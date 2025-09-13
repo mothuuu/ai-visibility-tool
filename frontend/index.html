@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Visibility Score - Real-Time Assessment</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AI Visibility Score</h1>
+            <p>Real-time analysis of how AI assistants find and recommend your website</p>
+        </div>
+
+        <div class="main-content">
+            <div class="input-section" id="inputSection">
+                <h2>Get Your Real-Time AI Marketing Assessment</h2>
+                <form class="url-form" id="urlForm">
+                    <input 
+                        type="url" 
+                        class="url-input" 
+                        id="websiteUrl" 
+                        placeholder="Enter your website URL (e.g., https://yourcompany.com)"
+                        required
+                    >
+                    <button type="submit" class="analyze-btn" id="analyzeBtn">
+                        Analyze My Website
+                    </button>
+                </form>
+                <p class="disclaimer">
+                    ✓ Real-time analysis ✓ Tests actual AI assistants ✓ No signup required
+                </p>
+            </div>
+
+            <div class="loading" id="loadingSection">
+                <div class="loading-spinner"></div>
+                <div class="loading-text" id="loadingText">Fetching website content...</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+
+            <div class="error-section" id="errorSection">
+                <h3>Analysis Error</h3>
+                <p id="errorMessage">Unable to analyze the website. Please check the URL and try again.</p>
+                <button class="analyze-btn" onclick="resetForm()">Try Again</button>
+            </div>
+
+            <div class="results" id="resultsSection">
+                <div class="industry-detection" id="industryDetection">
+                    <h3>Website Analysis</h3>
+                    <p id="detectedIndustry">Professional Services</p>
+                    <p id="websiteStats"></p>
+                </div>
+
+                <div class="score-header">
+                    <div class="score-circle" id="scoreCircle">
+                        <span id="totalScore">67</span><span>/100</span>
+                    </div>
+                    <h2 id="scoreTitle">Your AI Visibility Score</h2>
+                    <p id="scoreDescription">Results description will appear here</p>
+                </div>
+
+                <div class="score-categories" id="scoreCategories">
+                    <!-- Categories populated by JavaScript -->
+                </div>
+
+                <div class="ai-visibility-results" id="aiVisibilityResults">
+                    <!-- AI visibility results populated by JavaScript -->
+                </div>
+
+                <div class="recommendations">
+                    <h3>Priority Improvements for AI Visibility</h3>
+                    <div class="quick-wins" id="quickWins">
+                        <!-- Recommendations populated by JavaScript -->
+                    </div>
+                </div>
+
+                <div class="analysis-details">
+                    <h5>Analysis Details</h5>
+                    <div id="analysisBreakdown"></div>
+                </div>
+
+                <div class="cta-section">
+                    <h3>Ready to Dominate AI Search Results?</h3>
+                    <p>Don't let AI-savvy competitors capture your prospects. Let's optimize your website for AI discovery.</p>
+                    <div class="cta-buttons">
+                        <a href="#" class="cta-btn" id="getFullReportBtn">Get Detailed Report</a>
+                        <a href="#" class="cta-btn secondary" id="bookCallBtn">Book Strategy Call</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Powered by AI Analysis Engine | Real-Time Website Assessment</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
