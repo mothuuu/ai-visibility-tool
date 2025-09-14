@@ -1,5 +1,5 @@
 // Configuration
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = 'https://ai-visibility-tool.onrender.com/api';
 
 // Industry-specific test queries
 const TEST_QUERIES = {
