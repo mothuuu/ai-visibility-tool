@@ -22,16 +22,20 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// Rate limiting
+// Rate limiting - Fixed for Render
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 10,
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 50,
   message: {
     error: 'Too many requests from this IP, please try again later.',
     retryAfter: Math.ceil(parseInt(process.env.RATE_LIMIT_WINDOW_MS) / 1000 / 60)
   },
   standardHeaders: true,
   legacyHeaders: false,
+  trustProxy: true,  // ADD THIS LINE - fixes Render proxy issues
+  skip: (req) => {   // ADD THIS - skip rate limiting for health checks
+    return req.path === '/health';
+  }
 });
 
 app.use('/api/', limiter);
