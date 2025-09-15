@@ -383,10 +383,10 @@ function resetForm() {
 // CTA handlers
 document.getElementById('getFullReportBtn').addEventListener('click', (e) => {
     e.preventDefault();
-    window.open('mailto:contact@example.com?subject=Full AI Visibility Report Request', '_blank');
+    window.open('mailto:info@xeomarketing.com?subject=AI Visibility Report Request&body=Hi, I would like to request a detailed AI visibility analysis for my website. Here are my details:', '_blank');
 });
 
 document.getElementById('bookCallBtn').addEventListener('click', (e) => {
     e.preventDefault();
-    window.open('https://calendly.com/your-calendar', '_blank');
+    window.open('https://calendly.com/xeo-marketing/schedule-a-callback', '_blank');
 });
