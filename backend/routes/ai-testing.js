@@ -18,17 +18,15 @@ const AI_CONFIGS = {
   }
 };
 
-// Realistic scoring parameters based on what real websites actually have
-const SCORING_PARAMETERS = {
-  weights: {
-    aiSearchReadiness: 0.25,
-    contentStructure: 0.20,
-    voiceOptimization: 0.15,
-    technicalSetup: 0.20,
-    trustAuthority: 0.15,
-    aiReadability: 0.10,
-    speedUX: 0.10
-  }
+// Weights for final calculation
+const CATEGORY_WEIGHTS = {
+  aiSearchReadiness: 0.25,
+  contentStructure: 0.20,
+  voiceOptimization: 0.15,
+  technicalSetup: 0.20,
+  trustAuthority: 0.15,
+  aiReadability: 0.10,
+  speedUX: 0.10
 };
 
 // Industry detection
@@ -95,74 +93,70 @@ function detectIndustry(websiteData) {
   return bestMatch;
 }
 
-// Calculate factor score with realistic thresholds
+// Fixed graduated scoring function
 function calculateFactorScore(value, thresholds, points, factorName) {
-  console.log(`📊 Calculating ${factorName}:`, { value, thresholds, points });
+  console.log(`🔢 Scoring ${factorName}: value=${value}, thresholds=`, thresholds, 'points=', points);
   
-  if (typeof thresholds.high !== 'undefined') {
-    if (typeof points.medium !== 'undefined') {
+  // Ensure value is a number
+  const numValue = Number(value);
+  if (isNaN(numValue)) {
+    console.log(`❌ ${factorName}: Invalid value ${value}, returning 0`);
+    return 0;
+  }
+  
+  // Handle different threshold structures
+  if (thresholds.high !== undefined) {
+    if (points.medium !== undefined) {
       // Three-tier scoring
-      if (value >= thresholds.high) {
-        console.log(`✅ ${factorName}: ${value} >= ${thresholds.high} → ${points.high} points`);
+      if (numValue >= thresholds.high) {
+        console.log(`✅ ${factorName}: ${numValue} >= ${thresholds.high} → ${points.high} points`);
         return points.high;
       }
-      if (value >= thresholds.medium) {
-        console.log(`🟡 ${factorName}: ${value} >= ${thresholds.medium} → ${points.medium} points`);
+      if (numValue >= thresholds.medium) {
+        console.log(`🟡 ${factorName}: ${numValue} >= ${thresholds.medium} → ${points.medium} points`);
         return points.medium;
       }
-      console.log(`❌ ${factorName}: ${value} < ${thresholds.medium} → ${points.low} points`);
+      console.log(`❌ ${factorName}: ${numValue} < ${thresholds.medium} → ${points.low} points`);
       return points.low;
     } else {
       // Two-tier scoring
-      if (value >= thresholds.high) {
-        console.log(`✅ ${factorName}: ${value} >= ${thresholds.high} → ${points.high} points`);
+      if (numValue >= thresholds.high) {
+        console.log(`✅ ${factorName}: ${numValue} >= ${thresholds.high} → ${points.high} points`);
         return points.high;
       }
-      console.log(`❌ ${factorName}: ${value} < ${thresholds.high} → ${points.low} points`);
+      console.log(`❌ ${factorName}: ${numValue} < ${thresholds.high} → ${points.low} points`);
       return points.low;
     }
   }
   
-  console.log(`❌ ${factorName}: No valid thresholds → ${points.low} points`);
-  return points.low || 0;
+  console.log(`❌ ${factorName}: No valid thresholds, returning 0`);
+  return 0;
 }
 
-// Extract comprehensive metrics with more generous scoring
+// Extract comprehensive metrics
 function analyzePageMetrics(html, content, industry, url) {
-  console.log('\n🔬 Starting comprehensive page metrics analysis...');
+  console.log('\n🔬 Analyzing page metrics...');
   console.log('📄 HTML length:', html.length);
   console.log('📝 Content length:', content.length);
   
   // Basic content analysis
   const words = content.split(/\s+/).filter(word => word.length > 0);
   const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 0);
-  console.log('📊 Basic stats:', { wordCount: words.length, sentenceCount: sentences.length });
   
   // Heading analysis
   const h1Matches = html.match(/<h1[^>]*>/gi) || [];
   const allHeadingMatches = html.match(/<h[1-6][^>]*>.*?<\/h[1-6]>/gi) || [];
   const questionHeadingMatches = allHeadingMatches.filter(h => h.includes('?'));
-  const headingText = allHeadingMatches.join(' ').toLowerCase();
-  
-  // More generous content detection
   const hasSubheadings = (html.match(/<h[2-6][^>]*>/gi) || []).length >= 2;
+  
+  // Content structure elements
   const hasLists = (html.match(/<(ul|ol)[^>]*>/gi) || []).length >= 1;
   const hasTables = (html.match(/<table[^>]*>/gi) || []).length >= 1;
   const listElements = (html.match(/<(ul|ol|li|table|tr|td)[^>]*>/gi) || []).length;
   
-  console.log('📰 Heading analysis:', { 
-    h1Count: h1Matches.length, 
-    totalHeadings: allHeadingMatches.length,
-    questionHeadings: questionHeadingMatches.length,
-    hasSubheadings,
-    hasLists,
-    hasTables
-  });
-  
   // Image analysis
   const imageMatches = html.match(/<img[^>]*>/gi) || [];
   const altMatches = html.match(/<img[^>]+alt\s*=\s*["'][^"']*["'][^>]*>/gi) || [];
-  console.log('🖼️ Images:', { total: imageMatches.length, withAlt: altMatches.length });
   
   // Content quality indicators
   const hasAboutSection = /about|team|company|who we are|our story/i.test(content);
@@ -178,7 +172,7 @@ function analyzePageMetrics(html, content, industry, url) {
     content.toLowerCase().includes(pain.toLowerCase())
   ).length;
   
-  // FAQ and Q&A detection (more generous)
+  // FAQ and Q&A detection
   const hasFAQSection = /faq|frequently.asked|questions.and.answers|q&a/i.test(html);
   const hasQuestionWords = /what|how|why|when|where|which/i.test(content);
   
@@ -190,17 +184,16 @@ function analyzePageMetrics(html, content, industry, url) {
   const hasMetaDescription = html.includes('name="description"');
   const hasViewport = html.includes('name="viewport"');
   const hasStructuredData = html.includes('application/ld+json') || html.includes('itemscope');
-  const hasSitemap = html.includes('sitemap') || /sitemap/i.test(content);
   
   // Trust indicators
   const trustTerms = ['certified', 'licensed', 'accredited', 'professional', 'expert', 'award', 'years of experience'];
   const trustMatches = trustTerms.filter(term => content.toLowerCase().includes(term)).length;
   
-  // Calculate more generous percentages
+  // Calculate percentages and scores
   const questionBasedPercentage = allHeadingMatches.length > 0 ? 
     (questionHeadingMatches.length / allHeadingMatches.length) * 100 : 0;
   
-  // Enhanced scannability score (more generous)
+  // Enhanced scannability score
   let scannabilityScore = 0;
   if (hasLists) scannabilityScore += 30;
   if (hasTables) scannabilityScore += 20;
@@ -211,283 +204,261 @@ function analyzePageMetrics(html, content, industry, url) {
   const imageAltPercentage = imageMatches.length > 0 ? 
     (altMatches.length / imageMatches.length) * 100 : 100;
   
-  // More forgiving readability calculation
+  // Readability calculation
   const avgWordsPerSentence = sentences.length > 0 ? words.length / sentences.length : 15;
   const readabilityPercentage = Math.max(20, Math.min(100, 120 - Math.abs(avgWordsPerSentence - 15) * 3));
   
-  // Content structure score
-  let structureScore = 0;
-  if (h1Matches.length === 1) structureScore += 40;
-  if (hasSubheadings) structureScore += 30;
-  if (allHeadingMatches.length >= 3) structureScore += 30;
-  structureScore = Math.min(100, structureScore);
-  
-  // Voice optimization score
-  let voiceScore = 0;
-  if (hasQuestionWords) voiceScore += 25;
-  if (hasFAQSection) voiceScore += 35;
-  if (questionHeadingMatches.length > 0) voiceScore += 40;
-  voiceScore = Math.min(100, voiceScore);
-  
-  // Technical score
-  let technicalScore = 0;
-  if (hasMetaDescription) technicalScore += 25;
-  if (hasViewport) technicalScore += 25;
-  if (hasStructuredData) technicalScore += 30;
-  if (hasSitemap) technicalScore += 20;
-  technicalScore = Math.min(100, technicalScore);
-  
-  // Trust score
-  let trustScore = 0;
-  if (hasAboutSection) trustScore += 25;
-  if (hasContactInfo) trustScore += 20;
-  if (hasTestimonials) trustScore += 25;
-  if (trustMatches > 0) trustScore += 30;
-  trustScore = Math.min(100, trustScore);
-  
-  // Speed/UX score (basic indicators)
-  let speedScore = 50; // Base score
-  if (html.length < 100000) speedScore += 25; // Not too large
-  if (hasViewport) speedScore += 25; // Mobile friendly
-  speedScore = Math.min(100, speedScore);
-  
-  console.log('📈 Calculated generous scores:', {
+  console.log('📊 Calculated key metrics:', {
     questionBasedPercentage: questionBasedPercentage.toFixed(1),
     scannabilityScore: scannabilityScore.toFixed(1),
     readabilityPercentage: readabilityPercentage.toFixed(1),
-    structureScore: structureScore.toFixed(1),
-    voiceScore: voiceScore.toFixed(1),
-    technicalScore: technicalScore.toFixed(1),
-    trustScore: trustScore.toFixed(1),
-    speedScore: speedScore.toFixed(1)
+    imageAltPercentage: imageAltPercentage.toFixed(1),
+    industryTermCount,
+    hasFAQSection,
+    hasQuestionWords
   });
   
   return {
-    // AI Search Readiness
     questionBasedPercentage,
     scannabilityScore,
     readabilityPercentage,
     hasFAQsScore: hasFAQSection ? 100 : (hasQuestionWords ? 50 : 0),
     industryContentScore: Math.min(100, (industryTermCount * 25) + (painPointsCount * 15)),
     geoContentScore: Math.min(100, geoMatches * 20),
-    
-    // Content Structure
-    structureScore,
+    structureScore: (h1Matches.length === 1 ? 40 : 0) + (hasSubheadings ? 30 : 0) + (allHeadingMatches.length >= 3 ? 30 : 0),
     imageAltPercentage,
     semanticScore: hasAboutSection && hasServices ? 100 : 50,
-    
-    // Voice Optimization  
-    voiceScore,
+    voiceScore: (hasQuestionWords ? 25 : 0) + (hasFAQSection ? 35 : 0) + (questionHeadingMatches.length > 0 ? 40 : 0),
     localKeywordScore: geoMatches > 0 ? 100 : 0,
-    
-    // Technical Setup
-    technicalScore,
-    
-    // Trust & Authority
-    trustScore,
-    
-    // AI Readability
+    technicalScore: (hasMetaDescription ? 25 : 0) + (hasViewport ? 25 : 0) + (hasStructuredData ? 30 : 0) + 20,
+    trustScore: (hasAboutSection ? 25 : 0) + (hasContactInfo ? 20 : 0) + (hasTestimonials ? 25 : 0) + (trustMatches > 0 ? 30 : 0),
     mediaScore: imageAltPercentage,
-    
-    // Speed & UX
-    speedScore
+    speedScore: (html.length < 100000 ? 25 : 0) + (hasViewport ? 25 : 0) + 50
   };
 }
 
-// AI Search Readiness with more generous thresholds
+// AI Search Readiness Analysis
 function analyzeAISearchReadiness(metrics) {
-  console.log('\n🎯 Analyzing AI Search Readiness with generous scoring...');
+  console.log('\n🎯 Analyzing AI Search Readiness...');
   
-  const scores = {
-    // More forgiving thresholds - even 10% gets some points
-    questionBasedContent: calculateFactorScore(
-      metrics.questionBasedPercentage,
-      { high: 20, medium: 5 }, // Much lower thresholds
-      { high: 2.5, medium: 1.5, low: 0 },
-      'questionBasedContent'
-    ),
-    scannability: calculateFactorScore(
-      metrics.scannabilityScore,
-      { high: 40, medium: 20 }, // Lower thresholds
-      { high: 2.5, medium: 1.5, low: 0.5 }, // Minimum 0.5 points
-      'scannability'
-    ),
-    readabilityScore: calculateFactorScore(
-      metrics.readabilityPercentage,
-      { high: 50, medium: 30 }, // Lower thresholds  
-      { high: 2.5, medium: 1.5, low: 0.5 },
-      'readabilityScore'
-    ),
-    icpSpecificFAQs: calculateFactorScore(
-      metrics.hasFAQsScore,
-      { high: 50, medium: 25 },
-      { high: 2.5, medium: 1.5, low: 0 },
-      'icpSpecificFAQs'
-    ),
-    // Additional factors for more points
-    industryContent: calculateFactorScore(
-      metrics.industryContentScore,
-      { high: 40, medium: 20 },
-      { high: 2.0, medium: 1.0, low: 0.5 },
-      'industryContent'
-    ),
-    geoContent: calculateFactorScore(
-      metrics.geoContentScore,
-      { high: 40, medium: 20 },
-      { high: 1.5, medium: 1.0, low: 0 },
-      'geoContent'
-    )
-  };
+  const factorScores = {};
   
-  console.log('🎯 AI Search Readiness scores:', scores);
-  return scores;
+  // Individual factor calculations with detailed logging
+  factorScores.questionBasedContent = calculateFactorScore(
+    metrics.questionBasedPercentage,
+    { high: 20, medium: 5 },
+    { high: 2.5, medium: 1.5, low: 0 },
+    'questionBasedContent'
+  );
+  
+  factorScores.scannability = calculateFactorScore(
+    metrics.scannabilityScore,
+    { high: 40, medium: 20 },
+    { high: 2.5, medium: 1.5, low: 0.5 },
+    'scannability'
+  );
+  
+  factorScores.readabilityScore = calculateFactorScore(
+    metrics.readabilityPercentage,
+    { high: 50, medium: 30 },
+    { high: 2.5, medium: 1.5, low: 0.5 },
+    'readabilityScore'
+  );
+  
+  factorScores.icpSpecificFAQs = calculateFactorScore(
+    metrics.hasFAQsScore,
+    { high: 50, medium: 25 },
+    { high: 2.5, medium: 1.5, low: 0 },
+    'icpSpecificFAQs'
+  );
+  
+  factorScores.industryContent = calculateFactorScore(
+    metrics.industryContentScore,
+    { high: 40, medium: 20 },
+    { high: 2.0, medium: 1.0, low: 0.5 },
+    'industryContent'
+  );
+  
+  factorScores.geoContent = calculateFactorScore(
+    metrics.geoContentScore,
+    { high: 40, medium: 20 },
+    { high: 1.5, medium: 1.0, low: 0 },
+    'geoContent'
+  );
+  
+  // Sum up all factor scores
+  let categoryTotal = 0;
+  for (const [factorName, score] of Object.entries(factorScores)) {
+    console.log(`  ${factorName}: ${score} points`);
+    categoryTotal += score;
+  }
+  
+  console.log(`🎯 AI Search Readiness total: ${categoryTotal} points`);
+  return { scores: factorScores, total: categoryTotal };
 }
 
+// Content Structure Analysis
 function analyzeContentStructure(metrics) {
   console.log('\n🏗️ Analyzing Content Structure...');
   
-  const scores = {
-    headingStructure: calculateFactorScore(
-      metrics.structureScore,
-      { high: 60, medium: 30 }, // More achievable
-      { high: 3.0, medium: 2.0, low: 1.0 }, // Always get some points
-      'headingStructure'
-    ),
-    semanticContent: calculateFactorScore(
-      metrics.semanticScore,
-      { high: 75, medium: 40 },
-      { high: 2.5, medium: 1.5, low: 0.5 },
-      'semanticContent'
-    ),
-    imageAltText: calculateFactorScore(
-      metrics.imageAltPercentage,
-      { high: 70, medium: 40 },
-      { high: 2.0, medium: 1.0, low: 0.5 },
-      'imageAltText'
-    )
-  };
+  const factorScores = {};
   
-  console.log('🏗️ Content Structure scores:', scores);
-  return scores;
+  factorScores.headingStructure = calculateFactorScore(
+    metrics.structureScore,
+    { high: 60, medium: 30 },
+    { high: 3.0, medium: 2.0, low: 1.0 },
+    'headingStructure'
+  );
+  
+  factorScores.semanticContent = calculateFactorScore(
+    metrics.semanticScore,
+    { high: 75, medium: 40 },
+    { high: 2.5, medium: 1.5, low: 0.5 },
+    'semanticContent'
+  );
+  
+  factorScores.imageAltText = calculateFactorScore(
+    metrics.imageAltPercentage,
+    { high: 70, medium: 40 },
+    { high: 2.0, medium: 1.0, low: 0.5 },
+    'imageAltText'
+  );
+  
+  let categoryTotal = 0;
+  for (const [factorName, score] of Object.entries(factorScores)) {
+    console.log(`  ${factorName}: ${score} points`);
+    categoryTotal += score;
+  }
+  
+  console.log(`🏗️ Content Structure total: ${categoryTotal} points`);
+  return { scores: factorScores, total: categoryTotal };
 }
 
+// Voice Optimization Analysis
 function analyzeVoiceOptimization(metrics) {
   console.log('\n🎤 Analyzing Voice Optimization...');
   
-  const scores = {
-    conversationalContent: calculateFactorScore(
-      metrics.voiceScore,
-      { high: 50, medium: 25 },
-      { high: 3.0, medium: 2.0, low: 1.0 }, // Always get some points
-      'conversationalContent'
-    ),
-    localKeywords: calculateFactorScore(
-      metrics.localKeywordScore,
-      { high: 75, medium: 25 },
-      { high: 2.5, medium: 1.5, low: 0.5 },
-      'localKeywords'
-    )
-  };
+  const factorScores = {};
   
-  console.log('🎤 Voice Optimization scores:', scores);
-  return scores;
+  factorScores.conversationalContent = calculateFactorScore(
+    metrics.voiceScore,
+    { high: 50, medium: 25 },
+    { high: 3.0, medium: 2.0, low: 1.0 },
+    'conversationalContent'
+  );
+  
+  factorScores.localKeywords = calculateFactorScore(
+    metrics.localKeywordScore,
+    { high: 75, medium: 25 },
+    { high: 2.5, medium: 1.5, low: 0.5 },
+    'localKeywords'
+  );
+  
+  let categoryTotal = 0;
+  for (const [factorName, score] of Object.entries(factorScores)) {
+    console.log(`  ${factorName}: ${score} points`);
+    categoryTotal += score;
+  }
+  
+  console.log(`🎤 Voice Optimization total: ${categoryTotal} points`);
+  return { scores: factorScores, total: categoryTotal };
 }
 
+// Technical Setup Analysis
 function analyzeTechnicalSetup(metrics) {
   console.log('\n⚙️ Analyzing Technical Setup...');
   
-  const scores = {
-    basicTechnical: calculateFactorScore(
-      metrics.technicalScore,
-      { high: 60, medium: 30 },
-      { high: 5.0, medium: 3.0, low: 1.5 }, // Always get some points
-      'basicTechnical'
-    )
-  };
+  const factorScores = {};
   
-  console.log('⚙️ Technical Setup scores:', scores);
-  return scores;
+  factorScores.basicTechnical = calculateFactorScore(
+    metrics.technicalScore,
+    { high: 60, medium: 30 },
+    { high: 5.0, medium: 3.0, low: 1.5 },
+    'basicTechnical'
+  );
+  
+  let categoryTotal = 0;
+  for (const [factorName, score] of Object.entries(factorScores)) {
+    console.log(`  ${factorName}: ${score} points`);
+    categoryTotal += score;
+  }
+  
+  console.log(`⚙️ Technical Setup total: ${categoryTotal} points`);
+  return { scores: factorScores, total: categoryTotal };
 }
 
+// Trust & Authority Analysis
 function analyzeTrustAuthority(metrics) {
   console.log('\n🛡️ Analyzing Trust & Authority...');
   
-  const scores = {
-    trustSignals: calculateFactorScore(
-      metrics.trustScore,
-      { high: 60, medium: 30 },
-      { high: 4.0, medium: 2.5, low: 1.0 }, // Always get some points
-      'trustSignals'
-    )
-  };
+  const factorScores = {};
   
-  console.log('🛡️ Trust & Authority scores:', scores);
-  return scores;
+  factorScores.trustSignals = calculateFactorScore(
+    metrics.trustScore,
+    { high: 60, medium: 30 },
+    { high: 4.0, medium: 2.5, low: 1.0 },
+    'trustSignals'
+  );
+  
+  let categoryTotal = 0;
+  for (const [factorName, score] of Object.entries(factorScores)) {
+    console.log(`  ${factorName}: ${score} points`);
+    categoryTotal += score;
+  }
+  
+  console.log(`🛡️ Trust & Authority total: ${categoryTotal} points`);
+  return { scores: factorScores, total: categoryTotal };
 }
 
+// AI Readability Analysis
 function analyzeAIReadability(metrics) {
   console.log('\n👁️ Analyzing AI Readability...');
   
-  const scores = {
-    mediaOptimization: calculateFactorScore(
-      metrics.mediaScore,
-      { high: 70, medium: 40 },
-      { high: 3.0, medium: 2.0, low: 1.0 }, // Always get some points
-      'mediaOptimization'
-    )
-  };
+  const factorScores = {};
   
-  console.log('👁️ AI Readability scores:', scores);
-  return scores;
+  factorScores.mediaOptimization = calculateFactorScore(
+    metrics.mediaScore,
+    { high: 70, medium: 40 },
+    { high: 3.0, medium: 2.0, low: 1.0 },
+    'mediaOptimization'
+  );
+  
+  let categoryTotal = 0;
+  for (const [factorName, score] of Object.entries(factorScores)) {
+    console.log(`  ${factorName}: ${score} points`);
+    categoryTotal += score;
+  }
+  
+  console.log(`👁️ AI Readability total: ${categoryTotal} points`);
+  return { scores: factorScores, total: categoryTotal };
 }
 
+// Speed & UX Analysis
 function analyzeSpeedUX(metrics) {
   console.log('\n⚡ Analyzing Speed & UX...');
   
-  const scores = {
-    performanceBasics: calculateFactorScore(
-      metrics.speedScore,
-      { high: 70, medium: 40 },
-      { high: 3.0, medium: 2.0, low: 1.0 }, // Always get some points
-      'performanceBasics'
-    )
-  };
+  const factorScores = {};
   
-  console.log('⚡ Speed & UX scores:', scores);
-  return scores;
-}
-
-// Calculate total scores
-function calculateScores(analysis) {
-  console.log('\n🧮 Calculating final scores...');
+  factorScores.performanceBasics = calculateFactorScore(
+    metrics.speedScore,
+    { high: 70, medium: 40 },
+    { high: 3.0, medium: 2.0, low: 1.0 },
+    'performanceBasics'
+  );
   
-  const scores = {};
-  let totalWeightedScore = 0;
-  
-  for (const [category, categoryAnalysis] of Object.entries(analysis)) {
-    let categoryScore = 0;
-    
-    for (const [factorName, factorScore] of Object.entries(categoryAnalysis)) {
-      console.log(`  ${category}.${factorName}: ${factorScore}`);
-      categoryScore += factorScore;
-    }
-    
-    scores[category] = Math.round(categoryScore * 10) / 10;
-    const categoryWeight = SCORING_PARAMETERS.weights[category];
-    totalWeightedScore += categoryScore * categoryWeight;
-    
-    console.log(`📊 ${category}: ${categoryScore} points (weighted: ${(categoryScore * categoryWeight).toFixed(2)})`);
+  let categoryTotal = 0;
+  for (const [factorName, score] of Object.entries(factorScores)) {
+    console.log(`  ${factorName}: ${score} points`);
+    categoryTotal += score;
   }
   
-  scores.total = Math.round(totalWeightedScore * 10) / 10;
-  console.log('🎯 Total weighted score:', scores.total);
-  
-  return scores;
+  console.log(`⚡ Speed & UX total: ${categoryTotal} points`);
+  return { scores: factorScores, total: categoryTotal };
 }
 
-// Main analysis function
+// Main analysis function with fixed aggregation
 function performDetailedAnalysis(websiteData) {
-  console.log('\n🚀 Starting detailed analysis with generous scoring...');
+  console.log('\n🚀 Starting detailed analysis with fixed aggregation...');
   console.log('🌐 URL:', websiteData.url);
   
   const { html, url } = websiteData;
@@ -498,7 +469,8 @@ function performDetailedAnalysis(websiteData) {
   
   const metrics = analyzePageMetrics(html, content, industry, url);
   
-  const analysis = {
+  // Get analysis results with totals
+  const analysisResults = {
     aiSearchReadiness: analyzeAISearchReadiness(metrics),
     contentStructure: analyzeContentStructure(metrics),
     voiceOptimization: analyzeVoiceOptimization(metrics),
@@ -508,18 +480,37 @@ function performDetailedAnalysis(websiteData) {
     speedUX: analyzeSpeedUX(metrics)
   };
   
-  const scores = calculateScores(analysis);
+  // Calculate final scores using the totals
+  console.log('\n🧮 Calculating final scores...');
+  const categoryScores = {};
+  let totalWeightedScore = 0;
   
-  console.log('\n✅ Analysis complete!');
-  console.log('📊 Final scores:', scores);
+  for (const [category, result] of Object.entries(analysisResults)) {
+    const categoryScore = result.total;
+    categoryScores[category] = Math.round(categoryScore * 10) / 10;
+    
+    const weight = CATEGORY_WEIGHTS[category];
+    const weightedScore = categoryScore * weight;
+    totalWeightedScore += weightedScore;
+    
+    console.log(`📊 ${category}: ${categoryScore} points (weighted: ${weightedScore.toFixed(2)})`);
+  }
+  
+  categoryScores.total = Math.round(totalWeightedScore * 10) / 10;
+  
+  console.log('\n✅ Final category scores:', categoryScores);
+  console.log('🎯 Total weighted score:', categoryScores.total);
+  
+  // Generate recommendations
+  const recommendations = generateRecommendations(analysisResults, categoryScores, industry);
   
   return {
-    industry,
-    analysis,
-    scores,
-    metrics,
-    recommendations: generateRecommendations(analysis, scores, industry),
     url,
+    industry,
+    scores: categoryScores,
+    analysis: analysisResults,
+    recommendations,
+    metrics,
     analyzedAt: new Date().toISOString()
   };
 }
@@ -527,7 +518,6 @@ function performDetailedAnalysis(websiteData) {
 function generateRecommendations(analysis, scores, industry) {
   const recommendations = [];
   
-  // Check each category and provide specific recommendations
   if (scores.aiSearchReadiness < 8) {
     recommendations.push({
       title: 'Improve Question-Based Content',
@@ -620,7 +610,7 @@ router.post('/analyze-website', async (req, res) => {
   }
 });
 
-// Keep existing AI testing route
+// Keep existing AI testing route and helper functions
 router.post('/test-ai-visibility', async (req, res) => {
   try {
     const { url, industry, queries } = req.body;
@@ -669,7 +659,7 @@ async function fetchWebsiteContent(url) {
   }
 }
 
-// Simplified AI testing functions
+// Keep existing AI testing functions
 async function testAIVisibility(url, industry, queries) {
   const domain = new URL(url).hostname;
   const companyName = extractCompanyName(domain);
