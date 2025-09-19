@@ -201,56 +201,67 @@ function displayResults(results) {
 function displayCategoryAnalysis(results) {
     const scores = results.scores || {};
     
-    // Define categories with their details
+    // Define category weights (must match backend)
+    const categoryWeights = {
+        aiSearchReadiness: 0.25,
+        contentStructure: 0.20,
+        voiceOptimization: 0.15,
+        technicalSetup: 0.20,
+        trustAuthority: 0.15,
+        aiReadability: 0.03,
+        speedUX: 0.02
+    };
+    
+    // Define categories with their details and max scores
     const categories = [
         {
             key: 'aiSearchReadiness',
             name: 'AI Search Readiness',
             icon: '🎯',
             description: 'How well AI can find and cite your content',
-            maxScore: 13
+            maxScore: 13.0
         },
         {
             key: 'contentStructure',
             name: 'Content Structure',
             icon: '🏗️',
             description: 'Semantic HTML and content organization',
-            maxScore: 10
+            maxScore: 7.5
         },
         {
             key: 'voiceOptimization',
             name: 'Voice Optimization',
             icon: '🎤',
             description: 'Optimization for voice search queries',
-            maxScore: 10
+            maxScore: 5.5
         },
         {
             key: 'technicalSetup',
             name: 'Technical Setup',
             icon: '⚙️',
             description: 'Technical factors for AI crawling',
-            maxScore: 5
+            maxScore: 5.0
         },
         {
             key: 'trustAuthority',
             name: 'Trust & Authority',
             icon: '🛡️',
             description: 'Credibility signals for AI systems',
-            maxScore: 4
+            maxScore: 4.0
         },
         {
             key: 'aiReadability',
             name: 'AI Readability',
             icon: '👁️',
             description: 'How well AI can understand your content',
-            maxScore: 10
+            maxScore: 3.0
         },
         {
             key: 'speedUX',
             name: 'Speed & UX',
             icon: '⚡',
             description: 'Performance and user experience factors',
-            maxScore: 10
+            maxScore: 3.0
         }
     ];
     
@@ -258,14 +269,19 @@ function displayCategoryAnalysis(results) {
     categoriesContainer.innerHTML = '';
     
     categories.forEach(category => {
-        const score = scores[category.key] || 0;
-        const percentage = Math.round((score / category.maxScore) * 100);
+        const rawScore = scores[category.key] || 0;
+        const weight = categoryWeights[category.key];
+        
+        // Calculate weighted contribution
+        const actualContribution = rawScore * weight;
+        const maxContribution = category.maxScore * weight;
+        const contributionPercentage = Math.round((actualContribution / maxContribution) * 100);
         
         let categoryClass, statusEmoji;
-        if (percentage >= 70) {
+        if (contributionPercentage >= 70) {
             categoryClass = 'category-good';
             statusEmoji = '✅';
-        } else if (percentage >= 40) {
+        } else if (contributionPercentage >= 40) {
             categoryClass = 'category-fair';
             statusEmoji = '🟡';
         } else {
@@ -279,9 +295,10 @@ function displayCategoryAnalysis(results) {
             <h4>
                 <span>${category.icon}</span>
                 ${category.name}
-                <span class="category-score">${score.toFixed(1)}/${category.maxScore} ${statusEmoji}</span>
+                <span class="category-score">${actualContribution.toFixed(2)}/${maxContribution.toFixed(2)} pts ${statusEmoji}</span>
             </h4>
             <p>${category.description}</p>
+            <p><small><strong>Weight:</strong> ${(weight * 100)}% of total score | <strong>Raw:</strong> ${rawScore.toFixed(1)}/${category.maxScore}</small></p>
         `;
         categoriesContainer.appendChild(categoryDiv);
     });
