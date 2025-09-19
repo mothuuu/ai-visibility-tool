@@ -291,16 +291,6 @@ function displayCategoryAnalysis(results) {
         
         const categoryDiv = document.createElement('div');
         categoryDiv.className = `category ${categoryClass}`;
-        categoryDiv.innerHTML = `
-            <h4>
-                <span>${category.icon}</span>
-                ${category.name}
-                <span class="category-score">${actualContribution.toFixed(2)}/${maxContribution.toFixed(2)} pts ${statusEmoji}</span>
-            </h4>
-            <p>${category.description}</p>
-            <p><small><strong>Weight:</strong> ${(weight * 100)}% of total score | <strong>Raw:</strong> ${rawScore.toFixed(1)}/${category.maxScore}</small></p>
-        `;
-        categoriesContainer.appendChild(categoryDiv);
     });
 }
 
