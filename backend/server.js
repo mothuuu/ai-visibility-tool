@@ -6,6 +6,7 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 
 const aiTestingRoutes = require('./routes/ai-testing');
+console.log('✅ Routes file loaded successfully:', typeof aiTestingRoutes); // Debug line
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -32,20 +33,17 @@ const limiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  trustProxy: true,  // ADD THIS LINE - fixes Render proxy issues
-  skip: (req) => {   // ADD THIS - skip rate limiting for health checks
+  trustProxy: true,
+  skip: (req) => {
     return req.path === '/health';
   }
 });
-
 app.use('/api/', limiter);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Routes
-app.use('/api', aiTestingRoutes);
-
-// Health check
+// Health check (before other routes)
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
@@ -53,6 +51,14 @@ app.get('/health', (req, res) => {
     uptime: process.uptime()
   });
 });
+
+// Test route directly in server.js (MOVED BEFORE 404 handler)
+app.get('/api/direct-test', (req, res) => {
+    res.json({ message: 'Direct route in server.js working!' });
+});
+
+// Routes from external file
+app.use('/api', aiTestingRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -63,17 +69,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
+// 404 handler - THIS MUST BE LAST!
 app.use('*', (req, res) => {
+  console.log('❌ 404 - Route not found:', req.method, req.originalUrl);
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Test route directly in server.js
-app.get('/api/direct-test', (req, res) => {
-    res.json({ message: 'Direct route in server.js working!' });
-});
-
-// Should have ONLY ONE of these:
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
