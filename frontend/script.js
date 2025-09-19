@@ -208,7 +208,7 @@ function displayCategoryAnalysis(results) {
             name: 'AI Search Readiness',
             icon: '🎯',
             description: 'How well AI can find and cite your content',
-            maxScore: 20
+            maxScore: 13
         },
         {
             key: 'contentStructure',
@@ -229,14 +229,14 @@ function displayCategoryAnalysis(results) {
             name: 'Technical Setup',
             icon: '⚙️',
             description: 'Technical factors for AI crawling',
-            maxScore: 25
+            maxScore: 5
         },
         {
             key: 'trustAuthority',
             name: 'Trust & Authority',
             icon: '🛡️',
             description: 'Credibility signals for AI systems',
-            maxScore: 20
+            maxScore: 4
         },
         {
             key: 'aiReadability',
