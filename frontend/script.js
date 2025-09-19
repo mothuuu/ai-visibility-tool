@@ -44,27 +44,25 @@ async function analyzeWebsite(url) {
     showLoading();
     
     try {
-        // Step 1: Analyze website technically
+        // Step 1: Analyze website with the new backend
         updateProgress('Analyzing website structure...', 25);
-        const technicalData = await fetchTechnicalAnalysis(url);
+        const analysisData = await fetchTechnicalAnalysis(url);
         
-        // Step 2: Detect industry
-        updateProgress('Detecting industry type...', 50);
-        const industry = detectIndustry(technicalData);
-        
-        // Step 3: Test AI visibility
+        // Step 2: Test AI visibility (if needed)
         updateProgress('Testing AI assistant visibility...', 75);
-        const aiVisibilityData = await testAIVisibility(url, industry);
+        let aiVisibilityData = null;
+        try {
+            aiVisibilityData = await testAIVisibility(url, analysisData.industry);
+        } catch (error) {
+            console.log('AI visibility testing failed, continuing without it:', error);
+        }
         
-        // Step 4: Generate recommendations
-        updateProgress('Generating recommendations...', 100);
+        // Step 3: Combine results
+        updateProgress('Finalizing results...', 100);
         
-        // Combine results
         const results = {
-            ...technicalData,
-            industry,
-            aiVisibilityResults: aiVisibilityData,
-            combinedScore: calculateCombinedScore(technicalData, aiVisibilityData)
+            ...analysisData,
+            aiVisibilityResults: aiVisibilityData
         };
         
         // Display results
@@ -78,7 +76,7 @@ async function analyzeWebsite(url) {
     }
 }
 
-// API calls
+// Updated API call function
 async function fetchTechnicalAnalysis(url) {
     const response = await fetch(`${API_BASE_URL}/analyze-website`, {
         method: 'POST',
@@ -91,11 +89,19 @@ async function fetchTechnicalAnalysis(url) {
     }
     
     const data = await response.json();
+    
+    // Debug logging
+    console.log('Full API Response:', data);
+    console.log('Scores object:', data.data?.scores);
+    console.log('Analysis object:', data.data?.analysis);
+    console.log('Industry:', data.data?.industry);
+    console.log('Recommendations:', data.data?.recommendations);
+    
     return data.data;
 }
 
 async function testAIVisibility(url, industry) {
-    const queries = TEST_QUERIES[industry.key] || TEST_QUERIES.professional_services;
+    const queries = TEST_QUERIES[industry?.key] || TEST_QUERIES.professional_services;
     
     const response = await fetch(`${API_BASE_URL}/test-ai-visibility`, {
         method: 'POST',
@@ -119,37 +125,6 @@ function isValidUrl(string) {
     } catch (_) {
         return false;
     }
-}
-
-function detectIndustry(technicalData) {
-    // Simple industry detection - enhance based on content analysis
-    return {
-        key: 'professional_services',
-        name: 'Professional Services'
-    };
-}
-
-function calculateCombinedScore(technicalData, aiVisibilityData) {
-    let technicalScore = 0;
-    
-    // Calculate technical score based on factors
-    if (technicalData.hasSSL) technicalScore += 15;
-    if (technicalData.hasTitle) technicalScore += 10;
-    if (technicalData.hasMetaDescription) technicalScore += 15;
-    if (technicalData.hasStructuredData) technicalScore += 20;
-    if (technicalData.hasFAQ) technicalScore += 15;
-    if (technicalData.mobileOptimized) technicalScore += 25;
-    
-    // Calculate AI visibility score
-    let aiScore = 0;
-    if (aiVisibilityData?.overall) {
-        aiScore = (aiVisibilityData.overall.mentionRate + 
-                  aiVisibilityData.overall.recommendationRate + 
-                  aiVisibilityData.overall.citationRate) / 3;
-    }
-    
-    // Combined score (70% technical, 30% AI visibility)
-    return Math.round((technicalScore * 0.7) + (aiScore * 0.3));
 }
 
 // UI functions
@@ -183,23 +158,25 @@ function showResults(results) {
 }
 
 function displayResults(results) {
-    // Update industry
-    document.getElementById('detectedIndustry').textContent = results.industry.name;
+    // Update industry detection
+    document.getElementById('detectedIndustry').textContent = results.industry?.name || 'Professional Services';
     document.getElementById('websiteStats').textContent = 
         `Domain: ${new URL(results.url).hostname} | Analyzed: ${new Date(results.analyzedAt).toLocaleDateString()}`;
     
-    // Update score
-    document.getElementById('totalScore').textContent = results.combinedScore;
+    // Update total score
+    const totalScore = Math.round(results.scores?.total || 0);
+    document.getElementById('totalScore').textContent = totalScore;
     
     const scoreCircle = document.getElementById('scoreCircle');
     const scoreTitle = document.getElementById('scoreTitle');
     const scoreDescription = document.getElementById('scoreDescription');
     
-    if (results.combinedScore < 50) {
+    // Update score styling and messages based on total score
+    if (totalScore < 30) {
         scoreCircle.className = 'score-circle score-poor';
         scoreTitle.textContent = 'Critical AI Visibility Issues';
         scoreDescription.textContent = 'Your website has significant barriers preventing AI systems from finding and recommending you.';
-    } else if (results.combinedScore < 75) {
+    } else if (totalScore < 60) {
         scoreCircle.className = 'score-circle score-fair';
         scoreTitle.textContent = 'Moderate AI Visibility';
         scoreDescription.textContent = 'Your website appears in some AI results but has room for substantial improvement.';
@@ -209,35 +186,92 @@ function displayResults(results) {
         scoreDescription.textContent = 'Your website is well-optimized for AI discovery with minor optimization opportunities.';
     }
     
-    // Display technical factors
-    displayTechnicalAnalysis(results);
+    // Display category analysis
+    displayCategoryAnalysis(results);
     
-    // Display AI visibility results
+    // Display AI visibility results if available
     if (results.aiVisibilityResults) {
         displayAIVisibilityResults(results.aiVisibilityResults);
     }
     
-    // Generate and display recommendations
+    // Display recommendations
     displayRecommendations(results);
 }
 
-function displayTechnicalAnalysis(results) {
+function displayCategoryAnalysis(results) {
+    const scores = results.scores || {};
+    
+    // Define categories with their details
     const categories = [
-        { name: 'SSL Certificate', status: results.hasSSL, icon: '🔒' },
-        { name: 'Meta Description', status: results.hasMetaDescription, icon: '📝' },
-        { name: 'Structured Data', status: results.hasStructuredData, icon: '🏗️' },
-        { name: 'FAQ Section', status: results.hasFAQ, icon: '❓' },
-        { name: 'Mobile Optimized', status: results.mobileOptimized, icon: '📱' },
-        { name: 'Page Load Speed', status: results.estimatedLoadTime === 'Fast', icon: '⚡' }
+        {
+            key: 'aiSearchReadiness',
+            name: 'AI Search Readiness',
+            icon: '🎯',
+            description: 'How well AI can find and cite your content',
+            maxScore: 20
+        },
+        {
+            key: 'contentStructure',
+            name: 'Content Structure',
+            icon: '🏗️',
+            description: 'Semantic HTML and content organization',
+            maxScore: 10
+        },
+        {
+            key: 'voiceOptimization',
+            name: 'Voice Optimization',
+            icon: '🎤',
+            description: 'Optimization for voice search queries',
+            maxScore: 10
+        },
+        {
+            key: 'technicalSetup',
+            name: 'Technical Setup',
+            icon: '⚙️',
+            description: 'Technical factors for AI crawling',
+            maxScore: 25
+        },
+        {
+            key: 'trustAuthority',
+            name: 'Trust & Authority',
+            icon: '🛡️',
+            description: 'Credibility signals for AI systems',
+            maxScore: 20
+        },
+        {
+            key: 'aiReadability',
+            name: 'AI Readability',
+            icon: '👁️',
+            description: 'How well AI can understand your content',
+            maxScore: 10
+        },
+        {
+            key: 'speedUX',
+            name: 'Speed & UX',
+            icon: '⚡',
+            description: 'Performance and user experience factors',
+            maxScore: 10
+        }
     ];
     
     const categoriesContainer = document.getElementById('scoreCategories');
     categoriesContainer.innerHTML = '';
     
     categories.forEach(category => {
-        const categoryClass = category.status ? 'category-good' : 'category-poor';
-        const statusEmoji = category.status ? '✅' : '❌';
-        const score = category.status ? 25 : 0;
+        const score = scores[category.key] || 0;
+        const percentage = Math.round((score / category.maxScore) * 100);
+        
+        let categoryClass, statusEmoji;
+        if (percentage >= 70) {
+            categoryClass = 'category-good';
+            statusEmoji = '✅';
+        } else if (percentage >= 40) {
+            categoryClass = 'category-fair';
+            statusEmoji = '🟡';
+        } else {
+            categoryClass = 'category-poor';
+            statusEmoji = '❌';
+        }
         
         const categoryDiv = document.createElement('div');
         categoryDiv.className = `category ${categoryClass}`;
@@ -245,9 +279,9 @@ function displayTechnicalAnalysis(results) {
             <h4>
                 <span>${category.icon}</span>
                 ${category.name}
-                <span class="category-score">${score}/25 ${statusEmoji}</span>
+                <span class="category-score">${score.toFixed(1)}/${category.maxScore} ${statusEmoji}</span>
             </h4>
-            <p>Technical factor affecting AI crawling and understanding</p>
+            <p>${category.description}</p>
         `;
         categoriesContainer.appendChild(categoryDiv);
     });
@@ -288,7 +322,7 @@ function displayAIVisibilityResults(aiResults) {
 }
 
 function displayRecommendations(results) {
-    const recommendations = generateRecommendations(results);
+    const recommendations = results.recommendations || [];
     const quickWinsContainer = document.getElementById('quickWins');
     quickWinsContainer.innerHTML = '';
     
@@ -302,6 +336,7 @@ function displayRecommendations(results) {
         return;
     }
     
+    // Display the recommendations from the backend
     recommendations.forEach(rec => {
         const colors = { 
             'Critical': '#F31C7E', 
@@ -320,55 +355,10 @@ function displayRecommendations(results) {
                 </span>
             </h4>
             <p>${rec.description}</p>
+            ${rec.quickWin ? `<p><strong>Quick Win:</strong> ${rec.quickWin}</p>` : ''}
         `;
         quickWinsContainer.appendChild(recDiv);
     });
-}
-
-function generateRecommendations(results) {
-    const recommendations = [];
-    
-    if (!results.hasSSL) {
-        recommendations.push({
-            title: 'Enable HTTPS',
-            description: 'Secure your website with SSL certificate. AI assistants prioritize secure websites.',
-            impact: 'Critical'
-        });
-    }
-    
-    if (!results.hasStructuredData) {
-        recommendations.push({
-            title: 'Add Schema Markup',
-            description: 'Implement structured data to help AI systems understand your business information.',
-            impact: 'High'
-        });
-    }
-    
-    if (!results.hasFAQ) {
-        recommendations.push({
-            title: 'Create FAQ Section',
-            description: 'Add frequently asked questions that match what customers ask AI assistants.',
-            impact: 'High'
-        });
-    }
-    
-    if (!results.mobileOptimized) {
-        recommendations.push({
-            title: 'Optimize for Mobile',
-            description: 'Ensure your website works perfectly on mobile devices where most AI searches happen.',
-            impact: 'Medium'
-        });
-    }
-    
-    if (results.aiVisibilityResults?.overall?.mentionRate < 20) {
-        recommendations.push({
-            title: 'Improve AI Discovery',
-            description: 'Your company is rarely mentioned by AI assistants. Focus on creating more discoverable content.',
-            impact: 'Critical'
-        });
-    }
-    
-    return recommendations.slice(0, 4);
 }
 
 function resetForm() {
@@ -381,12 +371,21 @@ function resetForm() {
 }
 
 // CTA handlers
-document.getElementById('getFullReportBtn').addEventListener('click', (e) => {
-    e.preventDefault();
-    window.open('mailto:info@xeomarketing.com?subject=AI Visibility Report Request&body=Hi, I would like to request a detailed AI visibility analysis for my website. Here are my details:', '_blank');
-});
-
-document.getElementById('bookCallBtn').addEventListener('click', (e) => {
-    e.preventDefault();
-    window.open('https://calendly.com/xeo-marketing/schedule-a-callback', '_blank');
+document.addEventListener('DOMContentLoaded', function() {
+    const getReportBtn = document.getElementById('getFullReportBtn');
+    const bookCallBtn = document.getElementById('bookCallBtn');
+    
+    if (getReportBtn) {
+        getReportBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.open('mailto:info@xeomarketing.com?subject=AI Visibility Report Request&body=Hi, I would like to request a detailed AI visibility analysis for my website. Here are my details:', '_blank');
+        });
+    }
+    
+    if (bookCallBtn) {
+        bookCallBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.open('https://calendly.com/xeo-marketing/schedule-a-callback', '_blank');
+        });
+    }
 });
