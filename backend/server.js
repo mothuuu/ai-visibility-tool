@@ -1,9 +1,12 @@
+
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+
+const aiTestingRoutes = require('./routes/ai-testing');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -14,55 +17,59 @@ app.use(compression());
 
 // CORS configuration
 const corsOptions = {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
-    credentials: true,
-    optionsSuccessStatus: 200
+  origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
+  credentials: true,
+  optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
 
 // Rate limiting - Fixed for Render
 const limiter = rateLimit({
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 50,
-    message: {
-        error: 'Too many requests from this IP, please try again later.',
-        retryAfter: Math.ceil(parseInt(process.env.RATE_LIMIT_WINDOW_MS) / 1000 / 60)
-    }
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 50,
+  message: {
+    error: 'Too many requests from this IP, please try again later.',
+    retryAfter: Math.ceil(parseInt(process.env.RATE_LIMIT_WINDOW_MS) / 1000 / 60)
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  trustProxy: true,  // ADD THIS LINE - fixes Render proxy issues
+  skip: (req) => {   // ADD THIS - skip rate limiting for health checks
+    return req.path === '/health';
+  }
 });
-app.use(limiter);
 
-// Body parsing middleware
+app.use('/api/', limiter);
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Test routes (instead of external routes file)
-app.get('/', (req, res) => {
-    res.json({ 
-        message: 'Server is working with all middleware!', 
-        timestamp: new Date().toISOString() 
-    });
+// Routes
+app.use('/api', aiTestingRoutes);
+
+// Health check
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
 });
 
-app.get('/api/test', (req, res) => {
-    res.json({ message: 'API endpoint working' });
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+  });
 });
 
-// Add the route that was causing problems, but inline
-app.get('/api/ai-testing/test', (req, res) => {
-    res.json({ message: 'AI Testing inline route working' });
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Route not found' });
 });
 
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
-
-// Error handling
-process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err);
-    process.exit(1);
-});
-
-process.on('unhandledRejection', (err) => {
-    console.error('Unhandled Rejection:', err);
-    process.exit(1);
+  console.log(`AI Visibility API server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV}`);
 });
