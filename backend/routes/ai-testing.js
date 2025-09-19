@@ -25,8 +25,8 @@ const CATEGORY_WEIGHTS = {
   voiceOptimization: 0.15,
   technicalSetup: 0.20,
   trustAuthority: 0.15,
-  aiReadability: 0.10,
-  speedUX: 0.10
+  aiReadability: 0.03,
+  speedUX: 0.02
 };
 
 // Industry detection
