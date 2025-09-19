@@ -3,16 +3,15 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
-// const rateLimit = require('express-rate-limit'); // DISABLED FOR NOW
+const rateLimit = require('express-rate-limit');
 
 const aiTestingRoutes = require('./routes/ai-testing');
-console.log('✅ Routes file loaded successfully:', typeof aiTestingRoutes);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Configure Express to trust Render's proxy
-app.set('trust proxy', 1); // Trust first proxy (Render)
+// CRITICAL: Configure Express to trust Render's proxy
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet());
@@ -26,8 +25,21 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// RATE LIMITING DISABLED TEMPORARILY
-// app.use('/api/', limiter);
+// Rate limiting - Fixed for Render
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: {
+    error: 'Too many requests from this IP, please try again later.',
+    retryAfter: Math.ceil(15) // 15 minutes
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Skip rate limiting for health checks
+  skip: (req) => req.path === '/health'
+});
+
+app.use('/api/', limiter);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -44,7 +56,7 @@ app.get('/health', (req, res) => {
 // Test route directly in server.js
 app.get('/api/direct-test', (req, res) => {
     res.json({ 
-        message: 'Direct route in server.js working!',
+        message: 'Direct route in server.js working with rate limiting!',
         timestamp: new Date().toISOString()
     });
 });
@@ -63,7 +75,6 @@ app.use((err, req, res, next) => {
 
 // 404 handler - MUST BE LAST!
 app.use('*', (req, res) => {
-  console.log('❌ 404 - Route not found:', req.method, req.originalUrl);
   res.status(404).json({ error: 'Route not found' });
 });
 
