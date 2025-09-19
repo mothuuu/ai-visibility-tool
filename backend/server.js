@@ -3,13 +3,16 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
-const rateLimit = require('express-rate-limit');
+// const rateLimit = require('express-rate-limit'); // DISABLED FOR NOW
 
 const aiTestingRoutes = require('./routes/ai-testing');
-console.log('✅ Routes file loaded successfully:', typeof aiTestingRoutes); // Debug line
+console.log('✅ Routes file loaded successfully:', typeof aiTestingRoutes);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Configure Express to trust Render's proxy
+app.set('trust proxy', 1); // Trust first proxy (Render)
 
 // Security middleware
 app.use(helmet());
@@ -23,27 +26,13 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// Rate limiting - Fixed for Render
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 50,
-  message: {
-    error: 'Too many requests from this IP, please try again later.',
-    retryAfter: Math.ceil(parseInt(process.env.RATE_LIMIT_WINDOW_MS) / 1000 / 60)
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  trustProxy: true,
-  skip: (req) => {
-    return req.path === '/health';
-  }
-});
-app.use('/api/', limiter);
+// RATE LIMITING DISABLED TEMPORARILY
+// app.use('/api/', limiter);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check (before other routes)
+// Health check
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
@@ -52,9 +41,12 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Test route directly in server.js (MOVED BEFORE 404 handler)
+// Test route directly in server.js
 app.get('/api/direct-test', (req, res) => {
-    res.json({ message: 'Direct route in server.js working!' });
+    res.json({ 
+        message: 'Direct route in server.js working!',
+        timestamp: new Date().toISOString()
+    });
 });
 
 // Routes from external file
@@ -69,7 +61,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler - THIS MUST BE LAST!
+// 404 handler - MUST BE LAST!
 app.use('*', (req, res) => {
   console.log('❌ 404 - Route not found:', req.method, req.originalUrl);
   res.status(404).json({ error: 'Route not found' });
