@@ -73,11 +73,7 @@ app.get('/api/direct-test', (req, res) => {
     res.json({ message: 'Direct route in server.js working!' });
 });
 
+// Should have ONLY ONE of these:
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-});
-
-app.listen(PORT, () => {
-  console.log(`AI Visibility API server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV}`);
 });
