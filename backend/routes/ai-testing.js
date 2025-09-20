@@ -382,7 +382,14 @@ const indexNowScore = hasIndexNow ? 100 : 0;
 
   const thoughtLeadershipAnalysis = analyzeThoughtLeadership(content);
 
-  const trustBadgeAnalysis = analyzeTrustBadges(content, html);
+  // Enterprise trust cues (press/investors/customers/partners)
+const enterpriseTrustTerms = /\b(press release|media center|newsroom|investor relations|annual report|earnings|customer (story|case study)|case studies|partners|clients|who we work with)\b/gi;
+const enterpriseMatches = (content.match(enterpriseTrustTerms) || []).length;
+const enterpriseTrustScore = Math.min(100, enterpriseMatches * 20);
+
+const trustBadgeAnalysis = analyzeTrustBadges(content, html);
+const trustBadgeScore = Math.max(trustBadgeAnalysis.score, enterpriseTrustScore);
+
 
   // === VOICE & CONVERSATIONAL OPTIMIZATION ===
   const conversationalPhrases = analyzeConversationalContent(content);
