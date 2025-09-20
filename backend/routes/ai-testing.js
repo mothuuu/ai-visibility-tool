@@ -105,10 +105,41 @@ function analyzePageMetrics(html, content, industry, url) {
   
   // === AI READABILITY & MULTIMODAL ACCESS METRICS ===
   
-  // Image analysis
-  const imageMatches = html.match(/<img[^>]*>/gi) || [];
-  const altMatches = html.match(/<img[^>]+alt\s*=\s*["'][^"']+["'][^>]*>/gi) || [];
-  const imageAltPercentage = imageMatches.length > 0 ? (altMatches.length / imageMatches.length) * 100 : 100;
+  // === ENHANCED Image Analysis ===
+const imageMatches = html.match(/<img[^>]*>/gi) || [];
+
+// Improved alt text detection - catches multiple patterns
+const altPatterns = [
+  /<img[^>]*alt\s*=\s*"[^"]*"[^>]*>/gi,           // alt="text"
+  /<img[^>]*alt\s*=\s*'[^']*'[^>]*>/gi,           // alt='text'
+  /<img[^>]*alt\s*=\s*[^>\s]+[^>]*>/gi            // alt=text (no quotes)
+];
+
+let altMatches = [];
+altPatterns.forEach(pattern => {
+  const matches = html.match(pattern) || [];
+  altMatches = altMatches.concat(matches);
+});
+
+// Remove duplicates (same image caught by multiple patterns)
+const uniqueAltMatches = [...new Set(altMatches)];
+const imageAltPercentage = imageMatches.length > 0 ? (uniqueAltMatches.length / imageMatches.length) * 100 : 100;
+
+// Enhanced debugging
+console.log('\n🖼️ ENHANCED IMAGE ANALYSIS:');
+console.log(`  - Total images found: ${imageMatches.length}`);
+console.log(`  - Images with alt text: ${uniqueAltMatches.length}`);
+console.log(`  - Alt text coverage: ${imageAltPercentage.toFixed(1)}%`);
+
+// Debug first 3 images for verification
+if (imageMatches.length > 0) {
+  console.log('  - Sample image analysis:');
+  imageMatches.slice(0, 3).forEach((img, index) => {
+    const hasAlt = /alt\s*=\s*(["][^"]*["]|['][^']*[']|[^>\s]+)/i.test(img);
+    const altText = img.match(/alt\s*=\s*(["][^"]*["]|['][^']*[']|[^>\s]+)/i)?.[1] || 'none';
+    console.log(`    ${index + 1}. ${hasAlt ? '✅' : '❌'} Alt: ${altText.substring(0, 30)}...`);
+  });
+}
   
   // Video and audio analysis
   const videoMatches = html.match(/<video[^>]*>/gi) || [];
@@ -123,10 +154,38 @@ function analyzePageMetrics(html, content, industry, url) {
   const accessibleInteractive = html.match(/aria-label|aria-labelledby|role=/gi) || [];
   const interactiveAccessibility = interactiveMedia.length > 0 ? (accessibleInteractive.length / interactiveMedia.length) * 100 : 100;
   
-  // Cross-media relationships
-  const imageReferences = (content.match(/image|photo|picture|screenshot|diagram|chart/gi) || []).length;
-  const videoReferences = (content.match(/video|watch|demonstration|tutorial|webinar/gi) || []).length;
-  const crossMediaScore = Math.min(100, ((imageReferences + videoReferences) / words.length) * 1000);
+// === ENHANCED Cross-media Relationships ===
+const imageReferences = (content.match(/image|photo|picture|screenshot|diagram|chart|visual|graphic/gi) || []).length;
+const videoReferences = (content.match(/video|watch|demonstration|tutorial|webinar|recording|stream/gi) || []).length;
+const totalMediaReferences = imageReferences + videoReferences;
+const totalImages = imageMatches.length;
+const totalVideos = videoMatches.length;
+const totalMedia = totalImages + totalVideos;
+
+// Fixed scoring logic - no longer penalizes longer content
+let crossMediaScore = 0;
+if (totalMedia > 0) {
+  // Score based on how well media is referenced in text
+  const mediaToReferenceRatio = totalMediaReferences > 0 ? Math.min(100, (totalMediaReferences / totalMedia) * 100) : 0;
+  
+  // Bonus for media diversity
+  const mediaVarietyBonus = (totalImages > 0 ? 15 : 0) + (totalVideos > 0 ? 15 : 0);
+  
+  // Base score for having cross-references
+  const baseScore = totalMediaReferences > 0 ? 20 : 0;
+  
+  crossMediaScore = Math.min(100, baseScore + (mediaToReferenceRatio * 0.5) + mediaVarietyBonus);
+} else if (totalMediaReferences > 0) {
+  // Has media references but no actual media elements
+  crossMediaScore = 25;
+}
+
+console.log('\n🎬 CROSS-MEDIA ANALYSIS:');
+console.log(`  - Image references in text: ${imageReferences}`);
+console.log(`  - Video references in text: ${videoReferences}`);
+console.log(`  - Total media elements: ${totalMedia}`);
+console.log(`  - Cross-media score: ${crossMediaScore.toFixed(1)}`);
+
   
   // === AI SEARCH READINESS & CONTENT DEPTH METRICS ===
   
@@ -254,26 +313,56 @@ function analyzePageMetrics(html, content, industry, url) {
   const crawlerAccessScore = (crawlerFriendly ? 60 : 20) + (hasCDN ? 40 : 0);
   
   // Structured data analysis
-  const structuredDataAnalysis = analyzeStructuredData(html);
+  function analyzeStructuredData(html) {
+  const jsonLdBlocks = html.match(/<script[^>]+type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
+  const structuredDataTypes = new Set();
   
-  // Canonical and hreflang
-  const hasCanonical = html.includes('rel="canonical"');
-  const hasHreflang = html.includes('hreflang=');
-  const canonicalScore = (hasCanonical ? 70 : 0) + (hasHreflang ? 30 : 0);
+  console.log('\n📊 STRUCTURED DATA ANALYSIS:');
+  console.log(`  - JSON-LD blocks found: ${jsonLdBlocks.length}`);
   
-  // Open Graph and social markup
-  const hasOpenGraph = html.includes('property="og:');
-  const hasTwitterCards = html.includes('name="twitter:');
-  const socialMarkupScore = (hasOpenGraph ? 70 : 0) + (hasTwitterCards ? 30 : 0);
+  jsonLdBlocks.forEach((block, index) => {
+    try {
+      const jsonContent = block.replace(/<script[^>]*>|<\/script>/gi, '');
+      const data = JSON.parse(jsonContent);
+      const type = data['@type'] || (Array.isArray(data) ? data.map(item => item['@type']).join(',') : '');
+      if (type) {
+        structuredDataTypes.add(type.toLowerCase());
+        console.log(`    Block ${index + 1}: ${type}`);
+      }
+    } catch (e) {
+      console.log(`    Block ${index + 1}: Invalid JSON`);
+    }
+  });
   
-  // XML sitemap and feeds
-  const hasSitemap = /sitemap|sitemap\.xml/i.test(html);
-  const hasRSSFeed = html.includes('application/rss+xml') || html.includes('application/atom+xml');
-  const sitemapScore = (hasSitemap ? 60 : 0) + (hasRSSFeed ? 40 : 0);
+  // Check for microdata
+  const microdataTypes = html.match(/itemtype\s*=\s*["']([^"']+)["']/gi) || [];
+  console.log(`  - Microdata types found: ${microdataTypes.length}`);
   
-  // IndexNow
-  const hasIndexNow = html.includes('indexnow') || /api\.indexnow\./i.test(html);
-  const indexNowScore = hasIndexNow ? 100 : 0;
+  microdataTypes.forEach(match => {
+    const type = match.match(/itemtype\s*=\s*["']([^"']+)["']/i)?.[1];
+    if (type) {
+      const simplifiedType = type.split('/').pop().toLowerCase();
+      structuredDataTypes.add(simplifiedType);
+      console.log(`    Microdata: ${simplifiedType}`);
+    }
+  });
+  
+  const requiredTypes = ['organization', 'service', 'faqpage', 'article', 'breadcrumblist'];
+  const foundTypes = requiredTypes.filter(type => 
+    Array.from(structuredDataTypes).some(found => found.includes(type))
+  );
+  
+  const finalScore = Math.min(100, (foundTypes.length / requiredTypes.length) * 100 + (structuredDataTypes.size > 5 ? 20 : structuredDataTypes.size * 4));
+  
+  console.log(`  - Required types found: [${foundTypes.join(', ')}]`);
+  console.log(`  - All types detected: [${Array.from(structuredDataTypes).join(', ')}]`);
+  console.log(`  - Final structured data score: ${finalScore.toFixed(1)}`);
+  
+  return {
+    score: finalScore,
+    types: Array.from(structuredDataTypes)
+  };
+}
   
   // === TRUST, AUTHORITY & VERIFICATION METRICS ===
   
