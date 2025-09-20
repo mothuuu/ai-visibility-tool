@@ -106,41 +106,41 @@ function analyzePageMetrics(html, content, industry, url) {
   // === AI READABILITY & MULTIMODAL ACCESS METRICS ===
   
   // === ENHANCED Image Analysis ===
-const imageMatches = html.match(/<img[^>]*>/gi) || [];
+  const imageMatches = html.match(/<img[^>]*>/gi) || [];
 
-// Improved alt text detection - catches multiple patterns
-const altPatterns = [
-  /<img[^>]*alt\s*=\s*"[^"]*"[^>]*>/gi,           // alt="text"
-  /<img[^>]*alt\s*=\s*'[^']*'[^>]*>/gi,           // alt='text'
-  /<img[^>]*alt\s*=\s*[^>\s]+[^>]*>/gi            // alt=text (no quotes)
-];
+  // Improved alt text detection - catches multiple patterns
+  const altPatterns = [
+    /<img[^>]*alt\s*=\s*"[^"]*"[^>]*>/gi,           // alt="text"
+    /<img[^>]*alt\s*=\s*'[^']*'[^>]*>/gi,           // alt='text'
+    /<img[^>]*alt\s*=\s*[^>\s]+[^>]*>/gi            // alt=text (no quotes)
+  ];
 
-let altMatches = [];
-altPatterns.forEach(pattern => {
-  const matches = html.match(pattern) || [];
-  altMatches = altMatches.concat(matches);
-});
-
-// Remove duplicates (same image caught by multiple patterns)
-const uniqueAltMatches = [...new Set(altMatches)];
-const imageAltPercentage = imageMatches.length > 0 ? (uniqueAltMatches.length / imageMatches.length) * 100 : 100;
-
-// Enhanced debugging
-console.log('\n🖼️ ENHANCED IMAGE ANALYSIS:');
-console.log(`  - Total images found: ${imageMatches.length}`);
-console.log(`  - Images with alt text: ${uniqueAltMatches.length}`);
-console.log(`  - Alt text coverage: ${imageAltPercentage.toFixed(1)}%`);
-
-// Debug first 3 images for verification
-if (imageMatches.length > 0) {
-  console.log('  - Sample image analysis:');
-  imageMatches.slice(0, 3).forEach((img, index) => {
-    const hasAlt = /alt\s*=\s*(["][^"]*["]|['][^']*[']|[^>\s]+)/i.test(img);
-    const altText = img.match(/alt\s*=\s*(["][^"]*["]|['][^']*[']|[^>\s]+)/i)?.[1] || 'none';
-    console.log(`    ${index + 1}. ${hasAlt ? '✅' : '❌'} Alt: ${altText.substring(0, 30)}...`);
+  let altMatches = [];
+  altPatterns.forEach(pattern => {
+    const matches = html.match(pattern) || [];
+    altMatches = altMatches.concat(matches);
   });
-}
-  
+
+  // Remove duplicates (same image caught by multiple patterns)
+  const uniqueAltMatches = [...new Set(altMatches)];
+  const imageAltPercentage = imageMatches.length > 0 ? (uniqueAltMatches.length / imageMatches.length) * 100 : 100;
+
+  // Enhanced debugging
+  console.log('\n🖼️ ENHANCED IMAGE ANALYSIS:');
+  console.log(`  - Total images found: ${imageMatches.length}`);
+  console.log(`  - Images with alt text: ${uniqueAltMatches.length}`);
+  console.log(`  - Alt text coverage: ${imageAltPercentage.toFixed(1)}%`);
+
+  // Debug first 3 images for verification
+  if (imageMatches.length > 0) {
+    console.log('  - Sample image analysis:');
+    imageMatches.slice(0, 3).forEach((img, index) => {
+      const hasAlt = /alt\s*=\s*(["][^"]*["]|['][^']*[']|[^>\s]+)/i.test(img);
+      const altText = img.match(/alt\s*=\s*(["][^"]*["]|['][^']*[']|[^>\s]+)/i)?.[1] || 'none';
+      console.log(`    ${index + 1}. ${hasAlt ? '✅' : '❌'} Alt: ${altText.substring(0, 30)}...`);
+    });
+  }
+    
   // Video and audio analysis
   const videoMatches = html.match(/<video[^>]*>/gi) || [];
   const audioMatches = html.match(/<audio[^>]*>/gi) || [];
@@ -154,37 +154,37 @@ if (imageMatches.length > 0) {
   const accessibleInteractive = html.match(/aria-label|aria-labelledby|role=/gi) || [];
   const interactiveAccessibility = interactiveMedia.length > 0 ? (accessibleInteractive.length / interactiveMedia.length) * 100 : 100;
   
-// === ENHANCED Cross-media Relationships ===
-const imageReferences = (content.match(/image|photo|picture|screenshot|diagram|chart|visual|graphic/gi) || []).length;
-const videoReferences = (content.match(/video|watch|demonstration|tutorial|webinar|recording|stream/gi) || []).length;
-const totalMediaReferences = imageReferences + videoReferences;
-const totalImages = imageMatches.length;
-const totalVideos = videoMatches.length;
-const totalMedia = totalImages + totalVideos;
+  // === ENHANCED Cross-media Relationships ===
+  const imageReferences = (content.match(/image|photo|picture|screenshot|diagram|chart|visual|graphic/gi) || []).length;
+  const videoReferences = (content.match(/video|watch|demonstration|tutorial|webinar|recording|stream/gi) || []).length;
+  const totalMediaReferences = imageReferences + videoReferences;
+  const totalImages = imageMatches.length;
+  const totalVideos = videoMatches.length;
+  const totalMedia = totalImages + totalVideos;
 
-// Fixed scoring logic - no longer penalizes longer content
-let crossMediaScore = 0;
-if (totalMedia > 0) {
-  // Score based on how well media is referenced in text
-  const mediaToReferenceRatio = totalMediaReferences > 0 ? Math.min(100, (totalMediaReferences / totalMedia) * 100) : 0;
-  
-  // Bonus for media diversity
-  const mediaVarietyBonus = (totalImages > 0 ? 15 : 0) + (totalVideos > 0 ? 15 : 0);
-  
-  // Base score for having cross-references
-  const baseScore = totalMediaReferences > 0 ? 20 : 0;
-  
-  crossMediaScore = Math.min(100, baseScore + (mediaToReferenceRatio * 0.5) + mediaVarietyBonus);
-} else if (totalMediaReferences > 0) {
-  // Has media references but no actual media elements
-  crossMediaScore = 25;
-}
+  // Fixed scoring logic - no longer penalizes longer content
+  let crossMediaScore = 0;
+  if (totalMedia > 0) {
+    // Score based on how well media is referenced in text
+    const mediaToReferenceRatio = totalMediaReferences > 0 ? Math.min(100, (totalMediaReferences / totalMedia) * 100) : 0;
+    
+    // Bonus for media diversity
+    const mediaVarietyBonus = (totalImages > 0 ? 15 : 0) + (totalVideos > 0 ? 15 : 0);
+    
+    // Base score for having cross-references
+    const baseScore = totalMediaReferences > 0 ? 20 : 0;
+    
+    crossMediaScore = Math.min(100, baseScore + (mediaToReferenceRatio * 0.5) + mediaVarietyBonus);
+  } else if (totalMediaReferences > 0) {
+    // Has media references but no actual media elements
+    crossMediaScore = 25;
+  }
 
-console.log('\n🎬 CROSS-MEDIA ANALYSIS:');
-console.log(`  - Image references in text: ${imageReferences}`);
-console.log(`  - Video references in text: ${videoReferences}`);
-console.log(`  - Total media elements: ${totalMedia}`);
-console.log(`  - Cross-media score: ${crossMediaScore.toFixed(1)}`);
+  console.log('\n🎬 CROSS-MEDIA ANALYSIS:');
+  console.log(`  - Image references in text: ${imageReferences}`);
+  console.log(`  - Video references in text: ${videoReferences}`);
+  console.log(`  - Total media elements: ${totalMedia}`);
+  console.log(`  - Cross-media score: ${crossMediaScore.toFixed(1)}`);
 
   
   // === AI SEARCH READINESS & CONTENT DEPTH METRICS ===
@@ -313,9 +313,26 @@ console.log(`  - Cross-media score: ${crossMediaScore.toFixed(1)}`);
   const crawlerAccessScore = (crawlerFriendly ? 60 : 20) + (hasCDN ? 40 : 0);
   
   // Structured data analysis
+  const structuredDataAnalysis = analyzeStructuredData(html);
 
-  
+  // Canonical and hreflang
+  const hasCanonical = html.includes('rel="canonical"');
+  const hasHreflang = html.includes('hreflang=');
+  const canonicalScore = (hasCanonical ? 70 : 0) + (hasHreflang ? 30 : 0);
 
+  // Open Graph and social markup
+  const hasOpenGraph = html.includes('property="og:');
+  const hasTwitterCards = html.includes('name="twitter:');
+  const socialMarkupScore = (hasOpenGraph ? 70 : 0) + (hasTwitterCards ? 30 : 0);
+
+  // XML sitemap and feeds
+  const hasSitemap = /sitemap|sitemap\.xml/i.test(html);
+  const hasRSSFeed = html.includes('application/rss+xml') || html.includes('application/atom+xml');
+  const sitemapScore = (hasSitemap ? 60 : 0) + (hasRSSFeed ? 40 : 0);
+
+  // IndexNow
+  const hasIndexNow = html.includes('indexnow') || /api\.indexnow\./i.test(html);
+  const indexNowScore = hasIndexNow ? 100 : 0;
   
   // === TRUST, AUTHORITY & VERIFICATION METRICS ===
   
@@ -352,28 +369,6 @@ console.log(`  - Cross-media score: ${crossMediaScore.toFixed(1)}`);
   
   // Multi-turn conversation support
   const conversationContinuityAnalysis = analyzeConversationContinuity(content);
-
-// Call the structured data analysis function
-const structuredDataAnalysis = analyzeStructuredData(html);
-
-// Canonical and hreflang
-const hasCanonical = html.includes('rel="canonical"');
-const hasHreflang = html.includes('hreflang=');
-const canonicalScore = (hasCanonical ? 70 : 0) + (hasHreflang ? 30 : 0);
-
-// Open Graph and social markup
-const hasOpenGraph = html.includes('property="og:');
-const hasTwitterCards = html.includes('name="twitter:');
-const socialMarkupScore = (hasOpenGraph ? 70 : 0) + (hasTwitterCards ? 30 : 0);
-
-// XML sitemap and feeds
-const hasSitemap = /sitemap|sitemap\.xml/i.test(html);
-const hasRSSFeed = html.includes('application/rss+xml') || html.includes('application/atom+xml');
-const sitemapScore = (hasSitemap ? 60 : 0) + (hasRSSFeed ? 40 : 0);
-
-// IndexNow
-const hasIndexNow = html.includes('indexnow') || /api\.indexnow\./i.test(html);
-const indexNowScore = hasIndexNow ? 100 : 0;
   
   return {
     // AI Readability & Multimodal Access
@@ -744,29 +739,6 @@ function analyzeSpeedUX(metrics) {
   return { scores: subfactorScores, total: categoryTotal };
 }
 
-function debugV5Categories(analysisResults, categoryScores) {
-  console.log('\n🔍 V5 CATEGORY DEBUG BREAKDOWN:');
-  console.log('=====================================');
-  
-  Object.entries(analysisResults).forEach(([category, result]) => {
-    console.log(`\n📊 ${category.toUpperCase()}:`);
-    console.log(`  - Raw total: ${result.total}`);
-    console.log(`  - Final percentage: ${categoryScores[category]}%`);
-    console.log(`  - Weight: ${(CATEGORY_WEIGHTS[category] * 100).toFixed(1)}%`);
-    console.log(`  - Weighted contribution: ${((categoryScores[category] / 100) * CATEGORY_WEIGHTS[category] * 100).toFixed(2)} points`);
-    
-    if (result.scores) {
-      console.log(`  - Subfactor scores:`, result.scores);
-    }
-  });
-  
-  console.log('\n🎯 TOTAL EXPECTED SCORE:', 
-    Object.entries(categoryScores)
-      .filter(([key]) => key !== 'total')
-      .reduce((sum, [key, score]) => sum + ((score / 100) * CATEGORY_WEIGHTS[key] * 100), 0)
-      .toFixed(2)
-  );
-}
 function analyzeTechnicalSetup(metrics) {
   console.log('\n⚙️ Analyzing Technical Setup & Structured Data...');
   
@@ -844,6 +816,30 @@ function calculateV5SubfactorScore(value, threshold, weight) {
   return scoreMultiplier * weight;
 }
 
+function debugV5Categories(analysisResults, categoryScores) {
+  console.log('\n🔍 V5 CATEGORY DEBUG BREAKDOWN:');
+  console.log('=====================================');
+  
+  Object.entries(analysisResults).forEach(([category, result]) => {
+    console.log(`\n📊 ${category.toUpperCase()}:`);
+    console.log(`  - Raw total: ${result.total}`);
+    console.log(`  - Final percentage: ${categoryScores[category]}%`);
+    console.log(`  - Weight: ${(CATEGORY_WEIGHTS[category] * 100).toFixed(1)}%`);
+    console.log(`  - Weighted contribution: ${((categoryScores[category] / 100) * CATEGORY_WEIGHTS[category] * 100).toFixed(2)} points`);
+    
+    if (result.scores) {
+      console.log(`  - Subfactor scores:`, result.scores);
+    }
+  });
+  
+  console.log('\n🎯 TOTAL EXPECTED SCORE:', 
+    Object.entries(categoryScores)
+      .filter(([key]) => key !== 'total')
+      .reduce((sum, [key, score]) => sum + ((score / 100) * CATEGORY_WEIGHTS[key] * 100), 0)
+      .toFixed(2)
+  );
+}
+
 // Main analysis function with V5 structure
 function performDetailedAnalysis(websiteData) {
   console.log('\n🚀 Starting V5 detailed analysis...');
@@ -887,7 +883,7 @@ function performDetailedAnalysis(websiteData) {
   
   categoryScores.total = Math.round(totalWeightedScore);
 
-debugV5Categories(analysisResults, categoryScores);
+  debugV5Categories(analysisResults, categoryScores);
   
   console.log('\n✅ Final V5 category scores:', categoryScores);
   console.log('🎯 Total weighted score:', totalWeightedScore.toFixed(2));
