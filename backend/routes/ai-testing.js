@@ -273,10 +273,14 @@ function analyzePageMetrics(html, content, industry, url, discovery = {}) {
   const painPointMatches = industry.painPoints.filter(p => content.includes(p.toLowerCase())).length;
   const painPointsScore = Math.min(100, (painPointMatches / industry.painPoints.length) * 100);
 
-  // Geo terms & case studies
-  const geoTerms = ['local', 'ontario', 'toronto', 'canada', 'region', 'area', 'case study', 'client story', 'success story'];
-  const geoMatches = geoTerms.filter(t => content.includes(t.toLowerCase())).length;
-  const geoContentScore = Math.min(100, geoMatches * 15);
+// --- GEO / META (generalized) ---
+const phoneRe = /\+?\d[\d\s().-]{7,}/;
+const addressHints = /\b(ave|avenue|st|street|rd|road|blvd|suite|ste\.|floor|fl|building|campus|parkway|drive|dr)\b/i;
+const worldCities = /\b(paris|london|new york|dallas|madrid|tel aviv|singapore|são paulo|tokyo|sydney|toronto|vancouver|bangalore|pune|mumbai|seattle|boston|chicago|miami|san jose|los angeles|berlin|munich|amsterdam|zurich)\b/i;
+
+const geoHits = [phoneRe, addressHints, worldCities].reduce((s, re) => s + (re.test(content) ? 1 : 0), 0);
+const geoContentScore = Math.min(100, geoHits * 30);
+
 
   // === CONTENT FRESHNESS & MAINTENANCE ===
   const lastUpdatedMatch = /last\s*updated|updated\s*on|modified|revised/i.test(content);
@@ -323,8 +327,8 @@ function analyzePageMetrics(html, content, industry, url, discovery = {}) {
   const accessibilityScore = Math.min(100, accessibilityFeatures.length * 5);
 
   const hasMetaDescription = /name\s*=\s*["']description["']/i.test(html);
-  const geoInMeta = /\b(ontario|toronto|canada|local)\b/i.test(html);
-  const geoMetaScore = hasMetaDescription ? (geoInMeta ? 100 : 50) : 0;
+const geoInMeta = worldCities.test(html) || addressHints.test(html);
+const geoMetaScore = hasMetaDescription ? (geoInMeta ? 100 : 50) : 0;
 
   // === SPEED & UX (proxies) ===
   const performanceMetrics = estimatePerformanceMetrics(html);
