@@ -313,56 +313,9 @@ console.log(`  - Cross-media score: ${crossMediaScore.toFixed(1)}`);
   const crawlerAccessScore = (crawlerFriendly ? 60 : 20) + (hasCDN ? 40 : 0);
   
   // Structured data analysis
-  function analyzeStructuredData(html) {
-  const jsonLdBlocks = html.match(/<script[^>]+type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
-  const structuredDataTypes = new Set();
+
   
-  console.log('\n📊 STRUCTURED DATA ANALYSIS:');
-  console.log(`  - JSON-LD blocks found: ${jsonLdBlocks.length}`);
-  
-  jsonLdBlocks.forEach((block, index) => {
-    try {
-      const jsonContent = block.replace(/<script[^>]*>|<\/script>/gi, '');
-      const data = JSON.parse(jsonContent);
-      const type = data['@type'] || (Array.isArray(data) ? data.map(item => item['@type']).join(',') : '');
-      if (type) {
-        structuredDataTypes.add(type.toLowerCase());
-        console.log(`    Block ${index + 1}: ${type}`);
-      }
-    } catch (e) {
-      console.log(`    Block ${index + 1}: Invalid JSON`);
-    }
-  });
-  
-  // Check for microdata
-  const microdataTypes = html.match(/itemtype\s*=\s*["']([^"']+)["']/gi) || [];
-  console.log(`  - Microdata types found: ${microdataTypes.length}`);
-  
-  microdataTypes.forEach(match => {
-    const type = match.match(/itemtype\s*=\s*["']([^"']+)["']/i)?.[1];
-    if (type) {
-      const simplifiedType = type.split('/').pop().toLowerCase();
-      structuredDataTypes.add(simplifiedType);
-      console.log(`    Microdata: ${simplifiedType}`);
-    }
-  });
-  
-  const requiredTypes = ['organization', 'service', 'faqpage', 'article', 'breadcrumblist'];
-  const foundTypes = requiredTypes.filter(type => 
-    Array.from(structuredDataTypes).some(found => found.includes(type))
-  );
-  
-  const finalScore = Math.min(100, (foundTypes.length / requiredTypes.length) * 100 + (structuredDataTypes.size > 5 ? 20 : structuredDataTypes.size * 4));
-  
-  console.log(`  - Required types found: [${foundTypes.join(', ')}]`);
-  console.log(`  - All types detected: [${Array.from(structuredDataTypes).join(', ')}]`);
-  console.log(`  - Final structured data score: ${finalScore.toFixed(1)}`);
-  
-  return {
-    score: finalScore,
-    types: Array.from(structuredDataTypes)
-  };
-}
+
   
   // === TRUST, AUTHORITY & VERIFICATION METRICS ===
   
@@ -399,6 +352,30 @@ console.log(`  - Cross-media score: ${crossMediaScore.toFixed(1)}`);
   
   // Multi-turn conversation support
   const conversationContinuityAnalysis = analyzeConversationContinuity(content);
+
+// Call the structured data analysis function
+const structuredDataAnalysis = analyzeStructuredData(html);
+
+// Canonical and hreflang
+const hasCanonical = html.includes('rel="canonical"');
+const hasHreflang = html.includes('hreflang=');
+const canonicalScore = (hasCanonical ? 70 : 0) + (hasHreflang ? 30 : 0);
+
+// Open Graph and social markup
+const hasOpenGraph = html.includes('property="og:');
+const hasTwitterCards = html.includes('name="twitter:');
+const socialMarkupScore = (hasOpenGraph ? 70 : 0) + (hasTwitterCards ? 30 : 0);
+
+// XML sitemap and feeds
+const hasSitemap = /sitemap|sitemap\.xml/i.test(html);
+const hasRSSFeed = html.includes('application/rss+xml') || html.includes('application/atom+xml');
+const sitemapScore = (hasSitemap ? 60 : 0) + (hasRSSFeed ? 40 : 0);
+
+// IndexNow
+const hasIndexNow = html.includes('indexnow') || /api\.indexnow\./i.test(html);
+const indexNowScore = hasIndexNow ? 100 : 0;
+
+return {
   
   return {
     // AI Readability & Multimodal Access
