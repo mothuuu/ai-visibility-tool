@@ -679,7 +679,7 @@ function analyzeSpeedUX(metrics) {
   
   return { scores: subfactorScores, total: categoryTotal };
 }
-// Add this function after the analyzeVoiceOptimization function
+
 function debugV5Categories(analysisResults, categoryScores) {
   console.log('\n🔍 V5 CATEGORY DEBUG BREAKDOWN:');
   console.log('=====================================');
