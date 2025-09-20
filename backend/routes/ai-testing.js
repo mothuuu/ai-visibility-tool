@@ -1122,30 +1122,5 @@ function extractCompanyName(domain) {
     .trim();
 }
 
-// TEMP: discovery debug (you can remove this route later)
-// Usage: GET /_debug/discovery?url=https://www.amdocs.com/
-router.get('/_debug/discovery', async (req, res) => {
-  try {
-    const url = req.query.url;
-    if (!url) {
-      return res.status(400).json({ error: 'url query param required' });
-    }
-    // uses the helpers you added earlier
-    const { combinedHtml, discovery, origin, pagesFetched } = await fetchMultiPageSample(url);
-    res.json({
-      origin,
-      pagesFetched,
-      robots: discovery.robots,
-      sitemaps: discovery.sitemaps,
-      sitemapFound: discovery.sitemapFound,
-      combinedHtmlSize: combinedHtml.length
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-
-
 
 module.exports = router;
