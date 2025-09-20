@@ -6,43 +6,55 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 
-// ---- Discovery helpers (robots + sitemap + multi-page sampler) ----
+/* ------------------------------------------------------------------
+   Discovery helpers (robots + sitemap + multi-page sampler)
+-------------------------------------------------------------------*/
 async function fetchText(url, timeout = 10000, headers = {}) {
   try {
     const r = await axios.get(url, {
       timeout,
       headers: { 'User-Agent': 'Mozilla/5.0 (AI-Readiness-Tool/1.0)', ...headers }
     });
-    return { ok: true, status: r.status, text: typeof r.data === 'string' ? r.data : JSON.stringify(r.data), headers: r.headers };
+    return {
+      ok: true,
+      status: r.status,
+      text: typeof r.data === 'string' ? r.data : JSON.stringify(r.data),
+      headers: r.headers
+    };
   } catch (e) {
     return { ok: false, error: e.message };
   }
 }
 
-function parseRobots(text) {
+function parseRobots(text = '') {
   const hasBlanketDisallow = /^\s*Disallow:\s*\/\s*$/gim.test(text);
-  const allowsAIBots = /User-agent:\s*(GPTBot|Claude|Anthropic|Perplexity)/i.test(text) && !hasBlanketDisallow;
-  const sitemaps = (text.match(/^\s*Sitemap:\s*(.+)$/gim) || []).map(l => l.split(/:\s*/i).slice(1).join(':').trim());
+  const allowsAIBots =
+    /User-agent:\s*(GPTBot|Claude|Anthropic|Perplexity)/i.test(text) && !hasBlanketDisallow;
+  const sitemaps =
+    (text.match(/^\s*Sitemap:\s*(.+)$/gim) || [])
+      .map(l => l.split(/:\s*/i).slice(1).join(':').trim()) || [];
   return { hasBlanketDisallow, allowsAIBots, sitemaps };
 }
 
 async function fetchRobotsAndSitemaps(origin) {
   const robotsUrl = origin.replace(/\/+$/, '') + '/robots.txt';
   const robotsRes = await fetchText(robotsUrl);
-  let robots = null, foundSitemaps = [];
-  if (robotsRes.ok) {
-    robots = parseRobots(robotsRes.text);
-    const candidateSitemaps = [
-      ...(robots.sitemaps || []),
-      origin.replace(/\/+$/, '') + '/sitemap.xml',
-      origin.replace(/\/+$/, '') + '/sitemap_index.xml',
-      origin.replace(/\/+$/, '') + '/sitemap-index.xml'
-    ];
-    for (const s of [...new Set(candidateSitemaps)]) {
-      const r = await fetchText(s);
-      if (r.ok && /<(urlset|sitemapindex)\b/i.test(r.text)) foundSitemaps.push(s);
-    }
+  const robots = robotsRes.ok ? parseRobots(robotsRes.text) : null;
+
+  // Always try conventional sitemap locations even if robots.txt missing
+  const candidateSitemaps = [
+    ...(robots?.sitemaps || []),
+    origin.replace(/\/+$/, '') + '/sitemap.xml',
+    origin.replace(/\/+$/, '') + '/sitemap_index.xml',
+    origin.replace(/\/+$/, '') + '/sitemap-index.xml'
+  ];
+
+  const foundSitemaps = [];
+  for (const s of [...new Set(candidateSitemaps)]) {
+    const r = await fetchText(s);
+    if (r.ok && /<(urlset|sitemapindex)\b/i.test(r.text)) foundSitemaps.push(s);
   }
+
   return {
     robots,
     sitemapFound: foundSitemaps.length > 0,
@@ -50,26 +62,71 @@ async function fetchRobotsAndSitemaps(origin) {
   };
 }
 
+// Minimal sitemap URL extractor (grabs up to N <loc> links)
+async function extractSitemapUrls(sitemapUrl, max = 5) {
+  const res = await fetchText(sitemapUrl);
+  if (!res.ok) return [];
+  const xml = res.text || '';
+
+  // If it's a sitemap index, collect first few child sitemaps then recurse
+  if (/<sitemapindex\b/i.test(xml)) {
+    const childMaps = Array.from(xml.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi))
+      .map(m => m[1])
+      .slice(0, 3);
+    let urls = [];
+    for (const child of childMaps) {
+      const more = await extractSitemapUrls(child, max - urls.length);
+      urls = urls.concat(more);
+      if (urls.length >= max) break;
+    }
+    return urls;
+  }
+
+  // Plain urlset: return first few URLs
+  const urls = Array.from(xml.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi))
+    .map(m => m[1])
+    .filter(u => /^https?:\/\//i.test(u))
+    .slice(0, max);
+  return urls;
+}
+
 async function fetchMultiPageSample(startUrl) {
   const origin = new URL(startUrl).origin;
+
+  // Seed some common “content hubs”
   const corePaths = ['/insights', '/news', '/blog', '/press', '/resources', '/sitemap'];
   const targets = [startUrl, ...corePaths.map(p => origin.replace(/\/+$/, '') + p)];
+
   const pages = [];
   for (const u of [...new Set(targets)]) {
     const r = await fetchText(u);
     if (r.ok && r.text) pages.push(r.text);
   }
-  const combinedHtml = pages.join('\n<!-- PAGE SPLIT -->\n');
+
+  // robots + sitemaps
   const discovery = await fetchRobotsAndSitemaps(origin);
+
+  // Pull a handful of real article/service URLs from the sitemap
+  if (discovery.sitemapFound && discovery.sitemaps?.length) {
+    try {
+      const primaryMap = discovery.sitemaps[0];
+      const sampleUrls = await extractSitemapUrls(primaryMap, 5);
+      for (const u of sampleUrls) {
+        const r = await fetchText(u);
+        if (r.ok && r.text) pages.push(r.text);
+      }
+    } catch {
+      // ignore sitemap parse errors
+    }
+  }
+
+  const combinedHtml = pages.join('\n<!-- PAGE SPLIT -->\n');
   return { combinedHtml, discovery, origin, pagesFetched: pages.length };
 }
 
-
-/**
- * ================================
- * AI API CONFIGS (visibility tests)
- * ================================
- */
+/* ------------------------------------------------------------------
+   AI API CONFIGS (visibility tests)
+-------------------------------------------------------------------*/
 const AI_CONFIGS = {
   openai: {
     endpoint: 'https://api.openai.com/v1/chat/completions',
@@ -88,12 +145,9 @@ const AI_CONFIGS = {
   }
 };
 
-/**
- * =======================
- * V5 CATEGORY WEIGHTS
- * =======================
- * (Total = 100%) per the V5 rubric
- */
+/* ------------------------------------------------------------------
+   V5 CATEGORY WEIGHTS (sum = 1.00)
+-------------------------------------------------------------------*/
 const CATEGORY_WEIGHTS = {
   aiReadabilityMultimodal: 0.10, // 10%
   aiSearchReadiness: 0.20,       // 20%
@@ -105,11 +159,9 @@ const CATEGORY_WEIGHTS = {
   voiceOptimization: 0.12        // 12%
 };
 
-/**
- * =======================
- * Industry detection
- * =======================
- */
+/* ------------------------------------------------------------------
+   Industry detection
+-------------------------------------------------------------------*/
 function detectIndustry(websiteData) {
   const { html, url } = websiteData;
   const content = (html || '').toLowerCase();
@@ -151,27 +203,18 @@ function detectIndustry(websiteData) {
 
   for (const industry of industries) {
     let score = 0;
-
     for (const k of industry.keywords) if (content.includes(k)) score += 1;
     for (const dk of industry.domainKeywords) if (domain.includes(dk)) score += 3;
     for (const p of industry.painPoints) if (content.includes(p)) score += 0.5;
-
-    if (score > highestScore) {
-      highestScore = score;
-      bestMatch = industry;
-    }
+    if (score > highestScore) { highestScore = score; bestMatch = industry; }
   }
-
   return bestMatch;
 }
 
-/**
- * ==================================================
- * Core page metrics extraction per V5 rubric
- * ==================================================
- */
+/* ------------------------------------------------------------------
+   Core page metrics extraction per V5 rubric
+-------------------------------------------------------------------*/
 function analyzePageMetrics(html, content, industry, url, discovery = {}) {
-
   console.log('\n🔬 Analyzing page metrics with V5 rubric...');
   console.log('📄 HTML length:', html.length);
   console.log('📝 Content length:', content.length);
@@ -180,8 +223,6 @@ function analyzePageMetrics(html, content, industry, url, discovery = {}) {
   const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 0);
 
   // === AI READABILITY & MULTIMODAL ACCESS ===
-
-  // Images & alt coverage
   const imageMatches = html.match(/<img[^>]*>/gi) || [];
   const altPatterns = [
     /<img[^>]*\salt\s*=\s*"[^"]*"[^>]*>/gi,
@@ -193,7 +234,6 @@ function analyzePageMetrics(html, content, industry, url, discovery = {}) {
   const uniqueAltMatches = [...new Set(altMatches)];
   const imageAltPercentage = imageMatches.length > 0 ? (uniqueAltMatches.length / imageMatches.length) * 100 : 100;
 
-  // AV media & captions
   const videoMatches = html.match(/<video[^>]*>/gi) || [];
   const audioMatches = html.match(/<audio[^>]*>/gi) || [];
   const captionMatches = html.match(/<track[^>]+kind\s*=\s*["']captions["'][^>]*>/gi) || [];
@@ -201,12 +241,10 @@ function analyzePageMetrics(html, content, industry, url, discovery = {}) {
   const totalAvMedia = videoMatches.length + audioMatches.length;
   const captionPercentage = totalAvMedia > 0 ? ((captionMatches.length + (transcriptIndicators ? 1 : 0)) / totalAvMedia) * 100 : 0;
 
-  // Interactive media accessibility
   const interactiveMedia = html.match(/<(canvas|svg|iframe|embed|object)[^>]*>/gi) || [];
   const accessibleInteractive = html.match(/aria-label|aria-labelledby|role=/gi) || [];
   const interactiveAccessibility = interactiveMedia.length > 0 ? (accessibleInteractive.length / interactiveMedia.length) * 100 : 100;
 
-  // Cross-media relationships
   const imageReferences = (content.match(/\b(image|photo|picture|screenshot|diagram|chart|visual|graphic)\b/gi) || []).length;
   const videoReferences = (content.match(/\b(video|watch|demonstration|tutorial|webinar|recording|stream)\b/gi) || []).length;
   const totalMediaReferences = imageReferences + videoReferences;
@@ -224,8 +262,6 @@ function analyzePageMetrics(html, content, industry, url, discovery = {}) {
   }
 
   // === AI SEARCH READINESS & DEPTH ===
-
-  // Headings
   const h1Matches = html.match(/<h1[^>]*>[\s\S]*?<\/h1>/gi) || [];
   const h2h3Matches = html.match(/<h[2-3][^>]*>[\s\S]*?<\/h[2-3]>/gi) || [];
   const qWords = /\b(what|how|why|when|where|which|who)\b/i;
@@ -235,52 +271,44 @@ function analyzePageMetrics(html, content, industry, url, discovery = {}) {
   });
   const questionBasedPercentage = h2h3Matches.length > 0 ? (questionHeadingMatches.length / h2h3Matches.length) * 100 : 0;
 
-  // Lists/tables/steps
   const listMatches = html.match(/<(ul|ol)[^>]*>/gi) || [];
   const tableMatches = html.match(/<table[^>]*>/gi) || [];
   const stepsIndicators = /(?:^|\s)(step\s*\d|steps:|procedure|process|how to)(?=\s|$)/gi.test(content);
   const scannabilityScore = Math.min(100, (listMatches.length * 15) + (tableMatches.length * 20) + (stepsIndicators ? 25 : 0));
 
-  // Readability (Flesch approximation)
   const avgWordsPerSentence = sentences.length > 0 ? words.length / sentences.length : 15;
   const totalSyllables = estimateSyllables(words);
   const avgSyllablesPerWord = words.length ? (totalSyllables / words.length) : 1.4;
   const fleschScore = 206.835 - (1.015 * avgWordsPerSentence) - (84.6 * avgSyllablesPerWord);
   const readabilityPercentage = Math.max(0, Math.min(100, Number.isFinite(fleschScore) ? fleschScore : 0));
 
-  // ICP FAQs
   const hasFAQSection = /(?:^|[^a-z])(faq|frequently\s*asked|q&a)(?:[^a-z]|$)/i.test(html);
   const industryQuestions = industry.painPoints.filter(pain => new RegExp(`\\b(what|how|why|when)\\b[\\s\\S]{0,40}${escapeRegex(pain)}`, 'i').test(content)).length;
   const icpFAQScore = hasFAQSection ? 80 + Math.min(20, industryQuestions * 10) : Math.min(50, industryQuestions * 15);
 
-  // Snippet-eligible 40–60 words
   const snippetAnswers = findSnippetAnswers(content);
   const snippetScore = Math.min(100, snippetAnswers.length * 25);
 
-  // Pillar pages & internal links
   const pillarIndicators = /complete\s*guide|ultimate\s*guide|everything\s*about|comprehensive|hub|resource\s*center/i.test(content);
   const internalLinks = (html.match(/<a[^>]+href\s*=\s*["'][^"']+["'][^>]*>/gi) || [])
     .filter(link => {
       const href = (link.match(/href\s*=\s*["']([^"']+)["']/i)?.[1] || '').trim();
       if (!href) return false;
       if (href.startsWith('#')) return false;
-      // internal if relative OR same host
       return !/^https?:\/\//i.test(href) || href.includes(new URL(url).hostname);
     }).length;
   const pillarScore = pillarIndicators ? 60 + Math.min(40, Math.floor(internalLinks / 5) * 10) : Math.min(30, Math.floor(internalLinks / 3) * 10);
 
-  // Pain points coverage
   const painPointMatches = industry.painPoints.filter(p => content.includes(p.toLowerCase())).length;
   const painPointsScore = Math.min(100, (painPointMatches / industry.painPoints.length) * 100);
 
-// --- GEO / META (generalized) ---
-const phoneRe = /\+?\d[\d\s().-]{7,}/;
-const addressHints = /\b(ave|avenue|st|street|rd|road|blvd|suite|ste\.|floor|fl|building|campus|parkway|drive|dr)\b/i;
-const worldCities = /\b(paris|london|new york|dallas|madrid|tel aviv|singapore|são paulo|tokyo|sydney|toronto|vancouver|bangalore|pune|mumbai|seattle|boston|chicago|miami|san jose|los angeles|berlin|munich|amsterdam|zurich)\b/i;
+  // --- GEO / META (generalized) ---
+  const phoneRe = /\+?\d[\d\s().-]{7,}/;
+  const addressHints = /\b(ave|avenue|st|street|rd|road|blvd|suite|ste\.|floor|fl|building|campus|parkway|drive|dr)\b/i;
+  const worldCities = /\b(paris|london|new york|dallas|madrid|tel aviv|singapore|são paulo|tokyo|sydney|toronto|vancouver|bangalore|pune|mumbai|seattle|boston|chicago|miami|san jose|los angeles|berlin|munich|amsterdam|zurich)\b/i;
 
-const geoHits = [phoneRe, addressHints, worldCities].reduce((s, re) => s + (re.test(content) ? 1 : 0), 0);
-const geoContentScore = Math.min(100, geoHits * 30);
-
+  const geoHits = [phoneRe, addressHints, worldCities].reduce((s, re) => s + (re.test(content) ? 1 : 0), 0);
+  const geoContentScore = Math.min(100, geoHits * 30);
 
   // === CONTENT FRESHNESS & MAINTENANCE ===
   const lastUpdatedMatch = /last\s*updated|updated\s*on|modified|revised/i.test(content);
@@ -327,49 +355,43 @@ const geoContentScore = Math.min(100, geoHits * 30);
   const accessibilityScore = Math.min(100, accessibilityFeatures.length * 5);
 
   const hasMetaDescription = /name\s*=\s*["']description["']/i.test(html);
-const geoInMeta = worldCities.test(html) || addressHints.test(html);
-const geoMetaScore = hasMetaDescription ? (geoInMeta ? 100 : 50) : 0;
+  const geoInMeta = worldCities.test(html) || addressHints.test(html);
+  const geoMetaScore = hasMetaDescription ? (geoInMeta ? 100 : 50) : 0;
 
   // === SPEED & UX (proxies) ===
   const performanceMetrics = estimatePerformanceMetrics(html);
 
-// === TECHNICAL SETUP & STRUCTURED DATA ===
-const robots = discovery.robots || {};
-const robotsOk = robots.hasBlanketDisallow ? false : true;
-const aiAllowed = robots.allowsAIBots === true;
+  // === TECHNICAL SETUP & STRUCTURED DATA ===
+  const robots = discovery.robots || {};
+  const robotsOk = robots.hasBlanketDisallow ? false : true;
+  const aiAllowed = robots.allowsAIBots === true;
 
-// (keep your existing “noindex” heuristic on the page HTML)
-const crawlerFriendly = robotsOk && !/noindex|nofollow/i.test(html);
-const hasCDN = /cdn\.|cloudflare|cloudfront|fastly/i.test(html);
+  const crawlerFriendly = robotsOk && !/noindex|nofollow/i.test(html);
+  const hasCDN = /cdn\.|cloudflare|cloudfront|fastly/i.test(html);
 
-// Score: base on access + CDN + explicit AI-allow (0..100)
-let crawlerAccessScore = 0;
-crawlerAccessScore += crawlerFriendly ? 60 : 20;
-crawlerAccessScore += hasCDN ? 20 : 0;
-crawlerAccessScore += aiAllowed ? 20 : 0;
-crawlerAccessScore = Math.max(0, Math.min(100, crawlerAccessScore));
+  let crawlerAccessScore = 0;
+  crawlerAccessScore += crawlerFriendly ? 60 : 20;
+  crawlerAccessScore += hasCDN ? 20 : 0;
+  crawlerAccessScore += aiAllowed ? 20 : 0;
+  crawlerAccessScore = Math.max(0, Math.min(100, crawlerAccessScore));
 
-// Structured data (reuse your existing parser)
-const structuredDataAnalysis = analyzeStructuredData(html);
+  const structuredDataAnalysis = analyzeStructuredData(html);
 
-const hasCanonical = /rel\s*=\s*["']canonical["']/i.test(html);
-const hasHreflang = /hreflang\s*=/i.test(html);
-const canonicalScore = (hasCanonical ? 70 : 0) + (hasHreflang ? 30 : 0);
+  const hasCanonical = /rel\s*=\s*["']canonical["']/i.test(html);
+  const hasHreflang = /hreflang\s*=/i.test(html);
+  const canonicalScore = (hasCanonical ? 70 : 0) + (hasHreflang ? 30 : 0);
 
-const hasOpenGraph = /property\s*=\s*["']og:/i.test(html);
-const hasTwitterCards = /(name|property)\s*=\s*["']twitter:/i.test(html);
-const socialMarkupScore = (hasOpenGraph ? 70 : 0) + (hasTwitterCards ? 30 : 0);
+  const hasOpenGraph = /property\s*=\s*["']og:/i.test(html);
+  const hasTwitterCards = /(name|property)\s*=\s*["']twitter:/i.test(html);
+  const socialMarkupScore = (hasOpenGraph ? 70 : 0) + (hasTwitterCards ? 30 : 0);
 
-// ✅ sitemap from discovery (don’t guess from HTML)
-const sitemapScore = discovery.sitemapFound === true ? 100 : 0;
+  const sitemapScore = discovery.sitemapFound === true ? 100 : 0;
 
-// RSS/Atom still from HTML (ok as a heuristic)
-const hasRSSFeed = /application\/(rss|atom)\+xml/i.test(html);
-const rssFeedScore = hasRSSFeed ? 100 : 0;
+  const hasRSSFeed = /application\/(rss|atom)\+xml/i.test(html);
+  const rssFeedScore = hasRSSFeed ? 100 : 0;
 
-const hasIndexNow = /indexnow|api\.indexnow\./i.test(html);
-const indexNowScore = hasIndexNow ? 100 : 0;
-
+  const hasIndexNow = /indexnow|api\.indexnow\./i.test(html);
+  const indexNowScore = hasIndexNow ? 100 : 0;
 
   // === TRUST, AUTHORITY & VERIFICATION ===
   const authorBioAnalysis = analyzeAuthorBios(content);
@@ -383,13 +405,12 @@ const indexNowScore = hasIndexNow ? 100 : 0;
   const thoughtLeadershipAnalysis = analyzeThoughtLeadership(content);
 
   // Enterprise trust cues (press/investors/customers/partners)
-const enterpriseTrustTerms = /\b(press release|media center|newsroom|investor relations|annual report|earnings|customer (story|case study)|case studies|partners|clients|who we work with)\b/gi;
-const enterpriseMatches = (content.match(enterpriseTrustTerms) || []).length;
-const enterpriseTrustScore = Math.min(100, enterpriseMatches * 20);
+  const enterpriseTrustTerms = /\b(press release|media center|newsroom|investor relations|annual report|earnings|customer (story|case study)|case studies|partners|clients|who we work with)\b/gi;
+  const enterpriseMatches = (content.match(enterpriseTrustTerms) || []).length;
+  const enterpriseTrustScore = Math.min(100, enterpriseMatches * 20);
 
-const trustBadgeAnalysis = analyzeTrustBadges(content, html);
-const trustBadgeScore = Math.max(trustBadgeAnalysis.score, enterpriseTrustScore);
-
+  const trustBadgeAnalysis = analyzeTrustBadges(content, html);
+  const trustBadgeScore = Math.max(trustBadgeAnalysis.score, enterpriseTrustScore);
 
   // === VOICE & CONVERSATIONAL OPTIMIZATION ===
   const conversationalPhrases = analyzeConversationalContent(content);
@@ -449,7 +470,7 @@ const trustBadgeScore = Math.max(trustBadgeAnalysis.score, enterpriseTrustScore)
     certificationScore,
     domainAuthorityScore: domainAuthorityEstimate,
     thoughtLeadershipScore: thoughtLeadershipAnalysis.score,
-    trustBadgeScore: trustBadgeAnalysis.score,
+    trustBadgeScore, // ← use the maxed value
 
     // Voice & Conversational Optimization
     conversationalPhrasesScore: conversationalPhrases.score,
@@ -460,17 +481,14 @@ const trustBadgeScore = Math.max(trustBadgeAnalysis.score, enterpriseTrustScore)
   };
 }
 
-/**
- * ==========================
- * Helper functions
- * ==========================
- */
+/* ------------------------------------------------------------------
+   Helper functions
+-------------------------------------------------------------------*/
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function estimateSyllables(words) {
-  // crude heuristic
   return words.reduce((total, w) => {
     const m = w.toLowerCase().match(/[aeiouy]+/g) || [];
     return total + Math.max(1, m.length);
@@ -501,10 +519,9 @@ function analyzeStructuredData(html) {
         else if (t) types.add(String(t).toLowerCase());
       };
       collect(data);
-    } catch (_) { /* ignore bad JSON-LD */ }
+    } catch { /* ignore bad JSON-LD */ }
   });
 
-  // microdata itemtype
   const microTypes = html.match(/itemtype\s*=\s*["']([^"']+)["']/gi) || [];
   microTypes.forEach(m => {
     const t = m.match(/itemtype\s*=\s*["']([^"']+)["']/i)?.[1];
@@ -556,7 +573,6 @@ function estimatePerformanceMetrics(html) {
 function analyzeAuthorBios(content) {
   const authorIndicators = /\b(author|written\s*by|by\s+[A-Z][a-z]+)\b/gi;
   const credentialKeywords = /\b(phd|md|cpa|certified|licensed|degree|expert|specialist|years\s*of\s*experience)\b/gi;
-
   const hasAuthor = authorIndicators.test(content);
   const hasCredentials = credentialKeywords.test(content);
 
@@ -595,7 +611,6 @@ function analyzeConversationalContent(content) {
   const conversationalStarters = /\b(what\s*is|how\s*to|why\s*should|when\s*to|where\s*can|which\s*is|who\s*should)\b/gi;
   const longTailPhrases = content.match(/\b\w+\s+\w+\s+\w+\s+\w+\b/g) || [];
   const convMatches = content.match(conversationalStarters) || [];
-  // Count long-tail phrases that begin with a conversational starter term nearby
   const relevantLongTail = longTailPhrases.filter(p => conversationalStarters.test(p));
   return {
     score: Math.min(100, (convMatches.length * 15) + (relevantLongTail.length * 5)),
@@ -606,7 +621,6 @@ function analyzeConversationalContent(content) {
 function analyzeLocalVoiceOptimization(content) {
   const localPhrases = /\b(near\s*me|close\s*to\s*me|local|in\s*my\s*area|nearby|around\s*me)\b/gi;
   const locationTerms = /\b(ontario|toronto|canada|\d{5}|postal\s*code|address)\b/gi;
-
   const localMatches = content.match(localPhrases) || [];
   const locationMatches = content.match(locationTerms) || [];
   return { score: Math.min(100, (localMatches.length * 20) + (locationMatches.length * 10)), terms: localMatches.length + locationMatches.length };
@@ -623,7 +637,6 @@ function analyzeFeaturedSnippetOptimization(content) {
   const snippetAnswers = findSnippetAnswers(content);
   const definitionPatterns = /\b(is\s*defined\s*as|refers\s*to|means\s*that|can\s*be\s*described\s*as)\b/gi;
   const listPatterns = /\b(steps\s*include|methods\s*are|ways\s*to|types\s*of)\b/gi;
-
   const definitionMatches = content.match(definitionPatterns) || [];
   const listMatches = content.match(listPatterns) || [];
   return {
@@ -636,17 +649,14 @@ function analyzeFeaturedSnippetOptimization(content) {
 function analyzeConversationContinuity(content) {
   const followUpIndicators = /\b(also|additionally|furthermore|next|then|after|finally|related|similar|more\s*information)\b/gi;
   const questionSequences = /\b(first|second|third|another\s*question|follow\s*up)\b/gi;
-
   const followUpMatches = content.match(followUpIndicators) || [];
   const sequenceMatches = content.match(questionSequences) || [];
   return { score: Math.min(100, (followUpMatches.length * 5) + (sequenceMatches.length * 15)), indicators: followUpMatches.length + sequenceMatches.length };
 }
 
-/**
- * ===========================
- * V5 CATEGORY ANALYSIS
- * ===========================
- */
+/* ------------------------------------------------------------------
+   V5 CATEGORY ANALYSIS
+-------------------------------------------------------------------*/
 function analyzeAIReadabilityMultimodal(metrics) {
   const sub = {
     altTextCoverage: calculateV5SubfactorScore(metrics.imageAltPercentage, 80, 35),
@@ -742,9 +752,9 @@ function analyzeVoiceOptimization(metrics) {
   return { scores: sub, total: sumValues(sub) };
 }
 
-// Subfactor scoring with NaN/Infinity guard
+// Subfactor scoring with NaN/Infinity guard + partial credit for unknowns
 function calculateV5SubfactorScore(value, threshold, weight) {
-  if (value === null || value === undefined) return 0.5 * weight; // unknown → partial credit
+  if (value === null || value === undefined) return 0.5 * weight; // unknown → partial
   const safe = Number.isFinite(value) ? value : 0;
   const percentage = Math.min(100, Math.max(0, safe));
   let scoreMultiplier = 0;
@@ -756,7 +766,6 @@ function calculateV5SubfactorScore(value, threshold, weight) {
 
   return scoreMultiplier * weight;
 }
-
 
 function sumValues(obj) {
   return Object.values(obj).reduce((s, v) => s + (Number.isFinite(v) ? v : 0), 0);
@@ -782,13 +791,10 @@ function debugV5Categories(analysisResults, categoryScores) {
   console.log('\n🎯 TOTAL EXPECTED SCORE:', totalExpected.toFixed(2));
 }
 
-/**
- * ==========================================
- * Main analysis (V5)
- * ==========================================
- */
+/* ------------------------------------------------------------------
+   Main analysis (V5)
+-------------------------------------------------------------------*/
 function performDetailedAnalysis(websiteData, discovery = {}) {
-
   console.log('\n🚀 Starting V5 detailed analysis...');
   console.log('🌐 URL:', websiteData.url);
 
@@ -797,7 +803,7 @@ function performDetailedAnalysis(websiteData, discovery = {}) {
   const industry = detectIndustry(websiteData);
   console.log('🏭 Detected industry:', industry.name);
 
- const metrics = analyzePageMetrics(html, content, industry, url, discovery);
+  const metrics = analyzePageMetrics(html, content, industry, url, discovery);
 
   const analysisResults = {
     aiReadabilityMultimodal: analyzeAIReadabilityMultimodal(metrics),
@@ -842,11 +848,9 @@ function performDetailedAnalysis(websiteData, discovery = {}) {
   };
 }
 
-/**
- * ==========================================
- * Recommendations (thresholds aligned to V5)
- * ==========================================
- */
+/* ------------------------------------------------------------------
+   Recommendations (thresholds aligned to V5)
+-------------------------------------------------------------------*/
 function generateV5Recommendations(_analysis, scores, industry) {
   const recs = [];
 
@@ -933,11 +937,9 @@ function generateV5Recommendations(_analysis, scores, industry) {
   return recs.slice(0, 6);
 }
 
-/**
- * ===========================
- * Content extraction
- * ===========================
- */
+/* ------------------------------------------------------------------
+   Content extraction
+-------------------------------------------------------------------*/
 function extractTextContent(html) {
   if (!html || typeof html !== 'string') {
     console.log('⚠️ Invalid HTML provided to extractTextContent');
@@ -953,11 +955,9 @@ function extractTextContent(html) {
   return text;
 }
 
-/**
- * ===========================
- * API ROUTES
- * ===========================
- */
+/* ------------------------------------------------------------------
+   API ROUTES
+-------------------------------------------------------------------*/
 router.post('/analyze-website', async (req, res) => {
   try {
     console.log('\n🌐 New V5 website analysis request...');
@@ -968,11 +968,9 @@ router.post('/analyze-website', async (req, res) => {
     }
 
     console.log('🔍 Multi-page sampling + robots/sitemap for:', url);
-    // ⬇️ uses the helpers you added earlier
     const { combinedHtml, discovery, origin, pagesFetched } = await fetchMultiPageSample(url);
 
     const websiteData = { html: combinedHtml || '', url };
-    // ⬇️ pass discovery forward
     const analysis = performDetailedAnalysis(websiteData, discovery);
 
     console.log('✅ Sending V5 response with scores:', analysis.scores);
@@ -995,7 +993,6 @@ router.post('/analyze-website', async (req, res) => {
   }
 });
 
-
 router.post('/test-ai-visibility', async (req, res) => {
   try {
     const { url, industry, queries } = req.body;
@@ -1010,11 +1007,9 @@ router.post('/test-ai-visibility', async (req, res) => {
   }
 });
 
-/**
- * ===========================
- * Fetch + Visibility harness
- * ===========================
- */
+/* ------------------------------------------------------------------
+   Fetch + Visibility harness (legacy fetch kept for convenience)
+-------------------------------------------------------------------*/
 async function fetchWebsiteContent(url) {
   try {
     console.log('📡 Fetching website content from:', url);
@@ -1046,7 +1041,7 @@ async function testAIVisibility(url, industry, queries) {
     testedQueries: queries.length
   };
 
-  for (const [assistantKey, config] of Object.entries(AI_CONFIGS)) {
+  for (const [assistantKey] of Object.entries(AI_CONFIGS)) {
     const envKey = process.env[assistantKey.toUpperCase() + '_API_KEY'];
     if (!envKey) {
       results.assistants[assistantKey] = { name: assistantKey, tested: false, reason: 'API key not configured' };
@@ -1078,8 +1073,7 @@ async function testSingleAssistant(assistantKey, queries, companyName, domain) {
       if (analysis.recommended) recommendations++;
       if (analysis.cited) citations++;
 
-      // Be polite to APIs
-      await new Promise(res => setTimeout(res, 2000));
+      await new Promise(res => setTimeout(res, 2000)); // be polite to APIs
     } catch (error) {
       results.queries.push({ query, error: error.message, mentioned: false, recommended: false, cited: false });
     }
@@ -1099,7 +1093,7 @@ async function queryAIAssistant(assistant, query) {
   switch (assistant) {
     case 'openai':
       requestBody = {
-        model: 'gpt-4o-mini', // or gpt-4 if your account has access
+        model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: query }],
         max_tokens: 500,
         temperature: 0.7
@@ -1167,6 +1161,5 @@ function extractCompanyName(domain) {
     .replace(/\b(inc|llc|corp|ltd)\b/gi, '')
     .trim();
 }
-
 
 module.exports = router;
