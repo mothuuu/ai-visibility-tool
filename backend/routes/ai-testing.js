@@ -758,7 +758,8 @@ function debugV5Categories(analysisResults, categoryScores) {
  * Main analysis (V5)
  * ==========================================
  */
-function performDetailedAnalysis(websiteData) {
+function performDetailedAnalysis(websiteData, discovery = {}) {
+
   console.log('\n🚀 Starting V5 detailed analysis...');
   console.log('🌐 URL:', websiteData.url);
 
@@ -767,7 +768,7 @@ function performDetailedAnalysis(websiteData) {
   const industry = detectIndustry(websiteData);
   console.log('🏭 Detected industry:', industry.name);
 
-  const metrics = analyzePageMetrics(html, content, industry, url);
+ const metrics = analyzePageMetrics(html, content, industry, url, discovery);
 
   const analysisResults = {
     aiReadabilityMultimodal: analyzeAIReadabilityMultimodal(metrics),
@@ -932,23 +933,39 @@ router.post('/analyze-website', async (req, res) => {
   try {
     console.log('\n🌐 New V5 website analysis request...');
     const { url } = req.body;
-
     if (!url) {
       console.log('❌ No URL provided');
       return res.status(400).json({ error: 'URL is required' });
     }
 
-    console.log('🔍 Analyzing URL with V5 rubric:', url);
-    const websiteData = await fetchWebsiteContent(url);
-    const analysis = performDetailedAnalysis(websiteData);
+    console.log('🔍 Multi-page sampling + robots/sitemap for:', url);
+    // ⬇️ uses the helpers you added earlier
+    const { combinedHtml, discovery, origin, pagesFetched } = await fetchMultiPageSample(url);
+
+    const websiteData = { html: combinedHtml || '', url };
+    // ⬇️ pass discovery forward
+    const analysis = performDetailedAnalysis(websiteData, discovery);
 
     console.log('✅ Sending V5 response with scores:', analysis.scores);
-    return res.json({ success: true, data: analysis });
+    return res.json({
+      success: true,
+      data: {
+        ...analysis,
+        discovery: {
+          origin,
+          pagesFetched,
+          robots: discovery.robots,
+          sitemaps: discovery.sitemaps,
+          sitemapFound: discovery.sitemapFound
+        }
+      }
+    });
   } catch (error) {
     console.error('❌ V5 Website analysis failed:', error);
     return res.status(500).json({ error: 'Website analysis failed', message: error.message });
   }
 });
+
 
 router.post('/test-ai-visibility', async (req, res) => {
   try {
