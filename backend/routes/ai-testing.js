@@ -6,6 +6,65 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 
+// ---- Discovery helpers (robots + sitemap + multi-page sampler) ----
+async function fetchText(url, timeout = 10000, headers = {}) {
+  try {
+    const r = await axios.get(url, {
+      timeout,
+      headers: { 'User-Agent': 'Mozilla/5.0 (AI-Readiness-Tool/1.0)', ...headers }
+    });
+    return { ok: true, status: r.status, text: typeof r.data === 'string' ? r.data : JSON.stringify(r.data), headers: r.headers };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+function parseRobots(text) {
+  const hasBlanketDisallow = /^\s*Disallow:\s*\/\s*$/gim.test(text);
+  const allowsAIBots = /User-agent:\s*(GPTBot|Claude|Anthropic|Perplexity)/i.test(text) && !hasBlanketDisallow;
+  const sitemaps = (text.match(/^\s*Sitemap:\s*(.+)$/gim) || []).map(l => l.split(/:\s*/i).slice(1).join(':').trim());
+  return { hasBlanketDisallow, allowsAIBots, sitemaps };
+}
+
+async function fetchRobotsAndSitemaps(origin) {
+  const robotsUrl = origin.replace(/\/+$/, '') + '/robots.txt';
+  const robotsRes = await fetchText(robotsUrl);
+  let robots = null, foundSitemaps = [];
+  if (robotsRes.ok) {
+    robots = parseRobots(robotsRes.text);
+    const candidateSitemaps = [
+      ...(robots.sitemaps || []),
+      origin.replace(/\/+$/, '') + '/sitemap.xml',
+      origin.replace(/\/+$/, '') + '/sitemap_index.xml',
+      origin.replace(/\/+$/, '') + '/sitemap-index.xml'
+    ];
+    for (const s of [...new Set(candidateSitemaps)]) {
+      const r = await fetchText(s);
+      if (r.ok && /<(urlset|sitemapindex)\b/i.test(r.text)) foundSitemaps.push(s);
+    }
+  }
+  return {
+    robots,
+    sitemapFound: foundSitemaps.length > 0,
+    sitemaps: foundSitemaps
+  };
+}
+
+async function fetchMultiPageSample(startUrl) {
+  const origin = new URL(startUrl).origin;
+  const corePaths = ['/insights', '/news', '/blog', '/press', '/resources', '/sitemap'];
+  const targets = [startUrl, ...corePaths.map(p => origin.replace(/\/+$/, '') + p)];
+  const pages = [];
+  for (const u of [...new Set(targets)]) {
+    const r = await fetchText(u);
+    if (r.ok && r.text) pages.push(r.text);
+  }
+  const combinedHtml = pages.join('\n<!-- PAGE SPLIT -->\n');
+  const discovery = await fetchRobotsAndSitemaps(origin);
+  return { combinedHtml, discovery, origin, pagesFetched: pages.length };
+}
+
+
 /**
  * ================================
  * AI API CONFIGS (visibility tests)
