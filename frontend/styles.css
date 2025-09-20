@@ -258,3 +258,58 @@ body {
     .score-categories { grid-template-columns: 1fr; }
     .cta-buttons { flex-direction: column; align-items: center; }
 }
+
+/* V5 Category Progress Bars */
+.category-progress {
+    margin-top: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.progress-bar-small {
+    flex: 1;
+    height: 8px;
+    background-color: #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill-small {
+    height: 100%;
+    background: linear-gradient(135deg, #4DACA6 0%, #00B9DA 100%);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #495057;
+    min-width: 80px;
+}
+
+/* Update grid for 8 categories */
+.score-categories {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px;
+    margin: 40px 0;
+}
+
+@media (max-width: 768px) {
+    .score-categories { 
+        grid-template-columns: 1fr; 
+    }
+    
+    .category-progress {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 5px;
+    }
+    
+    .progress-text {
+        text-align: center;
+        min-width: auto;
+    }
+}
