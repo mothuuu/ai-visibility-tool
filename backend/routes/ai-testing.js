@@ -170,7 +170,8 @@ function detectIndustry(websiteData) {
  * Core page metrics extraction per V5 rubric
  * ==================================================
  */
-function analyzePageMetrics(html, content, industry, url) {
+function analyzePageMetrics(html, content, industry, url, discovery = {}) {
+
   console.log('\n🔬 Analyzing page metrics with V5 rubric...');
   console.log('📄 HTML length:', html.length);
   console.log('📝 Content length:', content.length);
@@ -328,28 +329,43 @@ function analyzePageMetrics(html, content, industry, url) {
   // === SPEED & UX (proxies) ===
   const performanceMetrics = estimatePerformanceMetrics(html);
 
-  // === TECHNICAL SETUP & STRUCTURED DATA ===
-  const crawlerFriendly = !/noindex|nofollow/i.test(html);
-  const hasCDN = /cdn\.|cloudflare|cloudfront|fastly/i.test(html);
-  const crawlerAccessScore = (crawlerFriendly ? 60 : 20) + (hasCDN ? 40 : 0);
+// === TECHNICAL SETUP & STRUCTURED DATA ===
+const robots = discovery.robots || {};
+const robotsOk = robots.hasBlanketDisallow ? false : true;
+const aiAllowed = robots.allowsAIBots === true;
 
-  const structuredDataAnalysis = analyzeStructuredData(html);
+// (keep your existing “noindex” heuristic on the page HTML)
+const crawlerFriendly = robotsOk && !/noindex|nofollow/i.test(html);
+const hasCDN = /cdn\.|cloudflare|cloudfront|fastly/i.test(html);
 
-  const hasCanonical = /rel\s*=\s*["']canonical["']/i.test(html);
-  const hasHreflang = /hreflang\s*=/i.test(html);
-  const canonicalScore = (hasCanonical ? 70 : 0) + (hasHreflang ? 30 : 0);
+// Score: base on access + CDN + explicit AI-allow (0..100)
+let crawlerAccessScore = 0;
+crawlerAccessScore += crawlerFriendly ? 60 : 20;
+crawlerAccessScore += hasCDN ? 20 : 0;
+crawlerAccessScore += aiAllowed ? 20 : 0;
+crawlerAccessScore = Math.max(0, Math.min(100, crawlerAccessScore));
 
-  const hasOpenGraph = /property\s*=\s*["']og:/i.test(html);
-  const hasTwitterCards = /(name|property)\s*=\s*["']twitter:/i.test(html);
-  const socialMarkupScore = (hasOpenGraph ? 70 : 0) + (hasTwitterCards ? 30 : 0);
+// Structured data (reuse your existing parser)
+const structuredDataAnalysis = analyzeStructuredData(html);
 
-  const hasSitemap = /sitemap(?:\.xml)?/i.test(html);
-  const hasRSSFeed = /application\/(rss|atom)\+xml/i.test(html);
-  const sitemapScore = (hasSitemap ? 60 : 0) + (hasRSSFeed ? 40 : 0);
-  const rssFeedScore = hasRSSFeed ? 100 : 0;
+const hasCanonical = /rel\s*=\s*["']canonical["']/i.test(html);
+const hasHreflang = /hreflang\s*=/i.test(html);
+const canonicalScore = (hasCanonical ? 70 : 0) + (hasHreflang ? 30 : 0);
 
-  const hasIndexNow = /indexnow|api\.indexnow\./i.test(html);
-  const indexNowScore = hasIndexNow ? 100 : 0;
+const hasOpenGraph = /property\s*=\s*["']og:/i.test(html);
+const hasTwitterCards = /(name|property)\s*=\s*["']twitter:/i.test(html);
+const socialMarkupScore = (hasOpenGraph ? 70 : 0) + (hasTwitterCards ? 30 : 0);
+
+// ✅ sitemap from discovery (don’t guess from HTML)
+const sitemapScore = discovery.sitemapFound === true ? 100 : 0;
+
+// RSS/Atom still from HTML (ok as a heuristic)
+const hasRSSFeed = /application\/(rss|atom)\+xml/i.test(html);
+const rssFeedScore = hasRSSFeed ? 100 : 0;
+
+const hasIndexNow = /indexnow|api\.indexnow\./i.test(html);
+const indexNowScore = hasIndexNow ? 100 : 0;
+
 
   // === TRUST, AUTHORITY & VERIFICATION ===
   const authorBioAnalysis = analyzeAuthorBios(content);
