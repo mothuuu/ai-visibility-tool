@@ -744,6 +744,7 @@ function analyzeVoiceOptimization(metrics) {
 
 // Subfactor scoring with NaN/Infinity guard
 function calculateV5SubfactorScore(value, threshold, weight) {
+  if (value === null || value === undefined) return 0.5 * weight; // unknown → partial credit
   const safe = Number.isFinite(value) ? value : 0;
   const percentage = Math.min(100, Math.max(0, safe));
   let scoreMultiplier = 0;
@@ -755,6 +756,7 @@ function calculateV5SubfactorScore(value, threshold, weight) {
 
   return scoreMultiplier * weight;
 }
+
 
 function sumValues(obj) {
   return Object.values(obj).reduce((s, v) => s + (Number.isFinite(v) ? v : 0), 0);
