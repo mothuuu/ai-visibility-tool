@@ -374,8 +374,6 @@ const sitemapScore = (hasSitemap ? 60 : 0) + (hasRSSFeed ? 40 : 0);
 // IndexNow
 const hasIndexNow = html.includes('indexnow') || /api\.indexnow\./i.test(html);
 const indexNowScore = hasIndexNow ? 100 : 0;
-
-return {
   
   return {
     // AI Readability & Multimodal Access
