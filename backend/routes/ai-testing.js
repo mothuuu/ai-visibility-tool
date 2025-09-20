@@ -679,7 +679,30 @@ function analyzeSpeedUX(metrics) {
   
   return { scores: subfactorScores, total: categoryTotal };
 }
-
+// Add this function after the analyzeVoiceOptimization function
+function debugV5Categories(analysisResults, categoryScores) {
+  console.log('\n🔍 V5 CATEGORY DEBUG BREAKDOWN:');
+  console.log('=====================================');
+  
+  Object.entries(analysisResults).forEach(([category, result]) => {
+    console.log(`\n📊 ${category.toUpperCase()}:`);
+    console.log(`  - Raw total: ${result.total}`);
+    console.log(`  - Final percentage: ${categoryScores[category]}%`);
+    console.log(`  - Weight: ${(CATEGORY_WEIGHTS[category] * 100).toFixed(1)}%`);
+    console.log(`  - Weighted contribution: ${((categoryScores[category] / 100) * CATEGORY_WEIGHTS[category] * 100).toFixed(2)} points`);
+    
+    if (result.scores) {
+      console.log(`  - Subfactor scores:`, result.scores);
+    }
+  });
+  
+  console.log('\n🎯 TOTAL EXPECTED SCORE:', 
+    Object.entries(categoryScores)
+      .filter(([key]) => key !== 'total')
+      .reduce((sum, [key, score]) => sum + ((score / 100) * CATEGORY_WEIGHTS[key] * 100), 0)
+      .toFixed(2)
+  );
+}
 function analyzeTechnicalSetup(metrics) {
   console.log('\n⚙️ Analyzing Technical Setup & Structured Data...');
   
@@ -799,6 +822,8 @@ function performDetailedAnalysis(websiteData) {
   }
   
   categoryScores.total = Math.round(totalWeightedScore);
+
+debugV5Categories(analysisResults, categoryScores);
   
   console.log('\n✅ Final V5 category scores:', categoryScores);
   console.log('🎯 Total weighted score:', totalWeightedScore.toFixed(2));
