@@ -1,7 +1,7 @@
 // Configuration
 const API_BASE_URL = 'https://ai-visibility-tool.onrender.com/api';
 
-// Industry-specific test queries
+// Industry-specific test queries (keep existing)
 const TEST_QUERIES = {
     msp: [
         "Best managed service providers for cybersecurity",
@@ -25,7 +25,7 @@ const TEST_QUERIES = {
     ]
 };
 
-// Main form handler
+// Main form handler (keep existing)
 document.getElementById('urlForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
@@ -39,7 +39,7 @@ document.getElementById('urlForm').addEventListener('submit', async (e) => {
     await analyzeWebsite(url);
 });
 
-// Website analysis function
+// Website analysis function (keep existing)
 async function analyzeWebsite(url) {
     showLoading();
     
@@ -76,7 +76,7 @@ async function analyzeWebsite(url) {
     }
 }
 
-// Updated API call function
+// Updated API call function (keep existing)
 async function fetchTechnicalAnalysis(url) {
     const response = await fetch(`${API_BASE_URL}/analyze-website`, {
         method: 'POST',
@@ -117,7 +117,7 @@ async function testAIVisibility(url, industry) {
     return data.data;
 }
 
-// Utility functions
+// Utility functions (keep existing)
 function isValidUrl(string) {
     try {
         new URL(string);
@@ -127,7 +127,7 @@ function isValidUrl(string) {
     }
 }
 
-// UI functions
+// UI functions (keep existing)
 function showLoading() {
     document.getElementById('inputSection').style.display = 'none';
     document.getElementById('loadingSection').style.display = 'block';
@@ -198,70 +198,68 @@ function displayResults(results) {
     displayRecommendations(results);
 }
 
+// UPDATED V5 CATEGORY DISPLAY FUNCTION
 function displayCategoryAnalysis(results) {
     const scores = results.scores || {};
+    const analysis = results.analysis || {};
     
-    // Define category weights (must match backend)
-    const categoryWeights = {
-        aiSearchReadiness: 0.25,
-        contentStructure: 0.20,
-        voiceOptimization: 0.15,
-        technicalSetup: 0.20,
-        trustAuthority: 0.15,
-        aiReadability: 0.03,
-        speedUX: 0.02
-    };
-    
-    // Define categories with their details and max scores
+    // V5 Categories with proper names and contribution percentages
     const categories = [
         {
-            key: 'aiSearchReadiness',
-            name: 'AI Search Readiness',
+            key: 'aiReadabilityMultimodal',
+            name: 'AI Readability & Multimodal Access',
+            icon: '👁️',
+            description: 'How well AI can process your images, videos, and multimedia content',
+            maxContribution: 10
+        },
+        {
+            key: 'aiSearchReadiness', 
+            name: 'AI Search Readiness & Content Depth',
             icon: '🎯',
-            description: 'How well AI can find and cite your content',
-            maxScore: 13.0
+            description: 'Content structure and depth for AI search optimization',
+            maxContribution: 20
+        },
+        {
+            key: 'contentFreshness',
+            name: 'Content Freshness & Maintenance', 
+            icon: '🔄',
+            description: 'Content currency and maintenance indicators for AI trust',
+            maxContribution: 8
         },
         {
             key: 'contentStructure',
-            name: 'Content Structure',
-            icon: '🏗️',
-            description: 'Semantic HTML and content organization',
-            maxScore: 7.5
-        },
-        {
-            key: 'voiceOptimization',
-            name: 'Voice Optimization',
-            icon: '🎤',
-            description: 'Optimization for voice search queries',
-            maxScore: 5.5
-        },
-        {
-            key: 'technicalSetup',
-            name: 'Technical Setup',
-            icon: '⚙️',
-            description: 'Technical factors for AI crawling',
-            maxScore: 5.0
-        },
-        {
-            key: 'trustAuthority',
-            name: 'Trust & Authority',
-            icon: '🛡️',
-            description: 'Credibility signals for AI systems',
-            maxScore: 4.0
-        },
-        {
-            key: 'aiReadability',
-            name: 'AI Readability',
-            icon: '👁️',
-            description: 'How well AI can understand your content',
-            maxScore: 3.0
+            name: 'Content Structure & Entity Recognition',
+            icon: '🏗️', 
+            description: 'Semantic structure and entity clarity for AI understanding',
+            maxContribution: 15
         },
         {
             key: 'speedUX',
-            name: 'Speed & UX',
+            name: 'Speed & User Experience',
             icon: '⚡',
-            description: 'Performance and user experience factors',
-            maxScore: 3.0
+            description: 'Core Web Vitals and performance metrics for AI crawlers',
+            maxContribution: 5
+        },
+        {
+            key: 'technicalSetup',
+            name: 'Technical Setup & Structured Data',
+            icon: '⚙️',
+            description: 'Technical infrastructure for AI crawler access and understanding', 
+            maxContribution: 18
+        },
+        {
+            key: 'trustAuthority',
+            name: 'Trust, Authority & Verification',
+            icon: '🛡️',
+            description: 'E-E-A-T signals and credibility indicators for AI systems',
+            maxContribution: 12
+        },
+        {
+            key: 'voiceOptimization',
+            name: 'Voice & Conversational Optimization', 
+            icon: '🎤',
+            description: 'Natural language and conversational query optimization',
+            maxContribution: 12
         }
     ];
     
@@ -269,20 +267,28 @@ function displayCategoryAnalysis(results) {
     categoriesContainer.innerHTML = '';
     
     categories.forEach(category => {
-        const rawScore = scores[category.key] || 0;
-        const weight = categoryWeights[category.key];
+        // Get the category analysis from backend response
+        const categoryResult = analysis[category.key];
+        let categoryPercentage = 0;
         
-        // Calculate weighted contribution
-        const actualContribution = rawScore * weight;
-        const maxContribution = category.maxScore * weight;
-        const contributionPercentage = Math.round((actualContribution / maxContribution) * 100);
+        // Handle both V5 and V4 response formats
+        if (categoryResult && typeof categoryResult.total === 'number') {
+            categoryPercentage = categoryResult.total;
+        } else if (scores[category.key] && typeof scores[category.key] === 'number') {
+            categoryPercentage = scores[category.key];
+        }
+        
+        // Calculate actual contribution to final score
+        const actualContribution = (categoryPercentage / 100) * category.maxContribution;
         
         let categoryClass, statusEmoji;
+        const contributionPercentage = (actualContribution / category.maxContribution) * 100;
+        
         if (contributionPercentage >= 70) {
             categoryClass = 'category-good';
             statusEmoji = '✅';
         } else if (contributionPercentage >= 40) {
-            categoryClass = 'category-fair';
+            categoryClass = 'category-fair'; 
             statusEmoji = '🟡';
         } else {
             categoryClass = 'category-poor';
@@ -291,15 +297,23 @@ function displayCategoryAnalysis(results) {
         
         const categoryDiv = document.createElement('div');
         categoryDiv.className = `category ${categoryClass}`;
+        
+        // Clean display without internal technical details
         categoryDiv.innerHTML = `
             <h4>
                 <span>${category.icon}</span>
                 ${category.name}
-                <span class="category-score">${actualContribution.toFixed(2)}/${maxContribution.toFixed(2)} pts ${statusEmoji}</span>
+                <span class="category-score">${actualContribution.toFixed(1)}/${category.maxContribution} pts ${statusEmoji}</span>
             </h4>
             <p>${category.description}</p>
-            <p><small><strong>Weight:</strong> ${(weight * 100)}% of total score | <strong>Raw:</strong> ${rawScore.toFixed(1)}/${category.maxScore}</small></p>
+            <div class="category-progress">
+                <div class="progress-bar-small">
+                    <div class="progress-fill-small" style="width: ${Math.min(100, contributionPercentage)}%"></div>
+                </div>
+                <span class="progress-text">${categoryPercentage.toFixed(0)}% optimized</span>
+            </div>
         `;
+        
         categoriesContainer.appendChild(categoryDiv);
     });
 }
@@ -387,7 +401,7 @@ function resetForm() {
     document.getElementById('progressFill').style.width = '0%';
 }
 
-// CTA handlers
+// CTA handlers (keep existing)
 document.addEventListener('DOMContentLoaded', function() {
     const getReportBtn = document.getElementById('getFullReportBtn');
     const bookCallBtn = document.getElementById('bookCallBtn');
