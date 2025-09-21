@@ -662,7 +662,7 @@ function performDetailedAnalysis(websiteData, discovery = {}) {
   totalWeightedScore += weightedContribution;
 }
 
-  categoryScores.total = Math.round(totalWeighted);
+ categoryScores.total = Math.max(SCORING_FLOORS.min_overall, Math.round(totalWeightedScore));
 
   const recommendations = generateV5Recommendations(analysisResults, categoryScores, industry);
   return {
