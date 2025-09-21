@@ -647,7 +647,8 @@ function performDetailedAnalysis(websiteData, discovery = {}) {
   };
 
   const categoryScores = {};
-  let totalWeighted = 0;
+  let totalWeightedScore = 0;
+
   for (const [cat, res] of Object.entries(analysisResults)) {
   const rawPct = Math.min(100, Math.max(0, res.total));
 
