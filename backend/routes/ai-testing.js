@@ -146,30 +146,6 @@ const CATEGORY_WEIGHTS = {
   voiceOptimization: 0.12
 };
 
-// ---- Floors / safety rails for scoring ----
-const SCORING_FLOORS = {
-  // If a metric is truly unknown / N/A (value === null or undefined)
-  // give this fraction of the subfactor weight.
-  unknownSubfactorMultiplier: 0.50,   // 50% of that subfactor's weight
-
-  // If a metric is present but scores extremely low (e.g., 0–tiny),
-  // guarantee at least this fraction of the subfactor weight.
-  minSubfactorMultiplier: 0.12,       // 12% of subfactor weight
-
-  // Optional category-level minimum percentages (post-subfactor sum)
-  categoryMinPercent: {
-    aiReadabilityMultimodal: 5,
-    aiSearchReadiness:       5,
-    contentFreshness:        5,
-    contentStructure:        5,
-    speedUX:                 5,
-    technicalSetup:          5,
-    trustAuthority:          5,
-    voiceOptimization:       5
-  }
-};
-
-
 /* =======================
    Expanded industry catalog
 ======================= */
@@ -521,28 +497,16 @@ function analyzeConversationContinuity(content){
 /* ===========================
    Category scorers (V5)
 =========================== */
-// Subfactor scoring with unknown + minimum floors
 function calculateV5SubfactorScore(value, threshold, weight) {
-  // Unknown/N-A → partial credit
-  if (value === null || value === undefined || !Number.isFinite(value)) {
-    return SCORING_FLOORS.unknownSubfactorMultiplier * weight;
-  }
-
-  const percentage = Math.max(0, Math.min(100, Number(value)));
-  let multiplier;
-
-  if (percentage >= threshold)              multiplier = 1.0;
-  else if (percentage >= threshold * 0.70)  multiplier = 0.8;
-  else if (percentage >= threshold * 0.40)  multiplier = 0.5;
-  else                                      multiplier = (threshold > 0 ? (percentage / threshold) : 0) * 0.5;
-
-  // Enforce a minimum for very low but present scores
-  const minFloor = SCORING_FLOORS.minSubfactorMultiplier;
-  multiplier = Math.max(minFloor, multiplier);
-
-  return multiplier * weight;
+  if (value === null || value === undefined) return 0.5 * weight; // unknown → partial credit
+  const pct = Math.min(100, Math.max(0, Number.isFinite(value) ? value : 0));
+  let m = 0;
+  if (pct >= threshold) m = 1.0;
+  else if (pct >= threshold * 0.7) m = 0.8;
+  else if (pct >= threshold * 0.4) m = 0.5;
+  else m = (threshold > 0 ? (pct / threshold) : 0) * 0.5;
+  return m * weight;
 }
-
 const sumValues = obj => Object.values(obj).reduce((s,v)=> s + (Number.isFinite(v)?v:0), 0);
 
 function analyzeAIReadabilityMultimodal(m){
@@ -647,23 +611,13 @@ function performDetailedAnalysis(websiteData, discovery = {}) {
   };
 
   const categoryScores = {};
-  let totalWeightedScore = 0;
-
+  let totalWeighted = 0;
   for (const [cat, res] of Object.entries(analysisResults)) {
-  const rawPct = Math.min(100, Math.max(0, res.total));
-
-  // Category floor (prevents whole category from dropping to 0 when signals are unknown)
-  const minPct = (SCORING_FLOORS?.categoryMinPercent?.[cat]) ?? 0;
-  const finalPct = Math.max(minPct, rawPct);
-
-  categoryScores[cat] = Math.round(finalPct * 10) / 10;
-
-  const weight = CATEGORY_WEIGHTS[cat];
-  const weightedContribution = (finalPct / 100) * weight * 100;
-  totalWeightedScore += weightedContribution;
-}
-
- categoryScores.total = Math.max(SCORING_FLOORS.min_overall, Math.round(totalWeightedScore));
+    const pct = Math.min(100, Math.max(0, res.total));
+    categoryScores[cat] = Math.round(pct * 10) / 10;
+    totalWeighted += (pct / 100) * CATEGORY_WEIGHTS[cat] * 100;
+  }
+  categoryScores.total = Math.round(totalWeighted);
 
   const recommendations = generateV5Recommendations(analysisResults, categoryScores, industry);
   return {
