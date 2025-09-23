@@ -35,7 +35,15 @@ document.getElementById('urlForm').addEventListener('submit', async (e) => {
         alert('Please enter a valid URL (e.g., https://example.com)');
         return;
     }
-    
+  // --- Sidecar submit to Google Sheets (uses your hidden form in index.html) ---
+const byId = (id) => document.getElementById(id);
+byId('sheet_website').value    = url;
+byId('sheet_page_url').value   = window.location.href;
+byId('sheet_user_agent').value = navigator.userAgent;
+byId('sheet_referrer').value   = document.referrer || '';
+byId('sheetForm')?.submit(); // sends to your Apps Script in the hidden iframe
+// ---------------------------------------------------------------------------
+  
     await analyzeWebsite(url);
 });
 
