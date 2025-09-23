@@ -98,6 +98,17 @@
             <p>Powered by Xeo AI Hub | AI Readiness Assessment Tool</p>
         </div>
     </div>
+<!-- Hidden iframe prevents page redirect on sidecar submit -->
+<iframe name="gsheet_silent_target" style="display:none;"></iframe>
+
+<!-- Hidden form that posts to your Google Sheet Apps Script -->
+<form id="sheetForm" method="POST" action="https://script.google.com/macros/s/AKfycby39Oc9Q_MhbFNTuV0telbuRC8ffb7Ts_TG2oaArxuDFxtW_w4tpjuab0x5YC4uBqjPew/exec" target="gsheet_silent_target" style="display:none;">
+  <input type="hidden" name="website"    id="sheet_website" />
+  <input type="hidden" name="page_url"   id="sheet_page_url" />
+  <input type="hidden" name="user_agent" id="sheet_user_agent" />
+  <input type="hidden" name="ip"         id="sheet_ip" />
+  <input type="hidden" name="referrer"   id="sheet_referrer" />
+</form>
 
     <script src="script.js"></script>
 </body>
