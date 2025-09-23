@@ -420,3 +420,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+document.addEventListener('DOMContentLoaded', function () {
+  var urlField = document.getElementById('page_url');
+  if (urlField) {
+    urlField.value = window.location.href;        // full URL (e.g., https://yoursite/page?x=1)
+    // Optional extras you can send later if you want:
+    // urlField.value = window.location.origin + window.location.pathname; // URL without query
+    // or store document.referrer in another hidden field if you add one
+  }
+});
+
