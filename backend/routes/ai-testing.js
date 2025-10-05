@@ -6,6 +6,9 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 
+// Import enhanced industries configuration
+const { INDUSTRIES, KEYWORD_WEIGHTS } = require('../config/industries');
+
 /* ================================
    DISCOVERY HELPERS (robots + sitemap + multi-page sampler)
 ================================ */
@@ -149,57 +152,264 @@ const CATEGORY_WEIGHTS = {
 /* =======================
    Expanded industry catalog
 ======================= */
-const INDUSTRIES = [
-  // Generic defaults
-  { key:'general_b2b', name:'General B2B', keywords:['solutions','services','platform','consulting','enterprise'], domainKeywords:[], painPoints:['cost','scalability','integration','security']},
-  // Technology & software
-  { key:'saas', name:'SaaS / Software', keywords:['saas','software','subscription','cloud','platform','api','devops','microservices'], domainKeywords:['saas','cloud','dev','api'], painPoints:['integration','scalability','security','adoption'] },
-  { key:'startup', name:'AI / Startup', keywords:['artificial intelligence','machine learning','genai','startup','innovation','automation','llm'], domainKeywords:['ai','ml','labs','tech','innovation'], painPoints:['funding','product-market fit','acquisition']},
-  { key:'cybersecurity', name:'Cybersecurity', keywords:['zero trust','xdr','siem','soc','endpoint security','vulnerability','pen test','threat'], domainKeywords:['sec','cyber'], painPoints:['breach','compliance','ransomware']},
-  { key:'cloud_devtools', name:'Cloud / DevTools', keywords:['kubernetes','containers','serverless','observability','monitoring','cicd','sdk'], domainKeywords:['cloud','dev','ops'], painPoints:['latency','downtime','scale']},
-  // IT services / Telecom / MSP
-  { key:'msp', name:'Managed Service Provider (MSP)', keywords:['managed services','it support','helpdesk','network management','cloud services','it consulting'], domainKeywords:['msp','itsupport','itservices'], painPoints:['downtime','compliance','backup']},
-  { key:'telecom', name:'Telecommunications', keywords:['telecommunications','broadband','fiber','wireless','connectivity','5g'], domainKeywords:['telecom','fiber','comm'], painPoints:['coverage','bandwidth','churn']},
-  // Regulated industries
-  { key:'financial', name:'Financial Services / Banking', keywords:['banking','payments','fintech','wealth','lending','trading','risk','kyc'], domainKeywords:['bank','pay','fin'], painPoints:['fraud','risk','compliance']},
-  { key:'insurance', name:'Insurance', keywords:['underwriting','claims','policy','broker','insurtech','actuarial'], domainKeywords:['insure','risk'], painPoints:['claims','fraud','loss ratio']},
-  { key:'healthcare', name:'Healthcare / Providers', keywords:['patient','clinical','ehr','telemedicine','care','medical'], domainKeywords:['health','clinic','care'], painPoints:['privacy','hipaa','outcomes']},
-  { key:'pharma', name:'Pharma / Life Sciences', keywords:['trial','gxp','fda','research','biotech','drug','molecule'], domainKeywords:['pharma','bio'], painPoints:['regulatory','trial','evidence']},
-  // Commerce & consumer
-  { key:'retail', name:'Retail / eCommerce', keywords:['ecommerce','cart','shop','merchandise','sku','marketplace','omnichannel'], domainKeywords:['shop','store','retail'], painPoints:['conversion','returns','inventory']},
-  { key:'travel', name:'Travel / Hospitality', keywords:['hotel','flight','booking','loyalty','guest','tourism','airline'], domainKeywords:['travel','hotel'], painPoints:['seasonality','occupancy','reviews']},
-  { key:'media', name:'Media / Entertainment', keywords:['streaming','content','studio','broadcast','publisher','advertising'], domainKeywords:['media','tv','video'], painPoints:['engagement','monetization']},
-  // Industrial
-  { key:'manufacturing', name:'Manufacturing', keywords:['factory','plant','supply chain','oee','qa','automation','plm','erp'], domainKeywords:['mfg','industrial'], painPoints:['downtime','quality','waste']},
-  { key:'logistics', name:'Logistics / Supply Chain', keywords:['warehouse','last mile','fulfillment','fleet','tracking','telematics'], domainKeywords:['logistics','shipping'], painPoints:['on-time','cost','visibility']},
-  { key:'energy', name:'Energy / Utilities', keywords:['grid','utility','oil','gas','renewable','solar','wind','iso','iso-ne'], domainKeywords:['energy','utility'], painPoints:['reliability','safety','regulation']},
-  { key:'construction', name:'Construction / AEC', keywords:['bim','general contractor','architect','subcontractor','rfp','rfq','project controls'], domainKeywords:['build','contractor'], painPoints:['delays','overruns','safety']},
-  { key:'automotive', name:'Automotive', keywords:['oem','tier1','dealer','connected car','telematics','ev'], domainKeywords:['auto','motor'], painPoints:['recalls','quality','supply']},
-  { key:'aerospace', name:'Aerospace / Defense', keywords:['avionics','airframe','satellite','defense','itars','dod'], domainKeywords:['aero','defense'], painPoints:['compliance','safety']},
-  // Real assets & services
-  { key:'real_estate', name:'Real Estate / PropTech', keywords:['property','realty','lease','tenant','brokerage','proptech'], domainKeywords:['realty','estate'], painPoints:['vacancy','cap rate']},
-  { key:'legal', name:'Legal Services', keywords:['law firm','litigation','counsel','ip','contract','compliance'], domainKeywords:['legal','law'], painPoints:['risk','deadlines']},
-  { key:'education', name:'Education / EdTech', keywords:['learning','lms','student','curriculum','campus','research','university'], domainKeywords:['edu','school','college'], painPoints:['enrollment','outcomes']},
-  { key:'government', name:'Government / Public Sector', keywords:['public','municipal','city','county','federal','policy','civic'], domainKeywords:['gov','state','city'], painPoints:['budget','transparency']},
-  { key:'nonprofit', name:'Nonprofit', keywords:['donor','fundraising','charity','foundation','mission','ngo'], domainKeywords:['org','foundation'], painPoints:['donations','impact']},
-  // Professional services
-  { key:'professional_services', name:'Professional Services', keywords:['consulting','advisory','strategy','expertise','implementation'], domainKeywords:['consult','advisory','services'], painPoints:['differentiation','acquisition','pricing']},
-];
 
-function detectIndustry(websiteData) {
+/* ================================
+   INDUSTRY DETECTION FUNCTIONS
+================================ */
+
+// Enhanced keyword-based detection (improved scoring)
+function detectIndustryKeywordBased(websiteData) {
   const { html, url } = websiteData;
   const content = (html || '').toLowerCase();
   const domain = new URL(url).hostname.toLowerCase();
 
-  let best = INDUSTRIES[0], bestScore = -1;
+  let best = INDUSTRIES[0];
+  let bestScore = -1;
+  
   for (const ind of INDUSTRIES) {
-    let s = 0;
-    for (const k of ind.keywords || []) if (content.includes(k)) s += 1;
-    for (const dk of ind.domainKeywords || []) if (domain.includes(dk)) s += 3;
-    for (const p of ind.painPoints || []) if (content.includes(p)) s += 0.5;
-    if (s > bestScore) { bestScore = s; best = ind; }
+    let score = 0;
+    
+    // Strong keywords (3 points each)
+    if (ind.strongKeywords) {
+      for (const k of ind.strongKeywords) {
+        if (content.includes(k.toLowerCase())) {
+          score += KEYWORD_WEIGHTS.strong;
+        }
+      }
+    }
+    
+    // Medium keywords (1.5 points each)
+    if (ind.mediumKeywords) {
+      for (const k of ind.mediumKeywords) {
+        if (content.includes(k.toLowerCase())) {
+          score += KEYWORD_WEIGHTS.medium;
+        }
+      }
+    }
+    
+    // Weak keywords (0.5 points each)
+    const weakKw = ind.weakKeywords || ind.keywords || [];
+    for (const k of weakKw) {
+      if (content.includes(k.toLowerCase())) {
+        score += KEYWORD_WEIGHTS.weak;
+      }
+    }
+    
+    // Domain keywords (3 points each)
+    if (ind.domainKeywords) {
+      for (const dk of ind.domainKeywords) {
+        if (domain.includes(dk)) {
+          score += KEYWORD_WEIGHTS.domain;
+        }
+      }
+    }
+    
+    // Context patterns (2 points each)
+    if (ind.contextPatterns) {
+      for (const pattern of ind.contextPatterns) {
+        if (content.includes(pattern.toLowerCase())) {
+          score += KEYWORD_WEIGHTS.context;
+        }
+      }
+    }
+    
+    // Certifications (1.5 points each)
+    if (ind.certifications) {
+      for (const cert of ind.certifications) {
+        if (content.includes(cert.toLowerCase())) {
+          score += KEYWORD_WEIGHTS.certification;
+        }
+      }
+    }
+    
+    // Pain points (0.5 points each)
+    if (ind.painPoints) {
+      for (const p of ind.painPoints) {
+        if (content.includes(p.toLowerCase())) {
+          score += KEYWORD_WEIGHTS.painPoint;
+        }
+      }
+    }
+    
+    // Exclusion keywords (-2 points each)
+    if (ind.excludeKeywords) {
+      for (const exclude of ind.excludeKeywords) {
+        if (content.includes(exclude.toLowerCase())) {
+          score += KEYWORD_WEIGHTS.exclude;
+        }
+      }
+    }
+    
+    // Apply priority boost (if set)
+    if (ind.priority) {
+      score += ind.priority * 0.1;
+    }
+    
+    if (score > bestScore) { 
+      bestScore = score; 
+      best = ind; 
+    }
   }
-  return best;
+  
+  return { 
+    ...best, 
+    detectionMethod: 'keyword', 
+    confidence: bestScore > 10 ? 'high' : bestScore > 5 ? 'medium' : 'low',
+    score: Math.round(bestScore * 10) / 10
+  };
+}
+
+// AI-based industry detection
+async function detectIndustryWithAI(websiteData, preferredAI = 'openai') {
+  const { html, url } = websiteData;
+  const content = extractTextContent(html).slice(0, 3000); // limit to first 3000 chars
+  const domain = new URL(url).hostname;
+  
+  // Build industry options list for AI
+  const industryOptions = INDUSTRIES.map(i => i.name).join(', ');
+  
+  const prompt = `Analyze this website content and classify it into ONE of these industries:
+
+${industryOptions}
+
+Website: ${domain}
+Content preview: ${content}
+
+Instructions:
+1. Return ONLY the industry name from the list above
+2. If multiple industries apply, choose the PRIMARY one
+3. If uncertain, return "General B2B"
+4. Response format: Just the industry name, nothing else
+
+Industry:`;
+
+  try {
+    // Check if API key is available
+    const aiKey = process.env[preferredAI.toUpperCase() + '_API_KEY'];
+    if (!aiKey) {
+      console.log(`No API key for ${preferredAI}, falling back to keyword detection`);
+      return detectIndustryKeywordBased(websiteData);
+    }
+
+    const response = await queryAIAssistant(preferredAI, prompt);
+    const detectedName = response.trim().replace(/['"]/g, '');
+    
+    // Find matching industry from our catalog
+    const matchedIndustry = INDUSTRIES.find(i => 
+      i.name.toLowerCase() === detectedName.toLowerCase() ||
+      detectedName.toLowerCase().includes(i.name.toLowerCase())
+    );
+    
+    if (matchedIndustry) {
+      console.log(`AI detected industry: ${matchedIndustry.name}`);
+      return { 
+        ...matchedIndustry, 
+        detectionMethod: 'ai',
+        confidence: 'high',
+        aiAssistant: preferredAI 
+      };
+    }
+    
+    // AI returned unexpected value, fall back to keywords
+    console.log(`AI returned unexpected industry "${detectedName}", using keyword fallback`);
+    return detectIndustryKeywordBased(websiteData);
+    
+  } catch (error) {
+    console.error('AI industry detection failed:', error.message);
+    // Fallback to keyword-based detection
+    return detectIndustryKeywordBased(websiteData);
+  }
+}
+
+// Hybrid approach: Use both AI and keywords
+async function detectIndustryHybrid(websiteData, useAI = true) {
+  if (!useAI) {
+    return detectIndustryKeywordBased(websiteData);
+  }
+  
+  // Run both in parallel
+  const [aiResult, keywordResult] = await Promise.allSettled([
+    detectIndustryWithAI(websiteData, 'openai'),
+    Promise.resolve(detectIndustryKeywordBased(websiteData))
+  ]);
+  
+  // Prefer AI if successful
+  if (aiResult.status === 'fulfilled' && aiResult.value.detectionMethod === 'ai') {
+    return aiResult.value;
+  }
+  
+  // Otherwise use keyword-based
+  return keywordResult.status === 'fulfilled' 
+    ? keywordResult.value 
+    : INDUSTRIES[0];
+}
+
+// Multi-AI consensus detection (optional - most accurate but uses more API calls)
+async function detectIndustryMultiAI(websiteData) {
+  const content = extractTextContent(websiteData.html).slice(0, 3000);
+  const domain = new URL(websiteData.url).hostname;
+  const industryOptions = INDUSTRIES.map(i => i.name).join(', ');
+  
+  const prompt = `Analyze this website and return ONLY the PRIMARY industry from this list:
+${industryOptions}
+
+Website: ${domain}
+Content: ${content}
+
+Return just the industry name:`;
+
+  const results = [];
+  
+  // Query multiple AIs in parallel
+  const aiPromises = ['openai', 'anthropic', 'perplexity']
+    .filter(ai => process.env[ai.toUpperCase() + '_API_KEY'])
+    .map(async (ai) => {
+      try {
+        const response = await queryAIAssistant(ai, prompt);
+        const industry = INDUSTRIES.find(i => 
+          response.toLowerCase().includes(i.name.toLowerCase())
+        );
+        return industry ? { ai, industry: industry.name, match: industry } : null;
+      } catch (err) {
+        console.error(`${ai} failed:`, err.message);
+        return null;
+      }
+    });
+  
+  const aiResults = (await Promise.all(aiPromises)).filter(Boolean);
+  
+  // Find consensus (if 2+ AIs agree)
+  if (aiResults.length >= 2) {
+    const counts = {};
+    aiResults.forEach(r => {
+      counts[r.industry] = (counts[r.industry] || 0) + 1;
+    });
+    
+    const consensus = Object.entries(counts).find(([_, count]) => count >= 2);
+    if (consensus) {
+      const industry = INDUSTRIES.find(i => i.name === consensus[0]);
+      return { 
+        ...industry, 
+        detectionMethod: 'ai-consensus', 
+        confidence: 'very-high',
+        consensusCount: consensus[1],
+        aiResponses: aiResults 
+      };
+    }
+  }
+  
+  // If no consensus, use first successful AI result
+  if (aiResults.length > 0) {
+    return { 
+      ...aiResults[0].match, 
+      detectionMethod: 'ai-single', 
+      confidence: 'medium',
+      aiAssistant: aiResults[0].ai 
+    };
+  }
+  
+  // Fall back to keyword detection
+  return detectIndustryKeywordBased(websiteData);
 }
 
 /* ================================
@@ -592,13 +802,14 @@ function analyzeVoiceOptimization(m){
 /* ===========================
    Detailed analysis + recs
 =========================== */
-function performDetailedAnalysis(websiteData, discovery = {}) {
+async function performDetailedAnalysis(websiteData, discovery = {}, useAI = true) {
   const { html, url } = websiteData;
   const content = extractTextContent(html);
-  const industry = detectIndustry(websiteData);
-
+  
+  // Use AI-based or hybrid industry detection
+  const industry = await detectIndustryHybrid(websiteData, useAI);
+  
   const m = analyzePageMetrics(html, content, industry, url, discovery);
-
   const analysisResults = {
     aiReadabilityMultimodal: analyzeAIReadabilityMultimodal(m),
     aiSearchReadiness:       analyzeAISearchReadiness(m),
@@ -621,8 +832,21 @@ function performDetailedAnalysis(websiteData, discovery = {}) {
 
   const recommendations = generateV5Recommendations(analysisResults, categoryScores, industry);
   return {
-    url, industry, scores: categoryScores, analysis: analysisResults,
-    recommendations, metrics: m, rubricVersion: 'V5', analyzedAt: new Date().toISOString()
+    url, 
+    industry: {
+      name: industry.name,
+      key: industry.key,
+      detectionMethod: industry.detectionMethod,
+      confidence: industry.confidence,
+      assistant: industry.aiAssistant,
+      score: industry.score
+    },
+    scores: categoryScores, 
+    analysis: analysisResults,
+    recommendations, 
+    metrics: m, 
+    rubricVersion: 'V5', 
+    analyzedAt: new Date().toISOString()
   };
 }
 
@@ -697,13 +921,14 @@ function extractTextContent(html) {
 =========================== */
 router.post('/analyze-website', async (req, res) => {
   try {
-    const { url } = req.body || {};
+    const { url, useAIDetection = true } = req.body || {}; // Add AI detection option
     if (!url) return res.status(400).json({ error: 'URL is required' });
 
     const { combinedHtml, discovery, origin, pagesFetched, sampledUrls } = await fetchMultiPageSample(url);
     const websiteData = { html: combinedHtml || '', url };
 
-    const analysis = performDetailedAnalysis(websiteData, discovery);
+    // Use AI-based industry detection if enabled (note: now awaiting async function)
+    const analysis = await performDetailedAnalysis(websiteData, discovery, useAIDetection);
 
     return res.json({
       success: true,
