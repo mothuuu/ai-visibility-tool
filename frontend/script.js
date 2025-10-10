@@ -39,7 +39,7 @@ const API_BASE_URL = window.location.hostname === 'localhost' || window.location
     ? 'http://localhost:3001/api'
     : 'https://ai-visibility-tool.onrender.com/api';
 
-// Industry-specific test queries (keep existing)
+// Industry-specific test queries
 const TEST_QUERIES = {
     msp: [
         "Best managed service providers for cybersecurity",
@@ -63,7 +63,7 @@ const TEST_QUERIES = {
     ]
 };
 
-// Main form handler (keep existing)
+// Main form handler
 document.getElementById('urlForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
@@ -73,31 +73,31 @@ document.getElementById('urlForm').addEventListener('submit', async (e) => {
         alert('Please enter a valid URL (e.g., https://example.com)');
         return;
     }
-  // --- Sidecar submit to Google Sheets (uses your hidden form in index.html) ---
-const byId = (id) => document.getElementById(id);
-byId('sheet_website').value    = url;
-byId('sheet_page_url').value   = window.location.href;
-byId('sheet_user_agent').value = navigator.userAgent;
-byId('sheet_referrer').value   = document.referrer || '';
-byId('sheetForm')?.submit(); // sends to your Apps Script in the hidden iframe
-// ---------------------------------------------------------------------------
-  
+    
+    // Sidecar submit to Google Sheets
+    const byId = (id) => document.getElementById(id);
+    byId('sheet_website').value = url;
+    byId('sheet_page_url').value = window.location.href;
+    byId('sheet_user_agent').value = navigator.userAgent;
+    byId('sheet_referrer').value = document.referrer || '';
+    byId('sheetForm')?.submit();
+    
     await analyzeWebsite(url);
 });
 
-// Website analysis function (keep existing)
+// Website analysis function
 async function analyzeWebsite(url) {
     showLoading();
-    
-    // ✅ MARK THAT USER HAS SCANNED
     localStorage.setItem('hasScanned', 'true');
     
     try {
-        // Step 1: Analyze website with the new backend
         updateProgress('Analyzing website structure...', 25);
         const analysisData = await fetchTechnicalAnalysis(url);
         
-        // Step 2: Test AI visibility (if needed)
+        if (!analysisData) {
+            return;
+        }
+        
         updateProgress('Testing AI assistant visibility...', 75);
         let aiVisibilityData = null;
         try {
@@ -106,7 +106,6 @@ async function analyzeWebsite(url) {
             console.log('AI visibility testing failed, continuing without it:', error);
         }
         
-        // Step 3: Combine results
         updateProgress('Finalizing results...', 100);
         
         const results = {
@@ -114,7 +113,6 @@ async function analyzeWebsite(url) {
             aiVisibilityResults: aiVisibilityData
         };
         
-        // Display results
         setTimeout(() => {
             showResults(results);
         }, 1000);
@@ -125,21 +123,18 @@ async function analyzeWebsite(url) {
     }
 }
 
-// Updated API call function (keep existing)
+// API call function - ALLOWS ANONYMOUS USERS
 async function fetchTechnicalAnalysis(url) {
     const token = getAuthToken();
     
-    if (!token) {
-        window.location.href = 'auth.html';
-        return;
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
     }
     
     const response = await fetch(`${API_BASE_URL}/analyze-website`, {
         method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-        },
+        headers: headers,
         body: JSON.stringify({ url })
     });
     
@@ -147,10 +142,9 @@ async function fetchTechnicalAnalysis(url) {
         const data = await response.json();
         if (data.error === 'Scan limit reached') {
             alert(data.message + '\n\n' + (data.upgrade || 'Please upgrade your plan.'));
-        } else {
-            logout();
+            window.location.href = 'auth.html?reason=limit';
         }
-        return;
+        return null;
     }
     
     if (!response.ok) {
@@ -178,7 +172,6 @@ async function testAIVisibility(url, industry) {
     return data.data;
 }
 
-// Utility functions (keep existing)
 function isValidUrl(string) {
     try {
         new URL(string);
@@ -188,7 +181,6 @@ function isValidUrl(string) {
     }
 }
 
-// UI functions (keep existing)
 function showLoading() {
     document.getElementById('inputSection').style.display = 'none';
     document.getElementById('loadingSection').style.display = 'block';
@@ -218,16 +210,14 @@ function showResults(results) {
     displayResults(results);
 }
 
+// UPDATED: Check freemium status and show appropriate view
 function displayResults(results) {
-    // Check if user is freemium (anonymous)
     const isFreemium = results.isFreemium || !getUser();
     
-    // Update industry detection
     document.getElementById('detectedIndustry').textContent = results.industry?.name || 'Professional Services';
     document.getElementById('websiteStats').textContent = 
         `Domain: ${new URL(results.url).hostname} | Analyzed: ${new Date(results.analyzedAt).toLocaleDateString()}`;
     
-    // Update total score
     const totalScore = Math.round(results.scores?.total || 0);
     document.getElementById('totalScore').textContent = totalScore;
     
@@ -235,7 +225,6 @@ function displayResults(results) {
     const scoreTitle = document.getElementById('scoreTitle');
     const scoreDescription = document.getElementById('scoreDescription');
     
-    // Update score styling and messages based on total score
     if (totalScore < 30) {
         scoreCircle.className = 'score-circle score-poor';
         scoreTitle.textContent = 'Critical AI Visibility Issues';
@@ -250,7 +239,6 @@ function displayResults(results) {
         scoreDescription.textContent = 'Your website is well-optimized for AI discovery with minor optimization opportunities.';
     }
     
-    // ✅ FREEMIUM LOGIC: Show limited or full results
     if (isFreemium) {
         displayFreemiumResults(results);
     } else {
@@ -258,9 +246,8 @@ function displayResults(results) {
     }
 }
 
-// NEW: Display limited results for freemium users
+// NEW: Freemium limited view
 function displayFreemiumResults(results) {
-    // Show locked categories with upgrade CTA
     const categoriesContainer = document.getElementById('scoreCategories');
     categoriesContainer.innerHTML = `
         <div style="text-align: center; padding: 60px 40px; background: linear-gradient(135deg, rgba(0,185,218,0.1) 0%, rgba(112,48,160,0.1) 100%); border-radius: 15px; border: 2px dashed #00B9DA;">
@@ -274,13 +261,9 @@ function displayFreemiumResults(results) {
         </div>
     `;
     
-    // Hide AI visibility results
     document.getElementById('aiVisibilityResults').innerHTML = '';
-    
-    // Show only top 3 recommendations
     displayRecommendations(results, 3);
     
-    // Add upgrade banner
     const resultsSection = document.getElementById('resultsSection');
     const existingBanner = document.getElementById('freemiumUpgradeBanner');
     if (!existingBanner) {
@@ -304,30 +287,21 @@ function displayFreemiumResults(results) {
     }
 }
 
-// NEW: Display full results for logged-in users
+// NEW: Full view for logged-in users
 function displayFullResults(results) {
-    // Display full category analysis
     displayCategoryAnalysis(results);
-    
-    // Display AI visibility results if available
     if (results.aiVisibilityResults) {
         displayAIVisibilityResults(results.aiVisibilityResults);
     }
-    
-    // Display all recommendations
     displayRecommendations(results);
-    
-    // Remove freemium banner if it exists
     const banner = document.getElementById('freemiumUpgradeBanner');
     if (banner) banner.remove();
 }
 
-// UPDATED V5 CATEGORY DISPLAY FUNCTION
 function displayCategoryAnalysis(results) {
     const scores = results.scores || {};
     const analysis = results.analysis || {};
     
-    // V5 Categories with proper names and contribution percentages
     const categories = [
         {
             key: 'aiReadabilityMultimodal',
@@ -391,18 +365,15 @@ function displayCategoryAnalysis(results) {
     categoriesContainer.innerHTML = '';
     
     categories.forEach(category => {
-        // Get the category analysis from backend response
         const categoryResult = analysis[category.key];
         let categoryPercentage = 0;
         
-        // Handle both V5 and V4 response formats
         if (categoryResult && typeof categoryResult.total === 'number') {
             categoryPercentage = categoryResult.total;
         } else if (scores[category.key] && typeof scores[category.key] === 'number') {
             categoryPercentage = scores[category.key];
         }
         
-        // Calculate actual contribution to final score
         const actualContribution = (categoryPercentage / 100) * category.maxContribution;
         
         let categoryClass, statusEmoji;
@@ -422,7 +393,6 @@ function displayCategoryAnalysis(results) {
         const categoryDiv = document.createElement('div');
         categoryDiv.className = `category ${categoryClass}`;
         
-        // Clean display without internal technical details
         categoryDiv.innerHTML = `
             <h4>
                 <span>${category.icon}</span>
@@ -476,7 +446,7 @@ function displayAIVisibilityResults(aiResults) {
     `;
 }
 
-function displayRecommendations(results) {
+function displayRecommendations(results, limit = null) {
     const recommendations = results.recommendations || [];
     const quickWinsContainer = document.getElementById('quickWins');
     quickWinsContainer.innerHTML = '';
@@ -491,8 +461,9 @@ function displayRecommendations(results) {
         return;
     }
     
-    // Display the recommendations from the backend
-    recommendations.forEach(rec => {
+    const recsToShow = limit ? recommendations.slice(0, limit) : recommendations;
+    
+    recsToShow.forEach(rec => {
         const colors = { 
             'Critical': '#F31C7E', 
             'High': '#FF6B35', 
@@ -514,6 +485,20 @@ function displayRecommendations(results) {
         `;
         quickWinsContainer.appendChild(recDiv);
     });
+    
+    if (limit && recommendations.length > limit) {
+        const moreDiv = document.createElement('div');
+        moreDiv.innerHTML = `
+            <div class="quick-win" style="background: #f8f9fa; border-left: 4px solid #00B9DA;">
+                <h4>🔒 +${recommendations.length - limit} More Recommendations</h4>
+                <p>Sign up free to see all ${recommendations.length} prioritized recommendations</p>
+                <button class="analyze-btn" onclick="window.location.href='auth.html'" style="margin-top: 15px;">
+                    View All Recommendations
+                </button>
+            </div>
+        `;
+        quickWinsContainer.appendChild(moreDiv);
+    }
 }
 
 function resetForm() {
@@ -525,7 +510,6 @@ function resetForm() {
     document.getElementById('progressFill').style.width = '0%';
 }
 
-// CTA handlers (keep existing)
 document.addEventListener('DOMContentLoaded', function() {
     const getReportBtn = document.getElementById('getFullReportBtn');
     const bookCallBtn = document.getElementById('bookCallBtn');
@@ -546,12 +530,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 document.addEventListener('DOMContentLoaded', function () {
-  var urlField = document.getElementById('page_url');
-  if (urlField) {
-    urlField.value = window.location.href;        // full URL (e.g., https://yoursite/page?x=1)
-    // Optional extras you can send later if you want:
-    // urlField.value = window.location.origin + window.location.pathname; // URL without query
-    // or store document.referrer in another hidden field if you add one
-  }
+    var urlField = document.getElementById('page_url');
+    if (urlField) {
+        urlField.value = window.location.href;
+    }
 });
-
