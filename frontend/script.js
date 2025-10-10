@@ -219,6 +219,9 @@ function showResults(results) {
 }
 
 function displayResults(results) {
+    // Check if user is freemium (anonymous)
+    const isFreemium = results.isFreemium || !getUser();
+    
     // Update industry detection
     document.getElementById('detectedIndustry').textContent = results.industry?.name || 'Professional Services';
     document.getElementById('websiteStats').textContent = 
@@ -247,7 +250,63 @@ function displayResults(results) {
         scoreDescription.textContent = 'Your website is well-optimized for AI discovery with minor optimization opportunities.';
     }
     
-    // Display category analysis
+    // ✅ FREEMIUM LOGIC: Show limited or full results
+    if (isFreemium) {
+        displayFreemiumResults(results);
+    } else {
+        displayFullResults(results);
+    }
+}
+
+// NEW: Display limited results for freemium users
+function displayFreemiumResults(results) {
+    // Show locked categories with upgrade CTA
+    const categoriesContainer = document.getElementById('scoreCategories');
+    categoriesContainer.innerHTML = `
+        <div style="text-align: center; padding: 60px 40px; background: linear-gradient(135deg, rgba(0,185,218,0.1) 0%, rgba(112,48,160,0.1) 100%); border-radius: 15px; border: 2px dashed #00B9DA;">
+            <h3 style="margin-bottom: 15px; color: #333;">🔒 See Your Detailed Breakdown</h3>
+            <p style="color: #666; margin-bottom: 25px;">
+                Sign up free to see your scores across all 8 AI readiness categories
+            </p>
+            <button class="analyze-btn" onclick="window.location.href='auth.html'" style="margin: 0 auto;">
+                Sign Up Free - No Credit Card
+            </button>
+        </div>
+    `;
+    
+    // Hide AI visibility results
+    document.getElementById('aiVisibilityResults').innerHTML = '';
+    
+    // Show only top 3 recommendations
+    displayRecommendations(results, 3);
+    
+    // Add upgrade banner
+    const resultsSection = document.getElementById('resultsSection');
+    const existingBanner = document.getElementById('freemiumUpgradeBanner');
+    if (!existingBanner) {
+        const upgradeBanner = document.createElement('div');
+        upgradeBanner.id = 'freemiumUpgradeBanner';
+        upgradeBanner.innerHTML = `
+            <div style="background: linear-gradient(135deg, #00B9DA 0%, #7030A0 100%); color: white; padding: 40px; border-radius: 20px; text-align: center; margin: 30px 0;">
+                <h3 style="margin-bottom: 15px; color: white;">Want the Full Report?</h3>
+                <p style="margin-bottom: 25px; opacity: 0.9;">
+                    Create a free account to see all 8 category scores, full recommendations, and track your progress over time
+                </p>
+                <button class="analyze-btn" onclick="window.location.href='auth.html'" style="background: white; color: #00B9DA; margin: 0 auto; border: none;">
+                    Get Full Access Free
+                </button>
+            </div>
+        `;
+        const ctaSection = document.querySelector('.cta-section');
+        if (ctaSection) {
+            ctaSection.parentNode.insertBefore(upgradeBanner, ctaSection);
+        }
+    }
+}
+
+// NEW: Display full results for logged-in users
+function displayFullResults(results) {
+    // Display full category analysis
     displayCategoryAnalysis(results);
     
     // Display AI visibility results if available
@@ -255,8 +314,12 @@ function displayResults(results) {
         displayAIVisibilityResults(results.aiVisibilityResults);
     }
     
-    // Display recommendations
+    // Display all recommendations
     displayRecommendations(results);
+    
+    // Remove freemium banner if it exists
+    const banner = document.getElementById('freemiumUpgradeBanner');
+    if (banner) banner.remove();
 }
 
 // UPDATED V5 CATEGORY DISPLAY FUNCTION
