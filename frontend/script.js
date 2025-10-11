@@ -1,537 +1,502 @@
-// ===== AUTH HELPERS =====
-function getAuthToken() {
-    return localStorage.getItem('authToken');
-}
+// ========================================
+// AI VISIBILITY TOOL - COMPLETE SCRIPT.JS
+// ========================================
 
-function getUser() {
-    const userStr = localStorage.getItem('user');
-    return userStr ? JSON.parse(userStr) : null;
-}
-
-function logout() {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('user');
-    window.location.href = 'auth.html';
-}
-
-// ===== ADD USER MENU TO PAGE =====
-document.addEventListener('DOMContentLoaded', () => {
-    const user = getUser();
-    if (user) {
-        const header = document.querySelector('.header');
-        const userMenu = document.createElement('div');
-        userMenu.style.cssText = 'position: absolute; top: 20px; right: 20px; color: white; display: flex; align-items: center; gap: 15px;';
-        userMenu.innerHTML = `
-            <div style="text-align: right;">
-                <div style="font-weight: 600;">${user.email}</div>
-                <div style="font-size: 0.85rem; opacity: 0.9;">${user.plan} plan • ${user.scans_used_this_month || 0} scans used</div>
-            </div>
-            <button onclick="logout()" style="padding: 8px 20px; border: 2px solid white; background: transparent; color: white; border-radius: 20px; cursor: pointer; font-weight: 600; transition: all 0.3s;">
-                Logout
-            </button>
-        `;
-        header.style.position = 'relative';
-        header.appendChild(userMenu);
-    }
-});
-
+// API Configuration
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:3001/api'
     : 'https://ai-visibility-tool.onrender.com/api';
 
-// Industry-specific test queries
-const TEST_QUERIES = {
-    msp: [
-        "Best managed service providers for cybersecurity",
-        "Top IT support companies for small business",
-        "Reliable MSP for remote work solutions"
-    ],
-    telecom: [
-        "Best internet service providers in Ontario",
-        "Reliable fiber internet companies",
-        "Top telecommunications providers for business"
-    ],
-    startup: [
-        "AI automation solutions for startups",
-        "Best technology platforms for scaling",
-        "Startup-friendly software solutions"
-    ],
-    professional_services: [
-        "Best consulting firms for business strategy",
-        "Top professional service providers",
-        "Business advisory services near me"
-    ]
-};
+// DOM Elements
+const scanForm = document.getElementById('scanForm');
+const urlInput = document.getElementById('urlInput');
+const analyzeBtn = document.getElementById('analyzeBtn');
+const loadingSection = document.getElementById('loadingSection');
+const resultsSection = document.getElementById('resultsSection');
+const categoriesContainer = document.getElementById('categoriesContainer');
+const recommendationsContainer = document.getElementById('recommendationsContainer');
+const errorMessage = document.getElementById('errorMessage');
 
-// Main form handler
-document.getElementById('urlForm').addEventListener('submit', async (e) => {
+// User state
+let currentUser = null;
+let authToken = null;
+
+// ========================================
+// INITIALIZATION
+// ========================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Check authentication status
+    checkAuthStatus();
+    
+    // Setup form handler
+    if (scanForm) {
+        scanForm.addEventListener('submit', handleScanSubmit);
+    }
+    
+    // Setup logout if button exists
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', handleLogout);
+    }
+});
+
+// ========================================
+// AUTHENTICATION
+// ========================================
+
+function checkAuthStatus() {
+    authToken = localStorage.getItem('authToken');
+    const userStr = localStorage.getItem('user');
+    
+    if (authToken && userStr) {
+        currentUser = JSON.parse(userStr);
+        updateUIForAuthUser();
+    } else {
+        currentUser = null;
+        updateUIForGuestUser();
+    }
+}
+
+function updateUIForAuthUser() {
+    // Update header or nav to show logged-in state
+    const authLink = document.getElementById('authLink');
+    const userDisplay = document.getElementById('userDisplay');
+    
+    if (authLink) {
+        authLink.style.display = 'none';
+    }
+    
+    if (userDisplay) {
+        userDisplay.innerHTML = `
+            <span>${currentUser.email}</span>
+            <span class="plan-badge">${currentUser.plan}</span>
+            <button id="logoutBtn" onclick="handleLogout()">Logout</button>
+        `;
+        userDisplay.style.display = 'flex';
+    }
+}
+
+function updateUIForGuestUser() {
+    const authLink = document.getElementById('authLink');
+    const userDisplay = document.getElementById('userDisplay');
+    
+    if (authLink) {
+        authLink.style.display = 'block';
+    }
+    
+    if (userDisplay) {
+        userDisplay.style.display = 'none';
+    }
+}
+
+function handleLogout() {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
+    currentUser = null;
+    authToken = null;
+    updateUIForGuestUser();
+    
+    // Redirect to home
+    window.location.href = 'index.html';
+}
+
+// ========================================
+// SCAN FORM HANDLING
+// ========================================
+
+async function handleScanSubmit(e) {
     e.preventDefault();
     
-    const url = document.getElementById('websiteUrl').value.trim();
+    const url = urlInput.value.trim();
     
-    if (!isValidUrl(url)) {
-        alert('Please enter a valid URL (e.g., https://example.com)');
+    if (!url) {
+        showError('Please enter a valid URL');
         return;
     }
     
-    // Sidecar submit to Google Sheets
-    const byId = (id) => document.getElementById(id);
-    byId('sheet_website').value = url;
-    byId('sheet_page_url').value = window.location.href;
-    byId('sheet_user_agent').value = navigator.userAgent;
-    byId('sheet_referrer').value = document.referrer || '';
-    byId('sheetForm')?.submit();
-    
-    await analyzeWebsite(url);
-});
-
-// Website analysis function
-async function analyzeWebsite(url) {
-    showLoading();
-    localStorage.setItem('hasScanned', 'true');
-    
-    try {
-        updateProgress('Analyzing website structure...', 25);
-        const analysisData = await fetchTechnicalAnalysis(url);
-        
-        if (!analysisData) {
-            return;
-        }
-        
-        updateProgress('Testing AI assistant visibility...', 75);
-        let aiVisibilityData = null;
-        try {
-            aiVisibilityData = await testAIVisibility(url, analysisData.industry);
-        } catch (error) {
-            console.log('AI visibility testing failed, continuing without it:', error);
-        }
-        
-        updateProgress('Finalizing results...', 100);
-        
-        const results = {
-            ...analysisData,
-            aiVisibilityResults: aiVisibilityData
-        };
-        
-        setTimeout(() => {
-            showResults(results);
-        }, 1000);
-        
-    } catch (error) {
-        console.error('Analysis failed:', error);
-        showError(error.message || 'Analysis failed. Please try again.');
-    }
-}
-
-// API call function - ALLOWS ANONYMOUS USERS
-async function fetchTechnicalAnalysis(url) {
-    const token = getAuthToken();
-    
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+    // Validate URL format
+    if (!isValidUrl(url)) {
+        showError('Please enter a valid URL (e.g., https://example.com)');
+        return;
     }
     
-    const response = await fetch(`${API_BASE_URL}/analyze-website`, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify({ url })
-    });
-    
-    if (response.status === 401 || response.status === 403) {
-        const data = await response.json();
-        if (data.error === 'Scan limit reached') {
-            alert(data.message + '\n\n' + (data.upgrade || 'Please upgrade your plan.'));
-            window.location.href = 'auth.html?reason=limit';
-        }
-        return null;
-    }
-    
-    if (!response.ok) {
-        throw new Error(`Technical analysis failed: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    return data.data;
-}
-
-async function testAIVisibility(url, industry) {
-    const queries = TEST_QUERIES[industry?.key] || TEST_QUERIES.professional_services;
-    
-    const response = await fetch(`${API_BASE_URL}/test-ai-visibility`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, industry, queries })
-    });
-    
-    if (!response.ok) {
-        throw new Error(`AI visibility testing failed: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    return data.data;
+    // Start scan
+    await runScan(url);
 }
 
 function isValidUrl(string) {
     try {
-        new URL(string);
-        return true;
+        const url = new URL(string);
+        return url.protocol === 'http:' || url.protocol === 'https:';
     } catch (_) {
         return false;
     }
 }
 
-function showLoading() {
-    document.getElementById('inputSection').style.display = 'none';
-    document.getElementById('loadingSection').style.display = 'block';
-    document.getElementById('errorSection').style.display = 'none';
-    document.getElementById('resultsSection').style.display = 'none';
+// ========================================
+// SCAN EXECUTION
+// ========================================
+
+async function runScan(url) {
+    try {
+        // Show loading state
+        showLoading();
+        hideError();
+        
+        // Prepare request
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+        
+        // Add auth token if available
+        if (authToken) {
+            headers['Authorization'] = `Bearer ${authToken}`;
+        }
+        
+        // Make API call
+        const response = await fetch(`${API_BASE_URL}/scan`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({ url })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Scan failed');
+        }
+        
+        // Display results
+        hideLoading();
+        displayResults(data);
+        
+    } catch (error) {
+        hideLoading();
+        showError(error.message);
+        console.error('Scan error:', error);
+    }
 }
 
-function updateProgress(text, percentage) {
-    document.getElementById('loadingText').textContent = text;
-    document.getElementById('progressFill').style.width = percentage + '%';
-}
+// ========================================
+// RESULTS DISPLAY ROUTER
+// ========================================
 
-function showError(message) {
-    document.getElementById('inputSection').style.display = 'none';
-    document.getElementById('loadingSection').style.display = 'none';
-    document.getElementById('errorSection').style.display = 'block';
-    document.getElementById('resultsSection').style.display = 'none';
-    document.getElementById('errorMessage').textContent = message;
-}
-
-function showResults(results) {
-    document.getElementById('inputSection').style.display = 'none';
-    document.getElementById('loadingSection').style.display = 'none';
-    document.getElementById('errorSection').style.display = 'none';
-    document.getElementById('resultsSection').style.display = 'block';
-    
-    displayResults(results);
-}
-
-// UPDATED: Check freemium status and show appropriate view
 function displayResults(results) {
-    const isFreemium = results.isFreemium || !getUser();
+    // Show results section
+    resultsSection.style.display = 'block';
     
-    document.getElementById('detectedIndustry').textContent = results.industry?.name || 'Professional Services';
-    document.getElementById('websiteStats').textContent = 
-        `Domain: ${new URL(results.url).hostname} | Analyzed: ${new Date(results.analyzedAt).toLocaleDateString()}`;
+    // Scroll to results
+    resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     
-    const totalScore = Math.round(results.scores?.total || 0);
-    document.getElementById('totalScore').textContent = totalScore;
-    
-    const scoreCircle = document.getElementById('scoreCircle');
-    const scoreTitle = document.getElementById('scoreTitle');
-    const scoreDescription = document.getElementById('scoreDescription');
-    
-    if (totalScore < 30) {
-        scoreCircle.className = 'score-circle score-poor';
-        scoreTitle.textContent = 'Critical AI Visibility Issues';
-        scoreDescription.textContent = 'Your website has significant barriers preventing AI systems from finding and recommending you.';
-    } else if (totalScore < 60) {
-        scoreCircle.className = 'score-circle score-fair';
-        scoreTitle.textContent = 'Moderate AI Visibility';
-        scoreDescription.textContent = 'Your website appears in some AI results but has room for substantial improvement.';
-    } else {
-        scoreCircle.className = 'score-circle score-good';
-        scoreTitle.textContent = 'Strong AI Visibility';
-        scoreDescription.textContent = 'Your website is well-optimized for AI discovery with minor optimization opportunities.';
-    }
-    
-    if (isFreemium) {
-        displayFreemiumResults(results);
-    } else {
+    // Route to appropriate display based on auth status
+    if (currentUser) {
         displayFullResults(results);
+    } else {
+        displayFreemiumResults(results);
     }
 }
 
-// NEW: Freemium limited view
+// ========================================
+// FREEMIUM DISPLAY (NEW - UPGRADED)
+// ========================================
+
 function displayFreemiumResults(results) {
-    const categoriesContainer = document.getElementById('scoreCategories');
-    categoriesContainer.innerHTML = `
-        <div style="text-align: center; padding: 60px 40px; background: linear-gradient(135deg, rgba(0,185,218,0.1) 0%, rgba(112,48,160,0.1) 100%); border-radius: 15px; border: 2px dashed #00B9DA;">
-            <h3 style="margin-bottom: 15px; color: #333;">🔒 See Your Detailed Breakdown</h3>
-            <p style="color: #666; margin-bottom: 25px;">
-                Sign up free to see your scores across all 8 AI readiness categories
+    // 1. Overall Score Display
+    const overallScoreHTML = `
+        <div class="overall-score-card">
+            <h2>Your AI Visibility Score</h2>
+            <div class="score-display">
+                <span class="score-value">${results.overallScore}/100</span>
+                <span class="score-label">${getScoreLabel(results.overallScore)}</span>
+            </div>
+            <p class="score-description">
+                ${getScoreDescription(results.overallScore)}
             </p>
-            <button class="analyze-btn" onclick="window.location.href='auth.html'" style="margin: 0 auto;">
+        </div>
+    `;
+    
+    // 2. Simplified Category Scores
+    const categories = [
+        { key: 'aiReadability', name: 'AI Readability & Multimodal', icon: '👁️', maxContribution: 10 },
+        { key: 'searchReadiness', name: 'AI Search Readiness', icon: '🎯', maxContribution: 20 },
+        { key: 'freshness', name: 'Content Freshness', icon: '🔄', maxContribution: 8 },
+        { key: 'expertise', name: 'Expertise & Authority', icon: '🎓', maxContribution: 15 },
+        { key: 'knowledgeGraph', name: 'Knowledge Graph Presence', icon: '🕸️', maxContribution: 12 },
+        { key: 'technicalSEO', name: 'Technical SEO Foundation', icon: '⚙️', maxContribution: 15 },
+        { key: 'userExperience', name: 'User Experience Signals', icon: '🎨', maxContribution: 10 },
+        { key: 'brandSignals', name: 'Brand & Trust Signals', icon: '🏆', maxContribution: 10 }
+    ];
+    
+    let categoriesHTML = '<div class="freemium-categories">';
+    categoriesHTML += '<h3>Score Breakdown</h3>';
+    categoriesHTML += '<p class="subtitle">See how each category contributes to your score</p>';
+    
+    categories.forEach(category => {
+        const categoryScore = results.scores[category.key] || 0;
+        const contribution = (categoryScore / 100) * category.maxContribution;
+        const status = getStatusEmoji(contribution, category.maxContribution);
+        const percentage = (contribution / category.maxContribution * 100).toFixed(0);
+        
+        categoriesHTML += `
+            <div class="freemium-category-row">
+                <div class="category-info">
+                    <span class="category-icon">${category.icon}</span>
+                    <span class="category-name">${category.name}</span>
+                </div>
+                <div class="category-score">
+                    <span class="contribution">${contribution.toFixed(1)}/${category.maxContribution}</span>
+                    <span class="status-indicator">${status}</span>
+                </div>
+                <div class="category-bar">
+                    <div class="bar-fill" style="width: ${percentage}%"></div>
+                </div>
+            </div>
+        `;
+    });
+    
+    categoriesHTML += '</div>';
+    
+    // 3. Upgrade CTA
+    const upgradePromptHTML = `
+        <div class="upgrade-prompt-card">
+            <div class="upgrade-icon">🔒</div>
+            <h4>Want Detailed Breakdowns?</h4>
+            <p>Sign up free to see:</p>
+            <ul class="upgrade-benefits">
+                <li>✓ Subcategory analysis for each pillar</li>
+                <li>✓ Specific issues detected on your site</li>
+                <li>✓ Complete recommendations list</li>
+                <li>✓ 2 free scans per month</li>
+            </ul>
+            <button class="upgrade-btn" onclick="window.location.href='auth.html'">
                 Sign Up Free - No Credit Card
             </button>
         </div>
     `;
     
-    document.getElementById('aiVisibilityResults').innerHTML = '';
-    displayRecommendations(results, 3);
+    // 4. Top 3-5 Recommendations Only
+    const topRecommendations = results.recommendations ? results.recommendations.slice(0, 5) : [];
+    let recommendationsHTML = '<div class="freemium-recommendations">';
+    recommendationsHTML += '<h3>Top Recommendations</h3>';
+    recommendationsHTML += '<p class="subtitle">Priority actions to improve your AI visibility</p>';
     
-    const resultsSection = document.getElementById('resultsSection');
-    const existingBanner = document.getElementById('freemiumUpgradeBanner');
-    if (!existingBanner) {
-        const upgradeBanner = document.createElement('div');
-        upgradeBanner.id = 'freemiumUpgradeBanner';
-        upgradeBanner.innerHTML = `
-            <div style="background: linear-gradient(135deg, #00B9DA 0%, #7030A0 100%); color: white; padding: 40px; border-radius: 20px; text-align: center; margin: 30px 0;">
-                <h3 style="margin-bottom: 15px; color: white;">Want the Full Report?</h3>
-                <p style="margin-bottom: 25px; opacity: 0.9;">
-                    Create a free account to see all 8 category scores, full recommendations, and track your progress over time
-                </p>
-                <button class="analyze-btn" onclick="window.location.href='auth.html'" style="background: white; color: #00B9DA; margin: 0 auto; border: none;">
-                    Get Full Access Free
-                </button>
-            </div>
-        `;
-        const ctaSection = document.querySelector('.cta-section');
-        if (ctaSection) {
-            ctaSection.parentNode.insertBefore(upgradeBanner, ctaSection);
+    if (topRecommendations.length > 0) {
+        topRecommendations.forEach((rec, index) => {
+            recommendationsHTML += `
+                <div class="recommendation-card">
+                    <div class="rec-number">${index + 1}</div>
+                    <div class="rec-content">
+                        <h4>${rec.title}</h4>
+                        <p>${rec.description}</p>
+                        <span class="rec-impact">${rec.impact || 'High'} Impact</span>
+                    </div>
+                </div>
+            `;
+        });
+        
+        if (results.recommendations && results.recommendations.length > 5) {
+            recommendationsHTML += `
+                <div class="more-recommendations-notice">
+                    <p>🔒 <strong>${results.recommendations.length - 5} more recommendations</strong> available with a free account</p>
+                </div>
+            `;
         }
+    } else {
+        recommendationsHTML += '<p>No recommendations available at this time.</p>';
     }
+    
+    recommendationsHTML += '</div>';
+    
+    // Render everything
+    categoriesContainer.innerHTML = overallScoreHTML + categoriesHTML + upgradePromptHTML;
+    recommendationsContainer.innerHTML = recommendationsHTML;
 }
 
-// NEW: Full view for logged-in users
+// ========================================
+// FULL RESULTS DISPLAY (AUTHENTICATED USERS)
+// ========================================
+
 function displayFullResults(results) {
-    displayCategoryAnalysis(results);
-    if (results.aiVisibilityResults) {
-        displayAIVisibilityResults(results.aiVisibilityResults);
-    }
-    displayRecommendations(results);
-    const banner = document.getElementById('freemiumUpgradeBanner');
-    if (banner) banner.remove();
-}
-
-function displayCategoryAnalysis(results) {
-    const scores = results.scores || {};
-    const analysis = results.analysis || {};
+    // Overall Score
+    let html = `
+        <div class="overall-score-card">
+            <h2>Your AI Visibility Score</h2>
+            <div class="score-display">
+                <span class="score-value">${results.overallScore}/100</span>
+                <span class="score-label">${getScoreLabel(results.overallScore)}</span>
+            </div>
+            <p class="score-description">
+                ${getScoreDescription(results.overallScore)}
+            </p>
+            ${currentUser && currentUser.plan === 'free' ? `
+                <div class="upgrade-notice">
+                    <p>🚀 Upgrade to Premium for multi-page scanning, competitor analysis, and more!</p>
+                    <button onclick="window.location.href='checkout.html?url=${encodeURIComponent(results.url || '')}'" class="upgrade-btn-small">
+                        Upgrade Now
+                    </button>
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    // Categories with Full Details
+    html += '<div class="full-categories">';
+    html += '<h3>Detailed Analysis</h3>';
     
     const categories = [
-        {
-            key: 'aiReadabilityMultimodal',
-            name: 'AI Readability & Multimodal Access',
-            icon: '👁️',
-            description: 'How well AI can process your images, videos, and multimedia content',
-            maxContribution: 10
-        },
-        {
-            key: 'aiSearchReadiness', 
-            name: 'AI Search Readiness & Content Depth',
-            icon: '🎯',
-            description: 'Content structure and depth for AI search optimization',
-            maxContribution: 20
-        },
-        {
-            key: 'contentFreshness',
-            name: 'Content Freshness & Maintenance', 
-            icon: '🔄',
-            description: 'Content currency and maintenance indicators for AI trust',
-            maxContribution: 8
-        },
-        {
-            key: 'contentStructure',
-            name: 'Content Structure & Entity Recognition',
-            icon: '🏗️', 
-            description: 'Semantic structure and entity clarity for AI understanding',
-            maxContribution: 15
-        },
-        {
-            key: 'speedUX',
-            name: 'Speed & User Experience',
-            icon: '⚡',
-            description: 'Core Web Vitals and performance metrics for AI crawlers',
-            maxContribution: 5
-        },
-        {
-            key: 'technicalSetup',
-            name: 'Technical Setup & Structured Data',
-            icon: '⚙️',
-            description: 'Technical infrastructure for AI crawler access and understanding', 
-            maxContribution: 18
-        },
-        {
-            key: 'trustAuthority',
-            name: 'Trust, Authority & Verification',
-            icon: '🛡️',
-            description: 'E-E-A-T signals and credibility indicators for AI systems',
-            maxContribution: 12
-        },
-        {
-            key: 'voiceOptimization',
-            name: 'Voice & Conversational Optimization', 
-            icon: '🎤',
-            description: 'Natural language and conversational query optimization',
-            maxContribution: 12
-        }
+        { key: 'aiReadability', name: 'AI Readability & Multimodal', icon: '👁️', maxContribution: 10 },
+        { key: 'searchReadiness', name: 'AI Search Readiness', icon: '🎯', maxContribution: 20 },
+        { key: 'freshness', name: 'Content Freshness', icon: '🔄', maxContribution: 8 },
+        { key: 'expertise', name: 'Expertise & Authority', icon: '🎓', maxContribution: 15 },
+        { key: 'knowledgeGraph', name: 'Knowledge Graph Presence', icon: '🕸️', maxContribution: 12 },
+        { key: 'technicalSEO', name: 'Technical SEO Foundation', icon: '⚙️', maxContribution: 15 },
+        { key: 'userExperience', name: 'User Experience Signals', icon: '🎨', maxContribution: 10 },
+        { key: 'brandSignals', name: 'Brand & Trust Signals', icon: '🏆', maxContribution: 10 }
     ];
     
-    const categoriesContainer = document.getElementById('scoreCategories');
-    categoriesContainer.innerHTML = '';
-    
     categories.forEach(category => {
-        const categoryResult = analysis[category.key];
-        let categoryPercentage = 0;
+        const categoryScore = results.scores[category.key] || 0;
+        const contribution = (categoryScore / 100) * category.maxContribution;
+        const status = getStatusEmoji(contribution, category.maxContribution);
+        const percentage = (contribution / category.maxContribution * 100).toFixed(0);
         
-        if (categoryResult && typeof categoryResult.total === 'number') {
-            categoryPercentage = categoryResult.total;
-        } else if (scores[category.key] && typeof scores[category.key] === 'number') {
-            categoryPercentage = scores[category.key];
-        }
-        
-        const actualContribution = (categoryPercentage / 100) * category.maxContribution;
-        
-        let categoryClass, statusEmoji;
-        const contributionPercentage = (actualContribution / category.maxContribution) * 100;
-        
-        if (contributionPercentage >= 70) {
-            categoryClass = 'category-good';
-            statusEmoji = '✅';
-        } else if (contributionPercentage >= 40) {
-            categoryClass = 'category-fair'; 
-            statusEmoji = '🟡';
-        } else {
-            categoryClass = 'category-poor';
-            statusEmoji = '❌';
-        }
-        
-        const categoryDiv = document.createElement('div');
-        categoryDiv.className = `category ${categoryClass}`;
-        
-        categoryDiv.innerHTML = `
-            <h4>
-                <span>${category.icon}</span>
-                ${category.name}
-                <span class="category-score">${actualContribution.toFixed(1)}/${category.maxContribution} pts ${statusEmoji}</span>
-            </h4>
-            <p>${category.description}</p>
-            <div class="category-progress">
-                <div class="progress-bar-small">
-                    <div class="progress-fill-small" style="width: ${Math.min(100, contributionPercentage)}%"></div>
+        html += `
+            <div class="category-card">
+                <div class="category-header">
+                    <div class="category-title">
+                        <span class="category-icon">${category.icon}</span>
+                        <h4>${category.name}</h4>
+                    </div>
+                    <div class="category-score-large">
+                        <span class="score">${contribution.toFixed(1)}/${category.maxContribution}</span>
+                        <span class="status">${status}</span>
+                    </div>
                 </div>
-                <span class="progress-text">${categoryPercentage.toFixed(0)}% optimized</span>
+                <div class="category-bar-large">
+                    <div class="bar-fill" style="width: ${percentage}%"></div>
+                </div>
+                <div class="category-details">
+                    <p>Score: ${categoryScore}/100</p>
+                    ${results.detailedAnalysis && results.detailedAnalysis[category.key] 
+                        ? `<p class="detail-text">${results.detailedAnalysis[category.key]}</p>` 
+                        : ''}
+                </div>
             </div>
         `;
-        
-        categoriesContainer.appendChild(categoryDiv);
-    });
-}
-
-function displayAIVisibilityResults(aiResults) {
-    const aiResultsContainer = document.getElementById('aiVisibilityResults');
-    
-    if (!aiResults || !aiResults.overall) {
-        aiResultsContainer.innerHTML = `
-            <h3>AI Visibility Testing</h3>
-            <p>AI assistant testing was not available for this analysis.</p>
-        `;
-        return;
-    }
-    
-    aiResultsContainer.innerHTML = `
-        <h3>Live AI Assistant Testing Results</h3>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0;">
-            <div style="text-align: center; background: white; padding: 20px; border-radius: 10px;">
-                <div style="font-size: 2rem; font-weight: bold; color: #00B9DA;">${Math.round(aiResults.overall.mentionRate)}%</div>
-                <div>Mention Rate</div>
-                <small>How often you're mentioned</small>
-            </div>
-            <div style="text-align: center; background: white; padding: 20px; border-radius: 10px;">
-                <div style="font-size: 2rem; font-weight: bold; color: #4DACA6;">${Math.round(aiResults.overall.recommendationRate)}%</div>
-                <div>Recommendation Rate</div>
-                <small>How often you're recommended</small>
-            </div>
-            <div style="text-align: center; background: white; padding: 20px; border-radius: 10px;">
-                <div style="font-size: 2rem; font-weight: bold; color: #7030A0;">${Math.round(aiResults.overall.citationRate)}%</div>
-                <div>Citation Rate</div>
-                <small>How often you're cited</small>
-            </div>
-        </div>
-        <p><strong>Queries tested:</strong> ${aiResults.testedQueries}</p>
-    `;
-}
-
-function displayRecommendations(results, limit = null) {
-    const recommendations = results.recommendations || [];
-    const quickWinsContainer = document.getElementById('quickWins');
-    quickWinsContainer.innerHTML = '';
-    
-    if (recommendations.length === 0) {
-        quickWinsContainer.innerHTML = `
-            <div class="quick-win">
-                <h4>Excellent Optimization!</h4>
-                <p>Your website is well-optimized for AI visibility. Continue monitoring for new opportunities.</p>
-            </div>
-        `;
-        return;
-    }
-    
-    const recsToShow = limit ? recommendations.slice(0, limit) : recommendations;
-    
-    recsToShow.forEach(rec => {
-        const colors = { 
-            'Critical': '#F31C7E', 
-            'High': '#FF6B35', 
-            'Medium': '#FFA726', 
-            'Low': '#4DACA6' 
-        };
-        
-        const recDiv = document.createElement('div');
-        recDiv.className = 'quick-win';
-        recDiv.innerHTML = `
-            <h4 style="display: flex; justify-content: space-between; align-items: center;">
-                ${rec.title}
-                <span style="background: ${colors[rec.impact]}; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem;">
-                    ${rec.impact}
-                </span>
-            </h4>
-            <p>${rec.description}</p>
-            ${rec.quickWin ? `<p><strong>Quick Win:</strong> ${rec.quickWin}</p>` : ''}
-        `;
-        quickWinsContainer.appendChild(recDiv);
     });
     
-    if (limit && recommendations.length > limit) {
-        const moreDiv = document.createElement('div');
-        moreDiv.innerHTML = `
-            <div class="quick-win" style="background: #f8f9fa; border-left: 4px solid #00B9DA;">
-                <h4>🔒 +${recommendations.length - limit} More Recommendations</h4>
-                <p>Sign up free to see all ${recommendations.length} prioritized recommendations</p>
-                <button class="analyze-btn" onclick="window.location.href='auth.html'" style="margin-top: 15px;">
-                    View All Recommendations
-                </button>
-            </div>
-        `;
-        quickWinsContainer.appendChild(moreDiv);
+    html += '</div>';
+    
+    categoriesContainer.innerHTML = html;
+    
+    // Full Recommendations
+    let recsHTML = '<div class="full-recommendations">';
+    recsHTML += '<h3>All Recommendations</h3>';
+    
+    if (results.recommendations && results.recommendations.length > 0) {
+        results.recommendations.forEach((rec, index) => {
+            recsHTML += `
+                <div class="recommendation-card-full">
+                    <div class="rec-number-full">${index + 1}</div>
+                    <div class="rec-content-full">
+                        <h4>${rec.title}</h4>
+                        <p>${rec.description}</p>
+                        <div class="rec-meta">
+                            <span class="rec-impact">${rec.impact || 'Medium'} Impact</span>
+                            ${rec.category ? `<span class="rec-category">${rec.category}</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+    } else {
+        recsHTML += '<p>Great job! No major issues detected.</p>';
+    }
+    
+    recsHTML += '</div>';
+    
+    recommendationsContainer.innerHTML = recsHTML;
+}
+
+// ========================================
+// HELPER FUNCTIONS
+// ========================================
+
+function getScoreLabel(score) {
+    if (score >= 90) return '🌟 Excellent';
+    if (score >= 75) return '✅ Good';
+    if (score >= 60) return '🟡 Fair';
+    if (score >= 40) return '🟠 Needs Work';
+    return '❌ Critical';
+}
+
+function getScoreDescription(score) {
+    if (score >= 90) return 'Your site is highly optimized for AI discovery and recommendation.';
+    if (score >= 75) return 'Your site is well-positioned for AI visibility with room for improvement.';
+    if (score >= 60) return 'Your site has moderate AI visibility. Focus on key improvements.';
+    if (score >= 40) return 'Your site needs significant optimization for AI engines.';
+    return 'Your site is not well-optimized for AI discovery. Immediate action needed.';
+}
+
+function getStatusEmoji(contribution, max) {
+    const percentage = (contribution / max) * 100;
+    if (percentage >= 80) return '✅';
+    if (percentage >= 50) return '🟡';
+    return '❌';
+}
+
+// ========================================
+// UI STATE MANAGEMENT
+// ========================================
+
+function showLoading() {
+    if (loadingSection) {
+        loadingSection.style.display = 'block';
+    }
+    if (resultsSection) {
+        resultsSection.style.display = 'none';
+    }
+    if (analyzeBtn) {
+        analyzeBtn.disabled = true;
+        analyzeBtn.textContent = 'Analyzing...';
     }
 }
 
-function resetForm() {
-    document.getElementById('inputSection').style.display = 'block';
-    document.getElementById('loadingSection').style.display = 'none';
-    document.getElementById('errorSection').style.display = 'none';
-    document.getElementById('resultsSection').style.display = 'none';
-    document.getElementById('websiteUrl').value = '';
-    document.getElementById('progressFill').style.width = '0%';
+function hideLoading() {
+    if (loadingSection) {
+        loadingSection.style.display = 'none';
+    }
+    if (analyzeBtn) {
+        analyzeBtn.disabled = false;
+        analyzeBtn.textContent = 'Analyze Website';
+    }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    const getReportBtn = document.getElementById('getFullReportBtn');
-    const bookCallBtn = document.getElementById('bookCallBtn');
-    
-    if (getReportBtn) {
-        getReportBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            window.open('mailto:info@xeomarketing.com?subject=AI Visibility Report Request&body=Hi, I would like to request a detailed AI visibility analysis for my website. Here are my details:', '_blank');
-        });
+function showError(message) {
+    if (errorMessage) {
+        errorMessage.textContent = message;
+        errorMessage.style.display = 'block';
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            hideError();
+        }, 5000);
+    } else {
+        alert(message);
     }
-    
-    if (bookCallBtn) {
-        bookCallBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            window.open('https://calendly.com/xeo-marketing/schedule-a-callback', '_blank');
-        });
-    }
-});
+}
 
-document.addEventListener('DOMContentLoaded', function () {
-    var urlField = document.getElementById('page_url');
-    if (urlField) {
-        urlField.value = window.location.href;
+function hideError() {
+    if (errorMessage) {
+        errorMessage.style.display = 'none';
     }
-});
+}
+
+// ========================================
+// EXPORT FOR TESTING
+// ========================================
+
+// Make functions available globally if needed
+window.runScan = runScan;
+window.handleLogout = handleLogout;
