@@ -937,7 +937,8 @@ function extractTextContent(html) {
 /* ===========================
    API ROUTES
 =========================== */
-router.post('/analyze-website', authenticateTokenOptional, async (req, res) => {
+
+router.post('/scan', authenticateTokenOptional, async (req, res) => {
   try {
     const { url, useAIDetection = true } = req.body || {};
     if (!url) return res.status(400).json({ error: 'URL is required' });
