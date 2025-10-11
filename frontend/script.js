@@ -198,389 +198,286 @@ function displayResults(results) {
 }
 
 // ========================================
-// FREEMIUM DISPLAY (NEW - UPGRADED)
+// FREEMIUM DISPLAY (WITH UPSELL MOMENTS)
 // ========================================
 
-/* ========================================
-   UPSELL MOMENTS CSS - Add to bottom of styles.css
-   ======================================== */
-
-/* Competitor Teaser Card (Locked) */
-.competitor-teaser-card {
-    background: white;
-    border-radius: 15px;
-    padding: 30px;
-    margin: 30px 0;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-}
-
-.teaser-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.teaser-header h3 {
-    font-size: 1.4rem;
-    color: #333;
-    margin: 0;
-}
-
-.pro-badge {
-    background: linear-gradient(135deg, #7030A0, #00B9DA);
-    color: white;
-    padding: 6px 16px;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    text-transform: uppercase;
-}
-
-.teaser-preview {
-    position: relative;
-    min-height: 200px;
-}
-
-.competitor-comparison-blur {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-.comparison-row {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.comparison-row span:first-child {
-    min-width: 120px;
-    font-weight: 500;
-    color: #555;
-}
-
-.score-bar-blur {
-    flex: 1;
-    height: 30px;
-    background: linear-gradient(90deg, #00B9DA, #4DACA6);
-    border-radius: 5px;
-    opacity: 0.6;
-}
-
-.comparison-row span:last-child {
-    min-width: 60px;
-    text-align: right;
-    font-weight: 600;
-    color: #333;
-}
-
-.blur-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(3px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-}
-
-.unlock-content {
-    text-align: center;
-    max-width: 400px;
-    padding: 20px;
-}
-
-.lock-icon {
-    font-size: 3rem;
-    margin-bottom: 15px;
-}
-
-.unlock-content h4 {
-    font-size: 1.5rem;
-    color: #333;
-    margin-bottom: 10px;
-}
-
-.unlock-content p {
-    color: #666;
-    margin-bottom: 20px;
-}
-
-.unlock-btn {
-    background: linear-gradient(135deg, #7030A0, #00B9DA);
-    color: white;
-    border: none;
-    padding: 15px 30px;
-    border-radius: 10px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: transform 0.2s ease;
-}
-
-.unlock-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 20px rgba(112, 48, 160, 0.3);
-}
-
-/* Deeper Insights Prompt */
-.deeper-insights-prompt {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border: 2px solid #00B9DA;
-    border-radius: 15px;
-    padding: 35px;
-    text-align: center;
-    margin: 30px 0;
-}
-
-.insights-icon {
-    font-size: 3.5rem;
-    margin-bottom: 15px;
-}
-
-.deeper-insights-prompt h3 {
-    font-size: 1.6rem;
-    color: #333;
-    margin-bottom: 10px;
-}
-
-.deeper-insights-prompt p {
-    color: #666;
-    font-size: 1.05rem;
-    margin-bottom: 25px;
-}
-
-.insights-features {
-    max-width: 500px;
-    margin: 0 auto 25px;
-    text-align: left;
-}
-
-.insight-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 0;
-}
-
-.insight-item .check {
-    color: #4DACA6;
-    font-size: 1.3rem;
-    font-weight: bold;
-}
-
-.insight-item span:last-child {
-    color: #555;
-    font-size: 0.95rem;
-}
-
-.insights-btn {
-    background: linear-gradient(135deg, #00B9DA 0%, #7030A0 100%);
-    color: white;
-    border: none;
-    padding: 16px 35px;
-    border-radius: 10px;
-    font-size: 1.1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: transform 0.2s ease;
-}
-
-.insights-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(0, 185, 218, 0.3);
-}
-
-/* Tier Comparison Card */
-.tier-comparison-card {
-    background: linear-gradient(135deg, rgba(112, 48, 160, 0.05) 0%, rgba(0, 185, 218, 0.05) 100%);
-    border: 1px solid rgba(0, 185, 218, 0.3);
-    border-radius: 20px;
-    padding: 40px;
-    margin: 40px 0;
-}
-
-.tier-comparison-card h3 {
-    text-align: center;
-    font-size: 2rem;
-    color: #333;
-    margin-bottom: 10px;
-}
-
-.tier-subtitle {
-    text-align: center;
-    color: #666;
-    margin-bottom: 35px;
-    font-size: 1.05rem;
-}
-
-.tier-comparison-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 25px;
-    margin-top: 30px;
-}
-
-.tier-card {
-    background: white;
-    border-radius: 15px;
-    padding: 30px;
-    position: relative;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.tier-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.12);
-}
-
-.tier-badge {
-    position: absolute;
-    top: -12px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: linear-gradient(135deg, #F31C7E, #DA4E91);
-    color: white;
-    padding: 6px 20px;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.tier-header {
-    text-align: center;
-    margin-bottom: 25px;
-    padding-bottom: 20px;
-    border-bottom: 2px solid #f0f0f0;
-}
-
-.tier-header h4 {
-    font-size: 1.4rem;
-    color: #333;
-    margin-bottom: 10px;
-}
-
-.tier-price {
-    font-size: 2.5rem;
-    font-weight: bold;
-    color: #00B9DA;
-}
-
-.tier-price span {
-    font-size: 1.2rem;
-    color: #666;
-    font-weight: normal;
-}
-
-.tier-features {
-    margin-bottom: 25px;
-}
-
-.tier-feature {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 0;
-    border-bottom: 1px solid #f5f5f5;
-}
-
-.tier-feature:last-child {
-    border-bottom: none;
-}
-
-.feature-icon {
-    color: #4DACA6;
-    font-size: 1.2rem;
-    font-weight: bold;
-}
-
-.tier-feature span:last-child {
-    color: #555;
-    font-size: 0.95rem;
-    line-height: 1.4;
-}
-
-.tier-btn {
-    width: 100%;
-    padding: 15px;
-    border-radius: 10px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    border: none;
-}
-
-.tier-btn-primary {
-    background: linear-gradient(135deg, #00B9DA 0%, #7030A0 100%);
-    color: white;
-}
-
-.tier-btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 185, 218, 0.4);
-}
-
-.tier-btn-secondary {
-    background: white;
-    color: #00B9DA;
-    border: 2px solid #00B9DA;
-}
-
-.tier-btn-secondary:hover {
-    background: #00B9DA;
-    color: white;
-}
-
-/* Highlight Starter Tier */
-.tier-starter {
-    border: 2px solid #00B9DA;
-}
-
-.tier-starter .tier-header {
-    border-bottom-color: #00B9DA;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .tier-comparison-grid {
-        grid-template-columns: 1fr;
+function displayFreemiumResults(results) {
+    // 1. Overall Score Display
+    const overallScoreHTML = `
+        <div class="overall-score-card">
+            <h2>Your AI Visibility Score</h2>
+            <div class="score-display">
+                <span class="score-value">${results.overallScore}/100</span>
+                <span class="score-label">${getScoreLabel(results.overallScore)}</span>
+            </div>
+            <p class="score-description">
+                ${getScoreDescription(results.overallScore)}
+            </p>
+        </div>
+    `;
+    
+    // 2. Simplified Category Scores
+    const categories = [
+        { key: 'aiReadability', name: 'AI Readability & Multimodal', icon: '👁️', maxContribution: 10 },
+        { key: 'searchReadiness', name: 'AI Search Readiness', icon: '🎯', maxContribution: 20 },
+        { key: 'freshness', name: 'Content Freshness', icon: '🔄', maxContribution: 8 },
+        { key: 'expertise', name: 'Expertise & Authority', icon: '🎓', maxContribution: 15 },
+        { key: 'knowledgeGraph', name: 'Knowledge Graph Presence', icon: '🕸️', maxContribution: 12 },
+        { key: 'technicalSEO', name: 'Technical SEO Foundation', icon: '⚙️', maxContribution: 15 },
+        { key: 'userExperience', name: 'User Experience Signals', icon: '🎨', maxContribution: 10 },
+        { key: 'brandSignals', name: 'Brand & Trust Signals', icon: '�†', maxContribution: 10 }
+    ];
+    
+    let categoriesHTML = '<div class="freemium-categories">';
+    categoriesHTML += '<h3>Score Breakdown</h3>';
+    categoriesHTML += '<p class="subtitle">See how each category contributes to your score</p>';
+    
+    categories.forEach(category => {
+        const categoryScore = results.scores[category.key] || 0;
+        const contribution = (categoryScore / 100) * category.maxContribution;
+        const status = getStatusEmoji(contribution, category.maxContribution);
+        const percentage = (contribution / category.maxContribution * 100).toFixed(0);
+        
+        categoriesHTML += `
+            <div class="freemium-category-row">
+                <div class="category-info">
+                    <span class="category-icon">${category.icon}</span>
+                    <span class="category-name">${category.name}</span>
+                </div>
+                <div class="category-score">
+                    <span class="contribution">${contribution.toFixed(1)}/${category.maxContribution}</span>
+                    <span class="status-indicator">${status}</span>
+                </div>
+                <div class="category-bar">
+                    <div class="bar-fill" style="width: ${percentage}%"></div>
+                </div>
+            </div>
+        `;
+    });
+    
+    categoriesHTML += '</div>';
+    
+    // 3. COMPETITOR COMPARISON TEASER (LOCKED)
+    const competitorTeaserHTML = `
+        <div class="competitor-teaser-card">
+            <div class="teaser-header">
+                <h3>🔒 Compare vs Your Competitors</h3>
+                <span class="pro-badge">PRO</span>
+            </div>
+            <div class="teaser-preview">
+                <div class="competitor-comparison-blur">
+                    <div class="comparison-row">
+                        <span>Your Site</span>
+                        <div class="score-bar-blur" style="width: ${results.overallScore}%"></div>
+                        <span>${results.overallScore}/100</span>
+                    </div>
+                    <div class="comparison-row">
+                        <span>Competitor A</span>
+                        <div class="score-bar-blur" style="width: 78%"></div>
+                        <span>78/100</span>
+                    </div>
+                    <div class="comparison-row">
+                        <span>Competitor B</span>
+                        <div class="score-bar-blur" style="width: 82%"></div>
+                        <span>82/100</span>
+                    </div>
+                    <div class="comparison-row">
+                        <span>Competitor C</span>
+                        <div class="score-bar-blur" style="width: 71%"></div>
+                        <span>71/100</span>
+                    </div>
+                </div>
+                <div class="blur-overlay">
+                    <div class="unlock-content">
+                        <div class="lock-icon">🔓</div>
+                        <h4>Unlock Competitor Benchmarking</h4>
+                        <p>See exactly how you stack up against your top 3 competitors</p>
+                        <button class="unlock-btn" onclick="window.location.href='checkout.html?url=${encodeURIComponent(results.url || '')}'">
+                            Upgrade to Pro - $99/mo
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 4. DEEPER INSIGHTS PROMPT
+    const deeperInsightsHTML = `
+        <div class="deeper-insights-prompt">
+            <div class="insights-icon">🔍</div>
+            <h3>Want Deeper Insights?</h3>
+            <p>You're seeing the homepage overview. Get detailed page-level analysis with actionable fixes.</p>
+            <div class="insights-features">
+                <div class="insight-item">
+                    <span class="check">✓</span>
+                    <span>Subcategory breakdowns with specific issues</span>
+                </div>
+                <div class="insight-item">
+                    <span class="check">✓</span>
+                    <span>Page-by-page TODO lists</span>
+                </div>
+                <div class="insight-item">
+                    <span class="check">✓</span>
+                    <span>Progress tracking over time</span>
+                </div>
+            </div>
+            <button class="insights-btn" onclick="window.location.href='auth.html'">
+                Sign Up Free - 2 Scans/Month
+            </button>
+        </div>
+    `;
+    
+    // 5. Top 3-5 Recommendations
+    const topRecommendations = results.recommendations ? results.recommendations.slice(0, 5) : [];
+    let recommendationsHTML = '<div class="freemium-recommendations">';
+    recommendationsHTML += '<h3>Top Recommendations</h3>';
+    recommendationsHTML += '<p class="subtitle">Priority actions to improve your AI visibility</p>';
+    
+    if (topRecommendations.length > 0) {
+        topRecommendations.forEach((rec, index) => {
+            recommendationsHTML += `
+                <div class="recommendation-card">
+                    <div class="rec-number">${index + 1}</div>
+                    <div class="rec-content">
+                        <h4>${rec.title}</h4>
+                        <p>${rec.description}</p>
+                        <span class="rec-impact">${rec.impact || 'High'} Impact</span>
+                    </div>
+                </div>
+            `;
+        });
+        
+        if (results.recommendations && results.recommendations.length > 5) {
+            recommendationsHTML += `
+                <div class="more-recommendations-notice">
+                    <p>🔒 <strong>${results.recommendations.length - 5} more recommendations</strong> available with a free account</p>
+                </div>
+            `;
+        }
     }
     
-    .teaser-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-    }
+    recommendationsHTML += '</div>';
     
-    .comparison-row {
-        flex-wrap: wrap;
-    }
+    // 6. GET FULL REPORT - TIER COMPARISON
+    const tierComparisonHTML = `
+        <div class="tier-comparison-card">
+            <h3>🚀 Get Your Full AI Visibility Report</h3>
+            <p class="tier-subtitle">Choose the plan that fits your needs</p>
+            
+            <div class="tier-comparison-grid">
+                <!-- FREE TIER -->
+                <div class="tier-card tier-free">
+                    <div class="tier-header">
+                        <h4>Free</h4>
+                        <div class="tier-price">$0<span>/mo</span></div>
+                    </div>
+                    <div class="tier-features">
+                        <div class="tier-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>2 scans per month</span>
+                        </div>
+                        <div class="tier-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Homepage only</span>
+                        </div>
+                        <div class="tier-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Basic score breakdown</span>
+                        </div>
+                        <div class="tier-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Top 5 recommendations</span>
+                        </div>
+                    </div>
+                    <button class="tier-btn tier-btn-secondary" onclick="window.location.href='auth.html'">
+                        Sign Up Free
+                    </button>
+                </div>
+                
+                <!-- DIY/STARTER TIER -->
+                <div class="tier-card tier-starter">
+                    <div class="tier-badge">MOST POPULAR</div>
+                    <div class="tier-header">
+                        <h4>DIY / Starter</h4>
+                        <div class="tier-price">$29<span>/mo</span></div>
+                    </div>
+                    <div class="tier-features">
+                        <div class="tier-feature">
+                            <span class="feature-icon">✓</span>
+                            <span><strong>5 pages</strong> per scan</span>
+                        </div>
+                        <div class="tier-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Detailed subcategory analysis</span>
+                        </div>
+                        <div class="tier-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Page-level TODO lists</span>
+                        </div>
+                        <div class="tier-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Progress tracking</span>
+                        </div>
+                        <div class="tier-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Basic JSON-LD export</span>
+                        </div>
+                    </div>
+                    <button class="tier-btn tier-btn-primary" onclick="window.location.href='checkout.html?plan=diy&url=${encodeURIComponent(results.url || '')}'">
+                        Get Started
+                    </button>
+                </div>
+                
+                <!-- PRO TIER -->
+                <div class="tier-card tier-pro">
+                    <div class="tier-header">
+                        <h4>Pro</h4>
+                        <div class="tier-price">$99<span>/mo</span></div>
+                    </div>
+                    <div class="tier-features">
+                        <div class="tier-feature">
+                            <span class="feature-icon">✓</span>
+                            <span><strong>25 pages</strong> per scan</span>
+                        </div>
+                        <div class="tier-feature">
+                            <span class="feature-icon">✓</span>
+                            <span><strong>Competitor benchmarking</strong> (3 domains)</span>
+                        </div>
+                        <div class="tier-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Knowledge Graph fields</span>
+                        </div>
+                        <div class="tier-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Brand Visibility Index</span>
+                        </div>
+                        <div class="tier-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Advanced JSON-LD pack</span>
+                        </div>
+                        <div class="tier-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Live dashboard & tracking</span>
+                        </div>
+                    </div>
+                    <button class="tier-btn tier-btn-primary" onclick="window.location.href='checkout.html?plan=pro&url=${encodeURIComponent(results.url || '')}'">
+                        Upgrade to Pro
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
     
-    .comparison-row span:first-child {
-        min-width: 100px;
-        font-size: 0.9rem;
-    }
+    // Render everything
+    categoriesContainer.innerHTML = 
+        overallScoreHTML + 
+        categoriesHTML + 
+        competitorTeaserHTML + 
+        deeperInsightsHTML;
     
-    .unlock-content h4 {
-        font-size: 1.3rem;
-    }
-    
-    .deeper-insights-prompt {
-        padding: 25px 20px;
-    }
-    
-    .tier-comparison-card {
-        padding: 25px 15px;
-    }
+    recommendationsContainer.innerHTML = 
+        recommendationsHTML + 
+        tierComparisonHTML;
 }
 
 // ========================================
