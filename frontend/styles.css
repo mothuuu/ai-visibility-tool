@@ -321,12 +321,6 @@ body {
     color: #00B9DA !important;
 }
 
-/* Logout button hover */
-.header button:hover {
-    background: white !important;
-    color: #00B9DA !important;
-}
-
 /* ========================================
    UPSELL MOMENTS CSS - Add to bottom of styles.css
    ======================================== */
