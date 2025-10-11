@@ -18,78 +18,61 @@
         <div class="header">
             <h1>AI Visibility Score</h1>
             <p>Real-time analysis of how AI assistants find and recommend your website</p>
+            
+            <!-- User Display (for logged-in users) -->
+            <div id="userDisplay" style="display: none; position: absolute; top: 20px; right: 20px; color: white; align-items: center; gap: 10px;">
+                <!-- Populated by script.js -->
+            </div>
+            <a id="authLink" href="auth.html" style="position: absolute; top: 20px; right: 20px; color: white; text-decoration: none; font-weight: 600;">Sign In</a>
         </div>
 
         <div class="main-content">
             <div class="input-section" id="inputSection">
                 <h2>Get Your Real-Time AI Marketing Assessment</h2>
-                <form class="url-form" id="urlForm">
+                <form class="url-form" id="scanForm">
                     <input 
                         type="url" 
                         class="url-input" 
-                        id="websiteUrl" 
+                        id="urlInput" 
                         placeholder="Enter your website URL (e.g., https://yourcompany.com)"
                         required
                     >
-                    <input type="hidden" name="page_url" id="page_url" value="" />
                     <button type="submit" class="analyze-btn" id="analyzeBtn">
                         Analyze My Website
                     </button>
                 </form>
                 <p class="disclaimer">
-                    ✓ Real-time analysis ✓ Tests actual AI assistants ✓ No signup required
+                    ✓ Real-time analysis ✓ Tests actual AI assistants ✓ No signup required for first scan
                 </p>
             </div>
 
+            <!-- Error Message -->
+            <div id="errorMessage" style="display: none; background: #fee; color: #c33; padding: 15px; border-radius: 10px; margin: 20px 0; text-align: center;">
+                <!-- Error text will be inserted here -->
+            </div>
+
+            <!-- Loading Section -->
             <div class="loading" id="loadingSection">
                 <div class="loading-spinner"></div>
-                <div class="loading-text" id="loadingText">Fetching website content...</div>
+                <div class="loading-text" id="loadingText">Analyzing your website...</div>
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFill"></div>
                 </div>
             </div>
 
-            <div class="error-section" id="errorSection">
-                <h3>Analysis Error</h3>
-                <p id="errorMessage">Unable to analyze the website. Please check the URL and try again.</p>
-                <button class="analyze-btn" onclick="resetForm()">Try Again</button>
-            </div>
-
-            <div class="results" id="resultsSection">
-                <div class="industry-detection" id="industryDetection">
-                    <h3>Website Analysis</h3>
-                    <p id="detectedIndustry">Professional Services</p>
-                    <p id="websiteStats"></p>
+            <!-- Results Section -->
+            <div class="results" id="resultsSection" style="display: none;">
+                <!-- Categories Container - Populated by script.js -->
+                <div id="categoriesContainer">
+                    <!-- Overall score + category breakdown will appear here -->
                 </div>
 
-                <div class="score-header">
-                    <div class="score-circle" id="scoreCircle">
-                        <span id="totalScore">67</span><span>/100</span>
-                    </div>
-                    <h2 id="scoreTitle">Your AI Visibility Score</h2>
-                    <p id="scoreDescription">Results description will appear here</p>
+                <!-- Recommendations Container - Populated by script.js -->
+                <div id="recommendationsContainer">
+                    <!-- Recommendations will appear here -->
                 </div>
 
-                <div class="score-categories" id="scoreCategories">
-                    <!-- Categories populated by JavaScript -->
-                </div>
-
-                <div class="ai-visibility-results" id="aiVisibilityResults">
-                    <!-- AI visibility results populated by JavaScript -->
-                </div>
-
-                <div class="recommendations">
-                    <h3>Priority Improvements for AI Visibility</h3>
-                    <div class="quick-wins" id="quickWins">
-                        <!-- Recommendations populated by JavaScript -->
-                    </div>
-                </div>
-
-                <div class="analysis-details">
-                    <h5>Analysis Details</h5>
-                    <div id="analysisBreakdown"></div>
-                </div>
-
+                <!-- CTA Section -->
                 <div class="cta-section">
                     <h3>Ready to Dominate AI Search Results?</h3>
                     <p>Don't let AI-savvy competitors capture your prospects. Let's optimize your website for AI discovery.</p>
@@ -105,18 +88,6 @@
             <p>Powered by Xeo AI Hub | AI Readiness Assessment Tool</p>
         </div>
     </div>
-
-    <!-- Hidden iframe prevents page redirect on sidecar submit -->
-    <iframe name="gsheet_silent_target" style="display:none;"></iframe>
-
-    <!-- Hidden form that posts to your Google Sheet Apps Script -->
-    <form id="sheetForm" method="POST" action="https://script.google.com/macros/s/AKfycby39Oc9Q_MhbFNTuV0telbuRC8ffb7Ts_TG2oaArxuDFxtW_w4tpjuab0x5YC4uBqjPew/exec" target="gsheet_silent_target" style="display:none;">
-        <input type="hidden" name="website" id="sheet_website" />
-        <input type="hidden" name="page_url" id="sheet_page_url" />
-        <input type="hidden" name="user_agent" id="sheet_user_agent" />
-        <input type="hidden" name="ip" id="sheet_ip" />
-        <input type="hidden" name="referrer" id="sheet_referrer" />
-    </form>
 
     <script>
         // Auth check before loading app
