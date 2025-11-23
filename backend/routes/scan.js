@@ -5,6 +5,7 @@ const db = require('../db/database');
 const { saveHybridRecommendations } = require('../utils/hybrid-recommendation-helper');
 const { extractRootDomain, isPrimaryDomain } = require('../utils/domain-extractor');
 const { calculateScanComparison, getHistoricalTimeline } = require('../utils/scan-comparison');
+const { logV2Comparison } = require('../utils/logV2Comparison');
 
 // ============================================
 // 🚀 IMPORT REAL ENGINES (NEW!)
@@ -12,6 +13,7 @@ const { calculateScanComparison, getHistoricalTimeline } = require('../utils/sca
 const V5EnhancedRubricEngine = require('../analyzers/v5-enhanced-rubric-engine'); // Import the ENHANCED class
 const V5RubricEngine = V5EnhancedRubricEngine; // Alias for compatibility
 const { generateCompleteRecommendations } = require('../analyzers/recommendation-generator');
+const { performV5ScanV2 } = require('../analyzers/v2-scan-runner');
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -32,12 +34,8 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
-// Plan limits
-const PLAN_LIMITS = {
-  free: { scansPerMonth: 2, pagesPerScan: 1, competitorScans: 0 },
-  diy: { scansPerMonth: 25, pagesPerScan: 5, competitorScans: 2 },
-  pro: { scansPerMonth: 50, pagesPerScan: 25, competitorScans: 10 }
-};
+// Plan limits – single source of truth
+const { PLAN_LIMITS, getPlanLimitsOrFail } = require('../middleware/usageLimits');
 
 // V5 Rubric Category Weights
 const V5_WEIGHTS = {
@@ -80,6 +78,32 @@ router.post('/guest', async (req, res) => {
     // Perform V5 rubric scan
     // Use 'guest' tier - NO recommendations shown to anonymous users
     const scanResult = await performV5Scan(url, 'guest');
+
+    // Kick off V2 shadow scan (non-blocking) after V1 completes
+    setImmediate(async () => {
+      const shadowStart = Date.now();
+      try {
+        const shadowResult = await performV5ScanV2(url, 'guest', {
+          pages: null,
+          userProgress: null,
+          userIndustry: null,
+          mode: 'optimization',
+          planLimits: null
+        });
+
+        logV2Comparison({
+          context: 'guest',
+          url,
+          plan: 'guest',
+          mode: 'optimization',
+          v1Result: scanResult,
+          v2Result: shadowResult,
+          durationMs: Date.now() - shadowStart
+        });
+      } catch (shadowError) {
+        console.error(`[V2 Shadow] Guest shadow scan failed for ${url}:`, shadowError.message);
+      }
+    });
 
     // Save guest scan to database for analytics (with user_id = NULL)
     // NOTE: Round scores to integers since DB columns are INTEGER type
@@ -182,7 +206,16 @@ router.post('/analyze', authenticateToken, async (req, res) => {
     }
 
     const user = userResult.rows[0];
-    const planLimits = PLAN_LIMITS[user.plan] || PLAN_LIMITS.free;
+
+    let planLimits;
+    try {
+      planLimits = getPlanLimitsOrFail(user.plan || 'free');
+    } catch (planError) {
+      return res.status(400).json({
+        error: 'Unsupported plan',
+        message: `Plan '${user.plan}' is not supported. Please contact support if this is unexpected.`,
+      });
+    }
 
     // Log user's industry preference if set
     if (user.industry) {
@@ -318,6 +351,34 @@ router.post('/analyze', authenticateToken, async (req, res) => {
     }
 
     console.log('✅ Scan result validation passed');
+
+    // Run V2 shadow scan in parallel (non-blocking, primary domain only)
+    if (!isCompetitorScan) {
+      setImmediate(async () => {
+        const shadowStart = Date.now();
+        try {
+          const shadowResult = await performV5ScanV2(url, user.plan, {
+            pages: pages || null,
+            userProgress,
+            userIndustry: user.industry,
+            mode: currentMode,
+            planLimits
+          });
+
+          logV2Comparison({
+            context: 'auth',
+            url,
+            plan: user.plan,
+            mode: currentMode,
+            v1Result: scanResult,
+            v2Result: shadowResult,
+            durationMs: Date.now() - shadowStart
+          });
+        } catch (shadowError) {
+          console.error(`[V2 Shadow] Auth shadow scan failed for ${url}:`, shadowError.message);
+        }
+      });
+    }
 
     // Increment appropriate scan count AFTER successful scan
     if (isCompetitorScan) {

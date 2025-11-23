@@ -6152,6 +6152,13 @@ function buildCurrentState(issue, scanEvidence) {
 
       state += `\n**CRITICAL INSTRUCTION**: Use the ACTUAL missing certifications listed above in your recommendation. DO NOT use generic placeholders like "Certified Digital Marketing Professional". Focus on the top 1-2 missing certifications from the lists above.`;
       return state;
+    } else if (certData?.genericOnly) {
+      const detectedNames = certData.detected.map(c => c.name).join(', ');
+      if (certData.detected.length > 0) {
+        return `- Certifications/trust signals detected: ${detectedNames}\n- Industry not set → provide generic visibility guidance\n- Make these certifications more visible (badges, schema, security/compliance page) and explain their relevance\n- Encourage user to set industry for tailored certification guidance`;
+      }
+
+      return `- No industry provided; generic certification scan ran\n- No widely recognized certifications detected (e.g., ISO 27001, SOC 2, GDPR, HIPAA, Google Partner)\n- Add trust signals (badges, compliance page, schema) and set industry for tailored certification guidance`;
     }
     return `- No certification schema detected\n- No industry-specific certification data available\n- Add certification badges and schema markup to establish trust`;
   }

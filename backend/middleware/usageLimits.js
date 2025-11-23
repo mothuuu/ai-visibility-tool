@@ -4,6 +4,7 @@ const PLAN_LIMITS = {
   free: {
     scansPerMonth: 2,
     pagesPerScan: 1, // Homepage only
+    competitorScans: 0,
     multiPageScan: false,
     pageSelection: false,
     competitorAnalysis: false,
@@ -16,6 +17,7 @@ const PLAN_LIMITS = {
   diy: {
     scansPerMonth: 25, // Reasonable limit for DIY users
     pagesPerScan: 5, // Homepage + 4 additional pages
+    competitorScans: 2,
     multiPageScan: true,
     pageSelection: true, // KEY FEATURE: User chooses which pages
     competitorAnalysis: false,
@@ -28,6 +30,7 @@ const PLAN_LIMITS = {
   pro: {
     scansPerMonth: 50,
     pagesPerScan: 25,
+    competitorScans: 10,
     multiPageScan: true,
     pageSelection: true,
     competitorAnalysis: true,
@@ -39,6 +42,16 @@ const PLAN_LIMITS = {
     outsideInCrawl: true // PR, reviews, social mentions
   }
 };
+
+function getPlanLimitsOrFail(plan = 'free') {
+  if (PLAN_LIMITS[plan]) {
+    return PLAN_LIMITS[plan];
+  }
+
+  const error = new Error(`Unsupported plan: ${plan}`);
+  error.code = 'UNSUPPORTED_PLAN';
+  throw error;
+}
 
 async function checkScanLimit(req, res, next) {
   try {
@@ -55,7 +68,15 @@ async function checkScanLimit(req, res, next) {
 
     const userId = req.user.id;
     const userPlan = req.user.plan || 'free';
-    const limits = PLAN_LIMITS[userPlan];
+    let limits;
+    try {
+      limits = getPlanLimitsOrFail(userPlan);
+    } catch (planError) {
+      return res.status(400).json({
+        error: 'Unsupported plan',
+        message: `Plan '${userPlan}' is not supported. Please contact support if this is unexpected.`
+      });
+    }
     
     // Check if user exceeded monthly limit
     if (req.user.scans_used_this_month >= limits.scansPerMonth) {
@@ -144,9 +165,10 @@ function validatePageCount(req, res, next) {
   next();
 }
 
-module.exports = { 
-  checkScanLimit, 
-  checkFeatureAccess, 
+module.exports = {
+  checkScanLimit,
+  checkFeatureAccess,
   validatePageCount,
-  PLAN_LIMITS 
+  PLAN_LIMITS,
+  getPlanLimitsOrFail
 };

@@ -146,6 +146,31 @@ function detectCertifications(siteData, industry) {
   return result;
 }
 
+function detectGenericCertificationSignals(siteData) {
+  const detected = detectBasicCertifications(siteData);
+
+  return {
+    libraryLoaded: false,
+    industry: null,
+    genericOnly: true,
+    detected,
+    missing: [],
+    unknown: detected,
+    coverage: {
+      critical: { found: 0, expected: 0 },
+      important: { found: 0, expected: 0 },
+      relevant: { found: 0, expected: 0 }
+    },
+    overallCoverage: 0,
+    detectionSources: {
+      textPatterns: detected.map(d => d.name),
+      schemaFields: [],
+      badges: [],
+      unknown: detected.map(d => d.name)
+    }
+  };
+}
+
 /**
  * Detect certifications on a single page
  * @param {Object} evidence - Page evidence object
@@ -340,6 +365,11 @@ function detectBasicCertifications(siteData) {
  * @returns {number} - Score from 0-100
  */
 function calculateCertificationScore(certificationData) {
+  if (certificationData.genericOnly) {
+    // Do not alter scoring when using generic, non-industry fallback detections
+    return 0;
+  }
+
   if (!certificationData.libraryLoaded) {
     // Without library, give partial credit for any detections
     const unknownBonus = Math.min(certificationData.unknown.length * 15, 45);
@@ -366,5 +396,6 @@ function calculateCertificationScore(certificationData) {
 module.exports = {
   detectCertifications,
   calculateCertificationScore,
-  detectBasicCertifications
+  detectBasicCertifications,
+  detectGenericCertificationSignals
 };

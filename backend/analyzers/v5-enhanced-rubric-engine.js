@@ -1,6 +1,6 @@
 const SiteCrawler = require('./site-crawler');
 const ContentExtractor = require('./content-extractor');
-const { detectCertifications, calculateCertificationScore } = require('./recommendation-engine/certification-detector');
+const { detectCertifications, calculateCertificationScore, detectGenericCertificationSignals } = require('./recommendation-engine/certification-detector');
 
 /**
  * V5 Enhanced Rubric Scoring Engine
@@ -110,8 +110,8 @@ class V5EnhancedRubricEngine {
           this.certificationData = null; // Continue scan without certification data
         }
       } else {
-        console.log(`[V5-Enhanced] No industry specified, skipping certification detection`);
-        this.certificationData = null;
+        console.log(`[V5-Enhanced] No industry specified, running generic certification detection`);
+        this.certificationData = detectGenericCertificationSignals(this.siteData);
       }
 
       // Step 2: Analyze each category using site-wide data
@@ -742,7 +742,7 @@ class V5EnhancedRubricEngine {
     factors.authorProfiles = hasAuthor ? 1.2 : 0.4;
 
     // Factor 2: Professional Credential Documentation (Enhanced with Certification Library)
-    if (this.certificationData) {
+    if (this.certificationData && !this.certificationData.genericOnly) {
       // Use certification detection results
       const certScore = calculateCertificationScore(this.certificationData);
       // Map 0-100 score to 0-1.2 scale for factor scoring
@@ -751,6 +751,9 @@ class V5EnhancedRubricEngine {
       // Additional factor for team credentials (Person schema with credentials)
       const teamCredScore = this.detectTeamCredentials();
       factors.teamCredentials = teamCredScore;
+    } else if (this.certificationData?.genericOnly) {
+      // Generic detection present: expose trust signal issue opportunities without changing scoring
+      factors.credentials = this.detectCredentials(firstPage) ? 1.2 : 0;
     } else {
       // Fallback to basic detection
       factors.credentials = this.detectCredentials(firstPage) ? 1.2 : 0;
