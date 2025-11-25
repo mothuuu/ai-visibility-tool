@@ -1419,9 +1419,19 @@
     </style>
 </head>
 <body>
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="loading-overlay">
-        <div class="loading-spinner"></div>
+    <!-- Scanning Progress Modal -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div style="background: white; padding: 50px 60px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); text-align: center; max-width: 500px; width: 90%;">
+            <div style="font-size: 4rem; margin-bottom: 20px;">🔍</div>
+            <h3 style="font-size: 1.5rem; font-weight: bold; color: #333; margin-bottom: 10px;">Analyzing Your Website...</h3>
+            <p style="color: #666; margin-bottom: 30px; font-size: 1rem;">
+                Scans usually take between 2-3 minutes
+            </p>
+            <div style="width: 100%; height: 8px; background: #E5E5E5; border-radius: 4px; overflow: hidden; margin-bottom: 15px;">
+                <div id="scanProgressBar" style="height: 100%; background: linear-gradient(90deg, #00B9DA 0%, #7030A0 100%); width: 0%; transition: width 0.3s ease;"></div>
+            </div>
+            <p style="color: #999; font-size: 0.9rem;">Please wait while we analyze your AI visibility...</p>
+        </div>
     </div>
 
     <!-- Header -->
