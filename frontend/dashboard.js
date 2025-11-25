@@ -855,15 +855,50 @@ document.addEventListener('click', function(event) {
     }
 });
 
-// Loading helpers
+// Loading helpers with progress bar animation
+let progressInterval = null;
+
 function showLoading() {
     const overlay = document.getElementById('loadingOverlay');
-    if (overlay) overlay.style.display = 'flex';
+    const progressBar = document.getElementById('scanProgressBar');
+
+    if (overlay) {
+        overlay.style.display = 'flex';
+
+        // Reset and animate progress bar
+        if (progressBar) {
+            progressBar.style.width = '0%';
+            let progress = 0;
+
+            progressInterval = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress > 90) progress = 90; // Stop at 90% until complete
+                progressBar.style.width = progress + '%';
+            }, 500);
+        }
+    }
 }
 
 function hideLoading() {
     const overlay = document.getElementById('loadingOverlay');
-    if (overlay) overlay.style.display = 'none';
+    const progressBar = document.getElementById('scanProgressBar');
+
+    // Clear progress interval
+    if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+    }
+
+    // Complete the progress bar animation before hiding
+    if (progressBar) {
+        progressBar.style.width = '100%';
+    }
+
+    // Hide after a brief delay to show completion
+    setTimeout(() => {
+        if (overlay) overlay.style.display = 'none';
+        if (progressBar) progressBar.style.width = '0%';
+    }, 300);
 }
 
 // Xeo Branded Modal Functions
