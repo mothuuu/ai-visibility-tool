@@ -1,5 +1,8 @@
 const db = require('../db/database');
 
+// Valid plan names (single source of truth)
+const VALID_PLANS = ['free', 'diy', 'pro'];
+
 const PLAN_LIMITS = {
   free: {
     scansPerMonth: 2,
@@ -43,6 +46,68 @@ const PLAN_LIMITS = {
   }
 };
 
+/**
+ * Get plan limits or fail with proper error handling (Single Source of Truth)
+ *
+ * @param {string} plan - The plan name to look up
+ * @param {number|null} userId - User ID for logging (optional)
+ * @returns {Object} { success: boolean, limits?: object, error?: object }
+ */
+async function getPlanLimitsOrFail(plan, userId = null) {
+  const limits = PLAN_LIMITS[plan];
+
+  if (limits) {
+    return { success: true, limits };
+  }
+
+  // Invalid plan detected - log and return error
+  console.error(`⚠️ CRITICAL: Invalid plan detected: "${plan}"${userId ? ` for user ${userId}` : ''}`);
+
+  // Log to database for monitoring (if userId provided)
+  if (userId) {
+    try {
+      await db.query(
+        'INSERT INTO usage_logs (user_id, action, metadata) VALUES ($1, $2, $3)',
+        [userId, 'invalid_plan_detected', JSON.stringify({
+          invalidPlan: plan,
+          timestamp: new Date().toISOString()
+        })]
+      );
+    } catch (logError) {
+      console.error('Failed to log invalid plan detection:', logError.message);
+    }
+  }
+
+  return {
+    success: false,
+    error: {
+      status: 400,
+      code: 'INVALID_PLAN',
+      message: `Invalid plan: "${plan}". Supported plans: ${VALID_PLANS.join(', ')}`,
+      userMessage: 'Your account has an invalid plan configuration. Please contact support.',
+      supportEmail: 'support@yourapp.com'
+    }
+  };
+}
+
+/**
+ * Synchronous version for cases where DB logging isn't needed
+ * @param {string} plan - The plan name to look up
+ * @returns {Object|null} Plan limits or null if invalid
+ */
+function getPlanLimits(plan) {
+  return PLAN_LIMITS[plan] || null;
+}
+
+/**
+ * Check if a plan is valid
+ * @param {string} plan - The plan name to check
+ * @returns {boolean}
+ */
+function isValidPlan(plan) {
+  return VALID_PLANS.includes(plan);
+}
+
 async function checkScanLimit(req, res, next) {
   try {
     // Allow anonymous freemium users (1 scan)
@@ -58,23 +123,18 @@ async function checkScanLimit(req, res, next) {
 
     const userId = req.user.id;
     const userPlan = req.user.plan || 'free';
-    const limits = PLAN_LIMITS[userPlan];
 
-    // Defensive guard: Ensure plan is valid
-    if (!limits) {
-      console.error(`⚠️ CRITICAL: Invalid plan detected for user ${userId}: "${userPlan}"`);
-      await db.query(
-        'INSERT INTO usage_logs (user_id, action, metadata) VALUES ($1, $2, $3)',
-        [userId, 'invalid_plan_detected', JSON.stringify({
-          invalidPlan: userPlan,
-          timestamp: new Date().toISOString()
-        })]
-      );
-      return res.status(500).json({
-        error: 'Invalid plan configuration',
-        message: 'Your account has an invalid plan. Please contact support.'
+    // Use centralized plan validation (single source of truth)
+    const planResult = await getPlanLimitsOrFail(userPlan, userId);
+    if (!planResult.success) {
+      return res.status(planResult.error.status).json({
+        error: planResult.error.code,
+        message: planResult.error.userMessage,
+        supportEmail: planResult.error.supportEmail
       });
     }
+
+    const limits = planResult.limits;
 
     // Check if user exceeded monthly limit
     if (req.user.scans_used_this_month >= limits.scansPerMonth) {
@@ -124,14 +184,15 @@ function checkFeatureAccess(feature) {
       });
     }
 
-    const limits = PLAN_LIMITS[req.user.plan];
+    // Use centralized plan validation (sync version - no DB logging needed here)
+    const limits = getPlanLimits(req.user.plan);
 
-    // Defensive guard: Ensure plan is valid
     if (!limits) {
-      console.error(`⚠️ CRITICAL: Invalid plan detected for user ${req.user.id}: "${req.user.plan}"`);
-      return res.status(500).json({
-        error: 'Invalid plan configuration',
-        message: 'Your account has an invalid plan. Please contact support.'
+      console.error(`⚠️ CRITICAL: Invalid plan in checkFeatureAccess for user ${req.user.id}: "${req.user.plan}"`);
+      return res.status(400).json({
+        error: 'INVALID_PLAN',
+        message: 'Your account has an invalid plan configuration. Please contact support.',
+        supportEmail: 'support@yourapp.com'
       });
     }
 
@@ -144,7 +205,7 @@ function checkFeatureAccess(feature) {
         upgrade: true
       });
     }
-    
+
     next();
   };
 }
@@ -172,9 +233,13 @@ function validatePageCount(req, res, next) {
   next();
 }
 
-module.exports = { 
-  checkScanLimit, 
-  checkFeatureAccess, 
+module.exports = {
+  checkScanLimit,
+  checkFeatureAccess,
   validatePageCount,
-  PLAN_LIMITS 
+  PLAN_LIMITS,
+  VALID_PLANS,
+  getPlanLimitsOrFail,
+  getPlanLimits,
+  isValidPlan
 };
