@@ -122,6 +122,7 @@ router.post('/guest', async (req, res) => {
       categories: scanResult.categories,
       categoryBreakdown: scanResult.categories,
       categoryWeights: V5_WEIGHTS, // Include weights for display
+      topProblemAreas: scanResult.topProblemAreas || null, // Top 3 lowest-scoring pillars
       recommendations: scanResult.recommendations, // Will be empty array for guest tier
       faq: null, // No FAQ for guest
       upgrade: scanResult.upgrade || null, // CTA to sign up
@@ -1523,6 +1524,71 @@ async function performV5Scan(url, plan, pages = null, userProgress = null, userI
       industry: userIndustry  // Pass industry for certification detection
     });
     const v5Results = await engine.analyze();
+
+    // GUEST TIER OPTIMIZATION: Skip recommendation generation entirely
+    // Saves API tokens by returning scores only - recs would be filtered to 0 anyway
+    if (plan === 'guest') {
+      console.log('👤 Guest tier: Skipping recommendation generation (token optimization)');
+
+      const categories = {
+        aiReadability: v5Results.categories.aiReadability.score || 0,
+        aiSearchReadiness: v5Results.categories.aiSearchReadiness.score || 0,
+        contentFreshness: v5Results.categories.contentFreshness.score || 0,
+        contentStructure: v5Results.categories.contentStructure.score || 0,
+        speedUX: v5Results.categories.speedUX.score || 0,
+        technicalSetup: v5Results.categories.technicalSetup.score || 0,
+        trustAuthority: v5Results.categories.trustAuthority.score || 0,
+        voiceOptimization: v5Results.categories.voiceOptimization.score || 0
+      };
+
+      // Compute top 3 problem areas (lowest scoring pillars)
+      const pillarNames = {
+        aiReadability: 'AI Readability',
+        aiSearchReadiness: 'AI Search Readiness',
+        contentFreshness: 'Content Freshness',
+        contentStructure: 'Content Structure',
+        speedUX: 'Speed & UX',
+        technicalSetup: 'Technical Setup',
+        trustAuthority: 'Trust & Authority',
+        voiceOptimization: 'Voice Optimization'
+      };
+
+      const sortedPillars = Object.entries(categories)
+        .map(([key, score]) => ({
+          key,
+          name: pillarNames[key],
+          score: Math.round(score),
+          weight: V5_WEIGHTS[key]
+        }))
+        .sort((a, b) => a.score - b.score);
+
+      const topProblemAreas = sortedPillars.slice(0, 3);
+
+      console.log(`✅ Guest scan complete. Total score: ${v5Results.totalScore}/100`);
+      console.log(`💰 Token savings: Skipped recommendation generation`);
+
+      return {
+        totalScore: v5Results.totalScore,
+        categories,
+        recommendations: [], // Empty for guest - no recommendations shown
+        faq: null,
+        upgrade: {
+          message: 'Sign up free to unlock your top 3 personalized recommendations',
+          cta: 'Create Free Account',
+          ctaUrl: '/register.html'
+        },
+        industry: v5Results.industry || 'General',
+        topProblemAreas, // Top 3 worst-scoring pillars for guest display
+        detailedAnalysis: {
+          url,
+          scannedAt: new Date().toISOString(),
+          rubricVersion: 'V5',
+          categoryBreakdown: categories,
+          summary: 'Guest scan - scores only',
+          metadata: v5Results.metadata
+        }
+      };
+    }
 
     // Debug: Log sitemap detection from crawler
     console.log('[DEBUG] Sitemap detected:', engine.evidence?.technical?.sitemapDetected || engine.evidence?.technical?.hasSitemap);

@@ -433,6 +433,13 @@
         <div class="category-grid" id="categoryGrid"></div>
     </div>
 
+    <!-- Top Problem Areas Section (new!) -->
+    <div class="category-section" id="problemAreasSection" style="display: none;">
+        <h2 class="section-title">Your Top 3 Problem Areas</h2>
+        <p style="text-align: center; color: #718096; margin-bottom: 30px;">These pillars need the most attention to improve your AI visibility</p>
+        <div id="problemAreasGrid" style="display: flex; flex-direction: column; gap: 20px;"></div>
+    </div>
+
     <!-- Unlock CTA Section -->
     <div class="unlock-section">
         <h2 class="unlock-title">Sign Up to Unlock Your Top 3 Recommendations</h2>
@@ -518,6 +525,11 @@
             if (data.categories) {
                 displayCategories(data.categories);
             }
+
+            // Display top problem areas (new!)
+            if (data.topProblemAreas && data.topProblemAreas.length > 0) {
+                displayProblemAreas(data.topProblemAreas);
+            }
         }
 
         function displayCategories(categories) {
@@ -576,6 +588,71 @@
                     bar.style.width = width;
                 });
             }, 100);
+        }
+
+        function displayProblemAreas(problemAreas) {
+            const section = document.getElementById('problemAreasSection');
+            const grid = document.getElementById('problemAreasGrid');
+
+            // Show the section
+            section.style.display = 'block';
+
+            const categoryIcons = {
+                aiReadability: '📖',
+                aiSearchReadiness: '🔍',
+                contentFreshness: '🎯',
+                contentStructure: '📄',
+                speedUX: '⚡',
+                technicalSetup: '⚙️',
+                trustAuthority: '⭐',
+                voiceOptimization: '👥'
+            };
+
+            const categoryDescriptions = {
+                aiReadability: 'AI engines struggle to understand your multimedia content',
+                aiSearchReadiness: 'Your content isn\'t structured for AI search answers',
+                contentFreshness: 'AI may skip outdated content in favor of fresher sources',
+                contentStructure: 'Poor heading hierarchy makes it hard for AI to parse your content',
+                speedUX: 'Slow sites get deprioritized by AI crawlers',
+                technicalSetup: 'Missing technical signals prevent AI from indexing properly',
+                trustAuthority: 'Lack of credibility signals reduces AI trust in your content',
+                voiceOptimization: 'Your content isn\'t optimized for conversational AI queries'
+            };
+
+            problemAreas.forEach((area, index) => {
+                const icon = categoryIcons[area.key] || '📊';
+                const description = categoryDescriptions[area.key] || 'This area needs improvement';
+                const displayScore = Math.round(area.score * 10);
+                const weightPercent = Math.round((area.weight || 0) * 100);
+
+                const card = document.createElement('div');
+                card.style.cssText = `
+                    background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%);
+                    padding: 25px;
+                    border-radius: 12px;
+                    border-left: 4px solid #ef4444;
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                `;
+
+                card.innerHTML = `
+                    <div style="font-size: 48px;">${icon}</div>
+                    <div style="flex: 1;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="font-size: 18px; font-weight: 700; color: #2d3748;">
+                                #${index + 1} ${area.name}
+                            </span>
+                            <span style="font-size: 28px; font-weight: 800; color: #ef4444;">${displayScore}</span>
+                        </div>
+                        <p style="color: #718096; font-size: 14px; margin-bottom: 10px;">${description}</p>
+                        <div style="font-size: 12px; color: #a0aec0;">
+                            Impact weight: ${weightPercent}% of total score
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
         }
     </script>
 
