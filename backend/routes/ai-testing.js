@@ -2,9 +2,8 @@
 // Express router for AI Readiness / AEO analysis (V5 rubric)
 
 const { authenticateToken, authenticateTokenOptional } = require('../middleware/auth');
-const { checkScanLimit } = require('../middleware/usageLimits');
+const { checkScanLimit, PLAN_LIMITS, getPlanLimits } = require('../middleware/usageLimits');
 const db = require('../db/database');
-const { PLAN_LIMITS } = require('../middleware/usageLimits');
 
 /* eslint-disable no-console */
 const express = require('express');
@@ -983,19 +982,30 @@ router.post('/analyze-website', authenticateTokenOptional, async (req, res) => {
     if (!url) return res.status(400).json({ error: 'URL is required' });
 
     const userPlan = req.user?.plan || 'free';
-    
+
     // For logged-in users, check and increment scan limit
     if (req.user) {
-      const limits = PLAN_LIMITS[userPlan];
-      const scanLimit = limits?.scansPerMonth || 2;
-      
+      // Use centralized plan validation (single source of truth)
+      const limits = getPlanLimits(userPlan);
+
+      if (!limits) {
+        console.error(`⚠️ CRITICAL: Invalid plan in ai-testing for user ${req.user.id}: "${userPlan}"`);
+        return res.status(400).json({
+          error: 'INVALID_PLAN',
+          message: 'Your account has an invalid plan configuration. Please contact support.',
+          supportEmail: 'support@yourapp.com'
+        });
+      }
+
+      const scanLimit = limits.scansPerMonth;
+
       if (req.user.scans_used_this_month >= scanLimit) {
         return res.status(403).json({
           error: 'Scan limit reached',
           message: `You've used ${req.user.scans_used_this_month}/${scanLimit} scans this month.`,
           currentPlan: userPlan,
-          upgrade: userPlan === 'free' 
-            ? 'Upgrade to DIY ($29/mo) for 25 scans/month' 
+          upgrade: userPlan === 'free'
+            ? 'Upgrade to DIY ($29/mo) for 25 scans/month'
             : userPlan === 'diy'
             ? 'Upgrade to Pro ($99/mo) for 50 scans/month'
             : null

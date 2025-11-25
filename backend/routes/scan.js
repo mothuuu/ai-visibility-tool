@@ -33,7 +33,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Plan limits imported from middleware (single source of truth)
-const { PLAN_LIMITS } = require('../middleware/usageLimits');
+const { PLAN_LIMITS, getPlanLimitsOrFail } = require('../middleware/usageLimits');
 
 // V5 Rubric Category Weights
 const V5_WEIGHTS = {
@@ -178,28 +178,18 @@ router.post('/analyze', authenticateToken, async (req, res) => {
     }
 
     const user = userResult.rows[0];
-    const planLimits = PLAN_LIMITS[user.plan];
 
-    // Defensive guard: Ensure plan is valid
-    if (!planLimits) {
-      console.error(`⚠️ CRITICAL: Invalid plan detected for user ${userId}: "${user.plan}"`);
-
-      // Log to database for monitoring
-      await db.query(
-        'INSERT INTO usage_logs (user_id, action, metadata) VALUES ($1, $2, $3)',
-        [userId, 'invalid_plan_detected', JSON.stringify({
-          invalidPlan: user.plan,
-          timestamp: new Date().toISOString()
-        })]
-      );
-
-      // Return error instead of silently downgrading
-      return res.status(500).json({
-        error: 'Invalid plan configuration',
-        message: 'Your account has an invalid plan. Please contact support.',
-        supportEmail: 'support@yourapp.com'
+    // Use centralized plan validation (single source of truth)
+    const planResult = await getPlanLimitsOrFail(user.plan, userId);
+    if (!planResult.success) {
+      return res.status(planResult.error.status).json({
+        error: planResult.error.code,
+        message: planResult.error.userMessage,
+        supportEmail: planResult.error.supportEmail
       });
     }
+
+    const planLimits = planResult.limits;
 
     // Log user's industry preference if set
     if (user.industry) {
