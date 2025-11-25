@@ -9,6 +9,61 @@
 const certLib = require('./certification-library-loader');
 
 /**
+ * Detailed certification descriptions for user-friendly display
+ */
+const certificationDescriptions = {
+  'ISO 27001': {
+    name: 'ISO 27001',
+    category: 'Information Security Management',
+    shortDescription: 'Critical for any organization that handles sensitive data.',
+    industries: ['IT companies', 'Finance', 'Healthcare', 'Legal services', 'Any business handling customer data'],
+    fullDescription: 'ISO 27001 is an internationally recognized standard that demonstrates your commitment to information security best practices. It covers risk management, security controls, and continuous improvement processes.'
+  },
+  'SOC 2': {
+    name: 'SOC 2',
+    category: 'Service Organization Control',
+    shortDescription: 'Essential for service organizations that store, process, or transmit sensitive customer data.',
+    industries: ['Technology & SaaS', 'Fintech & Financial Services', 'Healthcare & Healthtech', 'Managed Service Providers', 'E-commerce & Retail', 'Professional Services'],
+    fullDescription: 'SOC 2 validates your security, availability, processing integrity, confidentiality, and privacy controls. It\'s particularly important for cloud-based service providers.'
+  },
+  'GDPR Compliant': {
+    name: 'GDPR Compliance',
+    category: 'Data Protection Regulation',
+    shortDescription: 'Required for any organization handling personal data of EU residents.',
+    industries: ['Any business with EU customers', 'E-commerce', 'SaaS platforms', 'Marketing agencies', 'Healthcare providers'],
+    fullDescription: 'GDPR compliance demonstrates that your organization respects user privacy and follows strict data protection guidelines required by European law.'
+  },
+  'Google Partner': {
+    name: 'Google Partner',
+    category: 'Digital Marketing Certification',
+    shortDescription: 'Demonstrates expertise in Google Ads and digital marketing.',
+    industries: ['Digital marketing agencies', 'Advertising consultants', 'Media buying companies', 'Marketing departments'],
+    fullDescription: 'Google Partner status signals to potential clients that your team is trained, certified, and recognized by Google for advertising expertise.'
+  },
+  'HIPAA Compliant': {
+    name: 'HIPAA Compliance',
+    category: 'Healthcare Data Security',
+    shortDescription: 'Mandatory for handling protected health information.',
+    industries: ['Healthcare providers', 'Medical software', 'Health insurance', 'Medical billing', 'Telehealth platforms'],
+    fullDescription: 'HIPAA compliance is required for any organization that handles protected health information (PHI). It demonstrates your commitment to patient privacy and data security.'
+  },
+  'PCI DSS': {
+    name: 'PCI DSS',
+    category: 'Payment Security Standard',
+    shortDescription: 'Required for handling payment card data securely.',
+    industries: ['E-commerce', 'Retail', 'Payment processors', 'Subscription services', 'Any business accepting credit cards'],
+    fullDescription: 'PCI DSS compliance is mandatory for any organization that processes, stores, or transmits credit card information. It ensures your payment systems meet rigorous security standards.'
+  },
+  'ISO 9001': {
+    name: 'ISO 9001',
+    category: 'Quality Management',
+    shortDescription: 'Demonstrates systematic quality management and continuous improvement.',
+    industries: ['Manufacturing', 'Professional services', 'Technology companies', 'Any quality-focused business'],
+    fullDescription: 'ISO 9001 is the international standard for quality management systems. It demonstrates your commitment to consistent quality, customer satisfaction, and continuous improvement.'
+  }
+};
+
+/**
  * Generate professional certification recommendation with library data
  */
 function makeProgrammaticCertificationRecommendation(issue, scanEvidence, industry) {
@@ -59,15 +114,26 @@ function makeProgrammaticCertificationRecommendation(issue, scanEvidence, indust
     return null;
   }
 
-  // Build finding text
-  let finding = `Your site is missing key industry certifications that build trust and authority. `;
-  finding += `**${fullCert.name}** is ${fullCert.priority} for ${library.industry} companies. `;
+  // Build finding text with detailed descriptions
+  let finding = `Your site is missing key industry certifications that build trust and authority.\n\n`;
 
   if (certData.detected.length > 0) {
-    finding += `You're currently displaying: ${certData.detected.map(c => c.name).join(', ')}. `;
+    finding += `You're currently displaying: ${certData.detected.map(c => c.name).join(', ')}.\n\n`;
   }
 
-  finding += `Missing certifications: ${[...missingCritical, ...missingImportant].slice(0, 5).map(c => c.name).join(', ')}.`;
+  finding += `Recommended certifications:\n\n`;
+
+  // Add detailed descriptions for each missing certification
+  const allMissing = [...missingCritical, ...missingImportant].slice(0, 4);
+  allMissing.forEach(cert => {
+    const desc = certificationDescriptions[cert.name];
+    if (desc) {
+      finding += `✓ **${desc.name}** – ${desc.shortDescription} Great for ${desc.industries.slice(0, 3).join(', ')}.\n\n`;
+    } else {
+      // Fallback if description not found
+      finding += `✓ **${cert.name}** – ${cert.expectedImpact}\n\n`;
+    }
+  });
 
   // Build recommendation text
   let recommendation = `Add certification badges and structured data to your website:\n\n`;
@@ -384,5 +450,6 @@ ${JSON.stringify(schemaMarkup, null, 2)}
 module.exports = {
   makeProgrammaticCertificationRecommendation,
   makeProgrammaticTeamCredentialsRecommendation,
-  makeProgrammaticMembershipsRecommendation
+  makeProgrammaticMembershipsRecommendation,
+  certificationDescriptions
 };

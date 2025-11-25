@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Choose Your Plan - AI Visibility Score</title>
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -431,6 +432,131 @@
         .modal-btn-secondary:hover {
             background: var(--gray-50);
         }
+
+        /* Agency Plan Box */
+        .agency-box {
+            background: linear-gradient(135deg, #4A1F5E 0%, #5E2875 100%);
+            border-radius: 20px;
+            padding: 2.5rem;
+            margin-top: 2rem;
+            margin-bottom: 3rem;
+            box-shadow: 0 8px 24px rgba(74, 31, 94, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 2rem;
+        }
+
+        .agency-info {
+            flex-shrink: 0;
+        }
+
+        .agency-info .plan-name {
+            color: white;
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .agency-info .plan-tagline {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .agency-info .plan-price {
+            color: white;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .agency-info .plan-price span {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .agency-info .plan-billing {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.875rem;
+        }
+
+        .agency-features {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem 2rem;
+            list-style: none;
+        }
+
+        .agency-features li {
+            color: white;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .agency-features li i {
+            color: #00B9DA;
+            font-size: 1.1rem;
+        }
+
+        .agency-cta {
+            flex-shrink: 0;
+        }
+
+        .agency-btn {
+            background: white;
+            color: #4A1F5E;
+            padding: 1rem 2.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+            white-space: nowrap;
+        }
+
+        .agency-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 255, 255, 0.3);
+        }
+
+        @media (max-width: 1024px) {
+            .agency-box {
+                flex-direction: column;
+                text-align: center;
+                padding: 2rem;
+            }
+
+            .agency-features {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .agency-cta .agency-btn {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .agency-box {
+                padding: 1.5rem;
+            }
+
+            .agency-features {
+                grid-template-columns: 1fr;
+            }
+
+            .agency-info .plan-name {
+                font-size: 1.5rem;
+            }
+
+            .agency-info .plan-price {
+                font-size: 2rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -561,44 +687,37 @@
             </div>
 
             <!-- DIY Plan -->
-            <div class="plan-card">
+            <div class="plan-card featured">
                 <div class="plan-name">DIY</div>
-                <div class="plan-tagline">Perfect for getting started</div>
+                <div class="plan-tagline">For solopreneurs & small teams</div>
                 <div class="plan-price">$29<span>/mo</span></div>
                 <div class="plan-billing">Billed monthly • Cancel anytime</div>
                 <ul class="plan-features">
-                    <li><i class="fas fa-check-circle"></i><span>10 scans per month</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Homepage + 4 pages (5 total)</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Page-level TODO lists</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Progress tracking</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Basic JSON-LD export</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Combined recommendations</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Email support</span></li>
+                    <li><i class="fas fa-check-circle"></i><span>25 scans per month</span></li>
+                    <li><i class="fas fa-check-circle"></i><span>Up to 5 pages of the same domain</span></li>
+                    <li><i class="fas fa-check-circle"></i><span>Website Visibility Index (full)</span></li>
+                    <li><i class="fas fa-check-circle"></i><span>Copy-paste code snippets</span></li>
+                    <li><i class="fas fa-check-circle"></i><span>Competitor scanning</span></li>
                 </ul>
-                <button class="plan-btn plan-btn-secondary" onclick="selectPlan('diy')">
+                <button class="plan-btn plan-btn-primary" onclick="selectPlan('diy')">
                     Get Started
                 </button>
             </div>
 
             <!-- Pro Plan -->
-            <div class="plan-card featured">
+            <div class="plan-card">
                 <div class="plan-name">Pro</div>
-                <div class="plan-tagline">Most popular for businesses</div>
-                <div class="plan-price">$99<span>/mo</span></div>
+                <div class="plan-tagline">For growing businesses</div>
+                <div class="plan-price">$149<span>/mo</span></div>
                 <div class="plan-billing">Billed monthly • Cancel anytime</div>
                 <ul class="plan-features">
                     <li><i class="fas fa-check-circle"></i><span>50 scans per month</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Up to 25 pages per scan</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Brand Visibility Index</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Competitor benchmarking (3 domains)</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Outside-in crawl (PR, reviews, social)</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Advanced JSON-LD pack</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Knowledge Graph fields</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Live dashboard & analytics</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>PDF export</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Priority email support</span></li>
+                    <li><i class="fas fa-check-circle"></i><span>Up to 25 pages of the same domain</span></li>
+                    <li><i class="fas fa-check-circle"></i><span>Website Visibility Index (full) & Brand Visibility Index (Lite)</span></li>
+                    <li><i class="fas fa-check-circle"></i><span>Copy-paste code snippets</span></li>
+                    <li><i class="fas fa-check-circle"></i><span>3 competitor analyses</span></li>
                 </ul>
-                <button class="plan-btn plan-btn-primary" onclick="selectPlan('pro')">
+                <button class="plan-btn plan-btn-secondary" onclick="selectPlan('pro')">
                     Get Started
                 </button>
             </div>
@@ -606,47 +725,43 @@
             <!-- Enterprise Plan -->
             <div class="plan-card">
                 <div class="plan-name">Enterprise</div>
-                <div class="plan-tagline">For growing companies</div>
-                <div class="plan-price">$249<span>/mo</span></div>
+                <div class="plan-tagline">For enterprise & mid-market companies</div>
+                <div class="plan-price">$499<span>/mo</span></div>
                 <div class="plan-billing">Billed monthly • Cancel anytime</div>
                 <ul class="plan-features">
                     <li><i class="fas fa-check-circle"></i><span>200 scans per month</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Track 100 pages per domain</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Monitor 10 competitors</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Media & social monitoring</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Thought leadership tracking</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>White-label reports</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>API access</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Team members (up to 5)</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Dedicated account manager</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Priority phone support</span></li>
+                    <li><i class="fas fa-check-circle"></i><span>Up to 100 pages of the same domain</span></li>
+                    <li><i class="fas fa-check-circle"></i><span>Website Visibility Index (full) & Brand Visibility Index (Full)</span></li>
+                    <li><i class="fas fa-check-circle"></i><span>10 competitor analyses</span></li>
+                    <li><i class="fas fa-check-circle"></i><span>Advanced AI monitoring (50+ queries)</span></li>
+                    <li><i class="fas fa-check-circle"></i><span>Media & social tracking</span></li>
                 </ul>
                 <button class="plan-btn plan-btn-secondary" onclick="selectPlan('enterprise')">
                     Get Started
                 </button>
             </div>
 
-            <!-- Agency Plan -->
-            <div class="plan-card">
+        </div>
+
+        <!-- Agency Plan Box -->
+        <div class="agency-box">
+            <div class="agency-info">
                 <div class="plan-name">Agency</div>
-                <div class="plan-tagline">For agencies & resellers</div>
+                <div class="plan-tagline">For marketing agencies & consultants</div>
                 <div class="plan-price">$499<span>/mo</span></div>
                 <div class="plan-billing">Billed monthly • Cancel anytime</div>
-                <ul class="plan-features">
-                    <li><i class="fas fa-check-circle"></i><span>Unlimited scans</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Unlimited pages tracked</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Unlimited competitors</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Multi-client dashboard</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>White-label everything</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Custom branding</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Full API access</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Team members (unlimited)</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Reseller pricing</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Dedicated support team</span></li>
-                    <li><i class="fas fa-check-circle"></i><span>Custom integrations</span></li>
-                </ul>
-                <button class="plan-btn plan-btn-secondary" onclick="selectPlan('agency')">
-                    Get Started
+            </div>
+            <ul class="agency-features">
+                <li><i class="fas fa-check-circle"></i><span>10 client domains</span></li>
+                <li><i class="fas fa-check-circle"></i><span>Dedicated account manager</span></li>
+                <li><i class="fas fa-check-circle"></i><span>50 scans per domain/month</span></li>
+                <li><i class="fas fa-check-circle"></i><span>Priority support</span></li>
+                <li><i class="fas fa-check-circle"></i><span>White-label reports</span></li>
+                <li><i class="fas fa-check-circle"></i><span>Custom onboarding</span></li>
+            </ul>
+            <div class="agency-cta">
+                <button class="agency-btn" onclick="selectPlan('agency')">
+                    Contact Sales
                 </button>
             </div>
         </div>
@@ -693,7 +808,10 @@
         let currentPlan = null;
 
         function openDomainModal(planName) {
+            console.log('📝 openDomainModal called with plan:', planName);
             currentPlan = planName;
+            console.log('✅ currentPlan set to:', currentPlan);
+
             const modal = document.getElementById('domainModal');
             const input = document.getElementById('domainInput');
 
@@ -720,9 +838,16 @@
             // Clean up domain
             const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
 
+            // Save plan before closing modal (closeDomainModal resets currentPlan to null)
+            const selectedPlan = currentPlan;
+
+            console.log('📋 submitDomain called');
+            console.log('Selected plan:', selectedPlan);
+            console.log('Cleaned domain:', cleanDomain);
+
             // Close modal and proceed with checkout
             closeDomainModal();
-            await proceedWithCheckout(currentPlan, cleanDomain);
+            await proceedWithCheckout(selectedPlan, cleanDomain);
         }
 
         function showMessage(title, message, subtitle = '', isSuccess = true) {
@@ -804,40 +929,42 @@
         }
 
         async function selectPlan(planName) {
+            console.log('🎯 selectPlan called with:', planName);
+
             const authToken = localStorage.getItem('authToken');
 
             if (!authToken) {
+                console.log('❌ No auth token, redirecting to login');
                 window.location.href = 'auth.html?redirect=' + encodeURIComponent(window.location.href);
                 return;
             }
 
             // Handle free plan selection - show confirmation modal
             if (planName === 'free') {
+                console.log('➡️ Free plan selected, opening downgrade modal');
                 openDowngradeModal();
-                return;
-            }
-
-            // Handle DIY plan - redirect to Stripe portal
-            if (planName === 'diy') {
-                await openStripePortal();
                 return;
             }
 
             // Handle Pro, Enterprise, Agency plans - show coming soon modal
             if (planName === 'pro' || planName === 'enterprise' || planName === 'agency') {
+                console.log('➡️ ' + planName + ' plan selected, opening coming soon modal');
                 openComingSoonModal();
                 return;
             }
 
-            // Fallback for any other plans (shouldn't reach here)
+            // Handle DIY plan - create Stripe checkout session
             // Get domain from localStorage or show modal
             const domain = localStorage.getItem('primaryDomain');
+            console.log('📍 Primary domain from localStorage:', domain);
 
             if (!domain) {
+                console.log('➡️ No domain found, opening domain modal for plan:', planName);
                 openDomainModal(planName);
                 return;
             }
 
+            console.log('➡️ Domain found, proceeding directly to checkout');
             await proceedWithCheckout(planName, domain);
         }
 
@@ -897,33 +1024,74 @@
             const authToken = localStorage.getItem('authToken');
 
             try {
+                console.log('🛒 Starting checkout process...');
+                console.log('Plan:', planName);
+                console.log('Domain:', domain);
+                console.log('API Base URL:', API_BASE_URL);
+                console.log('Auth Token:', authToken ? 'Present (length: ' + authToken.length + ')' : 'Missing');
+
                 document.getElementById('loadingOverlay').style.display = 'flex';
 
-                const response = await fetch(`${API_BASE_URL}/subscription/create-checkout-session`, {
+                const requestBody = {
+                    plan: planName,
+                    domain: domain
+                };
+
+                console.log('Request body:', JSON.stringify(requestBody, null, 2));
+
+                const requestUrl = `${API_BASE_URL}/subscription/create-checkout-session`;
+                console.log('Request URL:', requestUrl);
+
+                const response = await fetch(requestUrl, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${authToken}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        plan: planName,
-                        domain: domain
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
-                const data = await response.json();
+                console.log('Response status:', response.status);
+                console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+                // Get response text first, then parse as JSON
+                const responseText = await response.text();
+                console.log('Raw response:', responseText);
+
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                    console.log('Parsed response data:', data);
+                } catch (parseError) {
+                    console.error('Failed to parse response as JSON:', parseError);
+                    throw new Error('Server returned invalid response format: ' + responseText.substring(0, 200));
+                }
 
                 if (!response.ok) {
-                    throw new Error(data.error || 'Failed to create checkout session');
+                    const errorMessage = data.error || data.message || 'Failed to create checkout session';
+                    console.error('Checkout failed with error:', errorMessage);
+                    throw new Error(errorMessage);
                 }
+
+                if (!data.url) {
+                    console.error('No checkout URL in response:', data);
+                    throw new Error('Server did not return a checkout URL. Please contact support.');
+                }
+
+                console.log('✅ Checkout session created successfully!');
+                console.log('Redirecting to:', data.url);
 
                 // Redirect to Stripe Checkout
                 window.location.href = data.url;
 
             } catch (error) {
                 document.getElementById('loadingOverlay').style.display = 'none';
-                console.error('Checkout error:', error);
-                showMessage('Checkout Failed', error.message, 'Please try again');
+                console.error('❌ Checkout error:', error);
+                console.error('Error stack:', error.stack);
+
+                // Show detailed error message
+                const errorMessage = error.message || 'An unexpected error occurred. Please try again.';
+                showMessage('Checkout Failed', errorMessage, 'Error Details: ' + error.name);
             }
         }
 
@@ -1002,5 +1170,8 @@
 
     <!-- AI Support Chat Widget -->
     <script src="support-chat.js"></script>
+
+    <!-- Universal Tracking Script for UTM Parameters -->
+    <script src="tracking.js"></script>
 </body>
 </html>

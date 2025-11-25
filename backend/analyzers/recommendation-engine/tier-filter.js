@@ -69,9 +69,15 @@ function filterByTier(recommendations, customizedFAQ, tier = 'free', metadata = 
   let activeCount = 0;
 
   if (tier === 'diy' && limits.progressiveUnlock) {
-    // DIY tier with progressive unlock - use userProgress data with a safe default
-    const progressCount = userProgress?.active_recommendations ?? 0;
-    activeCount = progressCount > 0 ? progressCount : limits.maxRecommendationsPerUnlock;
+    // DIY tier with progressive unlock
+    if (userProgress && userProgress.active_recommendations > 0) {
+      // Use saved progress if valid
+      activeCount = userProgress.active_recommendations;
+    } else {
+      // First scan OR corrupted data - default to 5 recommendations
+      activeCount = limits.maxRecommendationsPerUnlock || 5;
+      console.log(`⚠️ DIY tier: No valid userProgress, defaulting to ${activeCount} recommendations`);
+    }
     limitedRecs = sortedRecs.slice(0, activeCount);
   } else if (tier === 'guest') {
     // Guest - NO recommendations

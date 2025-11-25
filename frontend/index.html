@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Visibility Score - Is Your Website Invisible to AI?</title>
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
     <style>
         * {
             margin: 0;
@@ -600,37 +601,39 @@
 
         .pricing-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 30px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
             margin-top: 50px;
-            max-width: 1100px;
+            max-width: 1200px;
             margin-left: auto;
             margin-right: auto;
         }
 
         .pricing-card {
             background: white;
-            padding: 40px 35px;
-            border-radius: 20px;
-            border: 2px solid #e2e8f0;
-            transition: all 0.3s;
+            padding: 2rem;
+            border-radius: 16px;
+            border: 1px solid #E5E7EB;
+            transition: all 0.3s ease;
             position: relative;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }
 
         .pricing-card.featured {
-            border-color: #00B9DA;
-            box-shadow: 0 12px 40px rgba(0, 185, 218, 0.2);
-            transform: scale(1.05);
+            border: 2px solid #00B9DA;
+            box-shadow: 0 8px 24px rgba(0, 185, 218, 0.2);
         }
 
         .pricing-card:hover {
             border-color: #00B9DA;
-            box-shadow: 0 12px 40px rgba(0, 185, 218, 0.15);
-            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(0, 185, 218, 0.12);
+            transform: translateY(-4px);
         }
 
         .pricing-card.featured:hover {
-            transform: scale(1.08);
+            box-shadow: 0 12px 32px rgba(0, 185, 218, 0.25);
         }
 
         .plan-badge {
@@ -659,65 +662,73 @@
         }
 
         .plan-name {
-            font-size: 28px;
-            font-weight: 800;
-            color: #2d3748;
-            margin-bottom: 15px;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1F2937;
+            margin-bottom: 0.5rem;
         }
 
         .plan-price {
-            font-size: 48px;
+            font-size: 2.5rem;
             font-weight: 800;
             background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin-bottom: 5px;
+            margin-bottom: 0.5rem;
+            line-height: 1.2;
         }
 
         .plan-price-small {
-            font-size: 18px;
-            color: #718096;
-            margin-bottom: 25px;
+            font-size: 0.875rem;
+            color: #6B7280;
+            margin-bottom: 1.5rem;
+            line-height: 1.5;
         }
 
         .plan-features {
             list-style: none;
-            margin: 25px 0;
+            margin: 1.5rem 0;
+            flex: 1;
         }
 
         .plan-features li {
-            padding: 12px 0;
+            padding: 0.75rem 0;
             display: flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 15px;
-            color: #4a5568;
+            align-items: flex-start;
+            gap: 0.75rem;
+            font-size: 0.9375rem;
+            color: #374151;
+            line-height: 1.8;
         }
 
         .check-icon {
-            color: #10b981;
+            color: #00B9DA;
             font-size: 18px;
             font-weight: 700;
+            flex-shrink: 0;
+            margin-top: 0.1rem;
         }
 
         .plan-cta {
             width: 100%;
-            padding: 16px;
+            padding: 1rem;
             border-radius: 12px;
             font-weight: 700;
-            font-size: 16px;
+            font-size: 1rem;
             cursor: pointer;
             border: 2px solid #00B9DA;
             background: white;
             color: #00B9DA;
-            transition: all 0.3s;
-            margin-top: 20px;
+            transition: all 0.3s ease;
+            margin-top: auto;
         }
 
         .plan-cta:hover {
             background: #00B9DA;
             color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 185, 218, 0.3);
         }
 
         .pricing-card.featured .plan-cta {
@@ -727,8 +738,8 @@
         }
 
         .pricing-card.featured .plan-cta:hover {
-            transform: scale(1.05);
-            box-shadow: 0 8px 20px rgba(0, 185, 218, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 185, 218, 0.4);
         }
 
         /* Final CTA Section */
@@ -858,7 +869,7 @@
 
         .feature-row {
             display: grid;
-            grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr;
+            grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
             gap: 20px;
             padding: 15px 20px;
             align-items: center;
@@ -894,6 +905,207 @@
             color: #cbd5e0;
         }
 
+        /* Coming Soon Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 24px;
+            padding: 0;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+            animation: modalSlideIn 0.3s ease-out;
+            overflow: hidden;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-30px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%);
+            padding: 2rem;
+            text-align: center;
+            border-radius: 20px 20px 0 0;
+        }
+
+        .modal-header h2 {
+            color: white;
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .modal-header p {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.95rem;
+        }
+
+        .modal-body {
+            padding: 2rem;
+            border-radius: 0 0 20px 20px;
+        }
+
+        .modal-body p {
+            margin-bottom: 1.5rem;
+            color: #4a5568;
+            line-height: 1.6;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 1rem;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+            font-family: inherit;
+        }
+
+        .modal-btn-primary {
+            background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%);
+            color: white;
+        }
+
+        .modal-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 185, 218, 0.4);
+        }
+
+        .modal-btn-secondary {
+            background: white;
+            color: #4a5568;
+            border: 2px solid #d1d5db;
+        }
+
+        .modal-btn-secondary:hover {
+            background: #f9fafb;
+        }
+
+        /* Agency Plan Box */
+        .agency-box {
+            background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%);
+            border-radius: 20px;
+            padding: 2.5rem;
+            margin-top: 3rem;
+            margin-bottom: 3rem;
+            box-shadow: 0 8px 24px rgba(0, 185, 218, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 2rem;
+        }
+
+        .agency-info {
+            flex-shrink: 0;
+        }
+
+        .agency-info .agency-plan-name {
+            color: white;
+            font-size: 1.75rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .agency-info .agency-plan-tagline {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .agency-info .agency-plan-price {
+            color: white;
+            font-size: 2.25rem;
+            font-weight: 800;
+            margin-bottom: 0.25rem;
+        }
+
+        .agency-info .agency-plan-price span {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .agency-info .agency-plan-billing {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.875rem;
+        }
+
+        .agency-features {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem 2rem;
+            list-style: none;
+        }
+
+        .agency-features li {
+            color: white;
+            font-size: 0.9375rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .agency-features .check-icon {
+            color: white;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .agency-cta {
+            flex-shrink: 0;
+        }
+
+        .agency-btn {
+            background: white;
+            color: #00B9DA;
+            padding: 1rem 2.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+            white-space: nowrap;
+        }
+
+        .agency-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 255, 255, 0.3);
+        }
+
         /* Responsive */
         @media (max-width: 1200px) {
             .pricing-grid {
@@ -903,6 +1115,20 @@
             .feature-row {
                 grid-template-columns: 2fr repeat(5, 1fr);
                 font-size: 14px;
+            }
+
+            .agency-box {
+                flex-direction: column;
+                text-align: center;
+                padding: 2rem;
+            }
+
+            .agency-features {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .agency-cta .agency-btn {
+                width: 100%;
             }
         }
 
@@ -949,10 +1175,49 @@
             .feature-cross {
                 text-align: left;
             }
+
+            .agency-box {
+                padding: 1.5rem;
+            }
+
+            .agency-features {
+                grid-template-columns: 1fr;
+            }
+
+            .agency-info .agency-plan-name {
+                font-size: 1.5rem;
+            }
+
+            .agency-info .agency-plan-price {
+                font-size: 2rem;
+            }
         }
     </style>
 </head>
 <body>
+    <!-- Coming Soon Modal -->
+    <div id="comingSoonModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Coming Soon</h2>
+                <p>This plan will be available soon</p>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 1.5rem; color: #4a5568; line-height: 1.6;">
+                    We're working hard to bring this plan to you. Please check back soon or start with our <strong>DIY plan</strong> for immediate access.
+                </p>
+                <div class="modal-actions">
+                    <button class="modal-btn modal-btn-secondary" onclick="closeComingSoonModal()">
+                        Close
+                    </button>
+                    <button class="modal-btn modal-btn-primary" onclick="window.location.href='auth.html'">
+                        Try DIY Plan
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Navigation -->
     <nav class="navbar">
         <div class="logo">AI Visibility Score</div>
@@ -1259,13 +1524,13 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
 
                     <ul class="plan-features">
                         <li><span class="check-icon">✓</span> 25 scans per month</li>
-                        <li><span class="check-icon">✓</span> Up to 5 pages per scan</li>
+                        <li><span class="check-icon">✓</span> Up to 5 pages of the same domain</li>
                         <li><span class="check-icon">✓</span> Website Visibility Index (full)</li>
                         <li><span class="check-icon">✓</span> Copy-paste code snippets</li>
-                        <li><span class="check-icon">✓</span> PDF export & tracking</li>
+                        <li><span class="check-icon">✓</span> Competitor scanning</li>
                     </ul>
 
-                    <button class="plan-cta" onclick="window.location.href='auth.html'">Get Started Now</button>
+                    <button class="plan-cta" onclick="window.location.href='auth.html'">Get Started</button>
                 </div>
 
                 <!-- Card 3: SMB/Pro -->
@@ -1277,13 +1542,13 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
 
                     <ul class="plan-features">
                         <li><span class="check-icon">✓</span> 50 scans per month</li>
-                        <li><span class="check-icon">✓</span> Up to 25 pages per scan</li>
-                        <li><span class="check-icon">✓</span> Brand Visibility Index (Lite)</li>
+                        <li><span class="check-icon">✓</span> Up to 25 pages of the same domain</li>
+                        <li><span class="check-icon">✓</span> Website Visibility Index (full) & Brand Visibility Index (Lite)</li>
+                        <li><span class="check-icon">✓</span> Copy-paste code snippets</li>
                         <li><span class="check-icon">✓</span> 3 competitor analyses</li>
-                        <li><span class="check-icon">✓</span> Basic AI monitoring (10 queries)</li>
                     </ul>
 
-                    <button class="plan-cta" style="opacity: 0.6; cursor: not-allowed;" disabled>Coming Soon</button>
+                    <button class="plan-cta" onclick="openComingSoonModal()">Get Started</button>
                 </div>
 
                 <!-- Card 4: Enterprise -->
@@ -1295,43 +1560,15 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
 
                     <ul class="plan-features">
                         <li><span class="check-icon">✓</span> 200 scans per month</li>
-                        <li><span class="check-icon">✓</span> Up to 100 pages per scan</li>
-                        <li><span class="check-icon">✓</span> Brand Visibility Index (Full)</li>
+                        <li><span class="check-icon">✓</span> Up to 100 pages of the same domain</li>
+                        <li><span class="check-icon">✓</span> Website Visibility Index (full) & Brand Visibility Index (Full)</li>
                         <li><span class="check-icon">✓</span> 10 competitor analyses</li>
                         <li><span class="check-icon">✓</span> Advanced AI monitoring (50+ queries)</li>
                         <li><span class="check-icon">✓</span> Media & social tracking</li>
                     </ul>
 
-                    <button class="plan-cta" style="opacity: 0.6; cursor: not-allowed;" disabled>Coming Soon</button>
+                    <button class="plan-cta" onclick="openComingSoonModal()">Get Started</button>
                 </div>
-            </div>
-
-            <!-- Agency Box -->
-            <div style="background: linear-gradient(135deg, #00B9DA 0%, #7D41A5 100%); border-radius: 20px; padding: 50px 40px; text-align: center; color: white; margin: 50px 0; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);">
-                <div style="font-size: 56px; margin-bottom: 20px;">🏢</div>
-                <h2 style="font-size: 32px; font-weight: 800; margin-bottom: 15px;">Need an Agency Plan?</h2>
-                <p style="font-size: 18px; margin-bottom: 30px; opacity: 0.9;">Managing multiple clients? We've got you covered.</p>
-
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 35px; max-width: 900px; margin-left: auto; margin-right: auto;">
-                    <div style="font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                        <span style="color: #00B9DA; font-weight: 800; font-size: 18px;">✓</span>
-                        Unlimited scans & pages
-                    </div>
-                    <div style="font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                        <span style="color: #00B9DA; font-weight: 800; font-size: 18px;">✓</span>
-                        Multi-client dashboard
-                    </div>
-                    <div style="font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                        <span style="color: #00B9DA; font-weight: 800; font-size: 18px;">✓</span>
-                        Custom branding & integrations
-                    </div>
-                    <div style="font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                        <span style="color: #00B9DA; font-weight: 800; font-size: 18px;">✓</span>
-                        Dedicated account manager
-                    </div>
-                </div>
-
-                <a href="mailto:aivisibility@xeo.marketing" style="display: inline-block; padding: 18px 40px; background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%); color: white; border-radius: 12px; font-size: 18px; font-weight: 700; text-decoration: none; transition: all 0.3s ease;">Contact Us for Custom Pricing</a>
             </div>
 
             <!-- Compare Features Button -->
@@ -1355,16 +1592,14 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-value">25</div>
                         <div class="feature-value">50</div>
                         <div class="feature-value">200</div>
-                        <div class="feature-value">5000</div>
                     </div>
 
                     <div class="feature-row">
-                        <div class="feature-name">Pages per scan</div>
+                        <div class="feature-name">Pages of the same domain</div>
                         <div class="feature-value">1 (Homepage)</div>
                         <div class="feature-value">5</div>
                         <div class="feature-value">25</div>
                         <div class="feature-value">100</div>
-                        <div class="feature-value">1000</div>
                     </div>
 
                     <div class="feature-row">
@@ -1373,7 +1608,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-value">1</div>
                         <div class="feature-value">1</div>
                         <div class="feature-value">3</div>
-                        <div class="feature-value">Unlimited</div>
                     </div>
                 </div>
 
@@ -1387,7 +1621,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-check">✓ Full</div>
                         <div class="feature-check">✓ Full</div>
                         <div class="feature-check">✓ Full</div>
-                        <div class="feature-check">✓ Full</div>
                     </div>
 
                     <div class="feature-row">
@@ -1395,7 +1628,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
                         <div class="feature-value">✓ Lite</div>
-                        <div class="feature-check">✓ Full</div>
                         <div class="feature-check">✓ Full</div>
                     </div>
                 </div>
@@ -1410,13 +1642,11 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
-                        <div class="feature-check">✓</div>
                     </div>
 
                     <div class="feature-row">
                         <div class="feature-name">Basic recommendations</div>
                         <div class="feature-check">✓</div>
-                        <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
@@ -1428,7 +1658,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
-                        <div class="feature-check">✓</div>
                     </div>
 
                     <div class="feature-row">
@@ -1436,7 +1665,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-cross">—</div>
                         <div class="feature-value">Up to 10</div>
                         <div class="feature-value">Up to 25</div>
-                        <div class="feature-value">Unlimited</div>
                         <div class="feature-value">Unlimited</div>
                     </div>
 
@@ -1446,13 +1674,11 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
-                        <div class="feature-check">✓</div>
                     </div>
 
                     <div class="feature-row">
                         <div class="feature-name">Industry-specific insights</div>
                         <div class="feature-cross">—</div>
-                        <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
@@ -1469,7 +1695,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-value">Overall only</div>
                         <div class="feature-value">Historical</div>
                         <div class="feature-value">Historical</div>
-                        <div class="feature-value">Historical</div>
                     </div>
 
                     <div class="feature-row">
@@ -1478,14 +1703,12 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-value">90 days</div>
                         <div class="feature-value">Unlimited</div>
                         <div class="feature-value">Unlimited</div>
-                        <div class="feature-value">Unlimited</div>
                     </div>
 
                     <div class="feature-row">
                         <div class="feature-name">Score trend analysis</div>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
-                        <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
                     </div>
@@ -1501,7 +1724,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-cross">—</div>
                         <div class="feature-value">3</div>
                         <div class="feature-value">10</div>
-                        <div class="feature-value">Unlimited</div>
                     </div>
 
                     <div class="feature-row">
@@ -1509,7 +1731,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
                         <div class="feature-value">Basic (10)</div>
-                        <div class="feature-value">Advanced (50+)</div>
                         <div class="feature-value">Advanced (50+)</div>
                     </div>
 
@@ -1519,7 +1740,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
                         <div class="feature-check">✓</div>
-                        <div class="feature-check">✓</div>
                     </div>
 
                     <div class="feature-row">
@@ -1527,7 +1747,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
-                        <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
                     </div>
                 </div>
@@ -1542,7 +1761,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
-                        <div class="feature-check">✓</div>
                     </div>
 
                     <div class="feature-row">
@@ -1550,7 +1768,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
-                        <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
                     </div>
 
@@ -1560,7 +1777,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
-                        <div class="feature-check">✓</div>
                     </div>
                 </div>
 
@@ -1574,7 +1790,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-value">1</div>
                         <div class="feature-value">1</div>
                         <div class="feature-value">3</div>
-                        <div class="feature-value">Unlimited</div>
                     </div>
 
                     <div class="feature-row">
@@ -1583,7 +1798,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
-                        <div class="feature-check">✓</div>
                     </div>
 
                     <div class="feature-row">
@@ -1592,7 +1806,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
-                        <div class="feature-check">✓</div>
                     </div>
                 </div>
 
@@ -1606,7 +1819,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-value">Email</div>
                         <div class="feature-value">Email</div>
                         <div class="feature-value">Priority</div>
-                        <div class="feature-value">Dedicated</div>
                     </div>
 
                     <div class="feature-row">
@@ -1614,7 +1826,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
-                        <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
                     </div>
 
@@ -1624,7 +1835,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
-                        <div class="feature-check">✓</div>
                     </div>
 
                     <div class="feature-row">
@@ -1633,8 +1843,30 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
                         <div class="feature-check">✓</div>
-                        <div class="feature-check">✓</div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Agency Plan Box -->
+            <div class="agency-box">
+                <div class="agency-info">
+                    <div class="agency-plan-name">Agency</div>
+                    <div class="agency-plan-tagline">For marketing agencies & consultants</div>
+                    <div class="agency-plan-price">$499<span>/mo</span></div>
+                    <div class="agency-plan-billing">Billed monthly • Cancel anytime</div>
+                </div>
+                <ul class="agency-features">
+                    <li><span class="check-icon">✓</span><span>10 client domains</span></li>
+                    <li><span class="check-icon">✓</span><span>Dedicated account manager</span></li>
+                    <li><span class="check-icon">✓</span><span>50 scans per domain/month</span></li>
+                    <li><span class="check-icon">✓</span><span>Priority support</span></li>
+                    <li><span class="check-icon">✓</span><span>White-label reports</span></li>
+                    <li><span class="check-icon">✓</span><span>Custom onboarding</span></li>
+                </ul>
+                <div class="agency-cta">
+                    <button class="agency-btn" onclick="window.location.href='mailto:sales@visible2ai.com'">
+                        Contact Sales
+                    </button>
                 </div>
             </div>
         </div>
@@ -1825,6 +2057,37 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                 button.textContent = 'Compare All Features';
             }
         }
+
+        // Open Coming Soon Modal
+        function openComingSoonModal() {
+            const modal = document.getElementById('comingSoonModal');
+            modal.classList.add('active');
+        }
+
+        // Close Coming Soon Modal
+        function closeComingSoonModal() {
+            const modal = document.getElementById('comingSoonModal');
+            modal.classList.remove('active');
+        }
+
+        // Close modal when clicking outside
+        document.addEventListener('DOMContentLoaded', () => {
+            const comingSoonModalEl = document.getElementById('comingSoonModal');
+            comingSoonModalEl.addEventListener('click', (e) => {
+                if (e.target === comingSoonModalEl) {
+                    closeComingSoonModal();
+                }
+            });
+
+            // Close modals on Escape key
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (comingSoonModalEl.classList.contains('active')) {
+                        closeComingSoonModal();
+                    }
+                }
+            });
+        });
     </script>
 
     <!-- AI Support Chat Widget -->
@@ -2009,5 +2272,8 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
             }
         })();
     </script>
+
+    <!-- Universal Tracking Script for UTM Parameters -->
+    <script src="tracking.js"></script>
 </body>
 </html>

@@ -98,20 +98,16 @@ class V5EnhancedRubricEngine {
 
       console.log(`[V5-Enhanced] Crawled ${this.siteData.pageCount} pages`);
 
-      // Step 1.5: Detect certifications if industry is provided
+      // Step 1.5: Detect certifications (always runs, falls back to Generic)
       // Wrapped in try-catch to prevent certification detection errors from crashing scans
-      if (this.industry) {
-        try {
-          console.log(`[V5-Enhanced] Detecting certifications for industry: ${this.industry}`);
-          this.certificationData = detectCertifications(this.siteData, this.industry);
-        } catch (certError) {
-          console.error(`[V5-Enhanced] ⚠️  Certification detection failed (non-fatal):`, certError.message);
-          console.error(`[V5-Enhanced] Stack:`, certError.stack);
-          this.certificationData = null; // Continue scan without certification data
-        }
-      } else {
-        console.log(`[V5-Enhanced] No industry specified, running generic certification detection`);
-        this.certificationData = detectGenericCertificationSignals(this.siteData);
+      try {
+        const industryForCerts = this.industry || 'Generic';
+        console.log(`[V5-Enhanced] Detecting certifications for industry: ${industryForCerts}${!this.industry ? ' (fallback)' : ''}`);
+        this.certificationData = detectCertifications(this.siteData, industryForCerts);
+      } catch (certError) {
+        console.error(`[V5-Enhanced] ⚠️  Certification detection failed (non-fatal):`, certError.message);
+        console.error(`[V5-Enhanced] Stack:`, certError.stack);
+        this.certificationData = null; // Continue scan without certification data
       }
 
       // Step 2: Analyze each category using site-wide data

@@ -24,6 +24,54 @@ const priorityColors = {
     low: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300' }
 };
 
+/**
+ * Convert numeric priority score to text label
+ * @param {number|string} priority - Priority value (can be numeric score or text)
+ * @returns {string} Priority label (CRITICAL, HIGH, MEDIUM, LOW)
+ */
+function getPriorityLabel(priority) {
+    // If already a string label, normalize it
+    if (typeof priority === 'string' && isNaN(priority)) {
+        return priority.toLowerCase();
+    }
+
+    // Convert to number if it's a string number
+    const score = typeof priority === 'string' ? parseFloat(priority) : priority;
+
+    // If it's not a valid number, default to medium
+    if (isNaN(score)) {
+        return 'medium';
+    }
+
+    // Convert numeric score to priority category
+    if (score >= 80) {
+        return 'critical';
+    } else if (score >= 60) {
+        return 'high';
+    } else if (score >= 40) {
+        return 'medium';
+    } else {
+        return 'low';
+    }
+}
+
+/**
+ * Get priority badge color class
+ * @param {string} priority - Priority label (critical, high, medium, low)
+ * @returns {string} CSS class for priority badge
+ */
+function getPriorityBadgeClass(priority) {
+    const normalizedPriority = priority.toLowerCase();
+
+    if (normalizedPriority === 'critical' || normalizedPriority === 'high') {
+        return 'rec-priority-badge high';
+    } else if (normalizedPriority === 'medium') {
+        return 'rec-priority-badge medium';
+    } else {
+        return 'rec-priority-badge low';
+    }
+}
+
 // Global chart variable
 let categoryRadarChart = null;
 
@@ -913,12 +961,10 @@ function createRecommendationCard(rec, index, userPlan, isSkipped = false) {
     const quickWins = rec.quick_wins || rec.quickWins || [];
     const validationChecklist = rec.validation_checklist || rec.validationChecklist || [];
 
-    // Determine priority badge class
-    const priority = rec.priority || 'medium';
-    let priorityBadgeClass = 'rec-priority-badge ';
-    if (priority === 'critical' || priority === 'high') priorityBadgeClass += 'high';
-    else if (priority === 'medium') priorityBadgeClass += 'medium';
-    else priorityBadgeClass += 'low';
+    // Convert numeric priority to text label
+    const rawPriority = rec.priority != null ? rec.priority : 'medium';
+    const priority = getPriorityLabel(rawPriority);
+    const priorityBadgeClass = getPriorityBadgeClass(priority);
 
     // Delivery System fields
     const impactScore = rec.impact_score || null;
@@ -976,8 +1022,8 @@ function createRecommendationCard(rec, index, userPlan, isSkipped = false) {
         <div class="rec-body">
             ${(finding || impact) ? `
                 <div class="rec-description">
-                    ${finding ? `<p><strong>🔍 Finding:</strong> ${finding}</p>` : ''}
-                    ${impact ? `<p style="margin-top: ${finding ? '15px' : '0'};"><strong>💡 Why It Matters:</strong> ${impact}</p>` : ''}
+                    ${finding ? `<p><strong>🔍 Finding:</strong> ${renderMarkdown(finding)}</p>` : ''}
+                    ${impact ? `<p style="margin-top: ${finding ? '15px' : '0'};"><strong>💡 Why It Matters:</strong> ${renderMarkdown(impact)}</p>` : ''}
                 </div>
             ` : ''}
 

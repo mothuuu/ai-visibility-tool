@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - AI Visibility Score</title>
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -178,68 +179,58 @@
         }
 
         .user-info {
-            padding: 0.75rem 1.25rem;
-            background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 50%, var(--pink) 100%);
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 8px rgba(0, 185, 218, 0.2);
-            min-width: 140px;
-            text-align: right;
-            position: relative;
-        }
-
-        .user-info::before {
-            content: '⚡';
-            position: absolute;
-            left: 0.75rem;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 1.2rem;
-            opacity: 0.9;
-        }
-
-        .user-info:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 16px rgba(0, 185, 218, 0.4);
-            background: linear-gradient(135deg, var(--cyan) 0%, var(--pink) 50%, var(--purple) 100%);
-        }
-
-        .user-info:hover::before {
-            opacity: 1;
-            animation: pulse 0.5s ease-in-out;
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: translateY(-50%) scale(1); }
-            50% { transform: translateY(-50%) scale(1.2); }
-        }
-
-        .user-info:active {
-            transform: translateY(0);
-        }
-
-        .user-name {
-            font-weight: 700;
-            color: var(--white);
-            font-size: 0.875rem;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            padding: 0.625rem 1rem;
+            background: var(--gray-100);
+            border-radius: 8px;
             display: flex;
             align-items: center;
-            justify-content: flex-end;
             gap: 0.5rem;
         }
 
-        .user-name::after {
-            content: '⚙️';
-            font-size: 0.75rem;
-            opacity: 0.8;
+        .user-name {
+            font-weight: 600;
+            color: var(--gray-700);
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
-        .user-plan {
-            font-size: 0.75rem;
-            color: rgba(255, 255, 255, 0.9);
-            font-weight: 500;
+        .user-name::before {
+            content: '👤';
+            font-size: 1rem;
+        }
+
+        /* Upgrade Button */
+        .upgrade-btn {
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 50%, var(--pink) 100%);
+            color: white;
+            border: none;
+            padding: 0.625rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.875rem;
+            transition: all 0.3s;
+            box-shadow: 0 2px 8px rgba(0, 185, 218, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .upgrade-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 185, 218, 0.5);
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--pink) 50%, var(--purple) 100%);
+        }
+
+        .upgrade-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Hide upgrade button for paid users - will be controlled by JS */
+        .upgrade-btn.hidden {
+            display: none;
         }
 
         .logout-btn {
@@ -425,6 +416,36 @@
 
         .welcome-subtitle {
             font-size: 1rem;
+            color: var(--gray-600);
+            font-weight: 500;
+            margin-bottom: 1rem;
+        }
+
+        .welcome-plan-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 1rem;
+            padding: 0.75rem 1.25rem;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 12px;
+            border: 1px solid rgba(0, 185, 218, 0.2);
+        }
+
+        .plan-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.375rem 0.875rem;
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+            color: white;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.8125rem;
+            box-shadow: 0 2px 8px rgba(0, 185, 218, 0.3);
+        }
+
+        .plan-details {
+            font-size: 0.875rem;
             color: var(--gray-600);
             font-weight: 500;
         }
@@ -878,25 +899,31 @@
                 display: none !important;
             }
 
-            .user-info {
-                padding: 0.5rem 0.75rem;
-                min-width: auto;
+            .user-section {
+                gap: 0.5rem;
             }
 
-            .user-info::before {
-                display: none;
+            .user-info {
+                padding: 0.5rem 0.75rem;
             }
 
             .user-name {
                 font-size: 0.75rem;
             }
 
-            .user-name::after {
-                font-size: 0.65rem;
+            .user-name::before {
+                font-size: 0.875rem;
             }
 
-            .user-plan {
-                font-size: 0.65rem;
+            .upgrade-btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.75rem;
+            }
+
+            .welcome-plan-info {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
             }
 
             /* Subscription section mobile responsive */
@@ -1414,10 +1441,12 @@
                 <span id="competitorCount">0/3 competitors</span>
             </div>
             <div class="user-section">
-                <div class="user-info" onclick="window.location.href='https://www.visible2ai.com/checkout.html'" title="Click to manage your subscription">
+                <div class="user-info">
                     <div class="user-name" id="userName">User</div>
-                    <div class="user-plan" id="userPlan">Free Plan</div>
                 </div>
+                <button class="upgrade-btn" id="upgradeBtn" onclick="window.location.href='https://www.visible2ai.com/checkout.html'" title="Upgrade your plan">
+                    ✨ Upgrade
+                </button>
                 <button class="logout-btn" onclick="logout()">Logout</button>
             </div>
         </div>
@@ -1441,11 +1470,6 @@
                     <div class="nav-item" data-section="scan-history">
                         <i class="fas fa-history"></i>
                         <span>Scan History</span>
-                    </div>
-                    <div class="nav-item locked" data-section="scheduled-scans">
-                        <i class="fas fa-calendar-alt"></i>
-                        <span>Scheduled Scans</span>
-                        <i class="fas fa-lock" style="margin-left: auto; font-size: 0.75rem;"></i>
                     </div>
                 </div>
 
@@ -1496,11 +1520,6 @@
                         <span>Quick Wins</span>
                         <span class="badge" id="quickWinsCount">0</span>
                     </div>
-                    <div class="nav-item" data-section="implementation-progress">
-                        <i class="fas fa-check-circle"></i>
-                        <span>Implementation Progress</span>
-                        <span class="tier-badge-sidebar">PRO</span>
-                    </div>
                 </div>
 
                 <div class="nav-section">
@@ -1532,8 +1551,12 @@
             <section class="section active" id="dashboard-home">
                 <!-- Personalized Welcome Header -->
                 <div class="welcome-header">
-                    <h1 class="welcome-title">Welcome back, <span id="userName">User</span> 👋</h1>
+                    <h1 class="welcome-title">Welcome back, <span id="welcomeUserName">User</span> 👋</h1>
                     <p class="welcome-subtitle">Here's what's happening with your AI visibility today</p>
+                    <div class="welcome-plan-info" id="welcomePlanInfo">
+                        <span class="plan-badge" id="planBadge">Free Plan</span>
+                        <span class="plan-details">• <span id="scansRemaining">2 scans</span> remaining this month</span>
+                    </div>
                 </div>
 
                 <!-- Stats Grid -->
@@ -1736,45 +1759,6 @@
                             <button class="pagination-btn" disabled>Previous</button>
                             <button class="pagination-btn active">1</button>
                             <button class="pagination-btn" disabled>Next</button>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Scheduled Scans Section -->
-            <section class="section" id="scheduled-scans">
-                <div class="section-header">
-                    <h1 class="section-title">Scheduled Scans</h1>
-                    <p class="section-subtitle">Automate your scanning schedule</p>
-                </div>
-
-                <!-- Locked State (shown for Free/DIY) -->
-                <div class="locked-overlay" id="scheduledScansLocked">
-                    <div class="locked-content">
-                        <div class="locked-icon">🔒</div>
-                        <h2 class="locked-title">Unlock Scheduled Scans</h2>
-                        <p class="locked-text">Automate your monitoring with Pro or Enterprise</p>
-                        <button class="btn btn-primary" onclick="window.location.href='checkout.html?plan=pro'">
-                            Upgrade to Pro - $99/mo
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Unlocked State (shown for Pro+) -->
-                <div id="scheduledScansUnlocked" style="display: none;">
-                    <div class="card">
-                        <div class="card-header">
-                            <h2 class="card-title">Active Schedules (<span id="activeSchedulesCount">0</span>)</h2>
-                            <button class="btn btn-primary">
-                                <i class="fas fa-plus"></i>
-                                New Schedule
-                            </button>
-                        </div>
-                        <div id="schedulesContainer">
-                            <div class="empty-state">
-                                <div class="empty-icon">📅</div>
-                                <div class="empty-text">No scheduled scans yet. Create your first schedule!</div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -2086,83 +2070,6 @@
                 </div>
             </section>
 
-            <!-- Implementation Progress Section -->
-            <section class="section" id="implementation-progress">
-                <div class="section-header">
-                    <h1 class="section-title">Implementation Progress</h1>
-                    <p class="section-subtitle">Track your recommendation implementation and measure impact</p>
-                </div>
-
-                <!-- Locked State -->
-                <div class="locked-overlay" id="implementationProgressLocked">
-                    <div class="locked-content">
-                        <div class="locked-icon">🔒</div>
-                        <h2 class="locked-title">Unlock Implementation Progress Tracking</h2>
-                        <p class="locked-text">Upgrade to Pro to track your recommendation implementation, measure impact, and accelerate your AI visibility improvements</p>
-                        <button class="btn btn-primary" onclick="window.location.href='checkout.html?plan=pro'">
-                            Upgrade to Pro - $99/mo
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Unlocked State (shown for Pro+) -->
-                <div id="implementationProgressUnlocked" style="display: none;">
-                    <!-- Progress Overview Stats -->
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-label">Total Recommendations</div>
-                            <div class="stat-value" id="totalRecommendations">0</div>
-                            <div class="stat-meta">actionable items</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Implemented</div>
-                            <div class="stat-value" style="color: var(--good-green);" id="implementedCount">0</div>
-                            <div class="stat-meta" id="implementedPercentage">0% complete</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">In Progress</div>
-                            <div class="stat-value" style="color: var(--warning-yellow);" id="inProgressCount">0</div>
-                            <div class="stat-meta">being worked on</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Estimated Impact</div>
-                            <div class="stat-value" style="color: var(--cyan);" id="estimatedImpact">+0</div>
-                            <div class="stat-meta">points when complete</div>
-                        </div>
-                    </div>
-
-                    <!-- Progress Timeline -->
-                    <div class="card">
-                        <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Implementation Timeline</h3>
-                        <div id="implementationTimeline">
-                            <div class="empty-state">
-                                <div class="empty-icon">📊</div>
-                                <div class="empty-text">No implementation data yet. Start implementing recommendations to see your progress.</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Implementation List -->
-                    <div class="card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                            <h3 style="font-size: 1.25rem; font-weight: 700;">Your Recommendations</h3>
-                            <div class="filter-buttons">
-                                <button class="filter-btn active" data-filter="all">All</button>
-                                <button class="filter-btn" data-filter="pending">Pending</button>
-                                <button class="filter-btn" data-filter="in-progress">In Progress</button>
-                                <button class="filter-btn" data-filter="completed">Completed</button>
-                            </div>
-                        </div>
-                        <div id="implementationList">
-                            <div class="empty-state">
-                                <div class="empty-icon">✓</div>
-                                <div class="empty-text">No recommendations available</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
             <!-- Competitor Overview Section -->
             <section class="section" id="competitor-overview">
                 <div class="section-header">
@@ -2378,111 +2285,6 @@
                     </div>
                 </div>
 
-                <!-- 3. Payment Method Section -->
-                <div class="card" style="text-align: center; padding: 2rem; margin-bottom: 1.5rem;">
-                    <div class="card-header" style="display: block; text-align: center; margin-bottom: 1rem;">
-                        <h2 class="card-title">Payment Method</h2>
-                    </div>
-
-                    <div style="margin-bottom: 1.5rem;">
-                        <div style="font-size: 1rem; font-weight: 600; color: var(--gray-700); margin-bottom: 0.5rem;">
-                            Manage your subscription, billing, and payment methods securely through Stripe
-                        </div>
-                        <div style="font-size: 0.875rem; color: var(--gray-500);">
-                            View invoices, update payment methods, change plans, and more
-                        </div>
-                    </div>
-
-                    <button class="btn btn-primary" onclick="openStripePortal()" style="padding: 1rem 2rem; font-size: 1.125rem;">
-                        <i class="fas fa-credit-card" style="margin-right: 0.5rem;"></i>
-                        Manage in Stripe Portal
-                    </button>
-
-                    <div style="font-size: 0.75rem; color: var(--gray-500); margin-top: 1rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-                        <i class="fas fa-lock"></i> Secure payment portal powered by Stripe
-                    </div>
-                </div>
-
-                <!-- 4. Billing History Section -->
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Billing History</h2>
-                        <button class="btn btn-ghost" onclick="viewAllInvoices()">
-                            <i class="fas fa-external-link-alt"></i>
-                            View All Invoices
-                        </button>
-                    </div>
-
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Amount</th>
-                                    <th>Status</th>
-                                    <th>Invoice</th>
-                                </tr>
-                            </thead>
-                            <tbody id="billingHistoryTable">
-                                <tr>
-                                    <td>Dec 15, 2025</td>
-                                    <td>$149.00</td>
-                                    <td><span class="badge badge-good">Paid</span></td>
-                                    <td>
-                                        <button class="btn btn-ghost" onclick="downloadInvoice('inv_001')" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
-                                            <i class="fas fa-download"></i>
-                                            Download PDF
-                                        </button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>Nov 15, 2025</td>
-                                    <td>$149.00</td>
-                                    <td><span class="badge badge-good">Paid</span></td>
-                                    <td>
-                                        <button class="btn btn-ghost" onclick="downloadInvoice('inv_002')" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
-                                            <i class="fas fa-download"></i>
-                                            Download PDF
-                                        </button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>Oct 15, 2025</td>
-                                    <td>$149.00</td>
-                                    <td><span class="badge badge-good">Paid</span></td>
-                                    <td>
-                                        <button class="btn btn-ghost" onclick="downloadInvoice('inv_003')" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
-                                            <i class="fas fa-download"></i>
-                                            Download PDF
-                                        </button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>Sep 15, 2025</td>
-                                    <td>$149.00</td>
-                                    <td><span class="badge badge-good">Paid</span></td>
-                                    <td>
-                                        <button class="btn btn-ghost" onclick="downloadInvoice('inv_004')" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
-                                            <i class="fas fa-download"></i>
-                                            Download PDF
-                                        </button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>Aug 15, 2025</td>
-                                    <td>$149.00</td>
-                                    <td><span class="badge badge-good">Paid</span></td>
-                                    <td>
-                                        <button class="btn btn-ghost" onclick="downloadInvoice('inv_005')" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
-                                            <i class="fas fa-download"></i>
-                                            Download PDF
-                                        </button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
             </section>
         </main>
     </div>
@@ -2586,52 +2388,62 @@
 
             <!-- Plan Selection Grid -->
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
-                <!-- Free Plan -->
-                <div class="plan-option" data-plan="free" style="border: 2px solid var(--gray-200); border-radius: 12px; padding: 1.5rem; cursor: pointer; transition: all 0.3s;">
-                    <div style="font-size: 1.125rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.5rem;">Free</div>
-                    <div style="font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-pink) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 1rem;">
-                        $0<span style="font-size: 0.875rem; color: var(--gray-500);">/mo</span>
-                    </div>
-                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.75rem; color: var(--gray-600);">
-                        <li style="padding: 0.25rem 0;">✓ 2 scans/month</li>
-                        <li style="padding: 0.25rem 0;">✓ 1 page tracked</li>
-                        <li style="padding: 0.25rem 0;">✓ Basic reports</li>
-                    </ul>
-                </div>
-
                 <!-- DIY Plan -->
-                <div class="plan-option" data-plan="diy" style="border: 2px solid var(--gray-200); border-radius: 12px; padding: 1.5rem; cursor: pointer; transition: all 0.3s;">
-                    <div style="font-size: 1.125rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.5rem;">DIY</div>
+                <div class="plan-option" data-plan="diy" style="border: 2px solid var(--gray-200); border-radius: 12px; padding: 1.5rem; cursor: pointer; transition: all 0.3s; background: linear-gradient(135deg, #f0f9ff 0%, #fef3f2 100%);">
+                    <div style="font-size: 1rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.25rem;">DIY</div>
+                    <div style="font-size: 0.625rem; color: var(--gray-600); margin-bottom: 0.75rem;">For solopreneurs & small teams</div>
                     <div style="font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-pink) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 1rem;">
-                        $49<span style="font-size: 0.875rem; color: var(--gray-500);">/mo</span>
+                        $29<span style="font-size: 0.875rem; color: var(--gray-500);">/mo</span>
                     </div>
-                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.75rem; color: var(--gray-600);">
-                        <li style="padding: 0.25rem 0;">✓ 10 scans/month</li>
-                        <li style="padding: 0.25rem 0;">✓ 5 pages tracked</li>
-                        <li style="padding: 0.25rem 0;">✓ Competitor tracking</li>
+                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.7rem; color: var(--gray-600); line-height: 1.6;">
+                        <li style="padding: 0.25rem 0;">✓ 25 scans per month</li>
+                        <li style="padding: 0.25rem 0;">✓ Up to 5 pages of the same domain</li>
+                        <li style="padding: 0.25rem 0;">✓ Website Visibility Index (full)</li>
+                        <li style="padding: 0.25rem 0;">✓ Copy-paste code snippets</li>
+                        <li style="padding: 0.25rem 0;">✓ Competitor scanning</li>
                     </ul>
                 </div>
 
                 <!-- Pro Plan -->
                 <div class="plan-option" data-plan="pro" style="border: 2px solid var(--brand-cyan); border-radius: 12px; padding: 1.5rem; cursor: pointer; transition: all 0.3s; background: linear-gradient(135deg, #e6f7fb 0%, #f0e6ff 100%);">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                        <div style="font-size: 1.125rem; font-weight: 700; color: var(--gray-900);">Pro</div>
-                        <span style="font-size: 0.625rem; background: var(--brand-cyan); color: white; padding: 0.25rem 0.5rem; border-radius: 10px; font-weight: 700;">CURRENT</span>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
+                        <div style="font-size: 1rem; font-weight: 700; color: var(--gray-900);">Pro</div>
+                        <span id="proCurrentBadge" style="font-size: 0.625rem; background: var(--brand-cyan); color: white; padding: 0.25rem 0.5rem; border-radius: 10px; font-weight: 700; display: none;">CURRENT</span>
                     </div>
+                    <div style="font-size: 0.625rem; color: var(--gray-600); margin-bottom: 0.75rem;">For growing businesses</div>
                     <div style="font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-pink) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 1rem;">
                         $149<span style="font-size: 0.875rem; color: var(--gray-500);">/mo</span>
                     </div>
-                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.75rem; color: var(--gray-600);">
-                        <li style="padding: 0.25rem 0;">✓ 50 scans/month</li>
-                        <li style="padding: 0.25rem 0;">✓ 25 pages tracked</li>
-                        <li style="padding: 0.25rem 0;">✓ AI Discoverability</li>
+                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.7rem; color: var(--gray-600); line-height: 1.6;">
+                        <li style="padding: 0.25rem 0;">✓ 50 scans per month</li>
+                        <li style="padding: 0.25rem 0;">✓ Up to 25 pages of the same domain</li>
+                        <li style="padding: 0.25rem 0;">✓ Website Visibility Index (full) & Brand Visibility Index (Lite)</li>
+                        <li style="padding: 0.25rem 0;">✓ Copy-paste code snippets</li>
+                        <li style="padding: 0.25rem 0;">✓ 3 competitor analyses</li>
+                    </ul>
+                </div>
+
+                <!-- Enterprise Plan -->
+                <div class="plan-option" data-plan="enterprise" style="border: 2px solid var(--gray-200); border-radius: 12px; padding: 1.5rem; cursor: pointer; transition: all 0.3s; background: linear-gradient(135deg, #fef3f2 0%, #fff7ed 100%);">
+                    <div style="font-size: 1rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.25rem;">Enterprise</div>
+                    <div style="font-size: 0.625rem; color: var(--gray-600); margin-bottom: 0.75rem;">For enterprise & mid-market companies</div>
+                    <div style="font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-pink) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 1rem;">
+                        $499<span style="font-size: 0.875rem; color: var(--gray-500);">/mo</span>
+                    </div>
+                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.7rem; color: var(--gray-600); line-height: 1.6;">
+                        <li style="padding: 0.25rem 0;">✓ 200 scans per month</li>
+                        <li style="padding: 0.25rem 0;">✓ Up to 100 pages of the same domain</li>
+                        <li style="padding: 0.25rem 0;">✓ Website Visibility Index (full) & Brand Visibility Index (Full)</li>
+                        <li style="padding: 0.25rem 0;">✓ 10 competitor analyses</li>
+                        <li style="padding: 0.25rem 0;">✓ Advanced AI monitoring (50+ queries)</li>
+                        <li style="padding: 0.25rem 0;">✓ Media & social tracking</li>
                     </ul>
                 </div>
             </div>
 
-            <div style="background: #fff3cd; border: 2px solid #ffc107; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                <p style="margin: 0; color: #856404; font-size: 0.875rem;">
-                    <i class="fas fa-info-circle"></i> <strong>Note:</strong> Plan changes are pro-rated. You'll be credited for unused time on your current plan.
+            <!-- Dynamic Upgrade/Downgrade Note (initially hidden) -->
+            <div id="planChangeNote" style="display: none; background: #fff3cd; border: 2px solid #ffc107; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                <p id="planChangeNoteText" style="margin: 0; color: #856404; font-size: 0.875rem;">
                 </p>
             </div>
 
@@ -2657,20 +2469,24 @@
 
             <div style="background: #fee; border: 2px solid var(--critical-red); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
                 <h3 style="font-size: 1.125rem; font-weight: 700; color: var(--critical-red); margin-bottom: 0.75rem;">
-                    Wait! Here's what you'll lose:
+                    ⚠️ Wait! Here's what you'll lose:
                 </h3>
                 <ul style="list-style: none; padding: 0; margin: 0; color: var(--gray-700);">
                     <li style="padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
                         <i class="fas fa-times-circle" style="color: var(--critical-red);"></i>
-                        50 scans per month
+                        You'll be downgraded to Free plan (2 scans/month)
                     </li>
                     <li style="padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
                         <i class="fas fa-times-circle" style="color: var(--critical-red);"></i>
-                        25 tracked pages
+                        Your tracked pages will be reduced to homepage only
                     </li>
                     <li style="padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
                         <i class="fas fa-times-circle" style="color: var(--critical-red);"></i>
                         AI Discoverability tracking
+                    </li>
+                    <li style="padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas fa-times-circle" style="color: var(--critical-red);"></i>
+                        Competitor analysis
                     </li>
                     <li style="padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
                         <i class="fas fa-times-circle" style="color: var(--critical-red);"></i>
@@ -2686,8 +2502,8 @@
                 <p style="font-size: 1rem; font-weight: 700; color: var(--gray-900); margin: 0;" id="cancelAccessUntilDate">
                     January 15, 2026
                 </p>
-                <p style="font-size: 0.75rem; color: var(--gray-500); margin-top: 0.25rem;">
-                    You won't be charged again, and you can keep using Pro features until this date.
+                <p style="font-size: 0.75rem; color: var(--gray-500); margin-top: 0.25rem;" id="cancelAccessNote">
+                    You won't be charged again, and you can keep using <span id="cancelCurrentPlanName">Pro</span> features until this date. After that, you'll be on the Free plan with 2 scans per month.
                 </p>
             </div>
 
@@ -2702,6 +2518,38 @@
                 <button class="btn btn-danger" style="flex: 1;" onclick="confirmCancelSubscription()">
                     Yes, Cancel
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Coming Soon Modal for Pro & Enterprise -->
+    <div id="comingSoonModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 550px; padding: 0; overflow: hidden;">
+            <!-- Header with Gradient -->
+            <div style="background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%); padding: 2rem; text-align: center; border-radius: 20px 20px 0 0;">
+                <h2 style="color: white; font-size: 1.75rem; font-weight: 700; margin: 0 0 0.5rem 0;">
+                    Coming Soon
+                </h2>
+                <p style="color: rgba(255, 255, 255, 0.9); font-size: 1rem; margin: 0;">
+                    This plan will be available soon
+                </p>
+            </div>
+
+            <!-- Body -->
+            <div style="padding: 2rem; background: white; border-radius: 0 0 20px 20px;">
+                <p style="color: #374151; font-size: 1rem; line-height: 1.6; margin: 0 0 2rem 0;">
+                    We're working hard to bring this plan to you. Please check back soon or start with our <strong>DIY plan</strong> for immediate access.
+                </p>
+
+                <!-- Buttons -->
+                <div style="display: flex; gap: 1rem;">
+                    <button class="btn btn-secondary" style="flex: 1; padding: 0.875rem 2rem; border: 2px solid #E5E7EB; color: #374151; font-weight: 600; border-radius: 8px;" onclick="closeComingSoonModal()">
+                        Close
+                    </button>
+                    <button class="btn btn-primary" style="flex: 1; padding: 0.875rem 2rem; background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%); color: white; font-weight: 600; border-radius: 8px; border: none;" onclick="selectDiyPlan()">
+                        Try DIY Plan
+                    </button>
+                </div>
             </div>
         </div>
     </div>

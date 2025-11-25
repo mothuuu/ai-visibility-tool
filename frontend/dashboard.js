@@ -83,19 +83,54 @@ async function initDashboard() {
 function updateUserInfo() {
     const displayName = user.name || user.email.split('@')[0];
 
-    // Update both userName elements (header and welcome header)
-    const userNameElements = document.querySelectorAll('#userName');
-    userNameElements.forEach(el => {
-        el.textContent = displayName;
-    });
+    // Update header userName
+    const headerUserName = document.getElementById('userName');
+    if (headerUserName) {
+        headerUserName.textContent = displayName;
+    }
 
-    // Update plan type
+    // Update welcome section userName
+    const welcomeUserName = document.getElementById('welcomeUserName');
+    if (welcomeUserName) {
+        welcomeUserName.textContent = displayName;
+    }
+
+    // Update plan badge in welcome section
     const planNames = {
         free: 'Free Plan',
         diy: 'DIY Plan',
-        pro: 'Pro Plan'
+        pro: 'Pro Plan',
+        enterprise: 'Enterprise Plan'
     };
-    document.getElementById('userPlan').textContent = planNames[user.plan] || 'Free Plan';
+    const planBadge = document.getElementById('planBadge');
+    if (planBadge) {
+        planBadge.textContent = planNames[user.plan] || 'Free Plan';
+    }
+
+    // Update scans remaining in welcome section
+    const scansRemaining = document.getElementById('scansRemaining');
+    if (scansRemaining && user.scans_used_this_month !== undefined) {
+        const planLimits = {
+            free: 2,
+            diy: 25,
+            pro: 50,
+            enterprise: 200
+        };
+        const limit = planLimits[user.plan] || 2;
+        const remaining = Math.max(0, limit - user.scans_used_this_month);
+        scansRemaining.textContent = `${remaining} of ${limit} scans`;
+    }
+
+    // Show/hide upgrade button based on plan
+    const upgradeBtn = document.getElementById('upgradeBtn');
+    if (upgradeBtn) {
+        // Hide upgrade button for paid plans
+        if (user.plan === 'diy' || user.plan === 'pro' || user.plan === 'enterprise') {
+            upgradeBtn.classList.add('hidden');
+        } else {
+            upgradeBtn.classList.remove('hidden');
+        }
+    }
 
     // Update scan plan info in purple section
     const scanPlanInfo = document.getElementById('scanPlanInfo');
@@ -103,13 +138,15 @@ function updateUserInfo() {
         const planLimits = {
             free: 1,
             diy: 5,
-            pro: 25
+            pro: 25,
+            enterprise: 100
         };
         const pageLimit = planLimits[user.plan] || 1;
         const planDisplayNames = {
             free: 'Free plan',
             diy: 'DIY plan',
-            pro: 'Pro plan'
+            pro: 'Pro plan',
+            enterprise: 'Enterprise plan'
         };
         scanPlanInfo.textContent = `${planDisplayNames[user.plan] || 'Free plan'}: Analyze up to ${pageLimit} pages`;
     }
@@ -139,7 +176,8 @@ async function updateCompetitorBadge() {
     const competitorLimits = {
         free: 0,
         diy: 2,
-        pro: 3
+        pro: 3,
+        enterprise: 10
     };
 
     const competitorLimit = competitorLimits[user.plan] || 0;
@@ -187,21 +225,6 @@ function updateFeatureLocking() {
     const isPro = user.plan === 'pro';
     const isDiyPlus = user.plan === 'diy' || isPro;
 
-    // Scheduled Scans - Pro+ only
-    const scheduledScansLocked = document.getElementById('scheduledScansLocked');
-    const scheduledScansUnlocked = document.getElementById('scheduledScansUnlocked');
-    const scheduledScansNav = document.querySelector('[data-section="scheduled-scans"]');
-
-    if (isPro) {
-        if (scheduledScansLocked) scheduledScansLocked.style.display = 'none';
-        if (scheduledScansUnlocked) scheduledScansUnlocked.style.display = 'block';
-        scheduledScansNav?.classList.remove('locked');
-    } else {
-        if (scheduledScansLocked) scheduledScansLocked.style.display = 'flex';
-        if (scheduledScansUnlocked) scheduledScansUnlocked.style.display = 'none';
-        scheduledScansNav?.classList.add('locked');
-    }
-
     // Brand Visibility Index - Pro+ only
     const brandVisibilityLocked = document.getElementById('brandVisibilityLocked');
     const brandVisibilityUnlocked = document.getElementById('brandVisibilityUnlocked');
@@ -247,7 +270,8 @@ function updateQuota() {
     const planLimits = {
         free: { primary: 2, competitor: 0, pages: 1 },
         diy: { primary: 25, competitor: 2, pages: 5 },
-        pro: { primary: 50, competitor: 10, pages: 25 }
+        pro: { primary: 50, competitor: 3, pages: 25 },
+        enterprise: { primary: 200, competitor: 10, pages: 100 }
     };
 
     const limits = planLimits[user.plan] || planLimits.free;
@@ -824,6 +848,11 @@ document.addEventListener('click', function(event) {
     if (changeDomainModal && event.target === changeDomainModal) {
         closeDomainModal();
     }
+
+    const comingSoonModal = document.getElementById('comingSoonModal');
+    if (comingSoonModal && event.target === comingSoonModal) {
+        closeComingSoonModal();
+    }
 });
 
 // Loading helpers
@@ -925,13 +954,13 @@ async function loadSubscriptionData() {
             },
             diy: {
                 name: 'DIY Plan',
-                price: '$49/month',
+                price: '$29/month',
                 features: [
                     '25 scans per month',
-                    'Track up to 5 pages',
-                    'Competitor comparison (2)',
-                    'PDF exports',
-                    'Email support'
+                    'Up to 5 pages of the same domain',
+                    'Website Visibility Index (full)',
+                    'Copy-paste code snippets',
+                    'Competitor scanning'
                 ],
                 scansLimit: 25,
                 pagesLimit: 5,
@@ -942,16 +971,29 @@ async function loadSubscriptionData() {
                 price: '$149/month',
                 features: [
                     '50 scans per month',
-                    'Track up to 25 pages',
-                    'AI Discoverability tracking',
-                    'Brand Visibility Index',
-                    'Compare 3 competitors',
-                    'PDF & CSV exports',
-                    'Priority email support'
+                    'Up to 25 pages of the same domain',
+                    'Website Visibility Index (full) & Brand Visibility Index (Lite)',
+                    'Copy-paste code snippets',
+                    '3 competitor analyses'
                 ],
                 scansLimit: 50,
                 pagesLimit: 25,
                 competitorsLimit: 3
+            },
+            enterprise: {
+                name: 'Enterprise Plan',
+                price: '$499/month',
+                features: [
+                    '200 scans per month',
+                    'Up to 100 pages of the same domain',
+                    'Website Visibility Index (full) & Brand Visibility Index (Full)',
+                    '10 competitor analyses',
+                    'Advanced AI monitoring (50+ queries)',
+                    'Media & social tracking'
+                ],
+                scansLimit: 200,
+                pagesLimit: 100,
+                competitorsLimit: 10
             }
         };
 
@@ -1013,17 +1055,6 @@ async function loadSubscriptionData() {
             quotaResetElement.textContent = `Resets in ${daysUntilReset} days (${resetDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })})`;
         }
 
-        // For free plan users, show placeholder payment info (if these elements exist)
-        const cardInfoElement = document.getElementById('billingCardInfo');
-        const cardExpiryElement = document.getElementById('billingCardExpiry');
-        const billingAddressElement = document.getElementById('billingBillingAddress');
-
-        if (user.plan === 'free') {
-            if (cardInfoElement) cardInfoElement.textContent = 'No payment method on file';
-            if (cardExpiryElement) cardExpiryElement.textContent = 'Upgrade to add payment method';
-            if (billingAddressElement) billingAddressElement.textContent = 'No billing address';
-        }
-
     } catch (error) {
         console.error('Error loading subscription data:', error);
     }
@@ -1035,14 +1066,87 @@ let selectedPlanForChange = null;
 function openChangePlanModal() {
     document.getElementById('changePlanModal').style.display = 'flex';
 
+    // Hide the dynamic note initially
+    document.getElementById('planChangeNote').style.display = 'none';
+
+    // Plan hierarchy for comparison
+    const planRanks = {
+        free: 0,
+        diy: 1,
+        pro: 2,
+        enterprise: 3
+    };
+
+    // Show current plan badge
+    const currentPlanRank = planRanks[user.plan] || 0;
+
     // Setup plan selection handlers
     document.querySelectorAll('.plan-option').forEach(option => {
+        const planType = option.dataset.plan;
+
+        // Remove any existing current badges
+        const existingBadge = option.querySelector('.current-badge, #proCurrentBadge, #diyCurrentBadge, #enterpriseCurrentBadge');
+        if (existingBadge) {
+            existingBadge.style.display = 'none';
+        }
+
+        // Show CURRENT badge on user's current plan
+        if (planType === user.plan) {
+            // For Pro plan, show the badge
+            if (planType === 'pro') {
+                const proBadge = document.getElementById('proCurrentBadge');
+                if (proBadge) proBadge.style.display = 'inline-block';
+            } else {
+                // For other plans, add badge dynamically
+                const header = option.querySelector('div[style*="font-weight: 700"]');
+                if (header && !header.querySelector('.current-badge')) {
+                    const badge = document.createElement('span');
+                    badge.className = 'current-badge';
+                    badge.style.cssText = 'font-size: 0.625rem; background: var(--brand-cyan); color: white; padding: 0.25rem 0.5rem; border-radius: 10px; font-weight: 700; margin-left: 0.5rem;';
+                    badge.textContent = 'CURRENT';
+                    header.appendChild(badge);
+                }
+            }
+        }
+
         option.addEventListener('click', function() {
             // Remove selected from all
             document.querySelectorAll('.plan-option').forEach(o => o.classList.remove('selected'));
             // Add selected to clicked
             this.classList.add('selected');
             selectedPlanForChange = this.dataset.plan;
+
+            // Show/hide dynamic note based on upgrade or downgrade
+            const selectedPlanRank = planRanks[selectedPlanForChange] || 0;
+            const noteDiv = document.getElementById('planChangeNote');
+            const noteText = document.getElementById('planChangeNoteText');
+
+            if (selectedPlanForChange === user.plan) {
+                // Same plan - hide note
+                noteDiv.style.display = 'none';
+            } else if (selectedPlanRank > currentPlanRank) {
+                // Upgrading
+                noteDiv.style.display = 'block';
+                noteText.innerHTML = '<i class="fas fa-info-circle"></i> <strong>Note:</strong> Plan changes are pro-rated. You\'ll be credited for unused time on your current plan.';
+            } else {
+                // Downgrading
+                noteDiv.style.display = 'block';
+
+                // Calculate renewal date (example: 30 days from now)
+                const renewalDate = new Date();
+                renewalDate.setDate(renewalDate.getDate() + 30);
+                const formattedDate = renewalDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+                const planDisplayNames = {
+                    free: 'Free',
+                    diy: 'DIY',
+                    pro: 'Pro',
+                    enterprise: 'Enterprise'
+                };
+                const currentPlanName = planDisplayNames[user.plan] || 'current';
+
+                noteText.innerHTML = `📅 <strong>Your access continues until: ${formattedDate}</strong><br>You won't be charged again, and you can keep using ${currentPlanName} features until this date.`;
+            }
         });
     });
 }
@@ -1065,10 +1169,24 @@ async function confirmPlanChange() {
         return;
     }
 
+    // FIX FOR MODAL STACKING: Close the change plan modal FIRST
+    closeChangePlanModal();
+
+    // Wait brief moment for modal close animation
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    // Check if selected plan is Pro or Enterprise - show "Coming Soon" modal
+    if (selectedPlanForChange === 'pro' || selectedPlanForChange === 'enterprise') {
+        document.getElementById('comingSoonModal').style.display = 'flex';
+        return;
+    }
+
+    // For DIY plan - proceed with plan change
     const planNames = {
         free: 'Free Plan',
-        diy: 'DIY Plan ($49/month)',
-        pro: 'Pro Plan ($149/month)'
+        diy: 'DIY Plan ($29/month)',
+        pro: 'Pro Plan ($149/month)',
+        enterprise: 'Enterprise Plan ($499/month)'
     };
 
     const confirmed = await showXeoConfirm(
@@ -1076,7 +1194,11 @@ async function confirmPlanChange() {
         `Are you sure you want to change to ${planNames[selectedPlanForChange]}?\n\nChanges will be pro-rated and take effect immediately.`
     );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+        // If user cancels, reopen the change plan modal
+        openChangePlanModal();
+        return;
+    }
 
     try {
         showLoading();
@@ -1084,7 +1206,6 @@ async function confirmPlanChange() {
         // In production, this would call the backend API
         // For now, we'll show a message to use Stripe Portal
         hideLoading();
-        closeChangePlanModal();
         showXeoAlert('Plan Change', 'Please use the Stripe Portal to change your plan. This ensures secure payment processing and immediate activation.');
 
         // Optionally open Stripe Portal
@@ -1106,6 +1227,18 @@ function openCancelSubscriptionModal() {
     document.getElementById('cancelAccessUntilDate').textContent =
         renewalDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
+    // Update current plan name in the cancel message
+    const planDisplayNames = {
+        free: 'Free',
+        diy: 'DIY',
+        pro: 'Pro',
+        enterprise: 'Enterprise'
+    };
+    const cancelCurrentPlanName = document.getElementById('cancelCurrentPlanName');
+    if (cancelCurrentPlanName) {
+        cancelCurrentPlanName.textContent = planDisplayNames[user.plan] || 'Pro';
+    }
+
     document.getElementById('cancelSubscriptionModal').style.display = 'flex';
 }
 
@@ -1115,48 +1248,60 @@ function closeCancelSubscriptionModal() {
 
 async function confirmCancelSubscription() {
     try {
+        closeCancelSubscriptionModal();
         showLoading();
 
-        // In production, this would call the backend API
-        // For now, we'll redirect to Stripe Portal for cancellation
-        hideLoading();
-        closeCancelSubscriptionModal();
+        console.log('🚫 Cancelling subscription via API...');
 
-        const confirmed = await showXeoConfirm(
-            'Redirect to Stripe',
-            'To complete your cancellation, you will be redirected to the Stripe Customer Portal where you can securely cancel your subscription.\n\nWould you like to continue?'
-        );
-
-        if (confirmed) {
-            openStripePortal();
+        const authToken = localStorage.getItem('authToken');
+        if (!authToken) {
+            throw new Error('Not authenticated');
         }
 
+        // Call the backend API to cancel the subscription
+        const response = await fetch(`${API_BASE_URL}/subscription/cancel`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log('Cancel response status:', response.status);
+
+        const data = await response.json();
+        console.log('Cancel response data:', data);
+
+        hideLoading();
+
+        if (!response.ok) {
+            // If no active subscription, user is already on free plan
+            if (data.error && data.error.includes('No active subscription')) {
+                await showXeoAlert(
+                    'Already on Free Plan',
+                    'You are already on the Free plan. No active subscription to cancel.'
+                );
+                return;
+            }
+            throw new Error(data.error || 'Failed to cancel subscription');
+        }
+
+        // Show success message with period end date
+        const periodEndDate = data.periodEnd ? new Date(data.periodEnd * 1000).toLocaleDateString() : '';
+        const message = periodEndDate
+            ? `Your subscription has been cancelled and will end on ${periodEndDate}.\n\nAfter that, you'll be on the Free plan with 2 scans per month.`
+            : 'Your subscription has been cancelled. You will be downgraded to the Free plan at the end of your billing period.';
+
+        await showXeoAlert('Subscription Cancelled', message);
+
+        // Refresh billing data to show updated status
+        await loadBillingData();
+
     } catch (error) {
         hideLoading();
-        console.error('Cancellation error:', error);
-        showXeoAlert('Error', `Unable to process cancellation: ${error.message}`);
+        console.error('❌ Cancellation error:', error);
+        await showXeoAlert('Cancellation Failed', `Unable to cancel subscription: ${error.message}\n\nPlease try again or contact support.`);
     }
-}
-
-async function downloadInvoice(invoiceId) {
-    try {
-        showLoading();
-
-        // In production, this would fetch the invoice from the backend
-        // For now, we'll show a message
-        hideLoading();
-        showXeoAlert('Download Invoice', 'Invoice downloads are available through the Stripe Customer Portal.\n\nClick "View All Invoices" or "Manage in Stripe Portal" to access your invoices.');
-
-    } catch (error) {
-        hideLoading();
-        console.error('Download error:', error);
-        showXeoAlert('Error', `Unable to download invoice: ${error.message}`);
-    }
-}
-
-function viewAllInvoices() {
-    // Redirect to Stripe Portal for full invoice history
-    openStripePortal();
 }
 
 // Load billing page data
@@ -1180,15 +1325,15 @@ async function loadBillingData() {
             },
             diy: {
                 name: 'DIY Plan',
-                price: '$49/month',
+                price: '$29/month',
                 features: [
-                    '10 scans per month',
-                    'Track up to 5 pages',
-                    'Competitor comparison (2)',
-                    'PDF exports',
-                    'Email support'
+                    '25 scans per month',
+                    'Up to 5 pages of the same domain',
+                    'Website Visibility Index (full)',
+                    'Copy-paste code snippets',
+                    'Competitor scanning'
                 ],
-                scansLimit: 10,
+                scansLimit: 25,
                 pagesLimit: 5,
                 competitorsLimit: 2
             },
@@ -1197,14 +1342,29 @@ async function loadBillingData() {
                 price: '$149/month',
                 features: [
                     '50 scans per month',
-                    'Track up to 25 pages',
-                    'AI Discoverability tracking',
-                    'Compare 3 competitors',
-                    'Priority support'
+                    'Up to 25 pages of the same domain',
+                    'Website Visibility Index (full) & Brand Visibility Index (Lite)',
+                    'Copy-paste code snippets',
+                    '3 competitor analyses'
                 ],
                 scansLimit: 50,
                 pagesLimit: 25,
                 competitorsLimit: 3
+            },
+            enterprise: {
+                name: 'Enterprise Plan',
+                price: '$499/month',
+                features: [
+                    '200 scans per month',
+                    'Up to 100 pages of the same domain',
+                    'Website Visibility Index (full) & Brand Visibility Index (Full)',
+                    '10 competitor analyses',
+                    'Advanced AI monitoring (50+ queries)',
+                    'Media & social tracking'
+                ],
+                scansLimit: 200,
+                pagesLimit: 100,
+                competitorsLimit: 10
             }
         };
 
@@ -1268,6 +1428,35 @@ async function loadBillingData() {
 
     } catch (error) {
         console.error('Error loading billing data:', error);
+    }
+}
+
+// Coming Soon Modal Functions
+function closeComingSoonModal() {
+    document.getElementById('comingSoonModal').style.display = 'none';
+}
+
+async function selectDiyPlan() {
+    // Close coming soon modal
+    closeComingSoonModal();
+
+    // Wait brief moment
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    // Set selected plan to DIY
+    selectedPlanForChange = 'diy';
+
+    // Open change plan modal with DIY pre-selected
+    openChangePlanModal();
+
+    // Pre-select DIY plan
+    const diyOption = document.querySelector('.plan-option[data-plan="diy"]');
+    if (diyOption) {
+        document.querySelectorAll('.plan-option').forEach(o => o.classList.remove('selected'));
+        diyOption.classList.add('selected');
+
+        // Trigger the selection logic to show the upgrade note
+        diyOption.click();
     }
 }
 

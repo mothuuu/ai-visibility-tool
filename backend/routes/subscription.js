@@ -370,36 +370,53 @@ router.get('/status', async (req, res) => {
 // Cancel subscription
 router.post('/cancel', async (req, res) => {
   try {
+    console.log('🚫 [Cancel Subscription] Request received');
+
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
+      console.log('❌ [Cancel Subscription] No token provided');
       return res.status(401).json({ error: 'Token required' });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+    console.log(`👤 [Cancel Subscription] User ID: ${decoded.userId}`);
+
     const result = await db.query(
-      'SELECT stripe_subscription_id FROM users WHERE id = $1',
+      'SELECT stripe_subscription_id, email FROM users WHERE id = $1',
       [decoded.userId]
     );
 
-    if (result.rows.length === 0 || !result.rows[0].stripe_subscription_id) {
+    if (result.rows.length === 0) {
+      console.log('❌ [Cancel Subscription] User not found');
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.stripe_subscription_id) {
+      console.log(`❌ [Cancel Subscription] No active subscription for user ${user.email}`);
       return res.status(404).json({ error: 'No active subscription' });
     }
 
+    console.log(`📋 [Cancel Subscription] Cancelling subscription: ${user.stripe_subscription_id}`);
+
     // Cancel at period end (don't cancel immediately)
     const subscription = await stripe.subscriptions.update(
-      result.rows[0].stripe_subscription_id,
+      user.stripe_subscription_id,
       { cancel_at_period_end: true }
     );
+
+    console.log(`✅ [Cancel Subscription] Successfully cancelled for ${user.email}`);
+    console.log(`📅 [Cancel Subscription] Period ends: ${new Date(subscription.current_period_end * 1000).toLocaleDateString()}`);
 
     res.json({
       message: 'Subscription will be cancelled at period end',
       periodEnd: subscription.current_period_end
     });
   } catch (error) {
-    console.error('Cancellation failed:', error);
+    console.error('❌ [Cancel Subscription] Failed:', error);
     res.status(500).json({ error: 'Failed to cancel subscription' });
   }
 });

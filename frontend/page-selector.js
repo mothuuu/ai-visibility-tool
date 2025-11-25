@@ -8,18 +8,24 @@ let baseDomain = '';
 
 // Initialize on page load
 window.addEventListener('DOMContentLoaded', async () => {
-    const isAuthenticated = await checkAuth();
-    
-    if (!isAuthenticated) {
+    const userPlan = await checkAuth();
+
+    if (!userPlan) {
         alert('Please log in to continue');
         window.location.href = 'auth.html?redirect=page-selector.html';
         return;
     }
-    
+
+    // Check if user is on free plan - redirect them with upgrade prompt
+    if (userPlan === 'free') {
+        showFreePlanUpgradePrompt();
+        return;
+    }
+
     // Get domain from URL params (accepts both 'domain' and 'url')
     const urlParams = new URLSearchParams(window.location.search);
     baseDomain = urlParams.get('domain') || urlParams.get('url');
-    
+
     if (!baseDomain) {
         showError('No domain specified');
         setTimeout(() => {
@@ -27,12 +33,12 @@ window.addEventListener('DOMContentLoaded', async () => {
         }, 2000);
         return;
     }
-    
+
     // Normalize domain (ensure it has protocol)
     if (!baseDomain.startsWith('http://') && !baseDomain.startsWith('https://')) {
         baseDomain = 'https://' + baseDomain;
     }
-    
+
     // Display domain
     try {
         const url = new URL(baseDomain);
@@ -40,10 +46,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
         document.getElementById('domainDisplay').textContent = baseDomain;
     }
-    
+
     // Add homepage by default
     addPageToList(baseDomain);
-    
+
     // Enable enter key in input
     document.getElementById('pageUrlInput').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
@@ -53,14 +59,14 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
 });
 
-// Check authentication using localStorage token
+// Check authentication using localStorage token and return user plan
 async function checkAuth() {
     const authToken = localStorage.getItem('authToken');
-    
+
     if (!authToken) {
-        return false;
+        return null;
     }
-    
+
     try {
         const response = await fetch(`${API_BASE_URL}/auth/me`, {
             method: 'GET',
@@ -69,24 +75,25 @@ async function checkAuth() {
                 'Content-Type': 'application/json'
             }
         });
-        
+
         if (!response.ok) {
-            return false;
+            return null;
         }
-        
+
         const data = await response.json();
-        
+
         // Check if email is verified
         if (data.user && !data.user.email_verified) {
             alert('Please verify your email first');
             window.location.href = 'verify.html';
-            return false;
+            return null;
         }
-        
-        return true;
+
+        // Return user plan (default to 'free' if not set)
+        return data.user?.plan || 'free';
     } catch (error) {
         console.error('Auth check failed:', error);
-        return false;
+        return null;
     }
 }
 
@@ -304,12 +311,77 @@ function showInfo(message) {
     const infoDiv = document.getElementById('infoMessage');
     infoDiv.textContent = message;
     infoDiv.style.display = 'block';
-    
+
     // Hide error message
     document.getElementById('errorMessage').style.display = 'none';
-    
+
     // Auto-hide after 3 seconds
     setTimeout(() => {
         infoDiv.style.display = 'none';
     }, 3000);
+}
+
+// Show upgrade prompt for free plan users
+function showFreePlanUpgradePrompt() {
+    const container = document.querySelector('.selector-container');
+
+    // Hide all existing content
+    container.innerHTML = `
+        <div style="text-align: center; padding: 60px 20px;">
+            <div style="font-size: 4rem; margin-bottom: 20px;">🔒</div>
+            <h2 style="font-size: 2rem; color: #333; margin-bottom: 20px;">
+                Multi-Page Scanning Requires an Upgrade
+            </h2>
+            <p style="font-size: 1.2rem; color: #666; margin-bottom: 30px; line-height: 1.6;">
+                Free plan users can scan the homepage only.<br>
+                Upgrade to the <strong>DIY Plan</strong> to scan up to 5 pages from your website.
+            </p>
+
+            <div style="background: #f8f9fa; padding: 30px; border-radius: 15px; margin: 40px 0;">
+                <h3 style="color: #333; margin-bottom: 20px;">DIY Plan Features</h3>
+                <ul style="text-align: left; max-width: 400px; margin: 0 auto; color: #555; line-height: 2;">
+                    <li>✓ Analyze up to 5 pages from your website</li>
+                    <li>✓ Full AI visibility score (X/1000)</li>
+                    <li>✓ Complete 8-pillar breakdown</li>
+                    <li>✓ Detailed recommendations for each page</li>
+                    <li>✓ Unlimited monthly scans</li>
+                    <li>✓ Progress tracking over time</li>
+                </ul>
+            </div>
+
+            <div style="margin-top: 40px;">
+                <a href="checkout.html?plan=diy" style="
+                    display: inline-block;
+                    padding: 18px 40px;
+                    background: linear-gradient(135deg, #00B9DA 0%, #7030A0 100%);
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 12px;
+                    font-size: 1.2rem;
+                    font-weight: bold;
+                    margin-right: 15px;
+                    transition: transform 0.2s, box-shadow 0.2s;
+                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 10px 25px rgba(112, 48, 160, 0.3)';"
+                   onmouseout="this.style.transform=''; this.style.boxShadow='';">
+                    Upgrade to DIY - $29/month
+                </a>
+
+                <a href="dashboard.html" style="
+                    display: inline-block;
+                    padding: 18px 40px;
+                    background: white;
+                    color: #666;
+                    text-decoration: none;
+                    border: 2px solid #e1e5e9;
+                    border-radius: 12px;
+                    font-size: 1.2rem;
+                    font-weight: bold;
+                    transition: border-color 0.2s;
+                " onmouseover="this.style.borderColor='#00B9DA';"
+                   onmouseout="this.style.borderColor='#e1e5e9';">
+                    Back to Dashboard
+                </a>
+            </div>
+        </div>
+    `;
 }

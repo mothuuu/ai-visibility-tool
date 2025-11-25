@@ -17,6 +17,10 @@ const LIBRARIES_PATH = path.join(__dirname, 'certification-libraries');
  * Uses same mapping as FAQ libraries for consistency
  */
 const INDUSTRY_MAPPING = {
+  // Generic (fallback for all industries)
+  'generic': 'generic',
+  'general': 'generic',
+
   // Healthcare
   'healthcare': 'healthcare',
   'health': 'healthcare',

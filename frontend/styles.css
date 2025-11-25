@@ -1854,3 +1854,92 @@ body {
     background: var(--gray-50);
     border-color: var(--gray-400);
 }
+/* ===== CERTIFICATION DISPLAY ENHANCEMENTS ===== */
+
+/* Certification list styling in recommendations */
+.rec-description p {
+    line-height: 1.7;
+    margin-bottom: 0.75rem;
+}
+
+.rec-description strong {
+    color: var(--gray-900);
+    font-weight: 600;
+}
+
+/* Style for certification items (lines starting with ✓) */
+.rec-description {
+    line-height: 1.8;
+}
+
+/* Add spacing for certification recommendations section */
+.rec-description > p:has(strong):not(:first-child) {
+    margin-top: 1rem;
+}
+
+/* Certification list container */
+.certification-list {
+    margin-top: 1.5rem;
+}
+
+.certification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem;
+    background: #F9FAFB;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    border-left: 3px solid var(--cyan);
+    transition: all 0.2s;
+}
+
+.certification-item:hover {
+    background: #F3F4F6;
+    border-left-color: var(--purple);
+}
+
+.cert-checkmark {
+    color: var(--cyan);
+    font-size: 1.25rem;
+    font-weight: bold;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.cert-content h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gray-900);
+    margin-bottom: 0.25rem;
+}
+
+.cert-content p {
+    font-size: 0.875rem;
+    color: var(--gray-700);
+    line-height: 1.6;
+    margin: 0;
+}
+
+.cert-industries {
+    font-size: 0.8125rem;
+    color: var(--gray-600);
+    margin-top: 0.5rem;
+}
+
+.cert-industries strong {
+    color: var(--gray-800);
+}
+
+/* Enhanced typography for certification descriptions */
+.rec-description {
+    font-size: 0.9375rem;
+    color: var(--gray-800);
+}
+
+/* Better spacing between certification items in markdown text */
+.rec-description br + br {
+    display: block;
+    content: "";
+    margin-top: 0.5rem;
+}

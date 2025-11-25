@@ -34,8 +34,8 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
-// Plan limits – single source of truth
-const { PLAN_LIMITS, getPlanLimitsOrFail } = require('../middleware/usageLimits');
+// Plan limits imported from middleware (single source of truth)
+const { PLAN_LIMITS } = require('../middleware/usageLimits');
 
 // V5 Rubric Category Weights
 const V5_WEIGHTS = {
@@ -206,14 +206,26 @@ router.post('/analyze', authenticateToken, async (req, res) => {
     }
 
     const user = userResult.rows[0];
+    const planLimits = PLAN_LIMITS[user.plan];
 
-    let planLimits;
-    try {
-      planLimits = getPlanLimitsOrFail(user.plan || 'free');
-    } catch (planError) {
-      return res.status(400).json({
-        error: 'Unsupported plan',
-        message: `Plan '${user.plan}' is not supported. Please contact support if this is unexpected.`,
+    // Defensive guard: Ensure plan is valid
+    if (!planLimits) {
+      console.error(`⚠️ CRITICAL: Invalid plan detected for user ${userId}: "${user.plan}"`);
+
+      // Log to database for monitoring
+      await db.query(
+        'INSERT INTO usage_logs (user_id, action, metadata) VALUES ($1, $2, $3)',
+        [userId, 'invalid_plan_detected', JSON.stringify({
+          invalidPlan: user.plan,
+          timestamp: new Date().toISOString()
+        })]
+      );
+
+      // Return error instead of silently downgrading
+      return res.status(500).json({
+        error: 'Invalid plan configuration',
+        message: 'Your account has an invalid plan. Please contact support.',
+        supportEmail: 'support@yourapp.com'
       });
     }
 
@@ -1636,6 +1648,17 @@ async function performV5Scan(url, plan, pages = null, userProgress = null, userI
     console.log(`✅ V5 scan complete. Total score: ${totalScore}/100 (${finalIndustry})`);
     console.log(`📊 Generated ${recommendationResults.data.recommendations.length} recommendations`);
 
+    // Add industry prompt if certification data was detected without user-selected industry
+    let industryPrompt = null;
+    if (!userIndustry && v5Results.certificationData && v5Results.certificationData.industry === 'Generic') {
+      industryPrompt = {
+        message: "💡 Set your industry in settings for tailored certification recommendations",
+        actionUrl: "/settings.html#industry",
+        actionLabel: "Set Industry"
+      };
+      console.log(`💡 Industry prompt added (using Generic certification library)`);
+    }
+
     return {
       totalScore,
       categories,
@@ -1643,6 +1666,7 @@ async function performV5Scan(url, plan, pages = null, userProgress = null, userI
       faq: recommendationResults.data.faq || null,
       upgrade: recommendationResults.data.upgrade || null,
       industry: v5Results.industry || 'General',
+      industryPrompt: industryPrompt, // UI prompt to set industry
       detailedAnalysis: {
         url,
         scannedAt: new Date().toISOString(),

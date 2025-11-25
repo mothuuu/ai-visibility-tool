@@ -1,4 +1,36 @@
 /* Admin Dashboard Shared Styles */
+
+/* CSS Variables */
+:root {
+  /* Xeo Brand Colors */
+  --cyan: #00B9DA;
+  --pink: #f31c7e;
+  --purple: #7D41A5;
+  --teal: #4DACA6;
+  --white: #FFFFFF;
+
+  /* Neutral Colors */
+  --gray-50: #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-800: #1f2937;
+  --gray-900: #111827;
+
+  /* Status Colors */
+  --success: #10B981;
+  --warning: #F59E0B;
+  --error: #EF4444;
+
+  /* Shadows */
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -18,7 +50,7 @@ body {
   top: 0;
   bottom: 0;
   width: 260px;
-  background: linear-gradient(180deg, var(--violet-deep) 0%, var(--violet-rich) 100%);
+  background: linear-gradient(180deg, #1E293B 0%, #0F172A 100%);
   padding: 30px 20px;
   overflow-y: auto;
   z-index: 1000;
@@ -184,13 +216,32 @@ body {
 }
 
 .metric-card {
-  background: var(--white);
   padding: 25px;
   border-radius: 16px;
   box-shadow: var(--shadow);
   position: relative;
   overflow: hidden;
   transition: all 0.3s;
+}
+
+/* Total Users - Blue/Cyan */
+.metric-card:nth-child(1) {
+  background: linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%);
+}
+
+/* Monthly Revenue - Yellow/Gold */
+.metric-card:nth-child(2) {
+  background: linear-gradient(135deg, #FEF9C3 0%, #FDE68A 100%);
+}
+
+/* Scans This Month - Light Gray */
+.metric-card:nth-child(3) {
+  background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
+}
+
+/* Churn Rate - Pink/Rose */
+.metric-card:nth-child(4) {
+  background: linear-gradient(135deg, #FFE4E6 0%, #FECDD3 100%);
 }
 
 .metric-card:hover {
