@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require('../db/database');
 
 const { saveHybridRecommendations } = require('../utils/hybrid-recommendation-helper');
-const { extractRootDomain, isPrimaryDomain } = require('../utils/domain-extractor');
+const { extractRootDomain, isPrimaryDomain, resolveCanonicalUrl } = require('../utils/domain-extractor');
 const { calculateScanComparison, getHistoricalTimeline } = require('../utils/scan-comparison');
 
 // ============================================
@@ -58,27 +58,116 @@ router.post('/guest', async (req, res) => {
       return res.status(400).json({ error: 'URL is required' });
     }
 
-    // Validate URL format
-    let validUrl;
+    console.log('🔍 Guest scan requested for:', url);
+
+    // Step 1: Resolve canonical URL (follows redirects, normalizes www/non-www)
+    // This ensures consistent results regardless of how user enters the URL
+    let urlResolution;
     try {
-      validUrl = new URL(url);
-      if (validUrl.protocol !== 'http:' && validUrl.protocol !== 'https:') {
-        throw new Error('Invalid protocol');
+      urlResolution = await resolveCanonicalUrl(url);
+      console.log(`🔗 URL Resolution: "${url}" → "${urlResolution.canonicalUrl}"`);
+      if (urlResolution.redirected) {
+        console.log(`   ↳ Redirected from: ${urlResolution.normalizedInput}`);
+        console.log(`   ↳ Final destination: ${urlResolution.finalUrl}`);
       }
-    } catch (e) {
-      return res.status(400).json({ 
-        error: 'Invalid URL format. Please use http:// or https://' 
+    } catch (resolveError) {
+      console.error('❌ URL resolution failed:', resolveError.message);
+      return res.status(400).json({
+        error: 'Invalid URL',
+        message: 'Unable to resolve this URL. Please check it is accessible.'
       });
     }
 
-    console.log('🔍 Guest scan requested for:', url);
+    const canonicalUrl = urlResolution.canonicalUrl;
 
-    // Perform V5 rubric scan
+    // Step 2: Check for recent scan of same canonical URL (within last 5 minutes)
+    // This prevents duplicate scans and ensures consistent results
+    try {
+      const recentScan = await db.query(
+        `SELECT id, total_score, ai_readability_score, ai_search_readiness_score,
+                content_freshness_score, content_structure_score, speed_ux_score,
+                technical_setup_score, trust_authority_score, voice_optimization_score,
+                industry, created_at
+         FROM scans
+         WHERE url = $1 AND user_id IS NULL AND status = 'completed'
+           AND created_at > NOW() - INTERVAL '5 minutes'
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [canonicalUrl]
+      );
+
+      if (recentScan.rows.length > 0) {
+        const cached = recentScan.rows[0];
+        console.log(`💾 Returning cached scan from ${cached.created_at} (scan ID: ${cached.id})`);
+
+        // Reconstruct categories from cached scan
+        const cachedCategories = {
+          aiReadability: cached.ai_readability_score,
+          aiSearchReadiness: cached.ai_search_readiness_score,
+          contentFreshness: cached.content_freshness_score,
+          contentStructure: cached.content_structure_score,
+          speedUX: cached.speed_ux_score,
+          technicalSetup: cached.technical_setup_score,
+          trustAuthority: cached.trust_authority_score,
+          voiceOptimization: cached.voice_optimization_score
+        };
+
+        // Compute top 3 problem areas from cached scores
+        const pillarNames = {
+          aiReadability: 'AI Readability',
+          aiSearchReadiness: 'AI Search Readiness',
+          contentFreshness: 'Content Freshness',
+          contentStructure: 'Content Structure',
+          speedUX: 'Speed & UX',
+          technicalSetup: 'Technical Setup',
+          trustAuthority: 'Trust & Authority',
+          voiceOptimization: 'Voice Optimization'
+        };
+
+        const sortedPillars = Object.entries(cachedCategories)
+          .map(([key, score]) => ({
+            key,
+            name: pillarNames[key],
+            score: Math.round(score),
+            weight: V5_WEIGHTS[key]
+          }))
+          .sort((a, b) => a.score - b.score);
+
+        const topProblemAreas = sortedPillars.slice(0, 3);
+
+        return res.json({
+          success: true,
+          total_score: cached.total_score,
+          rubric_version: 'V5',
+          url: canonicalUrl,
+          input_url: url,
+          categories: cachedCategories,
+          categoryBreakdown: cachedCategories,
+          categoryWeights: V5_WEIGHTS,
+          topProblemAreas: topProblemAreas,
+          recommendations: [],
+          faq: null,
+          upgrade: {
+            message: 'Sign up free to unlock your top 3 personalized recommendations',
+            cta: 'Create Free Account',
+            ctaUrl: '/register.html'
+          },
+          message: 'Sign up free to unlock your top 3 recommendations',
+          guest: true,
+          cached: true,
+          cached_at: cached.created_at
+        });
+      }
+    } catch (cacheError) {
+      console.warn('⚠️ Cache check failed (continuing with fresh scan):', cacheError.message);
+    }
+
+    // Step 3: Perform V5 rubric scan using canonical URL
     // Use 'guest' tier - NO recommendations shown to anonymous users
-    const scanResult = await performV5Scan(url, 'guest');
+    const scanResult = await performV5Scan(canonicalUrl, 'guest');
 
     // Save guest scan to database for analytics (with user_id = NULL)
-    // NOTE: Round scores to integers since DB columns are INTEGER type
+    // NOTE: Store canonical URL for consistency, and round scores to integers
     try {
       await db.query(
         `INSERT INTO scans (
@@ -90,7 +179,7 @@ router.post('/guest', async (req, res) => {
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)`,
         [
           null, // user_id is NULL for guest scans
-          url,
+          canonicalUrl, // Store canonical URL for consistent caching
           'completed',
           1, // page_count
           'V5',
@@ -118,7 +207,8 @@ router.post('/guest', async (req, res) => {
       success: true,
       total_score: scanResult.totalScore,
       rubric_version: 'V5',
-      url: url,
+      url: canonicalUrl, // Return canonical URL
+      input_url: url, // Also return original input for reference
       categories: scanResult.categories,
       categoryBreakdown: scanResult.categories,
       categoryWeights: V5_WEIGHTS, // Include weights for display
