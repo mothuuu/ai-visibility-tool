@@ -510,7 +510,8 @@
             // Update score display
             document.getElementById('scoreNumber').textContent = displayScore;
             document.getElementById('scoreGrade').textContent = 'Grade: ' + getGrade(displayScore);
-            document.getElementById('scoreUrl').textContent = data.url || '';
+            // Show the user's original input URL (or canonical if not available)
+            document.getElementById('scoreUrl').textContent = data.input_url || data.url || '';
 
             // Animate circular progress
             const circle = document.getElementById('progressCircle');

@@ -21,6 +21,13 @@ const axios = require('axios');
  * - www.massivewebdesign.ca → https://www.massivewebdesign.ca
  * - http://massivewebdesign.ca → https://www.massivewebdesign.ca
  *
+ * GUARDRAILS:
+ * - Different paths are preserved: /blog ≠ /pricing (separate scans)
+ * - Subdomains are preserved: app.example.com ≠ example.com (different sites)
+ * - Only normalizes: protocol (→https), www vs bare (via redirect), trailing slash
+ * - Query params and hashes are stripped for canonical comparison
+ * - If URL is inaccessible, falls back to normalized input
+ *
  * @param {string} inputUrl - User-provided URL (may be missing protocol, www, etc.)
  * @returns {Promise<{canonicalUrl: string, inputUrl: string, redirected: boolean}>}
  */
