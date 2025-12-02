@@ -149,8 +149,49 @@ const SUBFACTOR_NAMES = {
   sitemapScore: 'XML Sitemap',
   robotsTxtScore: 'Robots.txt Configuration',
   httpsScore: 'HTTPS Security',
-  crawlAccessibilityScore: 'Crawl Accessibility'
+  crawlAccessibilityScore: 'Crawl Accessibility',
+  // Added missing subfactors
+  snippetFormatScore: 'Featured Snippet Optimization',
+  pillarPagesScore: 'Pillar Page Structure',
+  linkedSubpagesScore: 'Internal Linking',
+  painPointsScore: 'Pain Points & Solutions',
+  snippetEligibleScore: 'Snippet-Eligible Content',
+  altTextScore: 'Image Alt Text',
+  transcriptScore: 'Video/Audio Transcripts',
+  captionScore: 'Image Captions',
+  mediaDescriptionScore: 'Media Descriptions',
+  longTailScore: 'Long-Tail Keywords',
+  localIntentScore: 'Local Search Intent',
+  conversationalTermsScore: 'Conversational Language',
+  multiTurnScore: 'Multi-Turn Query Support',
+  lastUpdatedScore: 'Content Freshness Signals',
+  versioningScore: 'Content Versioning',
+  timeSensitiveScore: 'Time-Sensitive Content',
+  auditProcessScore: 'Content Audit Process',
+  liveDataScore: 'Live Data Integration',
+  httpFreshnessScore: 'HTTP Freshness Headers',
+  editorialCalendarScore: 'Editorial Calendar',
+  mobileSpeedScore: 'Mobile Page Speed',
+  coreWebVitalsScore: 'Core Web Vitals',
+  accessibilityScore: 'Accessibility',
+  professionalCertifications: 'Professional Certifications',
+  teamCredentials: 'Team Credentials',
+  industryMemberships: 'Industry Memberships',
+  canonicalHreflangScore: 'Canonical & Hreflang Tags'
 };
+
+// Helper to get user-friendly subfactor name
+function getSubfactorDisplayName(subfactor) {
+  if (SUBFACTOR_NAMES[subfactor]) {
+    return SUBFACTOR_NAMES[subfactor];
+  }
+  // Fallback: convert camelCase to Title Case (e.g., snippetFormatScore → Snippet Format Score)
+  return subfactor
+    .replace(/Score$/, '')
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, str => str.toUpperCase())
+    .trim();
+}
 
 const RECOMMENDATION_TEMPLATES = {
   structuredDataScore: {
@@ -490,10 +531,12 @@ async function customizeLibraryRecommendation(libraryRec, issue, _scanEvidence, 
 // -----------------------------------------
 
 async function generateWithChatGPT(issue, scanEvidence, tier, industry) {
+  const displayName = getSubfactorDisplayName(issue.subfactor);
+  const categoryName = CATEGORY_NAMES[issue.category] || issue.category;
   const template = RECOMMENDATION_TEMPLATES[issue.subfactor] || {
-    title: `Improve ${issue.subfactor}`,
-    impactArea: issue.category,
-    whyItMatters: "This affects your AI visibility.",
+    title: `Improve ${displayName}`,
+    impactArea: categoryName,
+    whyItMatters: `Optimizing ${displayName} helps AI systems better understand and cite your content.`,
     typicalTimeToFix: "Varies",
     difficulty: "Medium",
     estimatedGain: 10
@@ -1332,7 +1375,7 @@ function makeProgrammaticScannabilityRecommendation(issue, scanEvidence, industr
   const { profile, facts } = normalizeEvidence(scanEvidence);
 
   // Extract scannability metrics
-  const wordCount = scanEvidence.content?.word_count || 0;
+  const wordCount = scanEvidence.content?.wordCount || 0;
   const paragraphs = scanEvidence.content?.paragraphs || [];
   const headings = {
     h1: scanEvidence.content?.headings?.h1 || [],
@@ -1343,8 +1386,8 @@ function makeProgrammaticScannabilityRecommendation(issue, scanEvidence, industr
   const totalHeadings = headings.h1.length + headings.h2.length + headings.h3.length;
   const avgWordsPerHeading = totalHeadings > 0 ? Math.round(wordCount / totalHeadings) : wordCount;
 
-  // Find long paragraphs (>150 words)
-  const longParagraphs = paragraphs.filter(p => p.length > 150);
+  // Find long paragraphs (>150 words) - count actual words, not characters
+  const longParagraphs = paragraphs.filter(p => p.split(/\s+/).length > 150);
 
   // Detect lists/bullets
   const hasBullets = /<ul|<ol|<li/i.test(scanEvidence.html);
@@ -2397,7 +2440,7 @@ function makeProgrammaticReadabilityRecommendation(issue, scanEvidence, industry
   const pageTitle = scanEvidence.metadata?.title || 'Your Page';
 
   // Extract readability metrics from scanEvidence
-  const wordCount = scanEvidence.content?.word_count || 0;
+  const wordCount = scanEvidence.content?.wordCount || 0;
   const paragraphs = scanEvidence.content?.paragraphs || [];
   const sentences = scanEvidence.content?.sentences || [];
   const avgSentenceLength = sentences.length > 0 ? Math.round(wordCount / sentences.length) : 0;
@@ -2767,7 +2810,7 @@ function makeProgrammaticContentDepthRecommendation(issue, scanEvidence, industr
   const pageTitle = scanEvidence.metadata?.title || 'Your Page';
 
   // Extract content metrics from scanEvidence
-  const wordCount = scanEvidence.content?.word_count || 0;
+  const wordCount = scanEvidence.content?.wordCount || 0;
   const headings = scanEvidence.content?.headings || {};
   const totalHeadings = (headings.h2 || []).length + (headings.h3 || []).length + (headings.h4 || []).length;
   const paragraphs = scanEvidence.content?.paragraphs || [];
@@ -5410,10 +5453,12 @@ ${ogImg ? `<meta name="twitter:image" content="${ogImg}">` : ''}`;
 // -----------------------------------------
 
 function generateSmartTemplate(issue, scanEvidence, _tier, _industry) {
+  const displayName = getSubfactorDisplayName(issue.subfactor);
+  const categoryName = CATEGORY_NAMES[issue.category] || issue.category;
   const tpl = RECOMMENDATION_TEMPLATES[issue.subfactor] || {
-    title: `Improve ${issue.subfactor}`,
-    impactArea: issue.category,
-    whyItMatters: "This affects your AI visibility.",
+    title: `Improve ${displayName}`,
+    impactArea: categoryName,
+    whyItMatters: `Optimizing ${displayName} helps AI systems better understand and cite your content.`,
     typicalTimeToFix: "Varies",
     difficulty: "Medium",
     estimatedGain: 10
@@ -5841,20 +5886,40 @@ function clamp(str, max) {
 
 // PATCH B — coerce/guard final recommendation
 function coerceRecommendation(rec, template, issue) {
-  // Ensure non-empty sections
+  // Get user-friendly subfactor name (never expose internal variable names)
+  const displayName = getSubfactorDisplayName(issue.subfactor);
+  const categoryName = CATEGORY_NAMES[issue.category] || issue.category;
+
+  // Ensure non-empty sections with user-friendly text
   if (!rec.finding || rec.finding.length < 20) {
-    rec.finding = `Your ${issue.subfactor} score is ${issue.currentScore}/100; improvements are needed to reach ${issue.threshold}/100.`;
+    rec.finding = `Your ${displayName} score is ${issue.currentScore}/100 (target: ${issue.threshold}/100). This is a ${issue.gap}-point gap that affects your ${categoryName} performance.`;
   }
+
   if (!rec.impact || rec.impact.length < 20) {
-    rec.impact = template.whyItMatters || 'This affects your AI visibility.';
+    // Provide contextual impact text based on category
+    const categoryImpacts = {
+      aiSearchReadiness: `Improving ${displayName} helps AI assistants find and cite your content more accurately, increasing your visibility in AI-powered search results.`,
+      voiceOptimization: `Better ${displayName} makes your content more accessible to voice assistants and conversational AI, improving how your answers appear in voice search.`,
+      contentStructure: `Optimizing ${displayName} helps AI systems parse and understand your content structure, making it easier to extract relevant information.`,
+      technicalSetup: `Proper ${displayName} ensures AI crawlers can efficiently access and index your content, preventing technical barriers to visibility.`,
+      trustAuthority: `Strong ${displayName} signals expertise and credibility to AI systems, increasing the likelihood your content gets cited as authoritative.`,
+      contentFreshness: `Good ${displayName} signals to AI that your content is current and maintained, which affects ranking in time-sensitive queries.`,
+      aiReadability: `Improving ${displayName} helps AI understand your multimedia and visual content, enabling richer citations.`,
+      speedUX: `Better ${displayName} improves how quickly AI can process your pages, affecting crawl priority and user experience.`
+    };
+    rec.impact = template.whyItMatters || categoryImpacts[issue.category] || `Improving ${displayName} enhances how AI systems understand and surface your content in search results.`;
   }
+
   if (!Array.isArray(rec.actionSteps) || rec.actionSteps.length === 0) {
+    // Provide actionable steps without internal variable names
     rec.actionSteps = [
-      `Open the relevant template/page for ${issue.subfactor}.`,
-      'Apply the code/content changes below.',
-      'Validate with the recommended validator and re-scan.'
+      `Review your current ${displayName} implementation on your website`,
+      `Apply the specific changes recommended above to improve your score`,
+      `Test the changes using the validation tools mentioned`,
+      `Re-run the scan to verify your score improvement`
     ];
   }
+
   if (typeof rec.codeSnippet !== 'string') rec.codeSnippet = '';
 
   // Length guards (tune to your DB column sizes)
