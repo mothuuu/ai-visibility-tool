@@ -180,6 +180,68 @@ const SUBFACTOR_NAMES = {
   canonicalHreflangScore: 'Canonical & Hreflang Tags'
 };
 
+// Plain-language "Why It Matters" explanations for each subfactor (8th grade reading level)
+// Focused on business outcomes, not technical jargon
+const SUBFACTOR_IMPACTS = {
+  // AI Search Readiness
+  structuredDataScore: "Structured data is like a label that tells AI exactly what your business offers. When AI understands you better, it recommends you more often to people searching for your services.",
+  organizationSchema: "Organization schema tells AI the basics about your company — name, logo, contact info. This helps AI show accurate information about your business and builds trust with searchers.",
+  productSchema: "Product schema helps AI understand what you sell — prices, availability, reviews. When someone asks AI about products like yours, your listings can show up directly in the answer.",
+  faqScore: "When you mark up your FAQs properly, AI assistants can find your answers and share them directly with people asking questions — putting your business in front of potential customers.",
+  questionHeadingsScore: "People search by asking questions. When your headings are written as questions, AI can match your content to what people are actually asking and recommend you as the answer.",
+  openGraphScore: "When someone shares your link on social media, these tags control what people see. A good preview with an image and description means more clicks and more visitors to your site.",
+
+  // Content Structure
+  headingHierarchyScore: "Clear headings help AI understand your page like a table of contents. This makes it easier for AI to find specific information and recommend your content for the right searches.",
+  contentDepthScore: "AI prefers detailed, helpful content over thin pages. The more thoroughly you cover a topic, the more likely AI will see you as an expert worth recommending.",
+  scannabilityScore: "AI looks for content that's easy to scan — bullet points, numbered lists, short paragraphs. When your page is formatted this way, AI can quickly pull answers from it.",
+  snippetFormatScore: "Featured snippets are the answers that appear at the top of search results. Formatting your content properly helps AI choose your answer to display prominently.",
+  pillarPagesScore: "Pillar pages are comprehensive guides that link to related content. They help AI understand you have deep expertise on a topic, making you more likely to be recommended.",
+  linkedSubpagesScore: "Internal links show AI how your content connects. Good linking helps AI understand the full scope of your expertise and recommend you for more searches.",
+  painPointsScore: "When you address specific problems your customers face, AI can match your solutions to people searching for help. This brings in customers who are ready to buy.",
+  snippetEligibleScore: "Some content formats work better for AI answers — like step-by-step lists and clear definitions. Using these formats helps your content get picked for featured spots.",
+
+  // Trust & Authority
+  professionalCertifications: "Certifications prove you know your stuff. When AI sees your credentials displayed on your site, it's more likely to recommend you as a trusted expert in your field.",
+  teamCredentials: "Showing your team's qualifications and experience helps AI recognize that real experts work at your company. This builds trust with both AI and your potential customers.",
+  industryMemberships: "Being part of professional groups shows AI you're connected to your industry. It's like having references that vouch for your expertise when AI decides who to recommend.",
+
+  // Technical Setup
+  sitemapScore: "A sitemap is like a map of your website for AI. Without one, AI might miss pages on your site, meaning fewer chances for your content to be found and recommended.",
+  robotsTxtScore: "Robots.txt tells AI which pages to look at. If it's not set up right, you might accidentally be hiding great content from AI that could bring you customers.",
+  httpsScore: "HTTPS is the security lock in your browser. AI prioritizes secure websites because they're safer for users. Without HTTPS, AI may not recommend you at all.",
+  crawlAccessibilityScore: "If AI can't access your pages, it can't recommend them. Making sure AI can easily read your site is the first step to getting found.",
+  canonicalHreflangScore: "These tags prevent confusion when you have similar pages. They tell AI which version to show, so your content doesn't compete against itself in search results.",
+
+  // AI Readability (Multimedia)
+  altTextScore: "AI can't see images without descriptions. Adding alt text to your images lets AI understand and recommend your visual content to more searchers.",
+  transcriptScore: "AI can't listen to videos or podcasts. Adding transcripts lets AI read and recommend your audio/video content to people searching for that information.",
+  captionScore: "Image captions provide context that helps AI understand what your pictures show. This extra detail can help your visual content get recommended in more searches.",
+  mediaDescriptionScore: "Describing your media files helps AI understand what they contain. This opens up more opportunities for your content to be found in relevant searches.",
+
+  // Voice & Conversational
+  longTailScore: "People search using specific phrases, not just keywords. Targeting longer, more specific searches helps you reach people who know exactly what they want.",
+  localIntentScore: "When people search for local services, AI looks for businesses that clearly serve their area. Making your location clear helps nearby customers find you.",
+  conversationalTermsScore: "People talk to AI naturally, like asking a friend. When your content sounds conversational, AI can better match it to the way people actually search.",
+  multiTurnScore: "Sometimes people ask follow-up questions. Content that anticipates and answers related questions keeps visitors engaged and helps AI see you as a complete resource.",
+
+  // Content Freshness
+  lastUpdatedScore: "Showing when content was last updated tells AI it's current and reliable. Fresh content gets recommended more because people want up-to-date information.",
+  versioningScore: "Version numbers and changelog dates show your content evolves with your industry. AI trusts sources that keep their information current.",
+  timeSensitiveScore: "For content that changes often (like prices or events), showing it's current prevents AI from recommending outdated information that frustrates users.",
+  auditProcessScore: "Regular content reviews show AI you're committed to accuracy. This builds long-term trust and helps your content stay recommended over time.",
+  liveDataScore: "Real-time data (like stock prices or weather) shows AI your content is current. Dynamic, live information is valuable to searchers and gets recommended more.",
+  httpFreshnessScore: "Technical headers tell AI how fresh your content is. Proper freshness signals help AI know when to re-check your content for updates.",
+  editorialCalendarScore: "Regular publishing shows AI your site is active and maintained. Consistent updates build trust and keep AI coming back to check for new content.",
+
+  // Speed & User Experience
+  mobileSpeedScore: "Slow mobile pages frustrate visitors and AI. Fast-loading pages mean happy customers who stay longer and AI that recommends you more often.",
+  coreWebVitalsScore: "These measure how fast and smooth your site feels to visitors. Google uses them to decide who to recommend. Better scores mean more visibility.",
+  accessibilityScore: "Accessible websites work for everyone, including people using screen readers. AI also benefits from accessibility features, which help it understand your content better.",
+  geoContentScore: "Location-specific content helps AI connect you with nearby customers. The clearer your geographic focus, the better AI can match you to local searches.",
+  readabilityScore: "Content that's easy to read gets shared more and keeps visitors engaged. Clear writing helps both AI and humans understand what you offer."
+};
+
 // Helper to get user-friendly subfactor name
 function getSubfactorDisplayName(subfactor) {
   if (SUBFACTOR_NAMES[subfactor]) {
@@ -197,7 +259,7 @@ const RECOMMENDATION_TEMPLATES = {
   structuredDataScore: {
     title: "Implement Structured Data Schema",
     impactArea: "AI Understanding & Rich Results",
-    whyItMatters: "Structured data tells AI assistants exactly what your content is about, increasing citation chances by 3–5x.",
+    whyItMatters: "Structured data is like a label that tells AI exactly what your business offers. When AI understands you better, it recommends you more often to people searching for your services.",
     typicalTimeToFix: "1–2 hours",
     difficulty: "Easy",
     estimatedGain: 18
@@ -205,7 +267,7 @@ const RECOMMENDATION_TEMPLATES = {
   faqScore: {
     title: "Add FAQ Schema Markup",
     impactArea: "Voice Search & Featured Snippets",
-    whyItMatters: "FAQ schema helps your answers surface in AI-generated results and voice search.",
+    whyItMatters: "When you mark up your FAQs properly, AI assistants can find your answers and share them directly with people asking questions — putting your business in front of potential customers.",
     typicalTimeToFix: "1–2 hours",
     difficulty: "Easy",
     estimatedGain: 12
@@ -213,7 +275,7 @@ const RECOMMENDATION_TEMPLATES = {
   altTextScore: {
     title: "Complete Image Alt Text Coverage",
     impactArea: "Multimodal AI & Accessibility",
-    whyItMatters: "Alt text enables AI to understand and reference your images in multimodal search.",
+    whyItMatters: "AI can't see images without descriptions. Adding alt text to your images lets AI understand and recommend your visual content to more searchers.",
     typicalTimeToFix: "1–2 hours",
     difficulty: "Easy",
     estimatedGain: 8
@@ -221,23 +283,23 @@ const RECOMMENDATION_TEMPLATES = {
   openGraphScore: {
     title: "Add Open Graph & Twitter Card meta tags",
     impactArea: "Social Sharing & Entity Cards",
-    whyItMatters: "Ensures rich previews across social/AI surfaces and better CTR from shares.",
+    whyItMatters: "When someone shares your link on social media, these tags control what people see. A good preview with an image and description means more clicks and more visitors to your site.",
     typicalTimeToFix: "15–30 minutes",
     difficulty: "Easy",
     estimatedGain: 8
   },
   professionalCertifications: {
     title: "Display Industry Certifications",
-    impactArea: "Trust & Authority (E-E-A-T)",
-    whyItMatters: "Professional certifications demonstrate expertise, compliance, and industry standards. AI systems heavily weight these trust signals when citing sources.",
+    impactArea: "Trust & Authority",
+    whyItMatters: "Certifications prove you know your stuff. When AI sees your credentials displayed on your site, it's more likely to recommend you as a trusted expert in your field.",
     typicalTimeToFix: "20–30 minutes",
     difficulty: "Easy",
     estimatedGain: 22
   },
   teamCredentials: {
     title: "Add Team Member Credentials",
-    impactArea: "Expertise & Authority (E-E-A-T)",
-    whyItMatters: "Documenting team expertise with Person schema and credentials boosts E-E-A-T signals. AI systems look for verifiable expertise when determining source authority.",
+    impactArea: "Expertise & Authority",
+    whyItMatters: "Showing your team's qualifications and experience helps AI recognize that real experts work at your company. This builds trust with both AI and your potential customers.",
     typicalTimeToFix: "1–2 hours",
     difficulty: "Medium",
     estimatedGain: 18
@@ -245,7 +307,7 @@ const RECOMMENDATION_TEMPLATES = {
   industryMemberships: {
     title: "Display Industry Memberships & Associations",
     impactArea: "Authority Network & Trust",
-    whyItMatters: "Industry memberships demonstrate active participation in professional communities. These network signals strengthen your authority and credibility with AI systems.",
+    whyItMatters: "Being part of professional groups shows AI you're connected to your industry. It's like having references that vouch for your expertise when AI decides who to recommend.",
     typicalTimeToFix: "15–20 minutes",
     difficulty: "Easy",
     estimatedGain: 14
@@ -536,7 +598,7 @@ async function generateWithChatGPT(issue, scanEvidence, tier, industry) {
   const template = RECOMMENDATION_TEMPLATES[issue.subfactor] || {
     title: `Improve ${displayName}`,
     impactArea: categoryName,
-    whyItMatters: `Optimizing ${displayName} helps AI systems better understand and cite your content.`,
+    whyItMatters: `When people search online, AI decides which websites to recommend. Improving ${displayName} helps your business show up more often.`,
     typicalTimeToFix: "Varies",
     difficulty: "Medium",
     estimatedGain: 10
@@ -5458,7 +5520,7 @@ function generateSmartTemplate(issue, scanEvidence, _tier, _industry) {
   const tpl = RECOMMENDATION_TEMPLATES[issue.subfactor] || {
     title: `Improve ${displayName}`,
     impactArea: categoryName,
-    whyItMatters: `Optimizing ${displayName} helps AI systems better understand and cite your content.`,
+    whyItMatters: `When people search online, AI decides which websites to recommend. Improving ${displayName} helps your business show up more often.`,
     typicalTimeToFix: "Varies",
     difficulty: "Medium",
     estimatedGain: 10
@@ -5896,18 +5958,21 @@ function coerceRecommendation(rec, template, issue) {
   }
 
   if (!rec.impact || rec.impact.length < 20) {
-    // Provide contextual impact text based on category
+    // Plain language impact text focused on business outcomes (8th grade reading level)
+    // Priority: 1) Subfactor-specific impact, 2) Template whyItMatters, 3) Category fallback
     const categoryImpacts = {
-      aiSearchReadiness: `Improving ${displayName} helps AI assistants find and cite your content more accurately, increasing your visibility in AI-powered search results.`,
-      voiceOptimization: `Better ${displayName} makes your content more accessible to voice assistants and conversational AI, improving how your answers appear in voice search.`,
-      contentStructure: `Optimizing ${displayName} helps AI systems parse and understand your content structure, making it easier to extract relevant information.`,
-      technicalSetup: `Proper ${displayName} ensures AI crawlers can efficiently access and index your content, preventing technical barriers to visibility.`,
-      trustAuthority: `Strong ${displayName} signals expertise and credibility to AI systems, increasing the likelihood your content gets cited as authoritative.`,
-      contentFreshness: `Good ${displayName} signals to AI that your content is current and maintained, which affects ranking in time-sensitive queries.`,
-      aiReadability: `Improving ${displayName} helps AI understand your multimedia and visual content, enabling richer citations.`,
-      speedUX: `Better ${displayName} improves how quickly AI can process your pages, affecting crawl priority and user experience.`
+      aiSearchReadiness: `When someone asks ChatGPT or Google a question, AI looks for websites it can trust and understand. Getting ${displayName} right helps your business show up in those answers — instead of your competitors.`,
+      voiceOptimization: `More people are asking Siri, Alexa, and Google questions out loud. When your ${displayName} is set up well, you become the answer these assistants recommend.`,
+      contentStructure: `AI assistants scan pages quickly to find answers. Good ${displayName} makes it easy for AI to pull your information and share it with people looking for what you offer.`,
+      technicalSetup: `Even great content gets ignored if AI can't access it. Fixing ${displayName} is like making sure your store's front door is unlocked — basic but essential for getting customers through.`,
+      trustAuthority: `AI recommends sources it trusts. Strong ${displayName} helps AI see you as the go-to expert in your field, which means more people find you when they need help.`,
+      contentFreshness: `People want current information, and so does AI. Good ${displayName} tells AI your business is active and your information is reliable.`,
+      aiReadability: `AI is getting better at understanding images and videos. When your ${displayName} is done right, AI can recommend you for more types of searches.`,
+      speedUX: `Slow websites frustrate visitors and AI alike. Better ${displayName} means happy customers and AI that can quickly find and recommend your content.`
     };
-    rec.impact = template.whyItMatters || categoryImpacts[issue.category] || `Improving ${displayName} enhances how AI systems understand and surface your content in search results.`;
+
+    // Use subfactor-specific impact first (most specific), then template, then category fallback
+    rec.impact = SUBFACTOR_IMPACTS[issue.subfactor] || template.whyItMatters || categoryImpacts[issue.category] || `When people search for help online, AI decides which websites to recommend. Improving ${displayName} helps your business show up more often.`;
   }
 
   if (!Array.isArray(rec.actionSteps) || rec.actionSteps.length === 0) {
