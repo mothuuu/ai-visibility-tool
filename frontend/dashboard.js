@@ -17,7 +17,8 @@ let selectedScanType = 'single-page'; // Track selected scan type (single-page o
 
 // Initialize dashboard
 async function initDashboard() {
-    showLoading();
+    // NOTE: Don't use showLoading() here - that's the scanning modal
+    // Dashboard data loading is fast and doesn't need a full-screen overlay
 
     // Check authentication
     const authToken = localStorage.getItem('authToken');
@@ -68,8 +69,6 @@ async function initDashboard() {
         if (section) {
             navigateToSection(section);
         }
-
-        hideLoading();
 
     } catch (error) {
         console.error('Dashboard init error:', error);
