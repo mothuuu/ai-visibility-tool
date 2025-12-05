@@ -15,8 +15,15 @@ router.post('/:id/mark-complete', authenticateToken, async (req, res) => {
   try {
     const recId = req.params.id;
     const userId = req.user.id;
-    
+
     console.log(`📝 Marking recommendation ${recId} as complete for user ${userId}`);
+
+    // === DIAGNOSTIC LOGGING: BEFORE UPDATE ===
+    console.log('=== IMPLEMENT DIAGNOSTIC (mark-complete) ===');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('Recommendation ID:', recId);
+    console.log('User ID:', userId);
+    console.log('Request body:', JSON.stringify(req.body));
     
     // Verify the recommendation belongs to this user
     const recCheck = await db.query(
@@ -44,14 +51,27 @@ router.post('/:id/mark-complete', authenticateToken, async (req, res) => {
     }
     
     // Update recommendation to completed
-    await db.query(
-      `UPDATE scan_recommendations 
+    console.log('SQL Query: UPDATE scan_recommendations SET unlock_state = \'completed\', marked_complete_at = CURRENT_TIMESTAMP WHERE id =', recId);
+    const updateResult = await db.query(
+      `UPDATE scan_recommendations
        SET unlock_state = 'completed',
            marked_complete_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
       [recId]
     );
-    
+
+    // === DIAGNOSTIC LOGGING: AFTER UPDATE ===
+    console.log('Database update result:', updateResult);
+    console.log('Rows affected:', updateResult.rowCount);
+
+    // === DIAGNOSTIC LOGGING: VERIFICATION QUERY ===
+    const verification = await db.query(
+      'SELECT id, status, unlock_state, implemented_at, marked_complete_at FROM scan_recommendations WHERE id = $1',
+      [recId]
+    );
+    console.log('Verification query result:', JSON.stringify(verification.rows[0]));
+    console.log('=== END IMPLEMENT DIAGNOSTIC (mark-complete) ===');
+
     // Update user_progress
     await db.query(
       `UPDATE user_progress 

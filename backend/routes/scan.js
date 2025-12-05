@@ -1216,6 +1216,14 @@ router.post('/:id/recommendation/:recId/feedback', authenticateToken, async (req
     const userId = req.userId;
     const { status, feedback, rating } = req.body;
 
+    // === DIAGNOSTIC LOGGING: BEFORE UPDATE ===
+    console.log('=== IMPLEMENT DIAGNOSTIC (feedback endpoint) ===');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('Recommendation ID:', recId);
+    console.log('Scan ID:', scanId);
+    console.log('User ID:', userId);
+    console.log('Request body:', JSON.stringify(req.body));
+
     // Verify scan belongs to user
     const scanCheck = await db.query(
       'SELECT id FROM scans WHERE id = $1 AND user_id = $2',
@@ -1256,12 +1264,29 @@ router.post('/:id/recommendation/:recId/feedback', authenticateToken, async (req
 
     updateValues.push(recId, scanId);
 
-    await db.query(
+    // Log the SQL query being built
+    const sqlQuery = `UPDATE scan_recommendations SET ${updateFields.join(', ')} WHERE id = $${paramCount} AND scan_id = $${paramCount + 1}`;
+    console.log('SQL Query:', sqlQuery);
+    console.log('SQL Values:', updateValues);
+
+    const updateResult = await db.query(
       `UPDATE scan_recommendations
        SET ${updateFields.join(', ')}
        WHERE id = $${paramCount++} AND scan_id = $${paramCount}`,
       updateValues
     );
+
+    // === DIAGNOSTIC LOGGING: AFTER UPDATE ===
+    console.log('Database update result:', updateResult);
+    console.log('Rows affected:', updateResult.rowCount);
+
+    // === DIAGNOSTIC LOGGING: VERIFICATION QUERY ===
+    const verification = await db.query(
+      'SELECT id, status, unlock_state, implemented_at, marked_complete_at FROM scan_recommendations WHERE id = $1',
+      [recId]
+    );
+    console.log('Verification query result:', JSON.stringify(verification.rows[0]));
+    console.log('=== END IMPLEMENT DIAGNOSTIC (feedback endpoint) ===');
 
     // If marking as implemented, update user progress
     if (status === 'implemented') {
