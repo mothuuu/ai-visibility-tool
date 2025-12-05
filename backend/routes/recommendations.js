@@ -15,8 +15,15 @@ router.post('/:id/mark-complete', authenticateToken, async (req, res) => {
   try {
     const recId = req.params.id;
     const userId = req.user.id;
-    
+
     console.log(`📝 Marking recommendation ${recId} as complete for user ${userId}`);
+
+    // === DIAGNOSTIC LOGGING: BEFORE UPDATE ===
+    console.log('=== IMPLEMENT DIAGNOSTIC (mark-complete) ===');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('Recommendation ID:', recId);
+    console.log('User ID:', userId);
+    console.log('Request body:', JSON.stringify(req.body));
     
     // Verify the recommendation belongs to this user
     const recCheck = await db.query(
@@ -44,14 +51,27 @@ router.post('/:id/mark-complete', authenticateToken, async (req, res) => {
     }
     
     // Update recommendation to completed
-    await db.query(
-      `UPDATE scan_recommendations 
+    console.log('SQL Query: UPDATE scan_recommendations SET unlock_state = \'completed\', marked_complete_at = CURRENT_TIMESTAMP WHERE id =', recId);
+    const updateResult = await db.query(
+      `UPDATE scan_recommendations
        SET unlock_state = 'completed',
            marked_complete_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
       [recId]
     );
-    
+
+    // === DIAGNOSTIC LOGGING: AFTER UPDATE ===
+    console.log('Database update result:', updateResult);
+    console.log('Rows affected:', updateResult.rowCount);
+
+    // === DIAGNOSTIC LOGGING: VERIFICATION QUERY ===
+    const verification = await db.query(
+      'SELECT id, status, unlock_state, implemented_at, marked_complete_at FROM scan_recommendations WHERE id = $1',
+      [recId]
+    );
+    console.log('Verification query result:', JSON.stringify(verification.rows[0]));
+    console.log('=== END IMPLEMENT DIAGNOSTIC (mark-complete) ===');
+
     // Update user_progress
     await db.query(
       `UPDATE user_progress 
@@ -103,36 +123,57 @@ router.get('/active', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const scanId = req.query.scan_id; // Optional: filter by specific scan
-    
+
+    // === DIAGNOSTIC G: API RESPONSE (active endpoint) ===
+    console.log('=== DIAGNOSTIC G: API RESPONSE (GET /active) ===');
+    console.log('User ID:', userId);
+    console.log('Requested scan_id filter:', scanId || 'NONE (all scans)');
+
     let query = `
-      SELECT 
+      SELECT
         sr.id, sr.scan_id, sr.category, sr.recommendation_text,
         sr.priority, sr.estimated_impact, sr.estimated_effort,
         sr.action_steps, sr.findings, sr.code_snippet,
-        sr.unlock_state, sr.batch_number, sr.unlocked_at,
-        sr.marked_complete_at, sr.verified_at,
+        sr.unlock_state, sr.status, sr.batch_number, sr.unlocked_at,
+        sr.marked_complete_at, sr.verified_at, sr.implemented_at,
         s.url as scan_url, s.total_score
       FROM scan_recommendations sr
       JOIN scans s ON sr.scan_id = s.id
       WHERE s.user_id = $1 AND sr.unlock_state = 'active'
     `;
-    
+
     const params = [userId];
-    
+
     if (scanId) {
       query += ` AND sr.scan_id = $2`;
       params.push(scanId);
     }
-    
+
     query += ` ORDER BY sr.batch_number, sr.priority DESC`;
-    
+
     const result = await db.query(query, params);
-    
+
+    // Log what we're returning
+    console.log('Returning', result.rows.length, 'recommendations');
+    console.log('By unlock_state:', {
+      active: result.rows.filter(r => r.unlock_state === 'active').length,
+      completed: result.rows.filter(r => r.unlock_state === 'completed').length,
+      locked: result.rows.filter(r => r.unlock_state === 'locked').length
+    });
+    console.log('By status:', {
+      active: result.rows.filter(r => r.status === 'active' || !r.status).length,
+      implemented: result.rows.filter(r => r.status === 'implemented').length,
+      skipped: result.rows.filter(r => r.status === 'skipped').length
+    });
+    console.log('Scan IDs in response:', [...new Set(result.rows.map(r => r.scan_id))]);
+    console.log('CRITICAL: Query filters by unlock_state=active, NOT by status');
+    console.log('=== END DIAGNOSTIC G ===');
+
     res.json({
       success: true,
       recommendations: result.rows
     });
-    
+
   } catch (error) {
     console.error('❌ Get active recommendations error:', error);
     res.status(500).json({ error: 'Failed to get recommendations' });

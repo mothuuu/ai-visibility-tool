@@ -470,6 +470,43 @@ router.post('/analyze', authenticateToken, async (req, res) => {
     // Skip saving recommendations for competitor scans
 let progressInfo = null;
 if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendations.length > 0) {
+
+  // === DIAGNOSTIC D: WHAT HAPPENS DURING RESCAN ===
+  console.log('=== DIAGNOSTIC D: RECOMMENDATION GENERATION ===');
+  console.log('Scan ID:', scan.id);
+  console.log('User ID:', userId);
+  console.log('Is this a RESCAN?', !!user.primary_domain);
+  console.log('Domain being scanned:', url);
+  console.log('User primary domain:', user.primary_domain);
+
+  // Check if there are EXISTING recommendations for this domain from previous scans
+  const existingRecsResult = await db.query(
+    `SELECT sr.id, sr.scan_id, sr.status, sr.unlock_state, sr.recommendation_text, s.url, s.completed_at
+     FROM scan_recommendations sr
+     JOIN scans s ON sr.scan_id = s.id
+     WHERE s.user_id = $1
+       AND s.id != $2
+       AND s.url LIKE $3
+     ORDER BY s.completed_at DESC
+     LIMIT 10`,
+    [userId, scan.id, '%' + (user.primary_domain || url) + '%']
+  );
+  console.log('Existing recommendations from previous scans:', existingRecsResult.rows.length);
+  if (existingRecsResult.rows.length > 0) {
+    console.log('Previous scan recommendation statuses:', existingRecsResult.rows.map(r => ({
+      id: r.id,
+      scan_id: r.scan_id,
+      status: r.status,
+      unlock_state: r.unlock_state,
+      title: (r.recommendation_text || '').substring(0, 30)
+    })));
+  }
+
+  console.log('About to generate NEW recommendations: YES');
+  console.log('Number of new recs to save:', scanResult.recommendations.length);
+  console.log('CRITICAL: NO skip generation check exists - new recs are ALWAYS created');
+  console.log('=== END DIAGNOSTIC D ===');
+
   // Prepare page priorities from request
   const selectedPages = pages && pages.length > 0
     ? pages.map((pageUrl, index) => ({
@@ -500,12 +537,25 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
     // 🔍 Validate previous recommendations (Phase 3: Partial Implementation Detection)
     if (!isCompetitorScan && scanResult.detailedAnalysis) {
       try {
+        // === DIAGNOSTIC E: VALIDATION ===
+        console.log('=== DIAGNOSTIC E: VALIDATION ===');
+        console.log('Validating recommendations for user:', userId);
+        console.log('New scan ID:', scan.id);
+        console.log('Scan evidence keys:', Object.keys(scanResult.detailedAnalysis.scanEvidence || {}));
+
         const { validatePreviousRecommendations } = require('../utils/validation-engine');
         const validationResults = await validatePreviousRecommendations(
           userId,
           scan.id,
           scanResult.detailedAnalysis.scanEvidence || {}
         );
+
+        console.log('Validation result:', JSON.stringify(validationResults, null, 2));
+        console.log('verified_complete count:', validationResults.verified_complete || 0);
+        console.log('partial_progress count:', validationResults.partial_progress || 0);
+        console.log('not_implemented count:', validationResults.not_implemented || 0);
+        console.log('CRITICAL: Does validation UPDATE rec status in DB? NO - It only logs to history table');
+        console.log('=== END DIAGNOSTIC E ===');
 
         if (validationResults.validated) {
           console.log(`🔍 Validation complete: ${validationResults.verified_complete} verified, ${validationResults.partial_progress} partial, ${validationResults.not_implemented} not implemented`);
@@ -593,6 +643,22 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
     );
 
     console.log(`✅ Scan ${scan.id} completed with score: ${scanResult.totalScore}`);
+
+    // === DIAGNOSTIC A: REC IDs AFTER SCAN ===
+    console.log('=== DIAGNOSTIC A: REC IDs AFTER SCAN ===');
+    console.log('Scan ID:', scan.id);
+    console.log('User ID:', userId);
+    console.log('Domain:', scanDomain);
+    console.log('Is Rescan:', !!user.primary_domain && user.primary_domain === scanDomain);
+    console.log('Total recommendations returned:', (scanResult.recommendations || []).length);
+    console.log('Recommendation IDs:', (scanResult.recommendations || []).slice(0, 10).map(r => ({
+      id: r.id,
+      title: (r.title || r.recommendation_text || '').substring(0, 40),
+      status: r.status,
+      unlock_state: r.unlock_state,
+      scan_id: r.scan_id
+    })));
+    console.log('=== END DIAGNOSTIC A ===');
 
     // Return results
     res.json({
@@ -1216,6 +1282,14 @@ router.post('/:id/recommendation/:recId/feedback', authenticateToken, async (req
     const userId = req.userId;
     const { status, feedback, rating } = req.body;
 
+    // === DIAGNOSTIC LOGGING: BEFORE UPDATE ===
+    console.log('=== IMPLEMENT DIAGNOSTIC (feedback endpoint) ===');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('Recommendation ID:', recId);
+    console.log('Scan ID:', scanId);
+    console.log('User ID:', userId);
+    console.log('Request body:', JSON.stringify(req.body));
+
     // Verify scan belongs to user
     const scanCheck = await db.query(
       'SELECT id FROM scans WHERE id = $1 AND user_id = $2',
@@ -1256,12 +1330,29 @@ router.post('/:id/recommendation/:recId/feedback', authenticateToken, async (req
 
     updateValues.push(recId, scanId);
 
-    await db.query(
+    // Log the SQL query being built
+    const sqlQuery = `UPDATE scan_recommendations SET ${updateFields.join(', ')} WHERE id = $${paramCount} AND scan_id = $${paramCount + 1}`;
+    console.log('SQL Query:', sqlQuery);
+    console.log('SQL Values:', updateValues);
+
+    const updateResult = await db.query(
       `UPDATE scan_recommendations
        SET ${updateFields.join(', ')}
        WHERE id = $${paramCount++} AND scan_id = $${paramCount}`,
       updateValues
     );
+
+    // === DIAGNOSTIC LOGGING: AFTER UPDATE ===
+    console.log('Database update result:', updateResult);
+    console.log('Rows affected:', updateResult.rowCount);
+
+    // === DIAGNOSTIC LOGGING: VERIFICATION QUERY ===
+    const verification = await db.query(
+      'SELECT id, status, unlock_state, implemented_at, marked_complete_at FROM scan_recommendations WHERE id = $1',
+      [recId]
+    );
+    console.log('Verification query result:', JSON.stringify(verification.rows[0]));
+    console.log('=== END IMPLEMENT DIAGNOSTIC (feedback endpoint) ===');
 
     // If marking as implemented, update user progress
     if (status === 'implemented') {

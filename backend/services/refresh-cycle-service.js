@@ -128,6 +128,13 @@ class RefreshCycleService {
   async processRefreshCycle(userId, scanId) {
     const client = await this.pool.connect();
 
+    // === DIAGNOSTIC F: REFRESH CYCLE ===
+    console.log('=== DIAGNOSTIC F: REFRESH CYCLE ===');
+    console.log('Refresh cycle triggered: YES');
+    console.log('User ID:', userId);
+    console.log('Scan ID:', scanId);
+    console.log('Current date:', new Date().toISOString());
+
     try {
       await client.query('BEGIN');
 
@@ -141,10 +148,18 @@ class RefreshCycleService {
       `, [userId, scanId]);
 
       if (cycleResult.rows.length === 0) {
+        console.log('No refresh cycle found for this scan');
+        console.log('=== END DIAGNOSTIC F ===');
         throw new Error('No refresh cycle found for this scan');
       }
 
       const currentCycle = cycleResult.rows[0];
+      console.log('Current cycle:', {
+        cycle_number: currentCycle.cycle_number,
+        next_cycle_date: currentCycle.next_cycle_date,
+        cycle_start_date: currentCycle.cycle_start_date
+      });
+      console.log('Is refresh actually due?', new Date() >= new Date(currentCycle.next_cycle_date));
 
       // Get recommendations that need replacement (implemented or skipped)
       const needReplacement = await client.query(`
@@ -158,9 +173,16 @@ class RefreshCycleService {
       `, [scanId, currentCycle.cycle_start_date]);
 
       const replacementCount = needReplacement.rows.length;
+      console.log('Recommendations needing replacement:', replacementCount);
+      console.log('Statuses of recs needing replacement:', needReplacement.rows.map(r => ({
+        id: r.id,
+        status: r.status,
+        unlock_state: r.unlock_state
+      })));
 
       if (replacementCount === 0) {
         console.log('No recommendations need replacement');
+        console.log('=== END DIAGNOSTIC F ===');
         await this.extendCycle(client, currentCycle);
         await client.query('COMMIT');
         return {
