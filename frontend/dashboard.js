@@ -881,15 +881,56 @@ document.addEventListener('click', function(event) {
     }
 });
 
-// Loading helpers
+// Loading helpers with progress bar animation
+let scanProgressInterval = null;
+
 function showLoading() {
     const overlay = document.getElementById('loadingOverlay');
-    if (overlay) overlay.style.display = 'flex';
+    const progressBar = document.getElementById('scanProgressBar');
+
+    if (overlay) {
+        overlay.style.display = 'flex';
+
+        // Reset and animate progress bar
+        if (progressBar) {
+            progressBar.style.width = '0%';
+            let progress = 0;
+
+            // Clear any existing interval
+            if (scanProgressInterval) {
+                clearInterval(scanProgressInterval);
+            }
+
+            // Animate progress bar up to 90%
+            scanProgressInterval = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress > 90) progress = 90; // Stop at 90% until complete
+                progressBar.style.width = progress + '%';
+            }, 500);
+        }
+    }
 }
 
 function hideLoading() {
     const overlay = document.getElementById('loadingOverlay');
-    if (overlay) overlay.style.display = 'none';
+    const progressBar = document.getElementById('scanProgressBar');
+
+    // Clear progress interval
+    if (scanProgressInterval) {
+        clearInterval(scanProgressInterval);
+        scanProgressInterval = null;
+    }
+
+    // Complete progress bar before hiding
+    if (progressBar) {
+        progressBar.style.width = '100%';
+    }
+
+    // Brief delay to show 100% before hiding
+    setTimeout(() => {
+        if (overlay) overlay.style.display = 'none';
+        if (progressBar) progressBar.style.width = '0%';
+    }, 300);
 }
 
 // Xeo Branded Modal Functions
