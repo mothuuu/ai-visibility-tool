@@ -226,7 +226,7 @@ function getUpgradeCTA(tier, totalRecommendations, faq, limits) {
       title: 'Upgrade to DIY for deep scans, personalized code, and daily recommendations',
       message: `You're seeing 3 of ${totalRecommendations} recommendations. Upgrade to DIY Starter for the complete picture.`,
       benefits: [
-        '5 new recommendations unlocked daily',
+        'New recommendations every 5 days',
         '5-page deep scans (vs 1 page)',
         'Copy-paste ready code snippets',
         'Industry-specific FAQ schema',
