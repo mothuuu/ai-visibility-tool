@@ -707,19 +707,28 @@ function startNewScan() {
                 scanType: 'homepage'
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.error || err.message || `Request failed with status ${response.status}`);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             hideLoading();
             if (data.scan && data.scan.id) {
                 window.location.href = `results.html?scanId=${data.scan.id}`;
             } else if (data.scanId) {
                 window.location.href = `results.html?scanId=${data.scanId}`;
+            } else {
+                throw new Error('No scan ID in response');
             }
         })
         .catch(error => {
             hideLoading();
             console.error('Scan error:', error);
-            showXeoAlert('Scan Failed', 'Failed to start scan. Please try again.');
+            showXeoAlert('Scan Failed', error.message || 'Failed to start scan. Please try again.');
         });
         return;
     }
@@ -742,7 +751,14 @@ function startNewScan() {
                 scanType: 'single-page'
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.error || err.message || `Request failed with status ${response.status}`);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             hideLoading();
             if (data.scan && data.scan.id) {
