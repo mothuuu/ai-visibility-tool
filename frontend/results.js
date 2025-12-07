@@ -208,9 +208,10 @@ function displayResults(scan, quota) {
     if (scan.notifications) {
         displayNotificationCenter(scan.notifications, scan.unreadNotificationCount || 0);
     }
-    if (scan.currentCycle) {
-        displayRefreshCycle(scan.currentCycle);
-    }
+    // Refresh cycle display removed - info now shown in Optimization Mode card
+    // if (scan.currentCycle) {
+    //     displayRefreshCycle(scan.currentCycle);
+    // }
     if (scan.recentDetections && scan.recentDetections.length > 0) {
         displayAutoDetections(scan.recentDetections);
     }
@@ -220,11 +221,11 @@ function displayResults(scan, quota) {
         displayCategoryScores(scan.categoryBreakdown, scan.recommendations || [], scan.categoryWeights || {});
     }
 
-    // Update recommendations count
+    // Update recommendations count (simplified - full message shown in Optimization Mode card)
     const recCount = scan.recommendations ? scan.recommendations.length : 0;
     const recCountEl = document.getElementById('recCount');
     if (recCountEl) {
-        recCountEl.textContent = `${recCount} actionable improvement${recCount !== 1 ? 's' : ''} to boost your AI visibility`;
+        recCountEl.textContent = `${recCount} recommendation${recCount !== 1 ? 's' : ''} found`;
     }
 
     // Display recommendations based on tier and scan type
