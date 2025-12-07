@@ -40,6 +40,7 @@ app.use(compression());
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(origin => origin.trim()) || [
   'https://www.visible2ai.com',
   'https://visible2ai.com',
+  'https://ai-visibility-tool.onrender.com',
   'http://localhost:3000',
   'http://localhost:8000'
 ];
