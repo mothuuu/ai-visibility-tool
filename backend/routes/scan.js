@@ -417,8 +417,31 @@ router.post('/analyze', authenticateToken, async (req, res) => {
       scanResult.primaryScanId = activeContext.primaryScanId;
       console.log(`   ✓ Reused ${existingRecs.rows.length} recommendations from scan ${activeContext.primaryScanId}`);
     } else {
+      // Check if Free user has exhausted monthly recommendation quota (3 total)
+      const FREE_MONTHLY_REC_LIMIT = 3;
+      let skipRecsForFreeUser = false;
+
+      if (user.plan === 'free') {
+        const recsUsed = user.recs_generated_this_month || 0;
+        if (recsUsed >= FREE_MONTHLY_REC_LIMIT) {
+          console.log(`⚠️ Free user ${userId} has used ${recsUsed}/${FREE_MONTHLY_REC_LIMIT} recommendations this month`);
+          console.log(`   → Skipping recommendation generation (monthly limit reached)`);
+          skipRecsForFreeUser = true;
+        } else {
+          console.log(`📊 Free user has ${recsUsed}/${FREE_MONTHLY_REC_LIMIT} recommendations used this month`);
+        }
+      }
+
       // Full V5 rubric scan with NEW recommendations (mode-aware)
-      scanResult = await performV5Scan(url, user.plan, pages, userProgress, user.industry, currentMode, false);
+      // For Free users who hit their limit, skip recommendation generation
+      scanResult = await performV5Scan(url, user.plan, pages, userProgress, user.industry, currentMode, skipRecsForFreeUser);
+
+      // Add message for Free users who hit their limit
+      if (skipRecsForFreeUser) {
+        scanResult.recommendations = [];
+        scanResult.freeRecLimitReached = true;
+        scanResult.freeRecLimitMessage = `You've used your ${FREE_MONTHLY_REC_LIMIT} free recommendations this month. Upgrade to DIY for unlimited recommendations.`;
+      }
     }
 
     // Validate scan result structure
@@ -520,6 +543,17 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
     }
   } else {
     console.log(`⏭️ Skipping refresh cycle for Free user ${userId}`);
+
+    // Increment Free user's monthly recommendation counter
+    // Count how many recommendations were actually saved (limited to 3 for Free)
+    const recsSaved = Math.min(scanResult.recommendations.length, 3);
+    if (recsSaved > 0) {
+      await db.query(
+        `UPDATE users SET recs_generated_this_month = COALESCE(recs_generated_this_month, 0) + $1 WHERE id = $2`,
+        [recsSaved, userId]
+      );
+      console.log(`📊 Updated Free user rec counter: +${recsSaved} recommendations`);
+    }
   }
 }
 

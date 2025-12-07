@@ -27,6 +27,7 @@ async function checkAndResetMonthlyQuota(userId, currentScansUsed, lastResetDate
       `UPDATE users
        SET scans_used_this_month = 0,
            competitor_scans_used_this_month = 0,
+           recs_generated_this_month = 0,
            quota_reset_date = CURRENT_TIMESTAMP
        WHERE id = $1`,
       [userId]
