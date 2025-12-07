@@ -17,8 +17,6 @@ let selectedScanType = 'single-page'; // Track selected scan type (single-page o
 
 // Initialize dashboard
 async function initDashboard() {
-    showLoading();
-
     // Check authentication
     const authToken = localStorage.getItem('authToken');
     if (!authToken) {
@@ -76,8 +74,6 @@ async function initDashboard() {
         if (section) {
             navigateToSection(section);
         }
-
-        hideLoading();
 
     } catch (error) {
         console.error('Dashboard init error:', error.message);
