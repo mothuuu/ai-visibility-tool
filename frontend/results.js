@@ -2564,26 +2564,29 @@ function displayModeIndicator(userMode, currentScore, recommendationsCount = 0) 
         statsSection = `
             <div class="stat-item">
                 <div class="stat-value">${Math.round(progress)}%</div>
-                <div class="stat-label">Progress to Elite Mode</div>
+                <div class="stat-label">Progress to Elite</div>
                 <div class="progress-bar">
                     <div class="progress-fill" style="width: ${progress}%"></div>
                 </div>
             </div>
 
             <div class="stat-item">
-                <div class="stat-value">${remaining} points</div>
-                <div class="stat-label">Needed to reach Elite Mode (850+)</div>
+                <div class="stat-value">${remaining}</div>
+                <div class="stat-label">Points to Elite (850+)</div>
             </div>
 
             <div class="stat-item highlight">
-                <div class="stat-value">${recommendationsCount} actionable improvement${recommendationsCount !== 1 ? 's' : ''}</div>
-                <div class="stat-label">to boost your AI visibility</div>
+                <div class="stat-value">${recommendationsCount}</div>
+                <div class="stat-label">Improvements Available</div>
             </div>
         `;
     }
 
+    // Add elite-mode class for different styling
+    const cardClass = isElite ? 'optimization-status-card elite-mode' : 'optimization-status-card';
+
     container.innerHTML = `
-        <div class="optimization-status-card">
+        <div class="${cardClass}">
             <div class="optimization-header">
                 <div class="optimization-icon">${modeIcon}</div>
                 <div class="optimization-title-section">

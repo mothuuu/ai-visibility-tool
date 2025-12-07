@@ -927,6 +927,185 @@
         .tab-button {
             transition: all 0.3s ease !important;
         }
+
+        /* ========================================
+           Optimization Mode Status Card
+           ======================================== */
+        .optimization-status-card {
+            background: linear-gradient(135deg, #f3ebfa 0%, #e6f9fd 100%);
+            border: 2px solid #7D41A5;
+            border-radius: 16px;
+            padding: 1.5rem 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 12px rgba(125, 65, 165, 0.15);
+        }
+
+        .optimization-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.25rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(125, 65, 165, 0.2);
+        }
+
+        .optimization-icon {
+            font-size: 2.5rem;
+            line-height: 1;
+        }
+
+        .optimization-title-section {
+            flex: 1;
+        }
+
+        .optimization-mode-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #5B2D7A;
+            margin: 0 0 0.25rem 0;
+        }
+
+        .optimization-subtitle {
+            font-size: 0.95rem;
+            color: #4a5568;
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        /* Stats Grid - Horizontal Layout */
+        .optimization-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
+        .stat-item {
+            background: white;
+            padding: 1rem 1.25rem;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s ease;
+        }
+
+        .stat-item:hover {
+            border-color: #7D41A5;
+            box-shadow: 0 4px 8px rgba(125, 65, 165, 0.15);
+            transform: translateY(-2px);
+        }
+
+        /* Primary Stat (Current Score) - Prominent */
+        .stat-item.primary-stat {
+            background: linear-gradient(135deg, #7D41A5 0%, #00B9DA 100%);
+            border: none;
+        }
+
+        .stat-item.primary-stat .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 0.25rem;
+            line-height: 1;
+        }
+
+        .stat-item.primary-stat .stat-label {
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+
+        /* Standard Stat Values */
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #7D41A5;
+            margin-bottom: 0.25rem;
+            line-height: 1.2;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #718096;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        /* Progress Bar in Stat Item */
+        .stat-item .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+
+        .stat-item .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #7D41A5 0%, #00B9DA 100%);
+            border-radius: 3px;
+            transition: width 0.6s ease;
+        }
+
+        /* Highlight Stat (Recommendations) */
+        .stat-item.highlight {
+            background: linear-gradient(135deg, #e6f9fd 0%, #b3ecf7 100%);
+            border: 1px solid #00B9DA;
+        }
+
+        .stat-item.highlight .stat-value {
+            color: #0099B8;
+        }
+
+        .stat-item.highlight .stat-label {
+            color: #4a5568;
+        }
+
+        /* Elite Mode Card Variant */
+        .optimization-status-card.elite-mode {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-color: #d97706;
+        }
+
+        .optimization-status-card.elite-mode .optimization-mode-title {
+            color: #92400e;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .optimization-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .optimization-status-card {
+                padding: 1rem;
+            }
+
+            .optimization-header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .optimization-stats {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .stat-item.primary-stat .stat-number {
+                font-size: 2rem;
+            }
+
+            .stat-value {
+                font-size: 1.25rem;
+            }
+        }
+
+        /* Margin utility */
+        .mb-6 {
+            margin-bottom: 1.5rem;
+        }
     </style>
 </head>
 <body>
