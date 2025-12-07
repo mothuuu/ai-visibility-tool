@@ -180,16 +180,15 @@ router.post('/:id/implement', authenticateToken, async (req, res) => {
     const scoreAtCreation = rec.score_at_creation || null;
     const scoreImprovement = scoreAtCreation ? (latestScore - scoreAtCreation) : null;
 
-    // Update recommendation to implemented WITH score tracking
+    // Update recommendation to implemented
     await db.query(
       `UPDATE scan_recommendations
        SET unlock_state = 'completed',
            status = 'implemented',
            marked_complete_at = CURRENT_TIMESTAMP,
-           implemented_at = CURRENT_TIMESTAMP,
-           score_at_implementation = $2
+           implemented_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
-      [recId, latestScore]
+      [recId]
     );
 
     // Record score history (if table exists)
