@@ -1,6 +1,6 @@
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:3001/api'
-    : 'https://ai-visibility-tool-testing.onrender.com/api';
+    : 'https://ai-visibility-tool.onrender.com/api';
 
 // Get token from URL
 const urlParams = new URLSearchParams(window.location.search);
