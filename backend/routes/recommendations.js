@@ -20,6 +20,16 @@ router.post('/:id/mark-complete', authenticateToken, async (req, res) => {
 
     console.log(`📝 Marking recommendation ${recId} as implemented for user ${userId}`);
 
+    // Check if user is on Free plan (not allowed to mark complete)
+    const userPlanCheck = await db.query('SELECT plan FROM users WHERE id = $1', [userId]);
+    if (userPlanCheck.rows[0]?.plan === 'free') {
+      return res.status(403).json({
+        error: 'Upgrade required',
+        message: 'Upgrade to DIY plan to track implementation progress',
+        upgrade: { plan: 'diy', url: '/checkout.html?plan=diy' }
+      });
+    }
+
     // Verify the recommendation belongs to this user
     const recCheck = await db.query(
       `SELECT sr.id, sr.scan_id, sr.unlock_state, sr.status, s.user_id
