@@ -22,7 +22,7 @@ const knowledgeBase = {
                 "Homepage-only scanning (1 page)",
                 "AI Visibility Score (0-1000 points)",
                 "8-category breakdown (Schema, Entities, FAQs, Citations, Crawlability, Speed, Trust, AEO Content)",
-                "Top 5 priority recommendations",
+                "Top 3 priority recommendations",
                 "Email verification required"
             ],
             notIncluded: [
@@ -127,7 +127,7 @@ const knowledgeBase = {
 
         scoring: "Your AI Visibility Score is calculated from 0-1000 based on how well AI systems can understand and present your content across 8 categories: Schema, Entities, FAQs, Citations, Crawlability, Speed, Trust, and AEO Content. Higher scores mean better AI search visibility.",
 
-        recommendations: "Free: Top 5 priority recommendations. DIY: Up to 15 detailed recommendations with code snippets. Premium: Up to 25 detailed recommendations. We provide both domain-wide and page-level action items tailored to your actual content.",
+        recommendations: "Free: Top 3 priority recommendations. DIY: Up to 15 detailed recommendations with code snippets. Premium: Up to 25 detailed recommendations. We provide both domain-wide and page-level action items tailored to your actual content.",
 
         competitorTracking: "Free: None. DIY: 2 competitors (score-only, no breakdown). Premium: 3 competitors (full category breakdowns + gap analysis). Agency: 3 competitors per domain.",
 
@@ -218,7 +218,7 @@ Be friendly, concise, and helpful. Use the knowledge base provided to give ACCUR
 Free Plan ($0/month) - ACTIVE:
 - 2 scans/month, homepage only
 - AI Visibility Score with 8-category breakdown
-- Top 5 priority recommendations
+- Top 3 priority recommendations
 - Email verification required
 - Perfect for: Testing the tool
 
