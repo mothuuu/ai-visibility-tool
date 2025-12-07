@@ -1,5 +1,43 @@
 const db = require('../db/database');
 
+/**
+ * Check if monthly quota needs reset and perform reset if needed.
+ * Self-healing: resets quota on first request of new month.
+ * @param {number} userId - User ID
+ * @param {number} currentScansUsed - Current scans_used_this_month value
+ * @param {string|null} lastResetDate - Last quota_reset_date from DB
+ * @returns {Promise<number>} - Updated scans used (0 if reset, original if not)
+ */
+async function checkAndResetMonthlyQuota(userId, currentScansUsed, lastResetDate) {
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  // Parse last reset date to get its month
+  let lastResetMonth = null;
+  if (lastResetDate) {
+    const resetDate = new Date(lastResetDate);
+    lastResetMonth = `${resetDate.getFullYear()}-${String(resetDate.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  // If different month (or never reset), reset the quota
+  if (lastResetMonth !== currentMonth) {
+    console.log(`🔄 Monthly quota reset for user ${userId}: ${lastResetMonth || 'never'} → ${currentMonth}`);
+
+    await db.query(
+      `UPDATE users
+       SET scans_used_this_month = 0,
+           competitor_scans_used_this_month = 0,
+           quota_reset_date = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [userId]
+    );
+
+    return 0; // Quota has been reset
+  }
+
+  return currentScansUsed; // No reset needed
+}
+
 const PLAN_LIMITS = {
   free: {
     scansPerMonth: 2,
@@ -76,16 +114,24 @@ async function checkScanLimit(req, res, next) {
       });
     }
 
+    // Self-healing monthly quota reset
+    // If it's a new month since last reset, automatically reset the quota
+    const scansUsed = await checkAndResetMonthlyQuota(
+      userId,
+      req.user.scans_used_this_month || 0,
+      req.user.quota_reset_date
+    );
+
     // Check if user exceeded monthly limit
     // NOTE: We only CHECK here, we do NOT increment.
     // Incrementing happens in the scan route AFTER a successful scan.
     // This prevents double-counting and ensures failed scans aren't counted.
-    if (req.user.scans_used_this_month >= limits.scansPerMonth) {
+    if (scansUsed >= limits.scansPerMonth) {
       const upgradeMessage = getUpgradeMessage(userPlan);
 
       return res.status(403).json({
         error: 'Scan limit reached',
-        message: `You've used ${req.user.scans_used_this_month}/${limits.scansPerMonth} scans this month.`,
+        message: `You've used ${scansUsed}/${limits.scansPerMonth} scans this month.`,
         currentPlan: userPlan,
         upgrade: upgradeMessage
       });
