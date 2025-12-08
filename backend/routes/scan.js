@@ -9,6 +9,12 @@ const { computePageSetHash } = require('../utils/page-context');
 const UsageTrackerService = require('../services/usage-tracker-service');
 const RecommendationContextService = require('../services/recommendation-context-service');
 const RefreshCycleService = require('../services/refresh-cycle-service');
+const GuestScanCacheService = require('../services/guest-scan-cache-service');
+const { createGuestRateLimiter } = require('../middleware/guestRateLimit');
+
+// Initialize guest services
+const guestScanCache = new GuestScanCacheService(db);
+const guestRateLimiter = createGuestRateLimiter({ maxScansPerDay: 5, db });
 
 // ============================================
 // 🚀 IMPORT REAL ENGINES (NEW!)
@@ -81,8 +87,9 @@ async function findReusableScanContext({ userId, domain, pageSetHash, withinDays
 
 // ============================================
 // POST /api/scan/guest - Guest scan (no auth)
+// With caching and rate limiting
 // ============================================
-router.post('/guest', async (req, res) => {
+router.post('/guest', guestRateLimiter.middleware(), async (req, res) => {
   try {
     const { url } = req.body;
 
@@ -98,16 +105,57 @@ router.post('/guest', async (req, res) => {
         throw new Error('Invalid protocol');
       }
     } catch (e) {
-      return res.status(400).json({ 
-        error: 'Invalid URL format. Please use http:// or https://' 
+      return res.status(400).json({
+        error: 'Invalid URL format. Please use http:// or https://'
       });
     }
 
     console.log('🔍 Guest scan requested for:', url);
 
-    // Perform V5 rubric scan
+    // CHECK CACHE FIRST - prevent redundant analysis
+    const cachedResult = await guestScanCache.getCachedResult(url);
+    if (cachedResult) {
+      console.log('📦 Returning cached guest scan result');
+
+      // Still record for rate limiting (cache hits count toward limit)
+      await req.rateLimiter.recordScan(req);
+
+      return res.json({
+        success: true,
+        total_score: cachedResult.totalScore,
+        rubric_version: 'V5',
+        url: url,
+        categories: cachedResult.categories,
+        categoryBreakdown: cachedResult.categories,
+        categoryWeights: V5_WEIGHTS,
+        recommendations: cachedResult.recommendations || [],
+        faq: null,
+        upgrade: cachedResult.upgrade || null,
+        message: 'Sign up free to unlock your top 3 recommendations',
+        guest: true,
+        cached: true,
+        cacheInfo: {
+          message: 'Results cached for 24 hours. Sign up for fresh scans anytime.',
+          ttlHours: 24
+        }
+      });
+    }
+
+    // NO CACHE - Perform fresh V5 rubric scan
     // Use 'guest' tier - NO recommendations shown to anonymous users
     const scanResult = await performV5Scan(url, 'guest');
+
+    // Record scan for rate limiting (only count fresh scans)
+    await req.rateLimiter.recordScan(req);
+
+    // CACHE THE RESULT for future requests
+    await guestScanCache.setCachedResult(url, {
+      totalScore: scanResult.totalScore,
+      categories: scanResult.categories,
+      recommendations: scanResult.recommendations,
+      upgrade: scanResult.upgrade,
+      industry: scanResult.industry
+    });
 
     // Save guest scan to database for analytics (with user_id = NULL)
     // NOTE: Round scores to integers since DB columns are INTEGER type
@@ -158,7 +206,8 @@ router.post('/guest', async (req, res) => {
       faq: null, // No FAQ for guest
       upgrade: scanResult.upgrade || null, // CTA to sign up
       message: 'Sign up free to unlock your top 3 recommendations',
-      guest: true
+      guest: true,
+      cached: false
     });
 
   } catch (error) {
