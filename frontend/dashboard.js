@@ -693,6 +693,11 @@ function startNewScan() {
         url = 'https://' + url;
     }
 
+    // Track scan started
+    if (window.Analytics) {
+        window.Analytics.trackScanStarted(url);
+    }
+
     // For free users - scan homepage immediately
     if (user.plan === 'free') {
         showLoading();

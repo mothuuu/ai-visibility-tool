@@ -61,6 +61,14 @@ function startPolling(sessionId) {
 
 // Show verified state
 function showVerified(data) {
+    // Track purchase completed
+    if (window.Analytics) {
+        // DIY plan is $29/month
+        const plan = data.plan || 'diy';
+        const value = plan === 'diy' ? 29 : plan === 'pro' ? 99 : 29;
+        window.Analytics.trackPurchaseCompleted(plan, value);
+    }
+
     // Update status box
     const statusBox = document.getElementById('statusBox');
     statusBox.className = 'status-box verified';
@@ -68,15 +76,15 @@ function showVerified(data) {
         <h3>✅ Subscription Verified!</h3>
         <p>Your account has been successfully upgraded. You can now start analyzing your website.</p>
     `;
-    
+
     // Update progress steps
     const steps = document.querySelectorAll('.progress-step');
     steps.forEach(step => step.classList.add('completed'));
-    
+
     // Enable continue button
     const continueBtn = document.getElementById('continueBtn');
     continueBtn.disabled = false;
-    
+
     // Store domain for page selector
     if (data.domain) {
         sessionStorage.setItem('scanDomain', data.domain);

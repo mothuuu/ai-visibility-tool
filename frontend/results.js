@@ -145,6 +145,12 @@ async function loadScanResults() {
 function displayResults(scan, quota) {
     console.log('Scan data:', scan); // Debug log
 
+    // Track scan completed
+    if (window.Analytics) {
+        const displayScore = Math.round(scan.total_score * 10);
+        window.Analytics.trackScanCompleted(scan.url, displayScore);
+    }
+
     // Determine user tier (guest, free, diy, pro)
     const userTier = authToken ? (userData.plan || 'free') : 'guest';
 
