@@ -16,6 +16,42 @@ class GuestRateLimiter {
 
     // Clean up expired entries every hour
     setInterval(() => this.cleanup(), 60 * 60 * 1000);
+
+    // Ensure database table exists (non-blocking)
+    if (this.db) {
+      this.ensureTableExists().catch(err => {
+        console.error('⚠️ Failed to ensure guest_rate_limits table:', err.message);
+      });
+    }
+  }
+
+  /**
+   * Ensure the rate limits table exists
+   */
+  async ensureTableExists() {
+    try {
+      await this.db.query(`
+        CREATE TABLE IF NOT EXISTS guest_rate_limits (
+          ip_address VARCHAR(45) PRIMARY KEY,
+          scan_count INTEGER DEFAULT 0,
+          first_scan_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          last_scan_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create index for cleanup queries
+      await this.db.query(`
+        CREATE INDEX IF NOT EXISTS idx_guest_rate_limits_last_scan
+        ON guest_rate_limits(last_scan_at)
+      `);
+
+      console.log('✅ guest_rate_limits table ready');
+    } catch (error) {
+      // Ignore "already exists" errors
+      if (error.code !== '42P07') { // 42P07 = duplicate_table
+        throw error;
+      }
+    }
   }
 
   /**
