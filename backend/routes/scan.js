@@ -436,11 +436,37 @@ router.post('/analyze', authenticateToken, async (req, res) => {
       // For Free users who hit their limit, skip recommendation generation
       scanResult = await performV5Scan(url, user.plan, pages, userProgress, user.industry, currentMode, skipRecsForFreeUser);
 
-      // Add message for Free users who hit their limit
+      // MONTHLY FREEZE: For Free users who hit their limit, fetch existing recommendations
       if (skipRecsForFreeUser) {
-        scanResult.recommendations = [];
+        console.log(`🔒 Monthly freeze: Fetching existing recommendations for Free user ${userId}`);
+
+        // Get the start of current month for query
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        // Fetch existing recommendations from any scan this month
+        const existingRecs = await db.query(`
+          SELECT sr.* FROM scan_recommendations sr
+          JOIN scans s ON sr.scan_id = s.id
+          WHERE s.user_id = $1
+            AND s.created_at >= $2
+            AND sr.unlock_state IN ('active', 'locked')
+            AND sr.status NOT IN ('archived')
+          ORDER BY sr.impact_score DESC
+          LIMIT 3
+        `, [userId, monthStart.toISOString()]);
+
+        // Calculate days until next month for message
+        const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const daysUntilRefresh = Math.ceil((nextMonth - now) / (1000 * 60 * 60 * 24));
+
+        scanResult.recommendations = existingRecs.rows;
         scanResult.freeRecLimitReached = true;
-        scanResult.freeRecLimitMessage = `You've used your ${FREE_MONTHLY_REC_LIMIT} free recommendations this month. Upgrade to DIY for unlimited recommendations.`;
+        scanResult.recommendationsFrozen = true;
+        scanResult.freeRecLimitMessage = `Your ${FREE_MONTHLY_REC_LIMIT} recommendations are locked for this month. New recommendations available in ${daysUntilRefresh} day${daysUntilRefresh !== 1 ? 's' : ''}.`;
+
+        console.log(`   ✓ Returned ${existingRecs.rows.length} frozen recommendations`);
+        console.log(`   ✓ Next refresh: ${nextMonth.toISOString().split('T')[0]} (${daysUntilRefresh} days)`);
       }
     }
 
