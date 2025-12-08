@@ -463,14 +463,14 @@ async function generateRecommendations(issues, scanEvidence, tier = 'free', indu
         }
       }
 
-      // 3) ChatGPT for other subfactors (DIY/Pro tier)
-      if (tier !== 'free' && process.env.OPENAI_API_KEY) {
+      // 3) ChatGPT for all authenticated users (Free/DIY/Pro tier)
+      if (tier !== 'guest' && process.env.OPENAI_API_KEY) {
         const gptRec = await generateWithChatGPT(issue, scanEvidence, tier, industry);
         out.push(gptRec);
         continue;
       }
 
-      // 4) Smart template fallback
+      // 4) Smart template fallback (Guest users only, or if no API key)
       out.push(generateSmartTemplate(issue, scanEvidence, tier, industry));
 
     } catch (err) {
