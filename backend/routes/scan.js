@@ -143,7 +143,8 @@ router.post('/guest', guestRateLimiter.middleware(), async (req, res) => {
 
     // NO CACHE - Perform fresh V5 rubric scan
     // Use 'guest' tier - NO recommendations shown to anonymous users
-    const scanResult = await performV5Scan(url, 'guest');
+    // Skip recommendation generation entirely (guests never see them anyway)
+    const scanResult = await performV5Scan(url, 'guest', null, null, null, 'optimization', true);
 
     // Record scan for rate limiting (only count fresh scans)
     await req.rateLimiter.recordScan(req);
