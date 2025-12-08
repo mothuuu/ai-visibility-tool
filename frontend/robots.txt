@@ -1,0 +1,50 @@
+# Robots.txt for Visible2AI (https://visible2ai.com)
+# AI Visibility Score - The first tool that helps businesses get discovered by AI assistants
+
+# Allow all search engines and AI crawlers
+User-agent: *
+Allow: /
+Allow: /auth
+Allow: /dashboard
+Allow: /results
+Allow: /guest-results
+Allow: /implementation-progress
+
+# Disallow private/user-specific pages
+Disallow: /checkout
+Disallow: /success
+Disallow: /verify
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /waitlist
+Disallow: /page-selector
+Disallow: /analytics-dashboard
+Disallow: /api/
+
+# Explicitly allow major AI assistants and their crawlers
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: Anthropic-AI
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# Sitemap location
+Sitemap: https://visible2ai.com/sitemap.xml
