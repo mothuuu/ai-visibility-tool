@@ -115,10 +115,15 @@ loginForm.addEventListener('submit', async (e) => {
       // Store token in localStorage
       localStorage.setItem('authToken', data.accessToken);
       localStorage.setItem('user', JSON.stringify(data.user));
-      
+
+      // Track login event
+      if (window.Analytics) {
+        window.Analytics.trackLogin('email');
+      }
+
       // Show success message
       showSuccess('Login successful! Redirecting...');
-      
+
       // Redirect to dashboard after 1 second
       setTimeout(() => {
         window.location.href = 'dashboard.html';
@@ -126,7 +131,7 @@ loginForm.addEventListener('submit', async (e) => {
     } else {
       throw new Error('Invalid response from server');
     }
-    
+
   } catch (error) {
     showError(error.message || 'Login failed. Please try again.');
     submitBtn.disabled = false;
@@ -138,7 +143,12 @@ loginForm.addEventListener('submit', async (e) => {
 signupForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   hideMessages();
-  
+
+  // Track signup started
+  if (window.Analytics) {
+    window.Analytics.trackSignupStarted('signup_form');
+  }
+
   const email = document.getElementById('signupEmail').value.trim();
   const password = document.getElementById('signupPassword').value;
   const confirmPassword = document.getElementById('signupPasswordConfirm').value;
@@ -232,10 +242,15 @@ signupForm.addEventListener('submit', async (e) => {
       // Store token in localStorage
       localStorage.setItem('authToken', data.accessToken);
       localStorage.setItem('user', JSON.stringify(data.user));
-      
+
+      // Track signup completed
+      if (window.Analytics) {
+        window.Analytics.trackSignupCompleted('email');
+      }
+
       // Show success message
       showSuccess('Account created! Please check your email to verify your account. Redirecting...');
-      
+
       // Redirect to dashboard after 2 seconds
       setTimeout(() => {
         window.location.href = 'dashboard.html';

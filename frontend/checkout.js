@@ -187,7 +187,12 @@ async function handleCheckoutSubmit(e) {
         // Get plan from URL
         const urlParams = new URLSearchParams(window.location.search);
         const plan = urlParams.get('plan') || 'diy';
-        
+
+        // Track checkout started
+        if (window.Analytics) {
+            window.Analytics.trackCheckoutStarted(plan);
+        }
+
         // Disable button and show loading
         btn.disabled = true;
         btn.innerHTML = '<div class="loading-spinner"></div>Creating checkout session...';

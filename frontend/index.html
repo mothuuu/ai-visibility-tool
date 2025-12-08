@@ -1193,6 +1193,8 @@
             }
         }
     </style>
+    <!-- Google Analytics 4 -->
+    <script src="analytics.js"></script>
 </head>
 <body>
     <!-- Coming Soon Modal -->
@@ -1955,6 +1957,11 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
 
             // Normalize the URL to add https:// if needed
             url = normalizeUrl(url);
+
+            // Track scan started (guest scan)
+            if (window.Analytics) {
+                window.Analytics.trackScanStarted(url);
+            }
 
             // Create loading overlay
             const loadingOverlay = document.createElement('div');
