@@ -19,7 +19,8 @@ async function authenticateToken(req, res, next) {
     try {
       result = await db.query(
         `SELECT id, email, name, role, plan, email_verified, scans_used_this_month,
-                competitor_scans_used_this_month, primary_domain, primary_domain_changed_at,
+                competitor_scans_used_this_month, recs_generated_this_month, quota_reset_date,
+                primary_domain, primary_domain_changed_at,
                 stripe_customer_id, industry, industry_custom, created_at, last_login
          FROM users WHERE id = $1`,
         [decoded.userId]
@@ -30,7 +31,8 @@ async function authenticateToken(req, res, next) {
         console.log('Role column not found, querying without it');
         result = await db.query(
           `SELECT id, email, name, plan, email_verified, scans_used_this_month,
-                  competitor_scans_used_this_month, primary_domain, primary_domain_changed_at,
+                  competitor_scans_used_this_month, recs_generated_this_month, quota_reset_date,
+                  primary_domain, primary_domain_changed_at,
                   stripe_customer_id, industry, industry_custom, created_at, last_login
            FROM users WHERE id = $1`,
           [decoded.userId]
