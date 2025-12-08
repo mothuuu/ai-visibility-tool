@@ -285,7 +285,7 @@ function getTierFeatures(tier) {
       description: 'Registered - Top 3 recommendations'
     },
     diy: {
-      scansPerMonth: 'Unlimited',
+      scansPerMonth: 25,
       pagesPerScan: 5,
       recommendationsPerUnlock: 5,
       unlockIntervalDays: 5,
@@ -297,7 +297,7 @@ function getTierFeatures(tier) {
       description: 'DIY - 5 recommendations every 5 days + code'
     },
     pro: {
-      scansPerMonth: 'Unlimited',
+      scansPerMonth: 50,
       pagesPerScan: 25,
       recommendationsShown: 'All',
       codeSnippets: true,
