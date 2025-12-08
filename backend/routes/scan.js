@@ -417,18 +417,59 @@ router.post('/analyze', authenticateToken, async (req, res) => {
       scanResult.primaryScanId = activeContext.primaryScanId;
       console.log(`   ✓ Reused ${existingRecs.rows.length} recommendations from scan ${activeContext.primaryScanId}`);
     } else {
-      // Check if Free user has exhausted monthly recommendation quota (3 total)
+      // FREE USER FREEZE LOGIC (two-level check)
       const FREE_MONTHLY_REC_LIMIT = 3;
       let skipRecsForFreeUser = false;
+      let domainFrozen = false;
+      let existingDomainRecs = null;
 
       if (user.plan === 'free') {
-        const recsUsed = user.recs_generated_this_month || 0;
-        if (recsUsed >= FREE_MONTHLY_REC_LIMIT) {
-          console.log(`⚠️ Free user ${userId} has used ${recsUsed}/${FREE_MONTHLY_REC_LIMIT} recommendations this month`);
-          console.log(`   → Skipping recommendation generation (monthly limit reached)`);
+        // Get the start of current month for queries
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        // LEVEL 1: Domain-level freeze check
+        // Has this Free user already scanned THIS domain this month?
+        const domainScanCheck = await db.query(`
+          SELECT s.id as scan_id, s.created_at
+          FROM scans s
+          WHERE s.user_id = $1
+            AND s.extracted_domain = $2
+            AND s.created_at >= $3
+            AND s.status = 'completed'
+          ORDER BY s.created_at ASC
+          LIMIT 1
+        `, [userId, scanDomain, monthStart.toISOString()]);
+
+        if (domainScanCheck.rows.length > 0) {
+          // User has already scanned this domain this month - FREEZE for this domain
+          const previousScanId = domainScanCheck.rows[0].scan_id;
+          console.log(`🔒 Domain freeze: Free user already scanned ${scanDomain} this month`);
+          console.log(`   Previous scan: ${previousScanId} on ${domainScanCheck.rows[0].created_at}`);
+
+          // Fetch existing recommendations for THIS domain
+          existingDomainRecs = await db.query(`
+            SELECT sr.* FROM scan_recommendations sr
+            WHERE sr.scan_id = $1
+              AND sr.unlock_state IN ('active', 'locked')
+              AND sr.status NOT IN ('archived')
+            ORDER BY sr.impact_score DESC
+            LIMIT 3
+          `, [previousScanId]);
+
+          domainFrozen = true;
           skipRecsForFreeUser = true;
+          console.log(`   ✓ Found ${existingDomainRecs.rows.length} existing recommendations for this domain`);
         } else {
-          console.log(`📊 Free user has ${recsUsed}/${FREE_MONTHLY_REC_LIMIT} recommendations used this month`);
+          // LEVEL 2: Account-level cap check (only if domain not frozen)
+          const recsUsed = user.recs_generated_this_month || 0;
+          if (recsUsed >= FREE_MONTHLY_REC_LIMIT) {
+            console.log(`⚠️ Free user ${userId} has used ${recsUsed}/${FREE_MONTHLY_REC_LIMIT} recommendations this month`);
+            console.log(`   → Skipping recommendation generation (account cap reached)`);
+            skipRecsForFreeUser = true;
+          } else {
+            console.log(`📊 Free user: ${recsUsed}/${FREE_MONTHLY_REC_LIMIT} recs used, first scan of ${scanDomain} this month`);
+          }
         }
       }
 
@@ -436,36 +477,41 @@ router.post('/analyze', authenticateToken, async (req, res) => {
       // For Free users who hit their limit, skip recommendation generation
       scanResult = await performV5Scan(url, user.plan, pages, userProgress, user.industry, currentMode, skipRecsForFreeUser);
 
-      // MONTHLY FREEZE: For Free users who hit their limit, fetch existing recommendations
+      // MONTHLY FREEZE: For Free users, attach frozen recommendations
       if (skipRecsForFreeUser) {
-        console.log(`🔒 Monthly freeze: Fetching existing recommendations for Free user ${userId}`);
-
-        // Get the start of current month for query
         const now = new Date();
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-        // Fetch existing recommendations from any scan this month
-        const existingRecs = await db.query(`
-          SELECT sr.* FROM scan_recommendations sr
-          JOIN scans s ON sr.scan_id = s.id
-          WHERE s.user_id = $1
-            AND s.created_at >= $2
-            AND sr.unlock_state IN ('active', 'locked')
-            AND sr.status NOT IN ('archived')
-          ORDER BY sr.impact_score DESC
-          LIMIT 3
-        `, [userId, monthStart.toISOString()]);
-
-        // Calculate days until next month for message
         const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
         const daysUntilRefresh = Math.ceil((nextMonth - now) / (1000 * 60 * 60 * 24));
 
-        scanResult.recommendations = existingRecs.rows;
+        if (domainFrozen && existingDomainRecs) {
+          // Domain-level freeze: return recs from previous scan of this domain
+          console.log(`🔒 Domain freeze: Returning ${existingDomainRecs.rows.length} recommendations for ${scanDomain}`);
+          scanResult.recommendations = existingDomainRecs.rows;
+          scanResult.domainFrozen = true;
+          scanResult.freeRecLimitMessage = `Your recommendations for ${scanDomain} are locked until next month. New recommendations in ${daysUntilRefresh} day${daysUntilRefresh !== 1 ? 's' : ''}.`;
+        } else {
+          // Account-level freeze: return recs from any scan this month
+          console.log(`🔒 Account freeze: Fetching existing recommendations for Free user ${userId}`);
+          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+          const existingRecs = await db.query(`
+            SELECT sr.* FROM scan_recommendations sr
+            JOIN scans s ON sr.scan_id = s.id
+            WHERE s.user_id = $1
+              AND s.created_at >= $2
+              AND sr.unlock_state IN ('active', 'locked')
+              AND sr.status NOT IN ('archived')
+            ORDER BY sr.impact_score DESC
+            LIMIT 3
+          `, [userId, monthStart.toISOString()]);
+
+          scanResult.recommendations = existingRecs.rows;
+          scanResult.freeRecLimitMessage = `Your ${FREE_MONTHLY_REC_LIMIT} recommendations are locked for this month. New recommendations in ${daysUntilRefresh} day${daysUntilRefresh !== 1 ? 's' : ''}.`;
+          console.log(`   ✓ Returned ${existingRecs.rows.length} frozen recommendations`);
+        }
+
         scanResult.freeRecLimitReached = true;
         scanResult.recommendationsFrozen = true;
-        scanResult.freeRecLimitMessage = `Your ${FREE_MONTHLY_REC_LIMIT} recommendations are locked for this month. New recommendations available in ${daysUntilRefresh} day${daysUntilRefresh !== 1 ? 's' : ''}.`;
-
-        console.log(`   ✓ Returned ${existingRecs.rows.length} frozen recommendations`);
         console.log(`   ✓ Next refresh: ${nextMonth.toISOString().split('T')[0]} (${daysUntilRefresh} days)`);
       }
     }
