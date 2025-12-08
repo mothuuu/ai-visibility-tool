@@ -6,11 +6,13 @@
  * - Every 5 days, implemented/skipped recommendations are replaced
  * - Replacement happens during refresh cycle, not immediately
  * - New recommendations are pulled from the queue based on impact score
+ * - VERIFICATION: Implemented recommendations are verified before archiving
  */
 
 const { Pool } = require('pg');
 const ImpactScoreCalculator = require('./impact-score-calculator');
 const NotificationService = require('./notification-service');
+const { validateSingleRecommendation } = require('../utils/validation-engine');
 
 class RefreshCycleService {
   constructor(pool) {
@@ -157,19 +159,92 @@ class RefreshCycleService {
         ORDER BY impact_score DESC
       `, [scanId, currentCycle.cycle_start_date]);
 
-      const replacementCount = needReplacement.rows.length;
-
-      if (replacementCount === 0) {
+      if (needReplacement.rows.length === 0) {
         console.log('No recommendations need replacement');
         await this.extendCycle(client, currentCycle);
         await client.query('COMMIT');
         return {
           replaced: 0,
+          verified: 0,
+          movedBackToActive: 0,
           message: 'No recommendations needed replacement. Cycle extended.'
         };
       }
 
-      // Get locked recommendations to activate
+      // Get latest scan evidence for verification
+      const latestScanResult = await client.query(`
+        SELECT id, detailed_analysis, total_score
+        FROM scans
+        WHERE user_id = $1 AND id = $2
+        ORDER BY completed_at DESC
+        LIMIT 1
+      `, [userId, scanId]);
+
+      const scanEvidence = latestScanResult.rows[0]?.detailed_analysis?.scanEvidence || {};
+
+      // VERIFICATION PHASE: Check if 'implemented' recommendations were actually done
+      console.log(`🔍 Verifying ${needReplacement.rows.length} recommendations before refresh...`);
+
+      const verifiedToArchive = [];      // Fully implemented → archive and replace
+      const movedBackToActive = [];      // Not implemented or partial → move back to active
+      const skippedToArchive = [];       // Skipped → always archive (user's choice)
+
+      for (const rec of needReplacement.rows) {
+        if (rec.status === 'skipped') {
+          // Skipped recommendations are always archived (user explicitly chose to skip)
+          skippedToArchive.push(rec);
+          console.log(`   ⏭️ Skipped: "${rec.title?.substring(0, 50)}..." → will archive`);
+          continue;
+        }
+
+        // For 'implemented' recommendations, VERIFY before archiving
+        if (rec.status === 'implemented') {
+          try {
+            const validationResult = await validateSingleRecommendation(
+              rec,
+              scanId,
+              scanEvidence,
+              { id: scanId, user_id: userId }
+            );
+
+            if (validationResult.outcome === 'verified_complete') {
+              // FULLY IMPLEMENTED: Archive and replace
+              verifiedToArchive.push({ rec, validationResult });
+              console.log(`   ✅ Verified: "${rec.title?.substring(0, 50)}..." → will archive & replace`);
+
+            } else if (validationResult.outcome === 'partial_progress') {
+              // PARTIALLY IMPLEMENTED: Move back to active with updated text
+              movedBackToActive.push({
+                rec,
+                validationResult,
+                reason: 'partial_implementation',
+                message: `Partial progress detected (${validationResult.completionPercentage}%)`
+              });
+              console.log(`   ⚠️ Partial: "${rec.title?.substring(0, 50)}..." (${validationResult.completionPercentage}%) → moving back to active`);
+
+            } else {
+              // NOT IMPLEMENTED: Move back to active
+              movedBackToActive.push({
+                rec,
+                validationResult,
+                reason: 'not_implemented',
+                message: 'Implementation not detected - please complete and rescan'
+              });
+              console.log(`   ❌ Not done: "${rec.title?.substring(0, 50)}..." → moving back to active`);
+            }
+
+          } catch (validationError) {
+            // If validation fails, give user benefit of doubt and archive
+            console.error(`   ⚠️ Validation error for rec ${rec.id}:`, validationError.message);
+            verifiedToArchive.push({ rec, validationResult: { outcome: 'validation_error' } });
+          }
+        }
+      }
+
+      // Calculate how many replacements we actually need
+      const actualReplacementCount = verifiedToArchive.length + skippedToArchive.length;
+
+      // Get locked recommendations to activate (only for actual replacements)
       const availableRecs = await client.query(`
         SELECT *
         FROM scan_recommendations
@@ -179,20 +254,66 @@ class RefreshCycleService {
           AND status = 'active'
         ORDER BY impact_score DESC
         LIMIT $2
-      `, [scanId, replacementCount]);
+      `, [scanId, actualReplacementCount]);
 
       const newRecs = availableRecs.rows;
 
-      // Archive old recommendations
-      for (const oldRec of needReplacement.rows) {
+      // PHASE 1: Archive verified and skipped recommendations
+      for (const { rec } of verifiedToArchive) {
         await client.query(`
           UPDATE scan_recommendations
           SET
             unlock_state = 'archived',
             archived_at = CURRENT_TIMESTAMP,
-            archived_reason = $1
-          WHERE id = $2
-        `, [oldRec.status, oldRec.id]);
+            archived_reason = 'verified_implemented',
+            verification_status = 'verified'
+          WHERE id = $1
+        `, [rec.id]);
+      }
+
+      for (const rec of skippedToArchive) {
+        await client.query(`
+          UPDATE scan_recommendations
+          SET
+            unlock_state = 'archived',
+            archived_at = CURRENT_TIMESTAMP,
+            archived_reason = 'skipped'
+          WHERE id = $1
+        `, [rec.id]);
+      }
+
+      // PHASE 2: Move unverified/partial recommendations back to active
+      for (const { rec, validationResult, reason, message } of movedBackToActive) {
+        const updatedTitle = reason === 'partial_implementation'
+          ? `[${validationResult.completionPercentage}% Done] ${rec.title}`
+          : rec.title;
+
+        const updatedFindings = reason === 'partial_implementation'
+          ? `⚠️ PARTIAL IMPLEMENTATION DETECTED\n${message}\n\n${validationResult.notes || ''}\n\n---\nOriginal finding:\n${rec.findings || ''}`
+          : `❌ IMPLEMENTATION NOT DETECTED\n${message}\n\nPlease complete this recommendation and run another scan.\n\n---\nOriginal finding:\n${rec.findings || ''}`;
+
+        await client.query(`
+          UPDATE scan_recommendations
+          SET
+            unlock_state = 'active',
+            status = 'active',
+            title = $1,
+            findings = $2,
+            is_partial_implementation = $3,
+            verification_status = $4,
+            verification_notes = $5,
+            moved_back_to_active_at = CURRENT_TIMESTAMP,
+            moved_back_reason = $6
+          WHERE id = $7
+        `, [
+          updatedTitle,
+          updatedFindings,
+          reason === 'partial_implementation',
+          validationResult.outcome,
+          message,
+          reason,
+          rec.id
+        ]);
       }
 
       // Activate new recommendations
@@ -281,21 +402,39 @@ class RefreshCycleService {
 
       await client.query('COMMIT');
 
-      // Send notification
+      // Send notification with verification results
       const notificationService = new NotificationService(this.pool);
       await notificationService.createRefreshCycleNotification(userId, scanId, {
         replaced_count: newRecs.length,
-        new_recommendations: newRecs.map(r => r.title)
+        verified_count: verifiedToArchive.length,
+        moved_back_count: movedBackToActive.length,
+        skipped_count: skippedToArchive.length,
+        new_recommendations: newRecs.map(r => r.title),
+        moved_back_recommendations: movedBackToActive.map(m => ({
+          title: m.rec.title,
+          reason: m.reason
+        }))
       });
+
+      console.log(`🔄 Refresh cycle complete: ${verifiedToArchive.length} verified, ${movedBackToActive.length} moved back, ${skippedToArchive.length} skipped, ${newRecs.length} new`);
 
       return {
         replaced: newRecs.length,
+        verified: verifiedToArchive.length,
+        movedBackToActive: movedBackToActive.length,
+        skipped: skippedToArchive.length,
         cycleNumber: newCycleNumber,
         nextRefreshDate: newCycleEndDate,
         newRecommendations: newRecs.map(r => ({
           id: r.id,
           title: r.title,
           impact_score: r.impact_score
+        })),
+        movedBack: movedBackToActive.map(m => ({
+          id: m.rec.id,
+          title: m.rec.title,
+          reason: m.reason,
+          completionPercentage: m.validationResult.completionPercentage
         }))
       };
 
