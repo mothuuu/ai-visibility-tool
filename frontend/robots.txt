@@ -1,43 +1,45 @@
-# Robots.txt for Visible2AI (https://visible2ai.com)
-# AI Visibility Score - The first tool that helps businesses get discovered by AI assistants
+# robots.txt for visible2ai.com
+# Allow all crawlers including AI assistants
 
-# Allow all search engines and AI crawlers
 User-agent: *
 Allow: /
-Allow: /auth
-Allow: /dashboard
-Allow: /results
-Allow: /guest-results
-Allow: /implementation-progress
-
-# Disallow private/user-specific pages
-Disallow: /checkout
-Disallow: /success
-Disallow: /verify
-Disallow: /forgot-password
-Disallow: /reset-password
-Disallow: /waitlist
-Disallow: /page-selector
-Disallow: /analytics-dashboard
 Disallow: /api/
+Disallow: /dashboard
+Disallow: /results
+Disallow: /auth
 
-# Explicitly allow major AI assistants and their crawlers
+# Sitemap location
+Sitemap: https://visible2ai.com/sitemap.xml
+
+# AI Crawler Permissions - Explicitly ALLOW
 User-agent: GPTBot
 Allow: /
 
 User-agent: ChatGPT-User
 Allow: /
 
-User-agent: Claude-Web
+User-agent: Google-Extended
 Allow: /
 
-User-agent: Anthropic-AI
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
 Allow: /
 
 User-agent: PerplexityBot
 Allow: /
 
-User-agent: Google-Extended
+User-agent: Amazonbot
+Allow: /
+
+User-agent: FacebookBot
+Allow: /
+
+User-agent: Applebot
 Allow: /
 
 User-agent: Googlebot
@@ -46,5 +48,7 @@ Allow: /
 User-agent: Bingbot
 Allow: /
 
-# Sitemap location
-Sitemap: https://visible2ai.com/sitemap.xml
+User-agent: DuckDuckBot
+Allow: /
+
+Crawl-delay: 1
