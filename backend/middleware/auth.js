@@ -13,10 +13,10 @@ async function authenticateToken(req, res, next) {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Get fresh user data - query without role first for compatibility
-    // Role column may not exist in all database instances
+    // Get fresh user data with graceful fallback for missing columns
     let result;
     try {
+      // Try full query with all optional columns
       result = await db.query(
         `SELECT id, email, name, role, plan, email_verified, scans_used_this_month,
                 competitor_scans_used_this_month, recs_generated_this_month, quota_reset_date,
@@ -26,20 +26,21 @@ async function authenticateToken(req, res, next) {
         [decoded.userId]
       );
     } catch (dbError) {
-      // If role column doesn't exist, query without it
+      // If any column doesn't exist, fall back to minimal safe query
       if (dbError.code === '42703') { // column does not exist
-        console.log('Role column not found, querying without it');
+        console.log('Some columns not found, using minimal query. Missing:', dbError.message);
         result = await db.query(
           `SELECT id, email, name, plan, email_verified, scans_used_this_month,
-                  competitor_scans_used_this_month, recs_generated_this_month, quota_reset_date,
-                  primary_domain, primary_domain_changed_at,
+                  competitor_scans_used_this_month, primary_domain, primary_domain_changed_at,
                   stripe_customer_id, industry, industry_custom, created_at, last_login
            FROM users WHERE id = $1`,
           [decoded.userId]
         );
-        // Add default role
+        // Add default values for missing columns
         if (result.rows.length > 0) {
-          result.rows[0].role = 'user';
+          result.rows[0].role = result.rows[0].role || 'user';
+          result.rows[0].recs_generated_this_month = result.rows[0].recs_generated_this_month || 0;
+          result.rows[0].quota_reset_date = result.rows[0].quota_reset_date || null;
         }
       } else {
         throw dbError;
