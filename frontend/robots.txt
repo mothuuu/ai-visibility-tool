@@ -1,4 +1,4 @@
-# robots.txt for www.visible2ai.com
+# robots.txt for visible2ai.com
 # Allow all crawlers including AI assistants
 
 User-agent: *
@@ -9,7 +9,7 @@ Disallow: /results
 Disallow: /auth
 
 # Sitemap location
-Sitemap: https://www.visible2ai.com/sitemap.xml
+Sitemap: https://visible2ai.com/sitemap.xml
 
 # AI Crawler Permissions - Explicitly ALLOW
 User-agent: GPTBot
