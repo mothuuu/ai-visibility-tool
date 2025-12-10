@@ -1,4 +1,4 @@
-# robots.txt for www.visible2ai.com
+# robots.txt for visible2ai.com
 # Allow all crawlers including AI assistants
 
 User-agent: *
