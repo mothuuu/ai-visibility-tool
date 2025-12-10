@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Your AI Visibility Score - Free Analysis Results</title>
-    <link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+    <link rel="shortcut icon" href="/favicon.ico?v=2">
     <style>
         * {
             margin: 0;
@@ -33,12 +34,13 @@
         }
 
         .logo {
-            font-size: 24px;
-            font-weight: 800;
-            background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            display: flex;
+            align-items: center;
+        }
+
+        .logo img {
+            height: 40px;
+            width: auto;
         }
 
         .nav-buttons {
@@ -398,7 +400,7 @@
 <body>
     <!-- Navigation -->
     <nav class="navbar">
-        <div class="logo">AI Visibility Score</div>
+        <a href="index.html" class="logo" style="text-decoration: none;"><img src="/logo.png" alt="Visible2AI - AI Visibility Score" /></a>
         <div class="nav-buttons">
             <a href="auth.html?mode=login" class="btn btn-signin">Sign In</a>
             <a href="auth.html?mode=signup" class="btn btn-signup">Sign Up Free</a>

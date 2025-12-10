@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Login - AI Visibility Score</title>
-    <link rel="icon" type="image/x-icon" href="../favicon.ico?v=2">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+    <link rel="shortcut icon" href="/favicon.ico?v=2">
     <style>
         * {
             margin: 0;
@@ -39,9 +40,15 @@
         }
 
         .logo {
-            font-size: 36px;
-            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             margin-bottom: 10px;
+        }
+
+        .logo img {
+            height: 45px;
+            width: auto;
         }
 
         .logo-subtitle {
@@ -218,7 +225,7 @@
 <body>
     <div class="login-container">
         <div class="login-header">
-            <div class="logo">AI Visibility Score</div>
+            <a href="/index.html" class="logo" style="text-decoration: none;"><img src="/logo.png" alt="Visible2AI - AI Visibility Score" /></a>
             <div class="logo-subtitle">Admin Control Center</div>
         </div>
 
