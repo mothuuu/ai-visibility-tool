@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About Visible2AI | AI Visibility Score - Be Found by AI Assistants</title>
+    <meta name="description" content="Learn about Visible2AI, the first tool that helps businesses get discovered and recommended by AI assistants like ChatGPT, Claude, and Perplexity. Founded in Toronto by Arhan and Monali Supramanyam.">
+    <meta name="keywords" content="Visible2AI, AI Visibility Score, about us, AI search optimization, ChatGPT visibility, Claude visibility, Arhan Supramanyam, Monali Supramanyam, Xeo Marketing, Toronto">
+    <meta name="author" content="Visible2AI">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://www.visible2ai.com/about">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://www.visible2ai.com/about">
+    <meta property="og:title" content="About Visible2AI | Be Found by AI Assistants">
+    <meta property="og:description" content="The first tool that helps businesses get discovered and recommended by AI assistants. Learn our story — built by someone who's never known search without AI.">
+    <meta property="og:image" content="https://www.visible2ai.com/og-about.png">
+    <meta property="og:site_name" content="Visible2AI">
+    <meta property="og:locale" content="en_CA">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://www.visible2ai.com/about">
+    <meta name="twitter:title" content="About Visible2AI | Be Found by AI Assistants">
+    <meta name="twitter:description" content="The first tool that helps businesses get discovered and recommended by AI assistants. Built by someone who's never known search without AI.">
+    <meta name="twitter:image" content="https://www.visible2ai.com/twitter-about.png">
+
+    <!-- Geo Tags -->
+    <meta name="geo.region" content="CA-ON">
+    <meta name="geo.placename" content="Mississauga">
+    <meta name="geo.position" content="43.5890;-79.6441">
+    <meta name="ICBM" content="43.5890, -79.6441">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #2d3748;
+            overflow-x: hidden;
+        }
+
+        /* Navigation */
+        .navbar {
+            background: white;
+            padding: 20px 5%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .nav-link {
+            color: #2d3748;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-link:hover {
+            color: #f31c7e;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 12px 32px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-signin {
+            background: white;
+            color: #f31c7e;
+            border: 2px solid #f31c7e;
+        }
+
+        .btn-signin:hover {
+            background: #f31c7e;
+            color: white;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(0, 185, 218, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 185, 218, 0.4);
+        }
+
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, #00B9DA 0%, #7D41A5 100%);
+            padding: 80px 5% 100px;
+            text-align: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="2" fill="white" opacity="0.1"/></svg>') repeat;
+            opacity: 0.3;
+        }
+
+        .hero-content {
+            max-width: 900px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero h1 {
+            font-size: 56px;
+            font-weight: 800;
+            margin-bottom: 25px;
+            line-height: 1.2;
+        }
+
+        .tagline {
+            font-size: 24px;
+            font-weight: 600;
+            opacity: 0.95;
+        }
+
+        /* Main Content */
+        .main-content {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 5%;
+        }
+
+        article {
+            color: #2d3748;
+        }
+
+        section {
+            margin-bottom: 60px;
+        }
+
+        h2 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1a202c;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 3px solid #00B9DA;
+        }
+
+        h3 {
+            font-size: 22px;
+            font-weight: 600;
+            color: #2d3748;
+            margin: 24px 0 12px;
+        }
+
+        p {
+            font-size: 18px;
+            line-height: 1.8;
+            margin-bottom: 20px;
+            color: #4a5568;
+        }
+
+        strong {
+            color: #1a202c;
+        }
+
+        /* Highlight text */
+        .highlight {
+            background: linear-gradient(135deg, rgba(0, 185, 218, 0.1) 0%, rgba(243, 28, 126, 0.1) 100%);
+            padding: 20px 24px;
+            border-radius: 12px;
+            margin: 24px 0;
+            border-left: 4px solid #f31c7e;
+        }
+
+        .highlight p {
+            margin-bottom: 0;
+            font-weight: 500;
+            color: #2d3748;
+        }
+
+        /* Blockquote */
+        blockquote {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 30px 35px;
+            border-radius: 12px;
+            margin: 30px 0;
+            border-left: 5px solid #7D41A5;
+            font-style: italic;
+        }
+
+        blockquote p {
+            font-size: 17px;
+            line-height: 1.9;
+            color: #4a5568;
+            margin-bottom: 15px;
+        }
+
+        blockquote p:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Vision Quote */
+        .vision-quote {
+            background: linear-gradient(135deg, #00B9DA 0%, #7D41A5 100%);
+            padding: 40px;
+            border-radius: 16px;
+            margin: 30px 0;
+            color: white;
+            text-align: center;
+        }
+
+        .vision-quote p {
+            font-size: 20px;
+            font-weight: 500;
+            color: white;
+            margin-bottom: 0;
+            font-style: italic;
+        }
+
+        /* Feature List */
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 24px 0;
+        }
+
+        .feature-list li {
+            padding: 12px 0 12px 35px;
+            position: relative;
+            font-size: 17px;
+            color: #4a5568;
+        }
+
+        .feature-list li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #00B9DA;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        /* Team Section */
+        .team-member {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 24px;
+        }
+
+        .team-member h3 {
+            color: #1a202c;
+            margin-top: 0;
+            margin-bottom: 8px;
+        }
+
+        .team-member .role {
+            color: #f31c7e;
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
+
+        .team-member p {
+            margin-bottom: 0;
+            font-size: 16px;
+        }
+
+        /* Contact Section */
+        .contact-info {
+            background: linear-gradient(135deg, rgba(0, 185, 218, 0.05) 0%, rgba(125, 65, 165, 0.05) 100%);
+            padding: 30px;
+            border-radius: 16px;
+        }
+
+        .contact-info p {
+            margin-bottom: 12px;
+            font-size: 17px;
+        }
+
+        .contact-info a {
+            color: #00B9DA;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .contact-info a:hover {
+            color: #f31c7e;
+            text-decoration: underline;
+        }
+
+        address {
+            font-style: normal;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        /* Company Links */
+        .company-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .company-links a {
+            color: #00B9DA;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 8px 16px;
+            background: rgba(0, 185, 218, 0.1);
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .company-links a:hover {
+            background: #00B9DA;
+            color: white;
+        }
+
+        /* Footer */
+        .footer {
+            background: #2d3748;
+            padding: 40px 5%;
+            text-align: center;
+            color: white;
+        }
+
+        .footer-links {
+            margin-bottom: 20px;
+        }
+
+        .footer-links a {
+            color: white;
+            text-decoration: none;
+            margin: 0 15px;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+
+        .footer-links a:hover {
+            opacity: 1;
+            text-decoration: underline;
+        }
+
+        .footer-text {
+            margin-bottom: 10px;
+            opacity: 0.8;
+        }
+
+        .footer-text a {
+            color: white;
+            text-decoration: underline;
+        }
+
+        .footer-copyright {
+            font-size: 14px;
+            opacity: 0.6;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 36px;
+            }
+
+            .tagline {
+                font-size: 18px;
+            }
+
+            h2 {
+                font-size: 26px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .navbar {
+                flex-wrap: wrap;
+                gap: 15px;
+            }
+
+            .nav-buttons {
+                width: 100%;
+                justify-content: center;
+            }
+
+            blockquote {
+                padding: 20px;
+            }
+
+            .vision-quote {
+                padding: 25px;
+            }
+
+            .company-links {
+                flex-direction: column;
+            }
+        }
+    </style>
+
+    <!-- Google Analytics 4 -->
+    <script src="analytics.js"></script>
+
+    <!-- Schema 1: AboutPage Schema -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "AboutPage",
+      "name": "About Visible2AI",
+      "description": "Learn about Visible2AI, the first tool that helps businesses get discovered and recommended by AI assistants like ChatGPT, Claude, and Perplexity.",
+      "url": "https://www.visible2ai.com/about",
+      "mainEntity": {
+        "@type": "Organization",
+        "name": "Visible2AI",
+        "url": "https://www.visible2ai.com"
+      },
+      "inLanguage": "en-CA",
+      "datePublished": "2024-11-10",
+      "dateModified": "2025-12-09"
+    }
+    </script>
+
+    <!-- Schema 2: Organization Schema (enhanced for About page) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Visible2AI",
+      "alternateName": "AI Visibility Score",
+      "url": "https://www.visible2ai.com",
+      "logo": "https://www.visible2ai.com/logo.png",
+      "description": "Visible2AI helps businesses become discoverable, understandable, and recommendable by AI assistants like ChatGPT, Claude, and Perplexity.",
+      "slogan": "Be Found. Be Recommended. Be Chosen.",
+      "foundingDate": "2024",
+      "foundingLocation": {
+        "@type": "Place",
+        "name": "Mississauga, Ontario, Canada"
+      },
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Suite 700, 6733 Mississauga Rd",
+        "addressLocality": "Mississauga",
+        "addressRegion": "ON",
+        "postalCode": "L5N 6J5",
+        "addressCountry": "CA"
+      },
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "telephone": "+1-844-936-0011",
+        "contactType": "customer service",
+        "email": "info@xeomarketing.com",
+        "availableLanguage": "English"
+      },
+      "founder": [
+        {
+          "@type": "Person",
+          "name": "Arhan Supramanyam",
+          "jobTitle": "Technical Co-founder",
+          "description": "Second-year computer science student who built the AI Visibility Score platform. Represents the generation that has never known search without AI."
+        },
+        {
+          "@type": "Person",
+          "name": "Monali Supramanyam",
+          "jobTitle": "Co-founder & CEO",
+          "description": "Leads business strategy and go-to-market at Visible2AI. Also founder of Xeo Marketing, a Toronto-based AI strategy consulting agency."
+        }
+      ],
+      "parentOrganization": {
+        "@type": "Organization",
+        "name": "Xeo Marketing",
+        "url": "https://xeo.marketing"
+      },
+      "sameAs": [
+        "https://www.linkedin.com/company/xeo-marketing",
+        "https://www.capterra.com/p/10034013/AI-Visibility-Score/",
+        "https://xeo.marketing"
+      ],
+      "knowsAbout": [
+        "AI Visibility",
+        "AI Search Optimization",
+        "Answer Engine Optimization",
+        "ChatGPT Optimization",
+        "Claude Optimization",
+        "Perplexity Optimization",
+        "Schema Markup",
+        "Structured Data",
+        "B2B Marketing"
+      ]
+    }
+    </script>
+
+    <!-- Schema 3: Person Schema - Arhan Supramanyam -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Person",
+      "name": "Arhan Supramanyam",
+      "jobTitle": "Technical Co-founder",
+      "worksFor": {
+        "@type": "Organization",
+        "name": "Visible2AI",
+        "url": "https://www.visible2ai.com"
+      },
+      "description": "Second-year computer science student who built the AI Visibility Score platform. Represents the generation that has never known search without AI — bringing first-principles thinking to a problem most businesses don't know they have.",
+      "knowsAbout": [
+        "Software Development",
+        "AI Systems",
+        "Web Development",
+        "SaaS Development"
+      ]
+    }
+    </script>
+
+    <!-- Schema 4: Person Schema - Monali Supramanyam -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Person",
+      "name": "Monali Supramanyam",
+      "jobTitle": "Co-founder & CEO",
+      "worksFor": [
+        {
+          "@type": "Organization",
+          "name": "Visible2AI",
+          "url": "https://www.visible2ai.com"
+        },
+        {
+          "@type": "Organization",
+          "name": "Xeo Marketing",
+          "url": "https://xeo.marketing"
+        }
+      ],
+      "description": "Co-founder & CEO of Visible2AI. Also founder of Xeo Marketing, a Toronto-based AI strategy consulting agency. Recognized the market shift when clients started asking questions no existing tools could answer.",
+      "knowsAbout": [
+        "AI Marketing Strategy",
+        "B2B Marketing",
+        "Digital Strategy",
+        "Go-to-Market Strategy"
+      ]
+    }
+    </script>
+
+    <!-- Schema 5: AI Micro-Summary (SpeakableSpecification for voice search) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "About Visible2AI",
+      "url": "https://www.visible2ai.com/about",
+      "speakable": {
+        "@type": "SpeakableSpecification",
+        "cssSelector": [".ai-summary", ".mission-statement", ".company-description"]
+      },
+      "abstract": "Visible2AI is the first tool that helps businesses get discovered and recommended by AI assistants like ChatGPT, Claude, and Perplexity. Founded in 2024 in Mississauga, Canada by Arhan Supramanyam (Technical Co-founder) and Monali Supramanyam (Co-founder & CEO). The AI Visibility Score measures how AI sees your business across 47 factors in 8 categories, providing implementation-ready code to improve visibility. Be Found. Be Recommended. Be Chosen."
+    }
+    </script>
+</head>
+<body>
+    <!-- AI Micro-Summary Block (hidden from visual display, accessible to crawlers) -->
+    <div class="ai-summary" style="position: absolute; left: -9999px; top: -9999px;" aria-hidden="true">
+        <p><strong>Company:</strong> Visible2AI</p>
+        <p><strong>Product:</strong> AI Visibility Score</p>
+        <p><strong>What it does:</strong> Measures how AI assistants like ChatGPT, Claude, and Perplexity see, understand, and recommend businesses. Provides a score from 0-1000, analyzes 47 factors across 8 pillars, and delivers implementation-ready code to improve AI visibility.</p>
+        <p><strong>Tagline:</strong> Be Found. Be Recommended. Be Chosen.</p>
+        <p><strong>Founded:</strong> 2024</p>
+        <p><strong>Headquarters:</strong> Mississauga, Ontario, Canada</p>
+        <p><strong>Founders:</strong> Arhan Supramanyam (Technical Co-founder), Monali Supramanyam (Co-founder & CEO)</p>
+        <p><strong>Parent Company:</strong> Xeo Marketing</p>
+        <p><strong>Contact:</strong> info@xeomarketing.com | 1-844-936-0011</p>
+        <p><strong>Address:</strong> Suite 700, 6733 Mississauga Rd, Mississauga, ON L5N 6J5, Canada</p>
+        <p><strong>Website:</strong> https://www.visible2ai.com</p>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="index.html" class="logo">AI Visibility Score</a>
+        <div class="nav-links">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="about.html" class="nav-link">About</a>
+        </div>
+        <div class="nav-buttons">
+            <a href="auth.html" class="btn btn-signin">Sign In</a>
+            <a href="index.html#get-started" class="btn btn-primary">Get Started Free</a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="hero-content">
+            <h1>About Visible2AI</h1>
+            <p class="tagline">Be Found. Be Recommended. Be Chosen.</p>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <article>
+            <!-- Mission Section -->
+            <section id="mission">
+                <h2>Our Mission</h2>
+                <p class="mission-statement company-description">Visible2AI helps businesses become discoverable, understandable, and recommendable by AI assistants — so your ideal customers find you first and choose you over competitors.</p>
+                <p>In a world where buyers discover brands through ChatGPT, Claude, Perplexity, and Gemini, we give companies a clear, actionable path to becoming the answer AI recommends.</p>
+                <div class="highlight">
+                    <p><strong>If AI doesn't understand your business, it can't recommend you. And if AI doesn't recommend you, your customers choose your competitors.</strong></p>
+                </div>
+            </section>
+
+            <!-- The Shift Section -->
+            <section id="shift">
+                <h2>The Shift Is Here</h2>
+                <p>The way buyers find businesses has fundamentally changed.</p>
+                <p><strong>68% of B2B buyers</strong> now use AI assistants for research instead of Google. When they ask "Who's the best [service] in [location]?" — AI gives one answer, not ten links.</p>
+                <p>But here's the problem: most websites are invisible to AI.</p>
+                <p>Not because they're bad — but because AI can't interpret their content, verify their credibility, or extract clear answers. Traditional SEO doesn't work. AI uses completely different signals.</p>
+                <div class="highlight">
+                    <p><strong>There's no page two of ChatGPT. You're either the answer, or you're forgotten.</strong></p>
+                </div>
+            </section>
+
+            <!-- What We Do Section -->
+            <section id="what-we-do">
+                <h2>What We Do</h2>
+                <p><strong><a href="index.html" style="color: #00B9DA;">AI Visibility Score</a></strong> is the first tool that measures how AI assistants see, understand, and recommend your business.</p>
+                <p>In 60 seconds, you get:</p>
+                <ul class="feature-list">
+                    <li><strong>Your AI Visibility Score</strong> (0-1000) — how AI sees you right now</li>
+                    <li><strong>8-Pillar Analysis</strong> — breakdown across 47 factors that determine AI visibility</li>
+                    <li><strong>Prioritized Recommendations</strong> — what to fix first for maximum impact</li>
+                    <li><strong>Implementation-Ready Code</strong> — copy-paste fixes, no developer required</li>
+                </ul>
+                <p>We don't just identify problems. We solve them.</p>
+            </section>
+
+            <!-- Who We Serve Section -->
+            <section id="who-we-serve">
+                <h2>Who We Serve</h2>
+                <p>Visible2AI serves any business that depends on being discovered, trusted, and recommended by AI assistants — with a strong focus on B2B companies where clarity, authority, and precision matter most.</p>
+
+                <h3>Small & Medium Businesses</h3>
+                <p>Professional services, consultants, local service businesses, coaches, trainers, educators, wellness providers, and clinics.</p>
+
+                <h3>B2B Companies</h3>
+                <p>AI & tech startups, B2B SaaS, IT providers & MSPs, cybersecurity firms, telecom providers, consulting firms, marketing agencies, data & analytics companies, cloud & DevOps services, fintech, healthcare tech, legal & accounting firms, real estate & PropTech, and manufacturing & IoT providers.</p>
+
+                <h3>Agencies & Partners</h3>
+                <p>Marketing agencies, SEO firms, and web developers use Visible2AI to audit client visibility and deliver measurable results.</p>
+            </section>
+
+            <!-- Our Story Section -->
+            <section id="our-story">
+                <h2>Our Story</h2>
+                <p>It started with a pattern we couldn't ignore.</p>
+                <p>In a single week, three different clients called with the same panic: "Our SEO traffic is down 30%, our leads are garbage, and prospects keep mentioning they found competitors through ChatGPT. What do we do?"</p>
+                <p>We knew <em>what</em> was happening — high-intent B2B buyers were shifting from Google to AI assistants for research. But traditional SEO tools offered no solutions. Every framework, every methodology was built for a world where people clicked through search results, not one where AI delivered single answers.</p>
+                <p>We needed to understand how people who've <em>never known search without AI</em> actually behave.</p>
+                <p>That's when our technical co-founder stepped forward with a different perspective — and a solution.</p>
+            </section>
+
+            <!-- Built By Section -->
+            <section id="built-by">
+                <h2>Built by Someone Who's Never Known Search Without AI</h2>
+                <p><strong>Arhan Supramanyam</strong>, our 18-year-old technical co-founder and computer science student, represents a generation with fundamentally different search behavior.</p>
+                <blockquote>
+                    <p>"When everyone kept talking about 'AI search,' I was confused. For me, there's no 'AI search' versus 'regular search' — there's just search. I've never typed a question into Google and scrolled through 10 blue links. When I need to find a restaurant, research a product, or discover a service provider, I ask ChatGPT, Claude, or Siri. I get one answer, maybe two or three options. That's it.</p>
+                    <p>And here's what matters: I'm not an early adopter or a tech enthusiast. This is just normal for everyone I know. My friends, my classmates — we all search this way. If your business isn't structured for AI to understand and recommend you, you literally don't exist in my world.</p>
+                    <p>We're not the future. We're your customers right now."</p>
+                </blockquote>
+                <p>Rather than retrofitting old SEO frameworks for a new reality, Arhan built Visible2AI from first principles — designed for how people actually search today, not how they searched in 2019.</p>
+            </section>
+
+            <!-- Team Section -->
+            <section id="team">
+                <h2>Our Team</h2>
+
+                <div class="team-member">
+                    <h3>Arhan Supramanyam</h3>
+                    <p class="role">Technical Co-founder</p>
+                    <p>Second-year computer science student who built the AI Visibility Score platform. Represents the generation that has never known search without AI — bringing first-principles thinking to a problem most businesses don't know they have.</p>
+                </div>
+
+                <div class="team-member">
+                    <h3>Monali Supramanyam</h3>
+                    <p class="role">Co-founder & CEO</p>
+                    <p>Leads business strategy and go-to-market at Visible2AI. Also founder of <a href="https://xeo.marketing" target="_blank" rel="noopener noreferrer">Xeo Marketing</a>, a Toronto-based AI strategy consulting agency. Recognized the market shift when clients started asking questions no existing tools could answer.</p>
+                </div>
+            </section>
+
+            <!-- Vision Section -->
+            <section id="vision">
+                <h2>Our Vision</h2>
+                <p>To help businesses of all sizes become fully visible, understood, and recommended by the AI systems that increasingly shape customer decisions.</p>
+                <p>We believe:</p>
+                <div class="vision-quote">
+                    <p>You build great products. You deliver real value. You've earned your reputation.<br>But if AI can't interpret your business correctly, your ideal customers will never find you.</p>
+                </div>
+                <p><strong>Visible2AI changes that.</strong></p>
+            </section>
+
+            <!-- Contact Section -->
+            <section id="contact">
+                <h2>Contact Us</h2>
+                <div class="contact-info">
+                    <p><strong>Email:</strong> <a href="mailto:info@xeomarketing.com">info@xeomarketing.com</a></p>
+                    <p><strong>Phone:</strong> <a href="tel:+18449360011">1-844-936-0011</a></p>
+                    <address>
+                        <p><strong>Address:</strong></p>
+                        <p>Suite 700, 6733 Mississauga Rd<br>
+                        Mississauga, Ontario L5N 6J5<br>
+                        Canada</p>
+                    </address>
+                </div>
+            </section>
+
+            <!-- Company Section -->
+            <section id="company">
+                <h2>Company</h2>
+                <p>Visible2AI is a product of <strong><a href="https://xeo.marketing" target="_blank" rel="noopener noreferrer">Xeo Marketing</a></strong>, an AI strategy consulting agency helping businesses navigate the shift to AI-driven marketing.</p>
+                <p><strong>Founded:</strong> 2024<br>
+                <strong>Headquarters:</strong> Mississauga, Ontario, Canada</p>
+
+                <p><strong>Find Us On:</strong></p>
+                <div class="company-links">
+                    <a href="https://www.capterra.com/p/10034013/AI-Visibility-Score/" target="_blank" rel="noopener noreferrer">Capterra</a>
+                    <a href="https://www.linkedin.com/company/xeo-marketing" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                    <a href="https://xeo.marketing" target="_blank" rel="noopener noreferrer">Xeo Marketing</a>
+                </div>
+            </section>
+        </article>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-links">
+            <a href="index.html">Home</a>
+            <a href="about.html">About</a>
+            <a href="auth.html">Sign In</a>
+        </div>
+        <div class="footer-text">Powered by Xeo AI Hub & <a href="https://xeo.marketing/" target="_blank" rel="noopener noreferrer">Xeo Marketing</a></div>
+        <div class="footer-copyright">&copy; 2025 AI Visibility Score. All rights reserved.</div>
+    </footer>
+</body>
+</html>

@@ -9,7 +9,7 @@ Disallow: /results
 Disallow: /auth
 
 # Sitemap location
-Sitemap: https://visible2ai.com/sitemap.xml
+Sitemap: https://www.visible2ai.com/sitemap.xml
 
 # AI Crawler Permissions - Explicitly ALLOW
 User-agent: GPTBot
