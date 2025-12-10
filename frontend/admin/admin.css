@@ -37,8 +37,14 @@ body {
 }
 
 .logo img {
-  height: 35px;
+  height: 45px;
   width: auto;
+}
+
+@media (max-width: 768px) {
+  .logo img {
+    height: 38px;
+  }
 }
 
 .logo-subtitle {
