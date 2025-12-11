@@ -375,13 +375,21 @@ const $ = cheerio.load(html);
   }
 
   /**
-   * Extract FAQs with enhanced 3-tier detection
+   * Extract FAQs with enhanced multi-tier detection
    * IMPORTANT: Call this BEFORE removing footer/nav elements
+   *
+   * Detection methods:
+   * 0. JSON-LD FAQPage schema
+   * 1. Microdata schema markup
+   * 2. FAQ sections by class/id patterns
+   * 3. FAQ sections by heading text (e.g., "Frequently Asked Questions")
+   * 4. Accordion/collapsible patterns (buttons with aria-expanded, collapse classes)
+   * 5. Question-like headings (h2/h3/h4 ending with ?)
    */
   extractFAQs($, structuredData = []) {
     const faqs = [];
 
-    // Method 0: Extract FAQs from JSON-LD FAQPage schema (NEW!)
+    // Method 0: Extract FAQs from JSON-LD FAQPage schema
     const faqSchemas = structuredData.filter(sd => sd.type === 'FAQPage');
     if (faqSchemas.length > 0) {
       console.log(`[ContentExtractor] Found ${faqSchemas.length} FAQPage schemas in JSON-LD`);
@@ -416,6 +424,13 @@ const $ = cheerio.load(html);
       '[class*="faq" i], [id*="faq" i]',
       '[class*="question" i], [id*="question" i]',
       '[class*="accordion" i]',
+      '[class*="collapse" i]',
+      '[class*="toggle" i]',
+      '[class*="expandable" i]',
+      '[class*="q-and-a" i], [class*="qa-" i]',
+      '[data-accordion]',
+      '[data-toggle="collapse"]',
+      '[data-bs-toggle="collapse"]',
       'details'
     ].join(', ');
 
@@ -433,79 +448,228 @@ const $ = cheerio.load(html);
       }
 
       // For FAQ containers, look for Q&A patterns
-      const headings = $el.find('h2, h3, h4, h5, dt, [class*="question" i], [class*="title" i]');
-      headings.each((i, heading) => {
-        const $heading = $(heading);
-        const question = $heading.text().trim();
+      // Extended to include buttons, spans, and aria-expanded elements
+      const questionElements = $el.find('h2, h3, h4, h5, h6, dt, button, [role="button"], [aria-expanded], [class*="question" i], [class*="title" i], [class*="header" i]');
+      questionElements.each((i, questionEl) => {
+        const $questionEl = $(questionEl);
+        const question = $questionEl.text().trim();
 
-        // Get the answer (next siblings until next heading)
+        // Skip if question is too short or too long (likely a section header)
+        if (question.length < 10 || question.length > 300) return;
+
+        // Get the answer
         let answer = '';
-        if (heading.name === 'dt') {
+        const tagName = questionEl.name || '';
+
+        if (tagName === 'dt') {
           // Definition list pattern
-          answer = $heading.next('dd').text().trim();
+          answer = $questionEl.next('dd').text().trim();
+        } else if ($questionEl.attr('aria-expanded') !== undefined || $questionEl.attr('data-toggle') || $questionEl.attr('data-bs-toggle')) {
+          // Accordion button pattern - look for associated panel
+          const targetId = $questionEl.attr('aria-controls') || $questionEl.attr('data-target') || $questionEl.attr('data-bs-target');
+          if (targetId) {
+            const $target = $(`#${targetId.replace('#', '')}, ${targetId}`);
+            answer = $target.text().trim();
+          }
+          // Also check next sibling for collapse/panel
+          if (!answer) {
+            const $next = $questionEl.next();
+            if ($next.is('[class*="collapse" i], [class*="panel" i], [class*="content" i], [class*="answer" i], [class*="body" i]')) {
+              answer = $next.text().trim();
+            }
+          }
         } else {
-          // Get content until next heading
-          let $next = $heading.next();
-          while ($next.length && !$next.is('h1, h2, h3, h4, h5, h6, dt')) {
-            answer += ' ' + $next.text().trim();
+          // Get content until next similar element
+          let $next = $questionEl.next();
+          const siblingChecks = 5; // Check up to 5 siblings
+          let checks = 0;
+
+          while ($next.length && checks < siblingChecks) {
+            const nextClass = ($next.attr('class') || '').toLowerCase();
+            const isNextQuestion = $next.is('h1, h2, h3, h4, h5, h6, dt, button, [aria-expanded]') ||
+                                   nextClass.includes('question') || nextClass.includes('title') || nextClass.includes('header');
+
+            if (isNextQuestion) break;
+
+            const nextText = $next.text().trim();
+            if (nextText.length > 0 && nextText.length < 2000) {
+              answer += ' ' + nextText;
+            }
             $next = $next.next();
+            checks++;
           }
         }
 
-        // Only add if it looks like a Q&A (question ends with ? or is in FAQ section)
+        answer = answer.trim();
+
+        // Only add if it looks like a Q&A
         if (question && answer &&
             (question.includes('?') || question.length > 15) &&
             answer.length > 20) {
-          faqs.push({ question, answer, source: 'html' });
+          faqs.push({ question, answer: answer.substring(0, 1000), source: 'html' });
         }
       });
     });
 
-    // Method 3: Look for question-like headings followed by content
-    if (faqs.length === 0) {
-      $('h2, h3, h4').each((idx, heading) => {
-        const $heading = $(heading);
-        const question = $heading.text().trim();
+    // Method 3: Detect FAQ sections by heading text containing "FAQ" or "Frequently Asked"
+    // Find sections with FAQ-related headings, then extract Q&A within
+    const faqHeadingRegex = /\b(faq|frequently\s*asked|q\s*&\s*a|q&a|common\s*questions|questions?\s*and\s*answers?)\b/i;
 
-        // Check if heading looks like a question
-        if (question.includes('?') && question.length > 15) {
-          // Get the next paragraph(s) as answer
-          let answer = '';
-          let $next = $heading.next();
+    $('h1, h2, h3, h4').each((idx, headingEl) => {
+      const $heading = $(headingEl);
+      const headingText = $heading.text().trim();
 
-          // If heading has no next sibling, check if parent's next sibling has content
-          // This handles cases where headings are wrapped in divs (e.g., theme containers)
-          if ($next.length === 0) {
-            const $parent = $heading.parent();
-            $next = $parent.next();
+      if (faqHeadingRegex.test(headingText)) {
+        console.log(`[ContentExtractor] Found FAQ section heading: "${headingText}"`);
+
+        // Find the container (parent section, div, or article)
+        let $container = $heading.parent();
+        // Walk up to find a meaningful container
+        for (let i = 0; i < 3; i++) {
+          if ($container.is('section, article, main, [class*="faq" i], [class*="section" i]')) {
+            break;
           }
-
-          while ($next.length && !$next.is('h1, h2, h3, h4, h5, h6') && answer.length < 500) {
-            if ($next.is('p, div')) {
-              answer += ' ' + $next.text().trim();
-            }
-            $next = $next.next();
-          }
-
-          if (answer.length > 50) {
-            faqs.push({ question, answer, source: 'heading' });
-          }
+          $container = $container.parent();
         }
-      });
-    }
 
-    // Deduplicate FAQs (keep first occurrence)
+        // Extract Q&A pairs from within this container
+        // Look for question-answer pairs after the FAQ heading
+        const $afterHeading = $heading.nextAll();
+        let currentQuestion = null;
+        let currentAnswer = '';
+
+        $afterHeading.each((i, el) => {
+          const $el = $(el);
+          const tagName = el.name || '';
+          const text = $el.text().trim();
+          const elClass = ($el.attr('class') || '').toLowerCase();
+
+          // Stop if we hit another major section heading
+          if (tagName === 'h1' || (tagName === 'h2' && !text.includes('?'))) {
+            // Save any pending Q&A
+            if (currentQuestion && currentAnswer.length > 20) {
+              faqs.push({ question: currentQuestion, answer: currentAnswer.substring(0, 1000), source: 'section' });
+            }
+            return false; // Stop iterating
+          }
+
+          // Check if this is a question element
+          const isQuestionEl = (
+            text.includes('?') ||
+            elClass.includes('question') ||
+            elClass.includes('title') ||
+            elClass.includes('header') ||
+            $el.is('button, [aria-expanded], [role="button"], dt, h3, h4, h5, h6, strong')
+          );
+
+          if (isQuestionEl && text.length > 10 && text.length < 300) {
+            // Save previous Q&A if exists
+            if (currentQuestion && currentAnswer.length > 20) {
+              faqs.push({ question: currentQuestion, answer: currentAnswer.substring(0, 1000), source: 'section' });
+            }
+            currentQuestion = text;
+            currentAnswer = '';
+          } else if (currentQuestion) {
+            // This is answer content
+            if (text.length > 0 && text.length < 2000) {
+              currentAnswer += ' ' + text;
+            }
+          }
+        });
+
+        // Don't forget the last Q&A pair
+        if (currentQuestion && currentAnswer.length > 20) {
+          faqs.push({ question: currentQuestion, answer: currentAnswer.substring(0, 1000), source: 'section' });
+        }
+      }
+    });
+
+    // Method 4: Detect accordion patterns by aria-expanded buttons/elements outside FAQ sections
+    $('[aria-expanded]').each((idx, el) => {
+      const $el = $(el);
+      const question = $el.text().trim();
+
+      // Skip if already processed or invalid
+      if (question.length < 10 || question.length > 300) return;
+
+      // Get the associated panel content
+      let answer = '';
+      const targetId = $el.attr('aria-controls');
+      if (targetId) {
+        const $target = $(`#${targetId}`);
+        answer = $target.text().trim();
+      }
+
+      // Also try next sibling
+      if (!answer || answer.length < 20) {
+        const $next = $el.next();
+        if ($next.is('[class*="collapse" i], [class*="panel" i], [class*="content" i], [class*="body" i], [class*="answer" i]')) {
+          answer = $next.text().trim();
+        }
+      }
+
+      if (question && answer && answer.length > 20 && (question.includes('?') || question.length > 15)) {
+        faqs.push({ question, answer: answer.substring(0, 1000), source: 'aria' });
+      }
+    });
+
+    // Method 5: Look for question-like headings followed by content (always run, not just as fallback)
+    $('h2, h3, h4, h5').each((idx, heading) => {
+      const $heading = $(heading);
+      const question = $heading.text().trim();
+
+      // Check if heading looks like a question
+      if (question.includes('?') && question.length > 15 && question.length < 200) {
+        // Get the next paragraph(s) as answer
+        let answer = '';
+        let $next = $heading.next();
+
+        // If heading has no next sibling, check if parent's next sibling has content
+        // This handles cases where headings are wrapped in divs (e.g., theme containers)
+        if ($next.length === 0) {
+          const $parent = $heading.parent();
+          $next = $parent.next();
+        }
+
+        let checks = 0;
+        while ($next.length && !$next.is('h1, h2, h3, h4, h5, h6') && answer.length < 800 && checks < 5) {
+          const nextText = $next.text().trim();
+          if (nextText.length > 0) {
+            answer += ' ' + nextText;
+          }
+          $next = $next.next();
+          checks++;
+        }
+
+        answer = answer.trim();
+        if (answer.length > 30) {
+          faqs.push({ question, answer: answer.substring(0, 1000), source: 'heading' });
+        }
+      }
+    });
+
+    // Deduplicate FAQs (keep first occurrence, prioritize schema sources)
     const uniqueFAQs = [];
     const seen = new Set();
+
+    // Sort to prioritize schema > html > section > aria > heading
+    const sourcePriority = { 'schema': 0, 'html': 1, 'details': 2, 'section': 3, 'aria': 4, 'heading': 5 };
+    faqs.sort((a, b) => (sourcePriority[a.source] || 99) - (sourcePriority[b.source] || 99));
+
     for (const faq of faqs) {
-      const key = faq.question.toLowerCase().substring(0, 50);
-      if (!seen.has(key)) {
+      // Normalize question for deduplication
+      const key = faq.question.toLowerCase()
+        .replace(/[^\w\s]/g, '') // Remove punctuation
+        .replace(/\s+/g, ' ')    // Normalize whitespace
+        .substring(0, 50);
+
+      if (!seen.has(key) && key.length > 5) {
         seen.add(key);
         uniqueFAQs.push(faq);
       }
     }
 
-    console.log(`[ContentExtractor] Found ${uniqueFAQs.length} FAQs (schema: ${uniqueFAQs.filter(f => f.source === 'schema').length}, html: ${uniqueFAQs.filter(f => f.source === 'html').length}, details: ${uniqueFAQs.filter(f => f.source === 'details').length}, heading: ${uniqueFAQs.filter(f => f.source === 'heading').length})`);
+    console.log(`[ContentExtractor] Found ${uniqueFAQs.length} FAQs (schema: ${uniqueFAQs.filter(f => f.source === 'schema').length}, html: ${uniqueFAQs.filter(f => f.source === 'html').length}, details: ${uniqueFAQs.filter(f => f.source === 'details').length}, section: ${uniqueFAQs.filter(f => f.source === 'section').length}, aria: ${uniqueFAQs.filter(f => f.source === 'aria').length}, heading: ${uniqueFAQs.filter(f => f.source === 'heading').length})`);
 
     return uniqueFAQs;
   }
