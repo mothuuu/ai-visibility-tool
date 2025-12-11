@@ -936,13 +936,70 @@ function makeProgrammaticFAQSchemaRecommendation(issue, scanEvidence, subfactorS
   const { profile, facts } = normalizeEvidence(scanEvidence);
   const detectedIndustry = industry || 'General';
 
+  // Check current score to determine if already implemented
+  const currentScore = issue.currentScore || 0;
+  const threshold = issue.threshold || 70;
+  const isImplemented = currentScore >= threshold;
+  const hasFAQSchema = scanEvidence.technical?.hasFAQSchema;
+
   // Check if visible FAQ content exists
   const hasVisibleContent = subfactorScores?.aiSearchReadiness?.faqContentScore >= 70;
   const actualFAQs = scanEvidence.content?.faqs || [];
   const faqCount = actualFAQs.length;
 
-  console.log(`📊 FAQ Schema Analysis: Found ${faqCount} FAQs on site, Has visible content: ${hasVisibleContent ? 'Yes' : 'No'}`);
+  console.log(`📊 FAQ Schema Analysis: Current Score=${currentScore}/${threshold}, Implemented=${isImplemented}, Has visible content: ${hasVisibleContent ? 'Yes' : 'No'}`);
 
+  // If already implemented, show success message
+  if (isImplemented && hasFAQSchema) {
+    return {
+      id: `rec_${issue.category}_${issue.subfactor}_${Date.now()}`,
+      title: `${CATEGORY_NAMES[issue.category] || issue.category}: FAQ Schema`,
+      category: issue.category,
+      subfactor: "faqSchemaScore",
+      priority: 'low',
+      priorityScore: 10,
+      finding: `Status: Excellent! ✅
+
+FAQPage schema markup detected on ${domain}. Your FAQ schema implementation is complete! AI assistants like ChatGPT and Google can now properly parse and cite your FAQ content.
+
+Current Score: ${currentScore}/100 (Target: ${threshold}/100)`,
+      impact: `Your FAQ schema is properly implemented. Continue monitoring and ensure the schema stays synchronized with your visible FAQ content.`,
+      actionSteps: [
+        'Your FAQ schema implementation is complete',
+        'Ensure schema matches your visible FAQ content',
+        'Update schema whenever you update FAQ content',
+        'Monitor Google Search Console for FAQ rich results',
+        'Consider adding more FAQs on other pages for broader coverage'
+      ],
+      codeSnippet: '<!-- Your FAQ schema is already implemented! -->',
+      implementationNotes: [
+        'Schema detected and validated',
+        'Keep schema synchronized with visible content',
+        'Update quarterly based on customer questions'
+      ],
+      quickWins: ['✅ Schema already implemented', '✅ AI can parse your FAQs', '✅ Ready for rich results'],
+      validationChecklist: [
+        '✅ FAQPage schema detected',
+        '✅ Score above threshold',
+        'Continue monitoring implementation'
+      ],
+      estimatedTime: "N/A - Already implemented",
+      difficulty: "Completed",
+      estimatedScoreGain: 0,
+      currentScore: currentScore,
+      targetScore: threshold,
+      status: 'detected_implemented',
+      evidence: {
+        hasVisibleContent: hasVisibleContent,
+        hasFAQSchema: hasFAQSchema,
+        faqCount: faqCount,
+        industry: detectedIndustry
+      },
+      generatedBy: 'faq_schema_detected'
+    };
+  }
+
+  // Not implemented - show action needed
   // Determine what FAQs to use in schema
   let faqsToUse = [];
   let usingActualContent = false;
@@ -971,11 +1028,15 @@ function makeProgrammaticFAQSchemaRecommendation(issue, scanEvidence, subfactorS
 
 You have visible FAQ content on ${domain}, but no FAQPage schema markup detected. AI assistants need structured schema to properly parse your FAQs.
 
+Current Score: ${currentScore}/100 (Target: ${threshold}/100, Gap: ${threshold - currentScore} points)
+
 Without schema, AI assistants see your FAQs as plain text and may miss them entirely. Adding schema makes them instantly recognizable.`;
   } else {
     finding = `Status: Missing Both Schema and Content
 
 No FAQ schema or visible content detected on ${domain}. FAQs help AI assistants answer questions about your business, and schema makes them parseable.
+
+Current Score: ${currentScore}/100 (Target: ${threshold}/100, Gap: ${threshold - currentScore} points)
 
 This recommendation focuses on adding the schema markup. You'll also want to add visible FAQ content (see separate recommendation).`;
   }
@@ -1062,6 +1123,7 @@ This recommendation focuses on adding the schema markup. You'll also want to add
     estimatedScoreGain: Math.max(12, Math.round(issue.gap * 0.8)),
     currentScore: issue.currentScore,
     targetScore: issue.threshold,
+    status: 'not_implemented',
     evidence: {
       hasVisibleContent: hasVisibleContent,
       faqCount: faqCount,
@@ -1082,14 +1144,70 @@ function makeProgrammaticFAQContentRecommendation(issue, scanEvidence, subfactor
   const { profile, facts } = normalizeEvidence(scanEvidence);
   const detectedIndustry = industry || 'General';
 
+  // Check current score to determine if already implemented
+  const currentScore = issue.currentScore || 0;
+  const threshold = issue.threshold || 70;
+  const isImplemented = currentScore >= threshold;
+
   // Check if FAQ schema exists
   const hasSchema = subfactorScores?.aiSearchReadiness?.faqSchemaScore >= 70;
   const hasFAQSchema = scanEvidence.technical?.hasFAQSchema;
   const actualFAQs = scanEvidence.content?.faqs || [];
   const faqCount = actualFAQs.length;
 
-  console.log(`📊 FAQ Content Analysis: Found ${faqCount} FAQs on site, Has schema: ${hasSchema ? 'Yes' : 'No'}`);
+  console.log(`📊 FAQ Content Analysis: Current Score=${currentScore}/${threshold}, Implemented=${isImplemented}, Has schema: ${hasSchema ? 'Yes' : 'No'}`);
 
+  // If already implemented, show success message
+  if (isImplemented && faqCount >= 3) {
+    return {
+      id: `rec_${issue.category}_${issue.subfactor}_${Date.now()}`,
+      title: `${CATEGORY_NAMES[issue.category] || issue.category}: FAQ Content`,
+      category: issue.category,
+      subfactor: "faqContentScore",
+      priority: 'low',
+      priorityScore: 10,
+      finding: `Status: Excellent! ✅
+
+${faqCount} FAQ pairs detected on-page${hasFAQSchema ? ' WITH FAQPage schema markup' : ''}. Your FAQ implementation is ${hasFAQSchema ? 'strong!' : 'good - consider adding schema markup for even better AI visibility.'} The system has analyzed your actual FAQs and they cover relevant topics for your audience.
+
+Current Score: ${currentScore}/100 (Target: ${threshold}/100)`,
+      impact: `Your visible FAQ content is complete${hasFAQSchema ? ' and paired with schema markup' : ''}. Continue monitoring and updating FAQs based on actual customer questions from support tickets and sales calls.`,
+      actionSteps: [
+        'Your FAQ content implementation is complete',
+        'Ensure FAQs are distributed across multiple pages (About, Services, Contact) for maximum AI visibility',
+        'Update FAQs quarterly based on customer questions',
+        hasFAQSchema ? 'Monitor Google Search Console for FAQ rich results' : 'Consider adding FAQ schema markup (see "FAQ Schema" recommendation)',
+        'Keep answers concise and natural'
+      ],
+      codeSnippet: '<!-- Your FAQ content is already implemented! -->',
+      implementationNotes: [
+        'FAQ content detected and validated',
+        `${faqCount} Q&A pairs found on page`,
+        'Continue monitoring customer questions for new FAQs'
+      ],
+      quickWins: ['✅ FAQ content already implemented', `✅ ${faqCount} Q&A pairs detected`, '✅ Visible to users and AI'],
+      validationChecklist: [
+        '✅ FAQ content detected on page',
+        '✅ Score above threshold',
+        'Continue monitoring implementation'
+      ],
+      estimatedTime: "N/A - Already implemented",
+      difficulty: "Completed",
+      estimatedScoreGain: 0,
+      currentScore: currentScore,
+      targetScore: threshold,
+      status: 'detected_implemented',
+      evidence: {
+        hasSchema: hasSchema,
+        hasFAQSchema: hasFAQSchema,
+        faqCount: faqCount,
+        industry: detectedIndustry
+      },
+      generatedBy: 'faq_content_detected'
+    };
+  }
+
+  // Not implemented - show action needed
   // Get FAQ templates for this industry
   let faqLib = loadFAQLibrary(detectedIndustry);
   if (!faqLib) {
@@ -1104,11 +1222,15 @@ function makeProgrammaticFAQContentRecommendation(issue, scanEvidence, subfactor
 
 You have FAQ schema markup but no visible FAQ section detected on ${domain}. Users and AI assistants need to see the actual questions and answers, not just hidden schema.
 
+Current Score: ${currentScore}/100 (Target: ${threshold}/100, Gap: ${threshold - currentScore} points)
+
 Schema alone is not enough - AI needs to see the content to cite it properly.`;
   } else {
     finding = `Status: Missing Visible Content
 
 No visible FAQ content detected on ${domain}. FAQs help both users and AI assistants understand your business better.
+
+Current Score: ${currentScore}/100 (Target: ${threshold}/100, Gap: ${threshold - currentScore} points)
 
 Adding a visible FAQ section makes your expertise accessible to everyone.`;
   }
@@ -1179,6 +1301,7 @@ Adding a visible FAQ section makes your expertise accessible to everyone.`;
     estimatedScoreGain: Math.max(12, Math.round(issue.gap * 0.8)),
     currentScore: issue.currentScore,
     targetScore: issue.threshold,
+    status: 'not_implemented',
     evidence: {
       hasSchema: hasSchema,
       hasFAQSchema: hasFAQSchema,
@@ -3855,12 +3978,17 @@ function makeProgrammaticSitemapRecommendation(issue, scanEvidence, industry) {
   const { profile, facts } = normalizeEvidence(scanEvidence);
   const domain = extractDomain(scanEvidence.url);
 
+  // Check current score to determine if already implemented
+  const currentScore = issue.currentScore || 0;
+  const threshold = issue.threshold || 80;
+  const isImplemented = currentScore >= threshold;
+
   // Check for sitemap (try multiple properties for backward compatibility)
   const hasSitemap = scanEvidence.technical?.hasSitemap ||
                      scanEvidence.technical?.sitemapDetected ||
                      false;
 
-  console.log(`[Sitemap Rec] Checking sitemap status: hasSitemap=${scanEvidence.technical?.hasSitemap}, sitemapDetected=${scanEvidence.technical?.sitemapDetected}, final=${hasSitemap}`);
+  console.log(`[Sitemap Rec] Current Score=${currentScore}/${threshold}, Implemented=${isImplemented}, hasSitemap=${hasSitemap}`);
 
   // Use the actual detected sitemap location if available
   const sitemapLocation = scanEvidence.technical?.sitemapLocation || 'sitemap.xml';
@@ -3868,15 +3996,73 @@ function makeProgrammaticSitemapRecommendation(issue, scanEvidence, industry) {
   const pageCount = scanEvidence.technical?.sitemapPageCount || 0;
   const lastModified = scanEvidence.technical?.sitemapLastModified || 'Unknown';
 
-  // Build finding text
-  const finding = hasSitemap
-    ? `✅ **Sitemap Detected!** Your sitemap was found at **${sitemapLocation}** with ${pageCount} pages crawled (Score: ${issue.currentScore}/100, Target: ${issue.threshold}).
+  // If already implemented, show success message
+  if (isImplemented && hasSitemap) {
+    return {
+      id: `rec_${issue.category}_sitemap_${Date.now()}`,
+      title: 'Technical Setup: XML Sitemap',
+      category: issue.category,
+      subfactor: 'sitemapScore',
+      priority: 'low',
+      priorityScore: 10,
+      finding: `Status: Excellent! ✅
 
-The tool successfully detected your sitemap and is using it to analyze your site. To maximize AI visibility, ensure:
+Sitemap detected at **${sitemapLocation}** with ${pageCount} pages crawled. Your sitemap implementation is complete! Search engines and AI crawlers can efficiently discover and index your content.
+
+Current Score: ${currentScore}/100 (Target: ${threshold}/100)`,
+      impact: `Your sitemap is properly implemented. Sitemaps help search engines and AI systems discover and index your content efficiently. Better indexed pages → more likely to be AI training sources.`,
+      actionSteps: [
+        'Your sitemap implementation is complete',
+        'Ensure all important pages are included in the sitemap',
+        'Submit sitemap to Google Search Console and Bing Webmaster Tools if not already done',
+        'Keep sitemap updated automatically when you add/remove pages',
+        'Monitor Search Console for crawl errors'
+      ],
+      codeSnippet: `<!-- Your sitemap is already implemented! -->
+<!-- Location: ${sitemapUrl} -->
+<!-- Pages: ${pageCount} -->
+<!-- Last Modified: ${lastModified} -->`,
+      implementationNotes: [
+        `Sitemap detected at ${sitemapLocation}`,
+        `${pageCount} pages included`,
+        'Ensure sitemap stays updated automatically',
+        'Monitor for crawl errors in Search Console'
+      ],
+      quickWins: ['✅ Sitemap already implemented', `✅ ${pageCount} pages indexed`, '✅ AI crawlers can discover your content'],
+      validationChecklist: [
+        '✅ Sitemap detected and accessible',
+        '✅ Score above threshold',
+        'Continue monitoring implementation'
+      ],
+      estimatedTime: "N/A - Already implemented",
+      difficulty: "Completed",
+      estimatedScoreGain: 0,
+      currentScore: currentScore,
+      targetScore: threshold,
+      status: 'detected_implemented',
+      evidence: {
+        hasSitemap: hasSitemap,
+        sitemapUrl: sitemapUrl,
+        pageCount: pageCount,
+        lastModified: lastModified
+      },
+      generatedBy: 'sitemap_detected'
+    };
+  }
+
+  // Not implemented - show action needed
+  const finding = hasSitemap
+    ? `Status: Sitemap Found, Score Needs Improvement
+
+Your sitemap was found at **${sitemapLocation}** with ${pageCount} pages crawled, but your score is ${currentScore}/100 (Target: ${threshold}/100, Gap: ${threshold - currentScore} points).
+
+To maximize AI visibility, ensure:
 - All important pages are included in the sitemap
 - The sitemap is submitted to Google Search Console and Bing Webmaster Tools
 - The sitemap is updated automatically when you add/remove pages`
-    : `Your site is missing an XML sitemap (Score: ${issue.currentScore}/100, Target: ${issue.threshold}). Without a sitemap, search engines and AI crawlers have difficulty discovering all your pages, reducing visibility in answer engines like ChatGPT, Perplexity, and Google AI Overviews.`;
+    : `Status: Missing Sitemap
+
+Your site is missing an XML sitemap (Score: ${currentScore}/100, Target: ${threshold}/100, Gap: ${threshold - currentScore} points). Without a sitemap, search engines and AI crawlers have difficulty discovering all your pages, reducing visibility in answer engines like ChatGPT, Perplexity, and Google AI Overviews.`;
 
   // Build impact description
   const impact = `A sitemap is like a map of your website for search engines and AI. Without one, Google and AI assistants might miss some of your pages entirely. With a sitemap, you're telling them "Here's everything important on my site — please read it all!"`;
@@ -4133,6 +4319,7 @@ xmllint --noout sitemap.xml
     estimatedScoreGain: Math.max(8, Math.round(issue.gap * 0.7)),
     currentScore: issue.currentScore,
     targetScore: issue.threshold,
+    status: 'not_implemented',
     evidence: {
       hasSitemap: hasSitemap,
       sitemapUrl: sitemapUrl,
