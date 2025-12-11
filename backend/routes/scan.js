@@ -1647,7 +1647,8 @@ function transformV5ToSubfactors(v5Categories) {
       questionHeadingsScore: (directAnswer.factors?.questionDensity || 0) * 50,  // 0-2 → 0-100 (hybrid scoring)
       scannabilityScore: (directAnswer.factors?.scannability || 0) * 50,  // 0-2 → 0-100
       readabilityScore: (directAnswer.factors?.readability || 0) * 50,  // 0-2 → 0-100 (factor max is 2.0)
-      faqScore: (directAnswer.factors?.icpQA || 0) * 50,  // 0-2 → 0-100 (FIXED: was * 33, now * 50)
+      faqSchemaScore: (directAnswer.factors?.faqSchema || 0) * 50,  // 0-2 → 0-100 (FAQ schema markup)
+      faqContentScore: (directAnswer.factors?.faqContent || 0) * 50,  // 0-2 → 0-100 (visible FAQ content)
       snippetEligibleScore: (directAnswer.factors?.answerCompleteness || 0) * 50,  // 0-2 → 0-100
       pillarPagesScore: (topical.factors?.pillarPages || 0) * 50,  // 0-2 → 0-100 (max is 2.0, not 3.0)
       linkedSubpagesScore: (topical.factors?.semanticLinking || 0) * 50,  // 0-2 → 0-100 (max is 2.0)

@@ -275,31 +275,29 @@ async function generateRecommendations(issues, scanEvidence, tier = 'free', indu
       // 2) HIGH-VALUE PROGRAMMATIC GENERATORS (run FIRST - these have rich, pre-written content)
       // These take precedence over ChatGPT for consistency and quality
 
-      // 2a) FAQ Schema - Rich, ready-to-use FAQ content
-      if (issue.subfactor === 'faqScore') {
-        console.log(`✅ Detected faqScore issue - calling programmatic FAQ generator`);
-        const rec = makeProgrammaticFAQRecommendation(issue, scanEvidence, industry);
+      // 2a) FAQ Schema - Rich, ready-to-use FAQ schema markup
+      if (issue.subfactor === 'faqSchemaScore') {
+        console.log(`✅ Detected faqSchemaScore issue - calling programmatic FAQ schema generator`);
+        const rec = makeProgrammaticFAQSchemaRecommendation(issue, scanEvidence, subfactorScores, industry);
         if (rec) {
-          console.log(`✅ FAQ recommendation generated successfully`);
-          console.log(`🔍 FAQ GENERATOR RETURNED:`, {
-            title: rec.title?.substring(0, 50),
-            category: rec.category,
-            subfactor: rec.subfactor,
-            hasCustomizedImplementation: !!rec.customizedImplementation,
-            hasReadyToUseContent: !!rec.readyToUseContent,
-            hasImplementationNotes: !!rec.implementationNotes,
-            hasQuickWins: !!rec.quickWins,
-            hasValidationChecklist: !!rec.validationChecklist,
-            customizedImplLength: rec.customizedImplementation?.length || 0,
-            readyToUseLength: rec.readyToUseContent?.length || 0,
-            implementationNotesLength: Array.isArray(rec.implementationNotes) ? rec.implementationNotes.length : 0,
-            quickWinsLength: Array.isArray(rec.quickWins) ? rec.quickWins.length : 0,
-            validationChecklistLength: Array.isArray(rec.validationChecklist) ? rec.validationChecklist.length : 0
-          });
+          console.log(`✅ FAQ schema recommendation generated successfully`);
           out.push(rec);
           continue;
         } else {
-          console.log(`❌ FAQ generator returned null/undefined`);
+          console.log(`❌ FAQ schema generator returned null/undefined`);
+        }
+      }
+
+      // 2b) FAQ Content - Visible FAQ section
+      if (issue.subfactor === 'faqContentScore') {
+        console.log(`✅ Detected faqContentScore issue - calling programmatic FAQ content generator`);
+        const rec = makeProgrammaticFAQContentRecommendation(issue, scanEvidence, subfactorScores, industry);
+        if (rec) {
+          console.log(`✅ FAQ content recommendation generated successfully`);
+          out.push(rec);
+          continue;
+        } else {
+          console.log(`❌ FAQ content generator returned null/undefined`);
         }
       }
 
@@ -927,6 +925,274 @@ function loadFAQLibrary(industry) {
   console.log(`⚠️  No rich library for ${industry}, checking hardcoded fallback`);
   return null;
 }
+
+// ========================================
+// FAQ SCHEMA GENERATOR (Split from combined FAQ generator)
+// ========================================
+
+function makeProgrammaticFAQSchemaRecommendation(issue, scanEvidence, subfactorScores, industry) {
+  console.log('🎯 Starting FAQ SCHEMA recommendation generation...');
+  const domain = extractDomain(scanEvidence.url);
+  const { profile, facts } = normalizeEvidence(scanEvidence);
+  const detectedIndustry = industry || 'General';
+
+  // Check if visible FAQ content exists
+  const hasVisibleContent = subfactorScores?.aiSearchReadiness?.faqContentScore >= 70;
+  const actualFAQs = scanEvidence.content?.faqs || [];
+  const faqCount = actualFAQs.length;
+
+  console.log(`📊 FAQ Schema Analysis: Found ${faqCount} FAQs on site, Has visible content: ${hasVisibleContent ? 'Yes' : 'No'}`);
+
+  // Determine what FAQs to use in schema
+  let faqsToUse = [];
+  let usingActualContent = false;
+
+  if (faqCount > 0) {
+    usingActualContent = true;
+    faqsToUse = actualFAQs.map(faq => ({
+      q: faq.question,
+      pageAnswer: faq.answer,
+      schemaAnswer: faq.answer.substring(0, 300)
+    }));
+    console.log(`✅ Using ${faqCount} ACTUAL FAQs from website for schema`);
+  } else {
+    let faqLib = loadFAQLibrary(detectedIndustry);
+    if (!faqLib) {
+      faqLib = FAQ_LIBRARIES[detectedIndustry] || FAQ_LIBRARIES.General;
+    }
+    faqsToUse = faqLib.questions;
+    console.log(`📋 Using ${faqsToUse.length} template FAQs for schema`);
+  }
+
+  // Build finding based on context
+  let finding;
+  if (hasVisibleContent) {
+    finding = `Status: Missing Schema Markup
+
+You have visible FAQ content on ${domain}, but no FAQPage schema markup detected. AI assistants need structured schema to properly parse your FAQs.
+
+Without schema, AI assistants see your FAQs as plain text and may miss them entirely. Adding schema makes them instantly recognizable.`;
+  } else {
+    finding = `Status: Missing Both Schema and Content
+
+No FAQ schema or visible content detected on ${domain}. FAQs help AI assistants answer questions about your business, and schema makes them parseable.
+
+This recommendation focuses on adding the schema markup. You'll also want to add visible FAQ content (see separate recommendation).`;
+  }
+
+  // Build FAQ schema
+  const faqSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": faqsToUse.map(faq => ({
+      "@type": "Question",
+      "name": faq.q,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": faq.schemaAnswer
+      }
+    }))
+  };
+
+  const schemaCode = `<script type="application/ld+json">\n${JSON.stringify(faqSchema, null, 2)}\n</script>`;
+
+  // Build recommendation
+  const categoryName = CATEGORY_NAMES[issue.category] || issue.category;
+  const title = hasVisibleContent ?
+    `${categoryName}: Add FAQ Schema Markup` :
+    `${categoryName}: Add FAQ Schema (and Content)`;
+
+  const impact = hasVisibleContent ?
+    `You already have FAQ content on your page — great! But AI assistants can't easily find it yet. Adding a simple code snippet (FAQ schema) makes your answers instantly visible to ChatGPT, Google, and voice assistants like Siri and Alexa.` :
+    `Adding FAQ schema is a foundation for AI visibility. Once you have both schema and visible content, AI assistants can extract and cite your answers in voice search and rich results.`;
+
+  const actionSteps = hasVisibleContent ?
+    `1. The system has detected your ${faqCount} existing FAQs and generated schema for you
+2. Copy the FAQ Schema JSON-LD below (it contains YOUR actual questions and answers)
+3. Paste the JSON-LD into your page <head> tag or via Google Tag Manager
+4. Validate in Google Rich Results Test (search.google.com/test/rich-results)
+5. Re-scan in the AI Visibility Tool - your FAQ Schema score should become 100!` :
+    `1. Add a dedicated FAQ section to your page with visible Q&A pairs (see "FAQ Content" recommendation)
+2. Copy the FAQ Schema JSON-LD below
+3. Paste the JSON-LD into your page <head> tag or via Google Tag Manager
+4. Validate in Google Rich Results Test (search.google.com/test/rich-results)
+5. Re-scan in the AI Visibility Tool to confirm both FAQ scores improve`;
+
+  const implementationNotes = [
+    'FAQ schema must match your visible on-page content',
+    'Each answer in schema should be 300 characters or less',
+    'Validate with Google Rich Results Test to ensure no errors',
+    'Update schema whenever you update your FAQ content'
+  ];
+
+  const validationChecklist = [
+    'Google Rich Results Test: FAQPage schema detected, no warnings',
+    'Schema.org validator shows valid FAQPage markup',
+    'Re-scan in AI Visibility Tool: "FAQ Schema Score" reaches 100',
+    'Schema questions match visible FAQ content on page'
+  ];
+
+  let customizedImplementation = '';
+  if (usingActualContent) {
+    customizedImplementation = `### Your FAQ Schema (Generated from Your Actual FAQs)\n\nThe system extracted your ${faqCount} existing FAQs and generated schema for you:\n\n${faqsToUse.map((faq, idx) => `**Q${idx + 1}: ${faq.q}**\n(Schema answer: ${faq.schemaAnswer}...)`).join('\n\n')}\n\nJust copy the schema code below and add it to your page!`;
+  } else {
+    customizedImplementation = `### FAQ Schema Template for ${detectedIndustry}\n\nHere's a ready-to-use FAQ schema template:\n\n${faqsToUse.map((faq, idx) => `**Q${idx + 1}: ${faq.q}**\n(${faq.schemaAnswer}...)`).join('\n\n')}\n\nCustomize the answers to match your business, then add the schema code below.`;
+  }
+
+  return {
+    id: `rec_${issue.category}_${issue.subfactor}_${Date.now()}`,
+    title: title,
+    category: issue.category,
+    subfactor: "faqSchemaScore",
+    priority: issue.severity || 'high',
+    priorityScore: issue.priority || 85,
+    finding: finding,
+    impact: impact,
+    actionSteps: actionSteps.split('\n').filter(s => s.trim()),
+    codeSnippet: `## FAQ Schema Implementation\n\n${schemaCode}`,
+    customizedImplementation: customizedImplementation,
+    readyToUseContent: schemaCode,
+    implementationNotes: implementationNotes,
+    quickWins: hasVisibleContent ?
+      [`${faqCount} FAQs already detected - just add schema!`, 'Simple copy-paste implementation', 'Instant AI visibility boost'] :
+      ['Foundation for AI visibility', 'Pairs with visible FAQ content', 'Easy to validate with Google tools'],
+    validationChecklist: validationChecklist,
+    estimatedTime: "15-30 minutes",
+    difficulty: "Moderate",
+    estimatedScoreGain: Math.max(12, Math.round(issue.gap * 0.8)),
+    currentScore: issue.currentScore,
+    targetScore: issue.threshold,
+    evidence: {
+      hasVisibleContent: hasVisibleContent,
+      faqCount: faqCount,
+      usingActualContent: usingActualContent,
+      industry: detectedIndustry
+    },
+    generatedBy: usingActualContent ? 'actual_faq_schema_extraction' : 'programmatic_faq_schema_library'
+  };
+}
+
+// ========================================
+// FAQ CONTENT GENERATOR (Split from combined FAQ generator)
+// ========================================
+
+function makeProgrammaticFAQContentRecommendation(issue, scanEvidence, subfactorScores, industry) {
+  console.log('🎯 Starting FAQ CONTENT recommendation generation...');
+  const domain = extractDomain(scanEvidence.url);
+  const { profile, facts } = normalizeEvidence(scanEvidence);
+  const detectedIndustry = industry || 'General';
+
+  // Check if FAQ schema exists
+  const hasSchema = subfactorScores?.aiSearchReadiness?.faqSchemaScore >= 70;
+  const hasFAQSchema = scanEvidence.technical?.hasFAQSchema;
+  const actualFAQs = scanEvidence.content?.faqs || [];
+  const faqCount = actualFAQs.length;
+
+  console.log(`📊 FAQ Content Analysis: Found ${faqCount} FAQs on site, Has schema: ${hasSchema ? 'Yes' : 'No'}`);
+
+  // Get FAQ templates for this industry
+  let faqLib = loadFAQLibrary(detectedIndustry);
+  if (!faqLib) {
+    faqLib = FAQ_LIBRARIES[detectedIndustry] || FAQ_LIBRARIES.General;
+  }
+  const templateFAQs = faqLib.questions;
+
+  // Build finding based on context
+  let finding;
+  if (hasSchema) {
+    finding = `Status: Missing Visible Content
+
+You have FAQ schema markup but no visible FAQ section detected on ${domain}. Users and AI assistants need to see the actual questions and answers, not just hidden schema.
+
+Schema alone is not enough - AI needs to see the content to cite it properly.`;
+  } else {
+    finding = `Status: Missing Visible Content
+
+No visible FAQ content detected on ${domain}. FAQs help both users and AI assistants understand your business better.
+
+Adding a visible FAQ section makes your expertise accessible to everyone.`;
+  }
+
+  const faqPageCopy = templateFAQs.map((faq, idx) =>
+    `Q${idx + 1}. ${faq.q}\n${faq.pageAnswer}`
+  ).join('\n\n');
+
+  const frontendCode = `<!-- Add this FAQ section to your page HTML -->\n<section class="faq-section">\n  <h2>Frequently Asked Questions</h2>\n  \n${templateFAQs.map((faq, idx) => `  <div class="faq-item">\n    <h3>${faq.q}</h3>\n    <p>${faq.pageAnswer}</p>\n  </div>`).join('\n\n')}\n</section>`;
+
+  const categoryName = CATEGORY_NAMES[issue.category] || issue.category;
+  const title = hasSchema ?
+    `${categoryName}: Add Visible FAQ Section to Match Schema` :
+    `${categoryName}: Add Visible FAQ Content`;
+
+  const impact = hasSchema ?
+    `You have FAQ schema, but visible content gives AI assistants the actual answers to extract. Schema tells AI "these are FAQs" - content gives AI "here are the answers to cite."` :
+    `Adding a visible FAQ section is one of the fastest ways to get recommended by AI. When someone asks ChatGPT a question you've answered on your website, you're much more likely to show up as a recommendation.`;
+
+  const actionSteps = hasSchema ?
+    `1. Add a dedicated FAQ section to your page (below your primary CTA or above the footer)
+2. Copy the ready-to-use FAQ content from below
+3. Paste the Q&A pairs into your page HTML so they're visible to users
+4. Ensure your FAQ schema matches the new visible content
+5. Re-scan in the AI Visibility Tool - your FAQ Content score should become 100!` :
+    `1. Add a dedicated FAQ section to your page (below your primary CTA or above the footer)
+2. Copy the ready-to-use FAQ content from below (industry-specific for ${detectedIndustry})
+3. Paste the Q&A pairs into your page HTML
+4. Consider adding FAQ schema markup (see "FAQ Schema" recommendation)
+5. Re-scan in the AI Visibility Tool to confirm your FAQ Content score improves`;
+
+  const implementationNotes = [
+    'Keep each answer concise (80-140 words)',
+    'Update FAQ content quarterly based on actual customer questions',
+    'Ensure Q&A pairs are visible (not hidden behind accordions that block crawlers)',
+    'Use natural language that matches how customers ask questions'
+  ];
+
+  const validationChecklist = [
+    'FAQ section visible on page without JavaScript',
+    'Questions match common customer inquiries',
+    'Answers are clear, concise, and accurate',
+    'Re-scan in AI Visibility Tool: "FAQ Content Score" reaches 100'
+  ];
+
+  const customizedImplementation = `### FAQ Content for ${detectedIndustry}\n\n${hasSchema ? 'You already have FAQ schema. Now add visible content to match:' : 'Here are industry-specific questions for your FAQ section:'}\n\n${templateFAQs.map((faq, idx) => `**Q${idx + 1}: ${faq.q}**\n\n${faq.pageAnswer}`).join('\n\n---\n\n')}\n\nThese questions target common search queries in the ${detectedIndustry} industry and will help AI understand your business expertise.`;
+
+  return {
+    id: `rec_${issue.category}_${issue.subfactor}_${Date.now()}`,
+    title: title,
+    category: issue.category,
+    subfactor: "faqContentScore",
+    priority: issue.severity || 'high',
+    priorityScore: issue.priority || 80,
+    finding: finding,
+    impact: impact,
+    actionSteps: actionSteps.split('\n').filter(s => s.trim()),
+    codeSnippet: `## Frontend Implementation (Page Content)\n\n${frontendCode}`,
+    customizedImplementation: customizedImplementation,
+    readyToUseContent: faqPageCopy,
+    implementationNotes: implementationNotes,
+    quickWins: hasSchema ?
+      ['Schema already in place - just add visible content', 'Ready-to-use copy provided', 'Quick implementation'] :
+      (FAQ_LIBRARIES[detectedIndustry] || FAQ_LIBRARIES.General).quickWins,
+    validationChecklist: validationChecklist,
+    estimatedTime: "30-60 minutes",
+    difficulty: "Easy",
+    estimatedScoreGain: Math.max(12, Math.round(issue.gap * 0.8)),
+    currentScore: issue.currentScore,
+    targetScore: issue.threshold,
+    evidence: {
+      hasSchema: hasSchema,
+      hasFAQSchema: hasFAQSchema,
+      faqCount: faqCount,
+      industry: detectedIndustry
+    },
+    generatedBy: 'programmatic_faq_content_library'
+  };
+}
+
+// ========================================
+// OLD COMBINED FAQ GENERATOR (DEPRECATED)
+// Kept for reference, but no longer called
+// ========================================
 
 function makeProgrammaticFAQRecommendation(issue, scanEvidence, industry) {
   console.log('🎯 Starting FAQ recommendation generation...');
@@ -6205,7 +6471,7 @@ function determineNeededSchemas(issue, profile, scanEvidence) {
       schemas.push({ type: 'BreadcrumbList', useData: 'navigation hierarchy' });
     }
   }
-  if (issue.subfactor === 'faqScore') {
+  if (issue.subfactor === 'faqSchemaScore' || issue.subfactor === 'faqContentScore') {
     const hasFAQ = scanEvidence.technical?.hasFAQSchema;
     if (!hasFAQ) {
       schemas.push({ type: 'FAQPage', useData: 'on-page Q/A pairs' });
