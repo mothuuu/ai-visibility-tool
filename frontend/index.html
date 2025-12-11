@@ -1193,6 +1193,136 @@
                 font-size: 2rem;
             }
         }
+
+        /* FAQ Section */
+        .faq-section {
+            padding: 80px 5%;
+            background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+        }
+
+        .faq-section h2 {
+            text-align: center;
+            font-size: 42px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            color: #1a202c;
+        }
+
+        .faq-subtitle {
+            text-align: center;
+            font-size: 18px;
+            color: #718096;
+            margin-bottom: 50px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .faq-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .faq-item {
+            margin-bottom: 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background: white;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+        }
+
+        .faq-item:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .faq-item.active {
+            border-color: #00B9DA;
+            box-shadow: 0 4px 20px rgba(0, 185, 218, 0.15);
+        }
+
+        .faq-question {
+            width: 100%;
+            padding: 24px 28px;
+            text-align: left;
+            background: none;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 18px;
+            font-weight: 600;
+            color: #2d3748;
+            font-family: inherit;
+            transition: all 0.3s ease;
+        }
+
+        .faq-question:hover {
+            background: #f8f9fa;
+        }
+
+        .faq-item.active .faq-question {
+            background: linear-gradient(135deg, rgba(0, 185, 218, 0.05) 0%, rgba(243, 28, 126, 0.05) 100%);
+        }
+
+        .question-text {
+            flex: 1;
+            padding-right: 20px;
+        }
+
+        .faq-icon {
+            font-size: 28px;
+            font-weight: 300;
+            color: #00B9DA;
+            transition: transform 0.3s ease;
+            line-height: 1;
+        }
+
+        .faq-item.active .faq-icon {
+            transform: rotate(45deg);
+            color: #f31c7e;
+        }
+
+        .faq-answer {
+            padding: 0 28px 24px 28px;
+            color: #4a5568;
+            line-height: 1.8;
+            font-size: 16px;
+        }
+
+        .faq-answer p {
+            margin: 0;
+        }
+
+        .faq-answer[hidden] {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .faq-section {
+                padding: 60px 5%;
+            }
+
+            .faq-section h2 {
+                font-size: 32px;
+            }
+
+            .faq-question {
+                padding: 20px;
+                font-size: 16px;
+            }
+
+            .faq-answer {
+                padding: 0 20px 20px 20px;
+                font-size: 15px;
+            }
+
+            .faq-icon {
+                font-size: 24px;
+            }
+        }
     </style>
     <!-- Google Analytics 4 -->
     <script src="analytics.js"></script>
@@ -2168,6 +2298,114 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
         </div>
     </section>
 
+    <!-- FAQ Section -->
+    <section id="faq" class="faq-section">
+        <h2>Frequently Asked Questions</h2>
+        <p class="faq-subtitle">Everything you need to know about AI visibility and how Visible2AI helps your business get discovered.</p>
+
+        <div class="faq-container">
+            <div class="faq-item">
+                <button class="faq-question" aria-expanded="false">
+                    <span class="question-text">What is AI Visibility Score?</span>
+                    <span class="faq-icon">+</span>
+                </button>
+                <div class="faq-answer" hidden>
+                    <p>AI Visibility Score is the first tool that measures how AI assistants like ChatGPT, Claude, and Perplexity see, understand, and recommend your business. It provides a score from 0-1000 across 8 AI readiness pillars with implementation-ready fixes you can copy and paste.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" aria-expanded="false">
+                    <span class="question-text">What is Visible2AI?</span>
+                    <span class="faq-icon">+</span>
+                </button>
+                <div class="faq-answer" hidden>
+                    <p>Visible2AI is the company and platform behind AI Visibility Score. It helps businesses become discoverable, understandable, and recommendable by AI assistants so their ideal customers find them first and choose them over competitors.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" aria-expanded="false">
+                    <span class="question-text">How is AI Visibility different from SEO?</span>
+                    <span class="faq-icon">+</span>
+                </button>
+                <div class="faq-answer" hidden>
+                    <p>Traditional SEO optimizes for Google's ranking algorithms using keywords and backlinks. AI Visibility optimizes for how AI assistants understand, process, and recommend businesses. AI uses different signals like structured data, content clarity, and trust markers. You can rank well on Google but still be completely invisible to AI assistants.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" aria-expanded="false">
+                    <span class="question-text">Why does AI visibility matter?</span>
+                    <span class="faq-icon">+</span>
+                </button>
+                <div class="faq-answer" hidden>
+                    <p>68% of B2B buyers now use AI assistants like ChatGPT for research instead of Google. When they ask for recommendations, AI gives one answer, not ten links. If AI doesn't understand your business, it won't recommend you, and you lose high-intent buyers to competitors. 94% of websites are invisible to AI.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" aria-expanded="false">
+                    <span class="question-text">How long does it take to see results?</span>
+                    <span class="faq-icon">+</span>
+                </button>
+                <div class="faq-answer" hidden>
+                    <p>Most businesses see measurable improvements in their AI Visibility Score within 2-4 weeks of implementing top recommendations. Results vary based on starting point and implementation depth.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" aria-expanded="false">
+                    <span class="question-text">Do I need technical skills to use Visible2AI?</span>
+                    <span class="faq-icon">+</span>
+                </button>
+                <div class="faq-answer" hidden>
+                    <p>No. Visible2AI provides ready-to-deploy code with your business details already filled in. If you can copy and paste, you can improve your AI visibility. No developer required.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" aria-expanded="false">
+                    <span class="question-text">What are the 8 pillars of AI visibility?</span>
+                    <span class="faq-icon">+</span>
+                </button>
+                <div class="faq-answer" hidden>
+                    <p>The 8 pillars are: AI Readability, Search Readiness, Content Freshness, Content Structure, Speed and UX, Technical Setup, Trust and Authority, and Voice Optimization. Together they evaluate 47 factors that determine whether AI assistants can find, understand, and recommend your business.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" aria-expanded="false">
+                    <span class="question-text">How much does AI Visibility Score cost?</span>
+                    <span class="faq-icon">+</span>
+                </button>
+                <div class="faq-answer" hidden>
+                    <p>Visible2AI offers a free plan with 2 scans per month. Paid plans start at $29/month for DIY (25 scans, 5 pages), $149/month for Pro (50 scans, 25 pages, competitor analysis), and $499/month for Enterprise (200 scans, 100 pages, full brand monitoring).</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" aria-expanded="false">
+                    <span class="question-text">Who is Visible2AI for?</span>
+                    <span class="faq-icon">+</span>
+                </button>
+                <div class="faq-answer" hidden>
+                    <p>Visible2AI serves SMBs and B2B companies across 14 high-impact sectors including AI startups, SaaS, MSPs, cybersecurity, telecom, consulting, marketing agencies, fintech, healthtech, legal, real estate, and manufacturing. It helps any business that depends on being discovered and recommended by AI assistants.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" aria-expanded="false">
+                    <span class="question-text">Where is Visible2AI located?</span>
+                    <span class="faq-icon">+</span>
+                </button>
+                <div class="faq-answer" hidden>
+                    <p>Visible2AI is headquartered in Mississauga, Ontario, Canada at Suite 700, 6733 Mississauga Rd, L5N 6J5. It is a product of Xeo Marketing, a Toronto-based AI strategy consulting agency.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Final CTA -->
     <section class="final-cta">
         <div class="cta-content">
@@ -2393,6 +2631,37 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                     }
                 }
             });
+
+            // FAQ Accordion functionality
+            const faqItems = document.querySelectorAll('.faq-item');
+
+            faqItems.forEach(item => {
+                const question = item.querySelector('.faq-question');
+                const answer = item.querySelector('.faq-answer');
+
+                question.addEventListener('click', () => {
+                    const isActive = item.classList.contains('active');
+
+                    // Close all other items (accordion behavior)
+                    faqItems.forEach(otherItem => {
+                        otherItem.classList.remove('active');
+                        otherItem.querySelector('.faq-answer').hidden = true;
+                        otherItem.querySelector('.faq-question').setAttribute('aria-expanded', 'false');
+                    });
+
+                    // Toggle current item
+                    if (!isActive) {
+                        item.classList.add('active');
+                        answer.hidden = false;
+                        question.setAttribute('aria-expanded', 'true');
+                    }
+                });
+            });
+
+            // Open first FAQ question by default
+            if (faqItems.length > 0) {
+                faqItems[0].querySelector('.faq-question').click();
+            }
         });
     </script>
 
