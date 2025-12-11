@@ -1801,6 +1801,9 @@ async function performV5Scan(url, plan, pages = null, userProgress = null, userI
     const subfactorScores = transformV5ToSubfactors(v5Results.categories);
     console.log('[V5Transform] Transformed subfactor scores for issue detection');
     console.log('[V5Transform] Technical Setup subfactors:', JSON.stringify(subfactorScores.technicalSetup, null, 2));
+    console.log('[V5Transform] AI Search Readiness subfactors:', JSON.stringify(subfactorScores.aiSearchReadiness, null, 2));
+    console.log('[V5Transform] Trust Authority subfactors:', JSON.stringify(subfactorScores.trustAuthority, null, 2));
+    console.log('[V5Transform] Content Structure subfactors:', JSON.stringify(subfactorScores.contentStructure, null, 2));
 
     // Determine industry: Prioritize user-selected > auto-detected > fallback
     const finalIndustry = userIndustry || v5Results.industry || 'General';
