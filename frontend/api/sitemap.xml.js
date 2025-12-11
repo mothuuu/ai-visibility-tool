@@ -6,21 +6,21 @@ export default function handler(req, res) {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://www.visible2ai.com/</loc>
-    <lastmod>2025-12-09</lastmod>
+    <lastmod>2025-12-11</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://www.visible2ai.com/about</loc>
-    <lastmod>2025-12-09</lastmod>
+    <lastmod>2025-12-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://www.visible2ai.com/auth</loc>
-    <lastmod>2025-12-09</lastmod>
+    <loc>https://www.visible2ai.com/auth.html</loc>
+    <lastmod>2025-12-10</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <priority>0.5</priority>
   </url>
 </urlset>`);
 }
