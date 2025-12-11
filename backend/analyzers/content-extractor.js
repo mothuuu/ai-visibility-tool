@@ -29,13 +29,23 @@ const $ = cheerio.load(html);
       // Extract technical data first (includes JSON-LD parsing)
       const technical = this.extractTechnical($, html);
 
+      // CRITICAL: Extract structure and navigation BEFORE extractContent() removes nav/header/footer
+      // Fix for Issue #5: Navigation scoring was always returning false because
+      // extractStructure() was called AFTER extractContent() removed the elements
+      const structure = this.extractStructure($);
+      const navigation = this.extractNavigation($);
+
+      console.log('[Detection] Navigation links extracted:', navigation.links.length);
+      console.log('[Detection] Structure extracted - hasNav:', structure.hasNav, 'hasHeader:', structure.hasHeader, 'hasFooter:', structure.hasFooter);
+
       const evidence = {
         url: this.url,
         html: html, // Store HTML for analysis
         metadata: this.extractMetadata($),
         technical: technical, // Already extracted
-        content: this.extractContent($, technical.structuredData), // Pass structuredData to extractContent
-        structure: this.extractStructure($),
+        structure: structure, // Extracted BEFORE content removal
+        navigation: navigation, // Extracted BEFORE content removal
+        content: this.extractContent($, technical.structuredData), // Pass structuredData to extractContent - this removes nav/header/footer
         media: this.extractMedia($),
         performance: await this.checkPerformance(),
         accessibility: this.extractAccessibility($),
@@ -512,6 +522,7 @@ const $ = cheerio.load(html);
 
   /**
    * Extract structural elements and semantic HTML
+   * IMPORTANT: Call this BEFORE extractContent() which removes nav/header/footer
    */
   extractStructure($) {
     return {
@@ -523,10 +534,10 @@ const $ = cheerio.load(html);
       hasNav: $('nav').length > 0,
       hasHeader: $('header').length > 0,
       hasFooter: $('footer').length > 0,
-      
+
       // ARIA landmarks
       landmarks: $('[role="main"], [role="navigation"], [role="complementary"], [role="contentinfo"]').length,
-      
+
       // Heading hierarchy
       headingCount: {
         h1: $('h1').length,
@@ -536,20 +547,66 @@ const $ = cheerio.load(html);
         h5: $('h5').length,
         h6: $('h6').length
       },
-      
+
       // Links
       internalLinks: $('a[href^="/"], a[href^="' + this.url + '"]').length,
       externalLinks: $('a[href^="http"]').not('[href^="' + this.url + '"]').length,
-      
+
       // IDs and anchors
       elementsWithIds: $('[id]').length,
       anchorLinks: $('a[href^="#"]').length,
-      
+
       // Table of contents detection
       hasTOC: $('[id*="toc"], [class*="toc"], [class*="table-of-contents"]').length > 0,
-      
+
       // Breadcrumbs
       hasBreadcrumbs: $('[itemtype*="BreadcrumbList"], nav[aria-label*="breadcrumb"]').length > 0
+    };
+  }
+
+  /**
+   * Extract navigation links for section detection
+   * IMPORTANT: Call this BEFORE extractContent() which removes nav/header/footer
+   * Fix for Issue #2 + #9: Blog/FAQ detection now uses navigation links
+   */
+  extractNavigation($) {
+    const links = [];
+
+    // Extract links from nav and header elements
+    $('nav a, header a').each((i, el) => {
+      const href = $(el).attr('href') || '';
+      const text = $(el).text().trim();
+      if (href && text && href !== '#') {
+        links.push({ href, text });
+      }
+    });
+
+    // Detect section links
+    const hasBlogLink = links.some(l => /\/blog|\/news|\/articles/i.test(l.href) || /blog|news/i.test(l.text));
+    const hasFAQLink = links.some(l => /\/faq|\/frequently-asked/i.test(l.href) || /faq|frequently asked/i.test(l.text));
+    const hasAboutLink = links.some(l => /\/about/i.test(l.href) || /about/i.test(l.text));
+    const hasContactLink = links.some(l => /\/contact/i.test(l.href) || /contact/i.test(l.text));
+    const hasServicesLink = links.some(l => /\/services/i.test(l.href) || /services/i.test(l.text));
+    const hasPricingLink = links.some(l => /\/pricing/i.test(l.href) || /pricing/i.test(l.text));
+
+    console.log('[Detection] Navigation analysis:', {
+      totalLinks: links.length,
+      hasBlogLink,
+      hasFAQLink,
+      hasAboutLink,
+      hasContactLink,
+      hasServicesLink,
+      hasPricingLink
+    });
+
+    return {
+      links,
+      hasBlogLink,
+      hasFAQLink,
+      hasAboutLink,
+      hasContactLink,
+      hasServicesLink,
+      hasPricingLink
     };
   }
 

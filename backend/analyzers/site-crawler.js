@@ -27,6 +27,9 @@ class SiteCrawler {
     };
     this.visitedUrls = new Set();
     this.pageEvidences = [];
+    // Fix for Issue #2 + #9: Track ALL discovered URLs, even ones not crawled
+    // This enables blog/FAQ detection from sitemap/internal links
+    this.allDiscoveredUrls = new Set();
   }
 
   /**
@@ -75,6 +78,7 @@ class SiteCrawler {
 
     // Always crawl the base URL
     urls.add(this.baseUrl);
+    this.allDiscoveredUrls.add(this.baseUrl); // Track discovered URLs
 
     // Try to get URLs from sitemap
     let sitemapDetected = false;
@@ -82,7 +86,10 @@ class SiteCrawler {
       const sitemapUrls = await this.fetchSitemapUrls();
       if (sitemapUrls.length > 0) {
         sitemapDetected = true;
-        sitemapUrls.forEach(url => urls.add(url));
+        sitemapUrls.forEach(url => {
+          urls.add(url);
+          this.allDiscoveredUrls.add(url); // Track ALL discovered URLs
+        });
         console.log(`[Crawler] ✓ Sitemap detected with ${sitemapUrls.length} URLs`);
       } else {
         console.log(`[Crawler] ✗ No sitemap found, will use internal link crawling`);
@@ -96,7 +103,10 @@ class SiteCrawler {
     if (urls.size < this.options.maxPages && this.options.includeInternalLinks) {
       console.log(`[Crawler] Supplementing with internal links (current: ${urls.size}, target: ${this.options.maxPages})`);
       const internalLinks = await this.fetchInternalLinks(this.baseUrl);
-      internalLinks.forEach(url => urls.add(url));
+      internalLinks.forEach(url => {
+        urls.add(url);
+        this.allDiscoveredUrls.add(url); // Track ALL discovered URLs
+      });
     }
 
     // Filter out XML files (belt and suspenders - should already be filtered above)
@@ -114,6 +124,9 @@ class SiteCrawler {
     prioritizedUrls.slice(0, this.options.maxPages).forEach((url, idx) => {
       console.log(`  ${idx + 1}. ${url}`);
     });
+
+    // Log all discovered URLs for debugging
+    console.log(`[Crawler] Total discovered URLs (including non-crawled): ${this.allDiscoveredUrls.size}`);
 
     return prioritizedUrls;
   }
@@ -406,6 +419,37 @@ class SiteCrawler {
   }
 
   /**
+   * Get all discovered URLs (including non-crawled ones)
+   * Fix for Issue #2 + #9: Enables blog/FAQ detection from sitemap/internal links
+   */
+  getAllDiscoveredUrls() {
+    return Array.from(this.allDiscoveredUrls);
+  }
+
+  /**
+   * Analyze discovered URLs for key sections
+   * Fix for Issue #2 + #9: This data is passed to detection functions
+   */
+  analyzeDiscoveredSections() {
+    const allUrls = this.getAllDiscoveredUrls();
+
+    const discoveredSections = {
+      hasBlogUrl: allUrls.some(url => /\/blog|\/news|\/articles/i.test(url)),
+      hasFaqUrl: allUrls.some(url => /\/faq|\/frequently-asked/i.test(url)),
+      hasAboutUrl: allUrls.some(url => /\/about/i.test(url)),
+      hasContactUrl: allUrls.some(url => /\/contact/i.test(url)),
+      hasServicesUrl: allUrls.some(url => /\/services/i.test(url)),
+      hasPricingUrl: allUrls.some(url => /\/pricing/i.test(url)),
+      blogUrls: allUrls.filter(url => /\/blog|\/news|\/articles/i.test(url)),
+      faqUrls: allUrls.filter(url => /\/faq|\/frequently-asked/i.test(url)),
+    };
+
+    console.log('[Detection] Crawler discovered sections:', discoveredSections);
+
+    return discoveredSections;
+  }
+
+  /**
    * Aggregate evidence from all crawled pages into site-wide metrics
    */
   aggregateEvidence() {
@@ -414,6 +458,9 @@ class SiteCrawler {
     }
 
     console.log(`[Crawler] Aggregating evidence from ${this.pageEvidences.length} pages`);
+
+    // Fix for Issue #2 + #9: Analyze discovered URLs for key sections
+    const discoveredSections = this.analyzeDiscoveredSections();
 
     const aggregated = {
       siteUrl: this.baseUrl,
@@ -424,6 +471,8 @@ class SiteCrawler {
 
       // Site-wide metrics for scoring
       siteMetrics: {
+        // Fix for Issue #2 + #9: Include discovered sections from sitemap/internal links
+        discoveredSections,
         // Question-based content density (% of pages)
         pagesWithQuestionHeadings: this.calculatePageMetric(e => this.hasQuestionHeadings(e)),
         pagesWithFAQs: this.calculatePageMetric(e => e.content.faqs.length > 0),
