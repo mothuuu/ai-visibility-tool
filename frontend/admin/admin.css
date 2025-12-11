@@ -31,13 +31,20 @@ body {
 }
 
 .logo {
-  font-size: 22px;
-  font-weight: 800;
-  background: linear-gradient(135deg, var(--cyan) 0%, var(--pink) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  display: flex;
+  align-items: center;
   margin-bottom: 8px;
+}
+
+.logo img {
+  height: 45px;
+  width: auto;
+}
+
+@media (max-width: 768px) {
+  .logo img {
+    height: 38px;
+  }
 }
 
 .logo-subtitle {

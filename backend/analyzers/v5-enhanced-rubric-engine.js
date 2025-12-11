@@ -221,36 +221,49 @@ class V5EnhancedRubricEngine {
       factors.readability = 0.6;
     }
 
-    // Factor 4: ICP-Specific Q&A Coverage
-    // PDF: ≥5 ICP-specific Q&A → 2.0, 2-4 → 1.2, else 0
-    // HYBRID SCORING: Reward both percentage AND absolute count to prevent dilution
-    const faqPercent = this.siteData.siteMetrics.pagesWithFAQs * 100;
-    const faqCount = this.siteData.pages.filter(p => p.evidence.content.faqs.length > 0).length;
-    const totalFAQs = this.siteData.pages.reduce((sum, p) => sum + p.evidence.content.faqs.length, 0);
+    // Factor 4: FAQ Coverage - SPLIT into two separate subfactors
+    // Separate schema FAQs from visible FAQs to give precise feedback
+    const allFAQs = this.siteData.pages.reduce((acc, p) => {
+      return acc.concat(p.evidence.content.faqs);
+    }, []);
 
-    // Log FAQ distribution across pages for debugging
-    console.log(`[V5-Enhanced] ===== FAQ DISTRIBUTION ANALYSIS =====`);
-    console.log(`[V5-Enhanced] Total FAQs across all pages: ${totalFAQs}`);
-    console.log(`[V5-Enhanced] Pages with FAQs: ${faqCount}/${this.siteData.pageCount}`);
-    this.siteData.pages.forEach((page, idx) => {
-      if (page.evidence.content.faqs.length > 0) {
-        console.log(`[V5-Enhanced]   Page ${idx + 1} (${page.url}): ${page.evidence.content.faqs.length} FAQs`);
-      }
-    });
+    const schemaFAQs = allFAQs.filter(faq => faq.source === 'schema').length;
+    const visibleFAQs = allFAQs.filter(faq =>
+      faq.source === 'html' || faq.source === 'details' || faq.source === 'heading'
+    ).length;
 
-    // Score based on EITHER percentage OR absolute count (whichever is better)
-    const faqPercentScore = this.scoreTier(faqPercent, [
-      { threshold: 40, score: 2.0 },  // At least 40% of pages have FAQs = good coverage
-      { threshold: 20, score: 1.2 }
-    ]);
-    const faqAbsoluteScore = this.scoreTier(faqCount, [
-      { threshold: 5, score: 2.0 },   // At least 5 pages with FAQs = good absolute coverage
-      { threshold: 3, score: 1.8 },   // At least 3 pages with FAQs = decent coverage
-      { threshold: 1, score: 1.2 }    // At least 1 page with FAQs = some coverage
-    ]);
-    factors.icpQA = Math.max(faqPercentScore, faqAbsoluteScore);  // Use the better of the two scores
+    console.log(`[V5-Enhanced] FAQ breakdown: Schema=${schemaFAQs}, Visible=${visibleFAQs}`);
 
-    console.log(`[V5-Enhanced] FAQ Scoring - Pages: ${faqCount}/${this.siteData.pageCount} (${Math.round(faqPercent)}%) | Percent Score: ${faqPercentScore} | Absolute Score: ${faqAbsoluteScore} | Final: ${factors.icpQA}`);
+    // FACTOR 4a: FAQ Schema Score (checks for structured schema markup)
+    let faqSchemaScore = 0;
+    if (schemaFAQs >= 5) {
+      faqSchemaScore = 2.0; // 5+ FAQs in schema
+    } else if (schemaFAQs >= 3) {
+      faqSchemaScore = 1.5; // 3-4 FAQs in schema
+    } else if (schemaFAQs >= 1) {
+      faqSchemaScore = 1.0; // 1-2 FAQs in schema
+    } else {
+      faqSchemaScore = 0; // No FAQ schema
+    }
+
+    // FACTOR 4b: FAQ Content Score (checks for visible FAQ content)
+    let faqContentScore = 0;
+    if (visibleFAQs >= 5) {
+      faqContentScore = 2.0; // 5+ visible FAQs
+    } else if (visibleFAQs >= 3) {
+      faqContentScore = 1.5; // 3-4 visible FAQs
+    } else if (visibleFAQs >= 1) {
+      faqContentScore = 1.0; // 1-2 visible FAQs
+    } else {
+      faqContentScore = 0; // No visible FAQ content
+    }
+
+    console.log(`[V5-Enhanced] FAQ Schema Score: ${faqSchemaScore}`);
+    console.log(`[V5-Enhanced] FAQ Content Score: ${faqContentScore}`);
+
+    // Store both separately (removing old combined icpQA factor)
+    factors.faqSchema = faqSchemaScore;
+    factors.faqContent = faqContentScore;
 
     // Factor 5: Answer Completeness
     // PDF: 50-150 words with clear structure → 2.0, partial → 1.2, else 0

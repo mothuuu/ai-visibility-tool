@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Visibility Score - Is Your Website Invisible to AI?</title>
-    <link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+    <link rel="shortcut icon" href="/favicon.ico?v=2">
     <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
     <style>
         * {
@@ -34,12 +35,19 @@
         }
 
         .logo {
-            font-size: 28px;
-            font-weight: 800;
-            background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            display: flex;
+            align-items: center;
+        }
+
+        .logo img {
+            height: 50px;
+            width: auto;
+        }
+
+        @media (max-width: 768px) {
+            .logo img {
+                height: 38px;
+            }
         }
 
         .nav-buttons {
@@ -1337,7 +1345,7 @@
       "name": "Visible2AI",
       "alternateName": "AI Visibility Score",
       "url": "https://visible2ai.com",
-      "logo": "https://visible2ai.com/logo.png",
+      "logo": "https://www.visible2ai.com/logo.png",
       "description": "The first tool that helps businesses get discovered and recommended by AI assistants like ChatGPT, Claude, and Perplexity.",
       "foundingDate": "2024",
       "founders": [
@@ -1573,7 +1581,7 @@
         "@type": "Organization",
         "name": "Visible2AI",
         "url": "https://visible2ai.com",
-        "logo": "https://visible2ai.com/logo.png",
+        "logo": "https://www.visible2ai.com/logo.png",
         "contactPoint": {
           "@type": "ContactPoint",
           "telephone": "+1-844-936-0011",
@@ -1590,7 +1598,7 @@
       "@context": "https://schema.org",
       "@type": "LocalBusiness",
       "name": "Visible2AI",
-      "image": "https://visible2ai.com/logo.png",
+      "image": "https://www.visible2ai.com/logo.png",
       "url": "https://visible2ai.com",
       "telephone": "+1-844-936-0011",
       "email": "info@xeomarketing.com",
@@ -1643,7 +1651,7 @@
 
     <!-- Navigation -->
     <nav class="navbar">
-        <a href="index.html" class="logo" style="text-decoration: none;">AI Visibility Score</a>
+        <a href="index.html" class="logo" style="text-decoration: none;"><img src="/logo.png" alt="Visible2AI - AI Visibility Score" /></a>
         <div class="nav-links" style="display: flex; align-items: center; gap: 30px;">
             <a href="about.html" style="color: #2d3748; text-decoration: none; font-weight: 500;">About</a>
         </div>

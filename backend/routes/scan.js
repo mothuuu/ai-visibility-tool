@@ -1647,7 +1647,8 @@ function transformV5ToSubfactors(v5Categories) {
       questionHeadingsScore: (directAnswer.factors?.questionDensity || 0) * 50,  // 0-2 → 0-100 (hybrid scoring)
       scannabilityScore: (directAnswer.factors?.scannability || 0) * 50,  // 0-2 → 0-100
       readabilityScore: (directAnswer.factors?.readability || 0) * 50,  // 0-2 → 0-100 (factor max is 2.0)
-      faqScore: (directAnswer.factors?.icpQA || 0) * 50,  // 0-2 → 0-100 (FIXED: was * 33, now * 50)
+      faqSchemaScore: (directAnswer.factors?.faqSchema || 0) * 50,  // 0-2 → 0-100 (FAQ schema markup)
+      faqContentScore: (directAnswer.factors?.faqContent || 0) * 50,  // 0-2 → 0-100 (visible FAQ content)
       snippetEligibleScore: (directAnswer.factors?.answerCompleteness || 0) * 50,  // 0-2 → 0-100
       pillarPagesScore: (topical.factors?.pillarPages || 0) * 50,  // 0-2 → 0-100 (max is 2.0, not 3.0)
       linkedSubpagesScore: (topical.factors?.semanticLinking || 0) * 50,  // 0-2 → 0-100 (max is 2.0)
@@ -1801,6 +1802,9 @@ async function performV5Scan(url, plan, pages = null, userProgress = null, userI
     const subfactorScores = transformV5ToSubfactors(v5Results.categories);
     console.log('[V5Transform] Transformed subfactor scores for issue detection');
     console.log('[V5Transform] Technical Setup subfactors:', JSON.stringify(subfactorScores.technicalSetup, null, 2));
+    console.log('[V5Transform] AI Search Readiness subfactors:', JSON.stringify(subfactorScores.aiSearchReadiness, null, 2));
+    console.log('[V5Transform] Trust Authority subfactors:', JSON.stringify(subfactorScores.trustAuthority, null, 2));
+    console.log('[V5Transform] Content Structure subfactors:', JSON.stringify(subfactorScores.contentStructure, null, 2));
 
     // Determine industry: Prioritize user-selected > auto-detected > fallback
     const finalIndustry = userIndustry || v5Results.industry || 'General';
