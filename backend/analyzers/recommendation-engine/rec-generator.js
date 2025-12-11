@@ -235,6 +235,30 @@ async function generateRecommendations(issues, scanEvidence, tier = 'free', indu
   console.log(`   🎯 Generating recommendations for ${issues?.length || 0} issues (tier=${tier})`);
   if (!Array.isArray(issues) || !issues.length) return [];
 
+  // DEBUG: Show ALL issues sorted by priority BEFORE BATCH_SIZE filter
+  console.log('\n=== ALL DETECTED ISSUES (sorted by priority) ===');
+  issues.forEach((issue, index) => {
+    const selected = index < 5 ? '✓ SELECTED' : '❌ EXCLUDED';
+    console.log(`${index + 1}. ${issue.subfactor} [${selected}]`);
+    console.log(`   Category: ${issue.category}`);
+    console.log(`   Score: ${issue.currentScore} (threshold: ${issue.threshold})`);
+    console.log(`   Gap: ${issue.gap}`);
+    console.log(`   Priority: ${issue.priority}`);
+    console.log(`   Severity: ${issue.severity}`);
+    console.log('');
+  });
+
+  // Check specifically for faqScore
+  const faqIssue = issues.find(i => i.subfactor === 'faqScore');
+  if (faqIssue) {
+    const faqIndex = issues.indexOf(faqIssue);
+    console.log(`📋 FAQ STATUS: Found at position #${faqIndex + 1} with priority ${faqIssue.priority}`);
+    console.log(`   Will be ${faqIndex < 5 ? '✅ INCLUDED' : '❌ EXCLUDED by BATCH_SIZE=5'}`);
+  } else {
+    console.log('⚠️  FAQ STATUS: NO faqScore issue detected! Score must be >= 70');
+  }
+  console.log('=================================================\n');
+
   const BATCH_SIZE = 5;
   const issuesToProcess = issues.slice(0, BATCH_SIZE);
   const out = [];
