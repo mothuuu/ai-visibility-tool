@@ -25,6 +25,9 @@ const {
   makeProgrammaticMembershipsRecommendation
 } = require('./certification-recommendation-generators');
 
+// ✅ Dynamic recommendation text configuration
+const { getRecommendationText, generateGenericRecommendationText } = require('./recommendation-text-config');
+
 // -----------------------------------------
 // Inline helpers (no external file imports)
 // -----------------------------------------
@@ -924,6 +927,80 @@ function loadFAQLibrary(industry) {
 
   console.log(`⚠️  No rich library for ${industry}, checking hardcoded fallback`);
   return null;
+}
+
+// ========================================
+// DYNAMIC DETECTION WRAPPER
+// Wraps any generator to add dynamic "detected/implemented" logic
+// ========================================
+
+/**
+ * Wraps a recommendation generator to add dynamic detection logic.
+ * Checks if the issue is already implemented and returns appropriate text.
+ *
+ * @param {Function} generatorFn - The original generator function
+ * @param {Object} issue - The detected issue
+ * @param {Object} scanEvidence - Evidence from the scan
+ * @param {*} additionalArgs - Any additional arguments for the generator
+ * @returns {Object} - Recommendation with dynamic status
+ */
+function wrapWithDynamicDetection(generatorFn, issue, scanEvidence, ...additionalArgs) {
+  const currentScore = issue.currentScore || 0;
+  const threshold = issue.threshold || 70;
+  const isImplemented = currentScore >= threshold;
+
+  // Get dynamic text from configuration
+  const dynamicText = getRecommendationText(
+    issue.subfactor,
+    currentScore,
+    threshold,
+    scanEvidence
+  );
+
+  // If already implemented, return success message
+  if (isImplemented && dynamicText.status === 'detected_implemented') {
+    return {
+      id: `rec_${issue.category}_${issue.subfactor}_${Date.now()}`,
+      title: dynamicText.title,
+      category: issue.category,
+      subfactor: issue.subfactor,
+      priority: dynamicText.priority || 'low',
+      priorityScore: 10,
+      finding: dynamicText.finding,
+      impact: dynamicText.whyItMatters,
+      actionSteps: dynamicText.nextSteps ? [dynamicText.nextSteps] : ['Your implementation is complete', 'Continue monitoring and optimizing'],
+      codeSnippet: '<!-- Already implemented! -->',
+      implementationNotes: ['Implementation detected and validated', 'Continue monitoring'],
+      quickWins: ['✅ Already implemented', '✅ Score above threshold'],
+      validationChecklist: ['✅ Implementation detected', '✅ Score above threshold'],
+      estimatedTime: "N/A - Already implemented",
+      difficulty: "Completed",
+      estimatedScoreGain: 0,
+      currentScore: currentScore,
+      targetScore: threshold,
+      status: 'detected_implemented',
+      evidence: scanEvidence,
+      generatedBy: `${issue.subfactor}_detected`
+    };
+  }
+
+  // Not implemented - call the original generator
+  const recommendation = generatorFn(issue, scanEvidence, ...additionalArgs);
+
+  // Add status if not already present
+  if (!recommendation.status) {
+    recommendation.status = 'not_implemented';
+  }
+
+  // Update finding/impact with dynamic text if available
+  if (dynamicText.finding && !recommendation.finding.includes('✅')) {
+    recommendation.finding = dynamicText.finding;
+  }
+  if (dynamicText.whyItMatters && !recommendation.impact) {
+    recommendation.impact = dynamicText.whyItMatters;
+  }
+
+  return recommendation;
 }
 
 // ========================================
