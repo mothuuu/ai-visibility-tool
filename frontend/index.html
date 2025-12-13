@@ -751,6 +751,79 @@
             box-shadow: 0 8px 20px rgba(0, 185, 218, 0.4);
         }
 
+        /* Billing Toggle Styles */
+        .billing-toggle-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 3rem;
+        }
+
+        .billing-toggle {
+            display: flex;
+            background: #f5f5f5;
+            border-radius: 50px;
+            padding: 4px;
+            gap: 4px;
+        }
+
+        .billing-option {
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            background: transparent;
+            color: #6B7280;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .billing-option.active {
+            background: white;
+            color: #1F2937;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .billing-option:hover:not(.active) {
+            color: #374151;
+        }
+
+        .billing-discount {
+            color: #f31c7e;
+            font-size: 0.8125rem;
+            font-weight: 700;
+        }
+
+        /* Pricing visibility based on billing mode */
+        .annual-price,
+        .annual-note {
+            display: block;
+        }
+
+        .monthly-price,
+        .monthly-note {
+            display: none;
+        }
+
+        body.monthly-mode .annual-price,
+        body.monthly-mode .annual-note {
+            display: none;
+        }
+
+        body.monthly-mode .monthly-price,
+        body.monthly-mode .monthly-note {
+            display: block;
+        }
+
+        .plan-billing-note {
+            font-size: 0.8125rem;
+            color: #6B7280;
+            margin-top: 0.25rem;
+        }
+
         /* Final CTA Section */
         .final-cta {
             padding: 100px 5%;
@@ -1641,7 +1714,7 @@
                     <button class="modal-btn modal-btn-secondary" onclick="closeComingSoonModal()">
                         Close
                     </button>
-                    <button class="modal-btn modal-btn-primary" onclick="window.location.href='auth.html'">
+                    <button class="modal-btn modal-btn-primary" onclick="goToCheckout('diy')">
                         Try DIY Plan
                     </button>
                 </div>
@@ -1931,13 +2004,23 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                 <p class="section-subtitle">Start free. Upgrade when you're ready to dominate AI search.</p>
             </div>
 
+            <!-- Billing Toggle -->
+            <div class="billing-toggle-container">
+                <div class="billing-toggle">
+                    <button class="billing-option" id="monthlyToggle" onclick="setBillingMode('monthly')">Monthly</button>
+                    <button class="billing-option active" id="annualToggle" onclick="setBillingMode('annual')">
+                        Annually <span class="billing-discount">up to 35% off</span>
+                    </button>
+                </div>
+            </div>
+
             <div class="pricing-grid" style="grid-template-columns: repeat(4, 1fr);">
                 <!-- Card 1: Free -->
                 <div class="pricing-card">
                     <span class="plan-badge badge-free" style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 8px 20px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; background: linear-gradient(135deg, var(--purple) 0%, var(--pink) 100%); color: white;">FREE FOREVER</span>
                     <div class="plan-name" style="margin-top: 10px;">Free</div>
                     <div class="plan-price">$0</div>
-                    <div class="plan-price-small">Try before you buy</div>
+                    <div class="plan-price-small">Get started with basic AI visibility insights</div>
 
                     <ul class="plan-features">
                         <li><span class="check-icon">✓</span> 2 scans per month</li>
@@ -1946,15 +2029,20 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <li><span class="check-icon">✓</span> Top 5 recommendations</li>
                     </ul>
 
-                    <button class="plan-cta" onclick="scrollToScan(event)">Get Started Free</button>
+                    <button class="plan-cta" onclick="window.location.href='auth.html'">Get Started Free</button>
                 </div>
 
-                <!-- Card 2: DIY/SOHO (Most Popular) -->
+                <!-- Card 2: DIY (Most Popular) -->
                 <div class="pricing-card featured">
                     <span class="plan-badge badge-popular" style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 8px 20px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%); color: white;">MOST POPULAR</span>
                     <div class="plan-name" style="margin-top: 10px;">DIY</div>
-                    <div class="plan-price">$29</div>
-                    <div class="plan-price-small">per month<br><span style="font-size: 14px; color: #4a5568;">For solopreneurs & small teams</span></div>
+                    <div class="plan-price annual-price">$19</div>
+                    <div class="plan-price monthly-price">$29</div>
+                    <div class="plan-price-small">
+                        <span class="annual-note">per month · Billed annually</span>
+                        <span class="monthly-note">per month · Billed monthly</span>
+                        <br><span style="font-size: 14px; color: #4a5568;">Perfect for businesses optimizing their AI presence</span>
+                    </div>
 
                     <ul class="plan-features">
                         <li><span class="check-icon">✓</span> 25 scans per month</li>
@@ -1964,15 +2052,20 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <li><span class="check-icon">✓</span> Competitor scanning</li>
                     </ul>
 
-                    <button class="plan-cta" onclick="window.location.href='auth.html'">Get Started</button>
+                    <button class="plan-cta" onclick="goToCheckout('diy')">Get Started</button>
                 </div>
 
-                <!-- Card 3: SMB/Pro -->
+                <!-- Card 3: Pro -->
                 <div class="pricing-card">
                     <span class="plan-badge" style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 8px 20px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; background: linear-gradient(135deg, #4DACA6 0%, #f31c7e 100%); color: white;">GREAT VALUE</span>
                     <div class="plan-name" style="margin-top: 10px;">Pro</div>
-                    <div class="plan-price">$149</div>
-                    <div class="plan-price-small">per month<br><span style="font-size: 14px; color: #4a5568;">For growing businesses</span></div>
+                    <div class="plan-price annual-price">$99</div>
+                    <div class="plan-price monthly-price">$149</div>
+                    <div class="plan-price-small">
+                        <span class="annual-note">per month · Billed annually</span>
+                        <span class="monthly-note">per month · Billed monthly</span>
+                        <br><span style="font-size: 14px; color: #4a5568;">Advanced tools for growing teams and agencies</span>
+                    </div>
 
                     <ul class="plan-features">
                         <li><span class="check-icon">✓</span> 50 scans per month</li>
@@ -1989,8 +2082,13 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                 <div class="pricing-card">
                     <span class="plan-badge" style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 8px 20px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; background: linear-gradient(135deg, #7D41A5 0%, #f31c7e 100%); color: white;">FOR ENTERPRISES</span>
                     <div class="plan-name" style="margin-top: 10px;">Enterprise</div>
-                    <div class="plan-price">$499</div>
-                    <div class="plan-price-small">per month<br><span style="font-size: 14px; color: #4a5568;">For mid-market companies</span></div>
+                    <div class="plan-price annual-price">$349</div>
+                    <div class="plan-price monthly-price">$499</div>
+                    <div class="plan-price-small">
+                        <span class="annual-note">per month · Billed annually</span>
+                        <span class="monthly-note">per month · Billed monthly</span>
+                        <br><span style="font-size: 14px; color: #4a5568;">Full-scale AI visibility for large organizations</span>
+                    </div>
 
                     <ul class="plan-features">
                         <li><span class="check-icon">✓</span> 200 scans per month</li>
@@ -2608,6 +2706,36 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
             } else {
                 button.textContent = 'Compare All Features';
             }
+        }
+
+        // Billing toggle state - default to annual
+        let currentBilling = 'annual';
+
+        // Set billing mode (monthly or annual)
+        function setBillingMode(mode) {
+            currentBilling = mode;
+
+            // Update toggle buttons
+            const monthlyBtn = document.getElementById('monthlyToggle');
+            const annualBtn = document.getElementById('annualToggle');
+
+            if (mode === 'monthly') {
+                monthlyBtn.classList.add('active');
+                annualBtn.classList.remove('active');
+                document.body.classList.add('monthly-mode');
+            } else {
+                monthlyBtn.classList.remove('active');
+                annualBtn.classList.add('active');
+                document.body.classList.remove('monthly-mode');
+            }
+        }
+
+        // Navigate to checkout with current billing selection
+        function goToCheckout(plan) {
+            // Close modal if open
+            closeComingSoonModal();
+            // Navigate to auth page with plan and billing in URL
+            window.location.href = `auth.html?plan=${plan}&billing=${currentBilling}`;
         }
 
         // Open Coming Soon Modal
