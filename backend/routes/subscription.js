@@ -6,12 +6,24 @@ const jwt = require('jsonwebtoken');
 const { authenticateToken } = require('../middleware/auth');
 
 // Price IDs from your Stripe dashboard
-const PRICE_IDS = {
-  diy: process.env.STRIPE_PRICE_DIY || 'price_diy_monthly',
-  pro: process.env.STRIPE_PRICE_PRO || 'price_pro_monthly',
-  enterprise: process.env.STRIPE_PRICE_ENTERPRISE || 'price_enterprise_monthly',
-  agency: process.env.STRIPE_PRICE_AGENCY || 'price_agency_monthly'
+// Monthly prices
+const MONTHLY_PRICE_IDS = {
+  diy: process.env.STRIPE_DIY_MONTHLY_PRICE_ID || process.env.STRIPE_PRICE_DIY || 'price_diy_monthly',
+  pro: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || process.env.STRIPE_PRICE_PRO || 'price_pro_monthly',
+  enterprise: process.env.STRIPE_ENTERPRISE_MONTHLY_PRICE_ID || process.env.STRIPE_PRICE_ENTERPRISE || 'price_enterprise_monthly',
+  agency: process.env.STRIPE_AGENCY_MONTHLY_PRICE_ID || process.env.STRIPE_PRICE_AGENCY || 'price_agency_monthly'
 };
+
+// Annual prices
+const ANNUAL_PRICE_IDS = {
+  diy: process.env.STRIPE_DIY_ANNUAL_PRICE_ID || 'price_diy_annual',
+  pro: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || 'price_pro_annual',
+  enterprise: process.env.STRIPE_ENTERPRISE_ANNUAL_PRICE_ID || 'price_enterprise_annual',
+  agency: process.env.STRIPE_AGENCY_ANNUAL_PRICE_ID || 'price_agency_annual'
+};
+
+// Legacy support - maps to monthly prices
+const PRICE_IDS = MONTHLY_PRICE_IDS;
 
 // Test endpoint to verify routes are loaded
 router.get('/test', (req, res) => {
@@ -26,13 +38,16 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
   try {
     console.log('📥 Received create-checkout-session request');
     console.log('Request body:', req.body);
+    console.log('Request query:', req.query);
     console.log('User from auth:', req.user);
 
     const { domain, plan = 'diy' } = req.body;
+    // Support billing parameter from query string or body, default to 'annual'
+    const billing = req.query.billing || req.body.billing || 'annual';
     const userId = req.user.id;
     const email = req.user.email;
 
-    console.log(`🛒 Checkout request: User ${userId} (${email}) for ${plan} plan`);
+    console.log(`🛒 Checkout request: User ${userId} (${email}) for ${plan} plan (${billing} billing)`);
 
     if (!domain) {
       return res.status(400).json({ error: 'Domain required' });
@@ -42,9 +57,20 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid plan' });
     }
 
+    if (!['monthly', 'annual'].includes(billing)) {
+      return res.status(400).json({ error: 'Invalid billing cycle. Must be "monthly" or "annual"' });
+    }
+
+    // Select the correct price ID based on billing cycle
+    const priceId = billing === 'annual'
+      ? ANNUAL_PRICE_IDS[plan]
+      : MONTHLY_PRICE_IDS[plan];
+
+    console.log(`💰 Using price ID: ${priceId} (${billing})`);
+
     // Get or create Stripe customer
     let customerId = req.user.stripe_customer_id;
-    
+
     if (!customerId) {
       console.log(`📝 Creating new Stripe customer for user ${userId}`);
       const customer = await stripe.customers.create({
@@ -52,7 +78,7 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
         metadata: { userId: userId.toString(), domain }
       });
       customerId = customer.id;
-      
+
       await db.query(
         'UPDATE users SET stripe_customer_id = $1 WHERE id = $2',
         [customerId, userId]
@@ -66,28 +92,30 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
       payment_method_types: ['card'],
       line_items: [
         {
-          price: PRICE_IDS[plan],
+          price: priceId,
           quantity: 1,
         },
       ],
       mode: 'subscription',
       success_url: `${process.env.FRONTEND_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/checkout.html?plan=${plan}`,
+      cancel_url: `${process.env.FRONTEND_URL}/checkout.html?plan=${plan}&billing=${billing}`,
       metadata: {
         userId: userId.toString(),
         domain,
-        plan
+        plan,
+        billing_cycle: billing
       },
       subscription_data: {
         metadata: {
           userId: userId.toString(),
           domain,
-          plan
+          plan,
+          billing_cycle: billing
         }
       }
     });
 
-    console.log(`✅ Checkout session created: ${session.id}`);
+    console.log(`✅ Checkout session created: ${session.id} (${billing} billing)`);
     res.json({ url: session.url });
   } catch (error) {
     console.error('❌ Checkout session creation failed:', error);
@@ -227,14 +255,14 @@ async function handleSubscriptionChange(subscription) {
     const priceId = subscription.items.data[0].price.id;
     console.log('📋 Price ID from subscription:', priceId);
 
-    // Match price ID to plan
-    if (priceId === PRICE_IDS.pro || priceId === process.env.STRIPE_PRICE_PRO) {
+    // Match price ID to plan (check both monthly and annual price IDs)
+    if (priceId === MONTHLY_PRICE_IDS.pro || priceId === ANNUAL_PRICE_IDS.pro || priceId === process.env.STRIPE_PRICE_PRO) {
       plan = 'pro';
-    } else if (priceId === PRICE_IDS.diy || priceId === process.env.STRIPE_PRICE_DIY) {
+    } else if (priceId === MONTHLY_PRICE_IDS.diy || priceId === ANNUAL_PRICE_IDS.diy || priceId === process.env.STRIPE_PRICE_DIY) {
       plan = 'diy';
-    } else if (priceId === PRICE_IDS.enterprise || priceId === process.env.STRIPE_PRICE_ENTERPRISE) {
+    } else if (priceId === MONTHLY_PRICE_IDS.enterprise || priceId === ANNUAL_PRICE_IDS.enterprise || priceId === process.env.STRIPE_PRICE_ENTERPRISE) {
       plan = 'enterprise';
-    } else if (priceId === PRICE_IDS.agency || priceId === process.env.STRIPE_PRICE_AGENCY) {
+    } else if (priceId === MONTHLY_PRICE_IDS.agency || priceId === ANNUAL_PRICE_IDS.agency || priceId === process.env.STRIPE_PRICE_AGENCY) {
       plan = 'agency';
     } else {
       // Fallback to metadata if price ID doesn't match

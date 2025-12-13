@@ -86,8 +86,27 @@ function detectFAQ(scanEvidence) {
   const faqs = scanEvidence.content?.faqs || [];
   const h2s = scanEvidence.content?.headings?.h2 || [];
   const hasFAQSchema = scanEvidence.technical?.hasFAQSchema || false;
-  
-  return faqs.length > 0 || h2s.some(h => /faq/i.test(h)) || hasFAQSchema;
+
+  // Existing checks for on-page FAQ content
+  const hasOnPageFAQ = faqs.length > 0 || h2s.some(h => /faq/i.test(h)) || hasFAQSchema;
+
+  // Fix for Issue #2 + #9: Check crawler discoveries
+  const crawlerFoundFAQ = scanEvidence.siteMetrics?.discoveredSections?.hasFaqUrl || false;
+
+  // Fix for Issue #2 + #9: Check navigation links (if available)
+  const navHasFAQLink = scanEvidence.navigation?.hasFAQLink || false;
+
+  const result = hasOnPageFAQ || crawlerFoundFAQ || navHasFAQLink;
+
+  console.log('[Detection] FAQ detected:', result, {
+    hasOnPageFAQ,
+    faqCount: faqs.length,
+    hasFAQSchema,
+    crawlerFoundFAQ,
+    navHasFAQLink
+  });
+
+  return result;
 }
 
 function detectPricing(html) {
@@ -101,8 +120,26 @@ function detectContact(html) {
 function detectBlog(scanEvidence) {
   const url = scanEvidence.url || '';
   const hasArticleSchema = scanEvidence.technical?.hasArticleSchema || false;
-  
-  return /\/blog|\/news|\/articles/i.test(url) || hasArticleSchema;
+
+  // Check current page
+  const currentPageIsBlog = /\/blog|\/news|\/articles/i.test(url);
+
+  // Fix for Issue #2 + #9: Check crawler discoveries
+  const crawlerFoundBlog = scanEvidence.siteMetrics?.discoveredSections?.hasBlogUrl || false;
+
+  // Fix for Issue #2 + #9: Check navigation links (if available)
+  const navHasBlogLink = scanEvidence.navigation?.hasBlogLink || false;
+
+  const result = currentPageIsBlog || hasArticleSchema || crawlerFoundBlog || navHasBlogLink;
+
+  console.log('[Detection] Blog detected:', result, {
+    currentPageIsBlog,
+    hasArticleSchema,
+    crawlerFoundBlog,
+    navHasBlogLink
+  });
+
+  return result;
 }
 
 function detectLocalBusiness(scanEvidence) {
