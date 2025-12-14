@@ -86,6 +86,24 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
       console.log(`✅ Stripe customer created: ${customerId}`);
     }
 
+    // Build subscription_data with metadata
+    const subscriptionData = {
+      metadata: {
+        userId: userId.toString(),
+        domain,
+        plan,
+        billing_cycle: billing
+      }
+    };
+
+    // Apply launch coupon for monthly plans (makes monthly = annual price)
+    if (billing === 'monthly' && process.env.STRIPE_LAUNCH_COUPON_ID) {
+      subscriptionData.discounts = [{
+        coupon: process.env.STRIPE_LAUNCH_COUPON_ID
+      }];
+      console.log(`🎟️ Applying launch coupon: ${process.env.STRIPE_LAUNCH_COUPON_ID}`);
+    }
+
     // Create Checkout Session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -105,14 +123,7 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
         plan,
         billing_cycle: billing
       },
-      subscription_data: {
-        metadata: {
-          userId: userId.toString(),
-          domain,
-          plan,
-          billing_cycle: billing
-        }
-      }
+      subscription_data: subscriptionData
     });
 
     console.log(`✅ Checkout session created: ${session.id} (${billing} billing)`);
