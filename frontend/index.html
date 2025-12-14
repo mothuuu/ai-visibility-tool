@@ -824,6 +824,475 @@
             margin-top: 0.25rem;
         }
 
+        /* ================================ */
+        /* LAUNCH PROMO BANNER              */
+        /* Remove after Jan 31, 2026        */
+        /* ================================ */
+        .launch-banner {
+            background: #1a1a2e;
+            border-radius: 20px;
+            padding: 32px 40px 28px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            min-height: 200px;
+            margin-bottom: 3rem;
+        }
+
+        .launch-banner::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -5%;
+            width: 350px;
+            height: 350px;
+            background: radial-gradient(circle, var(--purple) 0%, transparent 70%);
+            opacity: 0.4;
+        }
+
+        .launch-banner::after {
+            content: '';
+            position: absolute;
+            bottom: -60%;
+            left: 15%;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, var(--cyan) 0%, transparent 70%);
+            opacity: 0.2;
+        }
+
+        .launch-banner-content {
+            position: relative;
+            z-index: 2;
+            flex: 1;
+        }
+
+        .launch-banner-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--pink);
+            color: white;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 8px 18px;
+            border-radius: 25px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 20px rgba(243, 28, 126, 0.4);
+            animation: launchPulse 2s infinite;
+        }
+
+        @keyframes launchPulse {
+            0%, 100% { box-shadow: 0 4px 20px rgba(243, 28, 126, 0.4); }
+            50% { box-shadow: 0 4px 30px rgba(243, 28, 126, 0.6); }
+        }
+
+        .launch-banner-tag .countdown-text {
+            background: rgba(255,255,255,0.25);
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        .launch-banner-headline {
+            font-size: 30px;
+            font-weight: 800;
+            color: #ffffff;
+            margin-bottom: 12px;
+            line-height: 1.2;
+        }
+
+        .launch-banner-headline .highlight {
+            color: var(--cyan);
+        }
+
+        .launch-price-box {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(255,255,255,0.1);
+            padding: 10px 24px;
+            border-radius: 30px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .launch-price-new {
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--cyan);
+        }
+
+        .launch-price-old {
+            font-size: 20px;
+            color: rgba(255,255,255,0.4);
+            text-decoration: line-through;
+        }
+
+        .launch-price-label {
+            font-size: 15px;
+            color: rgba(255,255,255,0.8);
+        }
+
+        .launch-fine-print {
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            max-width: 500px;
+            line-height: 1.5;
+        }
+
+        .launch-fine-print strong {
+            color: rgba(255,255,255,0.7);
+        }
+
+        /* Robot + Countdown */
+        .launch-robot-section {
+            position: relative;
+            z-index: 2;
+            margin-left: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .launch-robot-container {
+            animation: robotFloat 3s ease-in-out infinite;
+        }
+
+        @keyframes robotFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-12px); }
+        }
+
+        .launch-robot {
+            width: 120px;
+            height: 140px;
+            position: relative;
+        }
+
+        .launch-robot-head {
+            width: 100px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--cyan) 0%, #4DACA6 100%);
+            border-radius: 20px;
+            position: relative;
+            margin: 0 auto;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+
+        .launch-robot-head::before {
+            content: '';
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 20px;
+            background: var(--pink);
+            border-radius: 50%;
+            box-shadow: 0 0 20px var(--pink);
+            animation: antennaGlow 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes antennaGlow {
+            from { box-shadow: 0 0 10px var(--pink); }
+            to { box-shadow: 0 0 25px var(--pink), 0 0 40px var(--pink); }
+        }
+
+        .launch-robot-eyes {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            padding-top: 22px;
+        }
+
+        .launch-robot-eye {
+            width: 22px;
+            height: 22px;
+            background: #1a1a2e;
+            border-radius: 50%;
+            position: relative;
+            animation: robotBlink 4s infinite;
+        }
+
+        .launch-robot-eye::after {
+            content: '';
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 8px;
+            height: 8px;
+            background: #fff;
+            border-radius: 50%;
+        }
+
+        @keyframes robotBlink {
+            0%, 90%, 100% { transform: scaleY(1); }
+            95% { transform: scaleY(0.1); }
+        }
+
+        .launch-robot-mouth {
+            width: 36px;
+            height: 12px;
+            background: #1a1a2e;
+            border-radius: 0 0 10px 10px;
+            margin: 10px auto 0;
+        }
+
+        .launch-robot-body {
+            width: 70px;
+            height: 35px;
+            background: linear-gradient(135deg, var(--cyan) 0%, #4DACA6 100%);
+            margin: 6px auto 0;
+            border-radius: 12px 12px 18px 18px;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+            position: relative;
+        }
+
+        .launch-robot-body::before {
+            content: '';
+            position: absolute;
+            top: 10px;
+            left: 12px;
+            right: 12px;
+            height: 3px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 2px;
+        }
+
+        .launch-robot-body::after {
+            content: '';
+            position: absolute;
+            top: 18px;
+            left: 12px;
+            right: 12px;
+            height: 3px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+
+        .launch-speech-bubble {
+            position: absolute;
+            left: -105px;
+            top: 15px;
+            background: #fff;
+            padding: 10px 16px;
+            border-radius: 14px;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--purple);
+            white-space: nowrap;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            animation: bubbleBounce 3s ease-in-out infinite;
+        }
+
+        .launch-speech-bubble::after {
+            content: '';
+            position: absolute;
+            right: -10px;
+            top: 50%;
+            transform: translateY(-50%);
+            border: 10px solid transparent;
+            border-left-color: #fff;
+        }
+
+        @keyframes bubbleBounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        /* Countdown Timer */
+        .launch-countdown-timer {
+            margin-top: 16px;
+            text-align: center;
+        }
+
+        .launch-countdown-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 8px;
+        }
+
+        .launch-countdown-boxes {
+            display: flex;
+            gap: 6px;
+        }
+
+        .launch-countdown-box {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            padding: 8px 6px;
+            min-width: 44px;
+            text-align: center;
+        }
+
+        .launch-countdown-number {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--cyan);
+            line-height: 1;
+            display: block;
+        }
+
+        .launch-countdown-unit {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: rgba(255,255,255,0.5);
+            margin-top: 4px;
+            display: block;
+        }
+
+        .launch-countdown-box.seconds .launch-countdown-number {
+            animation: secondPulse 1s infinite;
+        }
+
+        @keyframes secondPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Launch Banner Responsive */
+        @media (max-width: 900px) {
+            .launch-banner {
+                padding: 28px 24px 24px;
+            }
+
+            .launch-banner-headline {
+                font-size: 24px;
+            }
+
+            .launch-robot-section {
+                margin-left: 20px;
+            }
+
+            .launch-robot {
+                width: 100px;
+                height: 120px;
+            }
+
+            .launch-robot-head {
+                width: 85px;
+                height: 68px;
+            }
+
+            .launch-robot-eyes {
+                gap: 16px;
+                padding-top: 18px;
+            }
+
+            .launch-robot-eye {
+                width: 18px;
+                height: 18px;
+            }
+
+            .launch-robot-eye::after {
+                width: 6px;
+                height: 6px;
+                top: 3px;
+                left: 3px;
+            }
+
+            .launch-robot-mouth {
+                width: 30px;
+                height: 10px;
+                margin-top: 8px;
+            }
+
+            .launch-robot-body {
+                width: 58px;
+                height: 28px;
+            }
+
+            .launch-speech-bubble {
+                left: -95px;
+                font-size: 12px;
+                padding: 8px 12px;
+            }
+
+            .launch-countdown-box {
+                min-width: 38px;
+                padding: 6px 4px;
+            }
+
+            .launch-countdown-number {
+                font-size: 16px;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .launch-banner {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .launch-robot-section {
+                margin-left: 0;
+                margin-top: 24px;
+                order: 1;
+            }
+
+            .launch-speech-bubble {
+                left: auto;
+                right: -85px;
+                top: 10px;
+            }
+
+            .launch-speech-bubble::after {
+                right: auto;
+                left: -10px;
+                border-left-color: transparent;
+                border-right-color: #fff;
+            }
+
+            .launch-fine-print {
+                max-width: 100%;
+            }
+
+            .launch-price-box {
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 8px;
+            }
+
+            .launch-countdown-boxes {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .launch-speech-bubble {
+                display: none;
+            }
+
+            .launch-banner-headline {
+                font-size: 20px;
+            }
+
+            .launch-price-new {
+                font-size: 28px;
+            }
+
+            .launch-countdown-box {
+                min-width: 34px;
+                padding: 5px 3px;
+            }
+
+            .launch-countdown-number {
+                font-size: 14px;
+            }
+
+            .launch-countdown-unit {
+                font-size: 8px;
+            }
+        }
+
         /* Final CTA Section */
         .final-cta {
             padding: 100px 5%;
@@ -2004,6 +2473,67 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                 <p class="section-subtitle">Start free. Upgrade when you're ready to dominate AI search.</p>
             </div>
 
+            <!-- LAUNCH PROMO: Remove after Jan 31, 2026 -->
+            <div class="launch-banner">
+                <div class="launch-banner-content">
+                    <div class="launch-banner-tag">
+                        🎉 Launch Pricing
+                        <span class="countdown-text">Ends Jan 31, 2026</span>
+                    </div>
+                    <div class="launch-banner-headline">
+                        Lock in <span class="highlight">$19/mo forever</span>. No catch.
+                    </div>
+                    <div class="launch-price-box">
+                        <span class="launch-price-new">$19</span>
+                        <span class="launch-price-old">$29</span>
+                        <span class="launch-price-label">/mo locked for life</span>
+                    </div>
+                    <div class="launch-fine-print">
+                        <strong>How it works:</strong> Sign up for monthly billing before Jan 31, 2026 and get our annual rate ($19/mo) applied to your monthly subscription — forever. No annual commitment required. Cancel anytime.
+                    </div>
+                </div>
+
+                <div class="launch-robot-section">
+                    <div class="launch-robot-container">
+                        <div class="launch-speech-bubble">Don't miss out!</div>
+                        <div class="launch-robot">
+                            <div class="launch-robot-head">
+                                <div class="launch-robot-eyes">
+                                    <div class="launch-robot-eye"></div>
+                                    <div class="launch-robot-eye"></div>
+                                </div>
+                                <div class="launch-robot-mouth"></div>
+                            </div>
+                            <div class="launch-robot-body"></div>
+                        </div>
+                    </div>
+
+                    <!-- Countdown Timer -->
+                    <div class="launch-countdown-timer">
+                        <div class="launch-countdown-label">Offer ends in</div>
+                        <div class="launch-countdown-boxes">
+                            <div class="launch-countdown-box">
+                                <span class="launch-countdown-number" id="launchDays">00</span>
+                                <span class="launch-countdown-unit">Days</span>
+                            </div>
+                            <div class="launch-countdown-box">
+                                <span class="launch-countdown-number" id="launchHours">00</span>
+                                <span class="launch-countdown-unit">Hrs</span>
+                            </div>
+                            <div class="launch-countdown-box">
+                                <span class="launch-countdown-number" id="launchMinutes">00</span>
+                                <span class="launch-countdown-unit">Min</span>
+                            </div>
+                            <div class="launch-countdown-box seconds">
+                                <span class="launch-countdown-number" id="launchSeconds">00</span>
+                                <span class="launch-countdown-unit">Sec</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- END LAUNCH PROMO -->
+
             <!-- Billing Toggle -->
             <div class="billing-toggle-container">
                 <div class="billing-toggle">
@@ -2729,6 +3259,39 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                 document.body.classList.remove('monthly-mode');
             }
         }
+
+        // LAUNCH PROMO: Countdown timer - Remove after Jan 31, 2026
+        (function initLaunchCountdown() {
+            const deadline = new Date('January 31, 2026 23:59:59').getTime();
+
+            function updateLaunchCountdown() {
+                const now = new Date().getTime();
+                const distance = deadline - now;
+
+                if (distance < 0) {
+                    // Offer expired
+                    document.getElementById('launchDays').textContent = '00';
+                    document.getElementById('launchHours').textContent = '00';
+                    document.getElementById('launchMinutes').textContent = '00';
+                    document.getElementById('launchSeconds').textContent = '00';
+                    return;
+                }
+
+                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+                document.getElementById('launchDays').textContent = days.toString().padStart(2, '0');
+                document.getElementById('launchHours').textContent = hours.toString().padStart(2, '0');
+                document.getElementById('launchMinutes').textContent = minutes.toString().padStart(2, '0');
+                document.getElementById('launchSeconds').textContent = seconds.toString().padStart(2, '0');
+            }
+
+            // Update immediately, then every second
+            updateLaunchCountdown();
+            setInterval(updateLaunchCountdown, 1000);
+        })();
 
         // Navigate to checkout with current billing selection
         function goToCheckout(plan) {
