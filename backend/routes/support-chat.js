@@ -12,10 +12,18 @@ const anthropic = new Anthropic({
 // Incorrect pricing information can result in legal liability
 
 const knowledgeBase = {
+    product: {
+        name: "Visible2AI",
+        tagline: "Make Your Website Visible to AI Search Engines",
+        description: "Visible2AI is the first AI Visibility Score tool that helps businesses optimize their websites to appear in AI-powered search results like ChatGPT, Perplexity, Claude, and Google AI Overviews.",
+        support_email: "aivisibility@xeo.marketing"
+    },
+
     plans: {
         free: {
             name: "Free Plan",
-            price: "$0/month",
+            monthlyPrice: "$0",
+            annualPrice: "$0",
             status: "Active",
             features: [
                 "2 scans per month (resets on the 1st)",
@@ -37,8 +45,11 @@ const knowledgeBase = {
         },
         diy: {
             name: "DIY Plan",
-            price: "$29/month",
+            monthlyPrice: "$29/month",
+            annualPrice: "$19/month (billed annually at $228/year)",
+            annualSavings: "Save 34% with annual billing",
             status: "Active - Available Now",
+            launchPromo: "🚀 LAUNCH SPECIAL: Use code at checkout for discount on monthly plans (limited time)",
             features: [
                 "25 scans per month (resets on the 1st)",
                 "Scan 5 pages per domain (homepage + 4 additional pages)",
@@ -55,7 +66,7 @@ const knowledgeBase = {
                 "Score trend analysis",
                 "Track up to 2 competitor websites (score-only view)",
                 "Cancel anytime",
-                "Monthly billing via Stripe"
+                "Monthly or annual billing via Stripe"
             ],
             limits: [
                 "All pages must be from the SAME domain",
@@ -69,10 +80,12 @@ const knowledgeBase = {
             },
             perfectFor: "Small businesses, startups, consultants tracking key pages"
         },
-        premium: {
-            name: "Premium Plan",
-            price: "$99/month",
-            status: "Coming Soon - Waitlist Open",
+        pro: {
+            name: "Pro Plan",
+            monthlyPrice: "$149/month",
+            annualPrice: "$99/month (billed annually at $1,188/year)",
+            annualSavings: "Save 34% with annual billing",
+            status: "COMING SOON - Join Waitlist",
             expectedLaunch: "Q1 2026",
             features: [
                 "Everything in DIY, PLUS:",
@@ -96,15 +109,17 @@ const knowledgeBase = {
             },
             perfectFor: "Mid-size businesses, agencies managing single clients, brands focused on AI discoverability"
         },
-        agency: {
-            name: "Agency Plan",
-            price: "$499/month",
-            status: "Coming Soon - Waitlist Open",
-            expectedLaunch: "Mid 2026 (post-Premium validation)",
+        enterprise: {
+            name: "Enterprise Plan",
+            monthlyPrice: "$499/month",
+            annualPrice: "$349/month (billed annually at $4,188/year)",
+            annualSavings: "Save 30% with annual billing",
+            status: "COMING SOON - Join Waitlist",
+            expectedLaunch: "Mid 2026",
             features: [
-                "Everything in Premium × 10 Domains",
+                "Everything in Pro × 10 Domains",
                 "Track 10 separate client domains",
-                "All Premium features PER domain (50 scans, 25 pages, dual indexes)",
+                "All Pro features PER domain (50 scans, 25 pages, dual indexes)",
                 "Unified agency dashboard",
                 "Team member access controls",
                 "Client management tools",
@@ -116,26 +131,26 @@ const knowledgeBase = {
                 "Role-based permissions (view-only, editor, admin)"
             ],
             perfectFor: "Marketing agencies, MSPs, enterprise consultants managing multiple client domains",
-            notes: "For more than 10 domains, contact aivisibility@xeo.marketing for enterprise pricing"
+            notes: "For more than 10 domains, contact aivisibility@xeo.marketing for custom enterprise pricing"
         }
     },
 
     features: {
-        scanQuota: "Free plan: 2 scans/month, DIY plan: 25 scans/month, Premium plan: 50 scans/month, Agency plan: 50 scans/month per domain. Scans reset on the 1st of each month and do NOT rollover.",
+        scanQuota: "Free plan: 2 scans/month, DIY plan: 25 scans/month, Pro plan: 50 scans/month, Enterprise plan: 50 scans/month per domain. Scans reset on the 1st of each month and do NOT rollover.",
 
-        pageScanning: "Free: Homepage only (1 page). DIY: 5 pages per domain (homepage + 4 you choose). Premium: 25 pages per domain. Agency: 25 pages per domain. All pages must be from the SAME domain. Homepage is always locked and required for paid plans.",
+        pageScanning: "Free: Homepage only (1 page). DIY: 5 pages per domain (homepage + 4 you choose). Pro: 25 pages per domain. Enterprise: 25 pages per domain × 10 domains. All pages must be from the SAME domain. Homepage is always locked and required for paid plans.",
 
-        scoring: "Your AI Visibility Score is calculated from 0-1000 based on how well AI systems can understand and present your content across 8 categories: Schema, Entities, FAQs, Citations, Crawlability, Speed, Trust, and AEO Content. Higher scores mean better AI search visibility.",
+        scoring: "Your AI Visibility Score is calculated from 0-1000 based on how well AI systems can understand and present your content across 8 categories: Schema, Entities, FAQs, Citations, Crawlability, Speed, Trust, and AEO Content. Higher scores mean better AI search visibility in ChatGPT, Perplexity, Claude, and Google AI Overviews.",
 
-        recommendations: "Free: Top 3 priority recommendations. DIY: Up to 15 detailed recommendations with code snippets. Premium: Up to 25 detailed recommendations. We provide both domain-wide and page-level action items tailored to your actual content.",
+        recommendations: "Free: Top 3 priority recommendations. DIY: Up to 15 detailed recommendations with code snippets. Pro: Up to 25 detailed recommendations. We provide both domain-wide and page-level action items tailored to your actual content.",
 
-        competitorTracking: "Free: None. DIY: 2 competitors (score-only, no breakdown). Premium: 3 competitors (full category breakdowns + gap analysis). Agency: 3 competitors per domain.",
+        competitorTracking: "Free: None. DIY: 2 competitors (score-only, no breakdown). Pro: 3 competitors (full category breakdowns + gap analysis). Enterprise: 3 competitors per domain.",
 
-        export: "Free & DIY: JSON-LD export only. Premium & Agency: JSON-LD + PDF export for comprehensive reporting.",
+        export: "Free & DIY: JSON-LD export only. Pro & Enterprise: JSON-LD + PDF export for comprehensive reporting.",
 
-        dualIndexes: "Premium and Agency plans include both Website Visibility Index (how well AI can understand your site) and Brand Visibility Index (how AI engines perceive your brand across the web).",
+        dualIndexes: "Pro and Enterprise plans include both Website Visibility Index (how well AI can understand your site) and Brand Visibility Index (how AI engines perceive your brand across the web).",
 
-        waitlist: "Premium ($99/mo) launches Q1 2026. Agency ($499/mo) launches mid 2026. Join waitlist to be notified first and get early-bird pricing."
+        waitlist: "Pro ($99-$149/mo) launches Q1 2026. Enterprise ($349-$499/mo) launches mid 2026. Join waitlist to be notified first and get early-bird pricing."
     },
 
     dashboardNavigation: {
@@ -157,7 +172,7 @@ const knowledgeBase = {
 
         cancelSubscription: "You can cancel your subscription anytime from your dashboard. Your access will continue until the end of your billing period.",
 
-        billing: "Billing happens on the same day each month as your original subscription date. You'll receive an email receipt for each payment."
+        billing: "Billing happens on the same day each month (monthly) or year (annual) as your original subscription date. You'll receive an email receipt for each payment. Annual plans are billed upfront for the full year."
     },
 
     technicalHelp: {
@@ -169,7 +184,7 @@ const knowledgeBase = {
 
         dataNotShowing: "Try refreshing the page. If data still doesn't appear, log out and log back in. Contact support if the issue persists.",
 
-        cantScanAnotherPage: "Free plan users: Your plan includes homepage-only scanning. Upgrade to DIY ($29/mo) to scan 5 pages. DIY users: You can scan up to 5 pages total per domain. To add more, upgrade to Premium (waitlist) for 25 pages.",
+        cantScanAnotherPage: "Free plan users: Your plan includes homepage-only scanning. Upgrade to DIY ($19-$29/mo) to scan 5 pages. DIY users: You can scan up to 5 pages total per domain. To add more, upgrade to Pro (waitlist) for 25 pages.",
 
         changingPages: "DIY users can change their 5 tracked pages anytime (except homepage, which is locked). Historical data for removed pages is archived and accessible.",
 
@@ -177,24 +192,30 @@ const knowledgeBase = {
     },
 
     commonQuestions: {
-        whichPlan: "Quick guide: Just testing? → Free Plan. Small business tracking key pages? → DIY Plan ($29/mo). Need comprehensive visibility? → Premium Plan (waitlist, $99/mo). Managing multiple clients? → Agency Plan (waitlist, $499/mo).",
+        whatIsVisible2AI: "Visible2AI is an AI Visibility Score tool that analyzes your website and tells you how well AI search engines (ChatGPT, Perplexity, Claude, Google AI Overviews) can find, understand, and recommend your content. We score you 0-1000 and give actionable recommendations to improve.",
 
-        competitorDifference: "DIY: 2 competitors, score-only (e.g., 'Competitor A: 720/1000'). Premium: 3 competitors with full category breakdowns, side-by-side comparison, and gap analysis showing exactly what they do better.",
+        whichPlan: "Quick guide: Just testing? → Free Plan ($0). Small business tracking key pages? → DIY Plan ($19-$29/mo). Need comprehensive visibility with brand monitoring? → Pro Plan (waitlist, $99-$149/mo). Managing multiple clients? → Enterprise Plan (waitlist, $349-$499/mo).",
 
-        upgradeFromDIY: "Yes! Once Premium launches (Q1 2026), you can upgrade seamlessly. Your current data carries over automatically.",
+        monthlyVsAnnual: "Annual billing saves you 30-34% compared to monthly. For DIY: $19/mo annually vs $29/mo monthly. Annual plans are billed upfront for the full year.",
 
-        multipleDomains: "Free & DIY: 1 domain only. Premium: 1 domain. Agency: 10 domains. For tracking multiple domains, join the Agency waitlist.",
+        competitorDifference: "DIY: 2 competitors, score-only (e.g., 'Competitor A: 720/1000'). Pro: 3 competitors with full category breakdowns, side-by-side comparison, and gap analysis showing exactly what they do better.",
 
-        brandVisibilityIndex: "Available in Premium & Agency. It measures how AI engines perceive your brand across the web through news mentions, reviews, social proof, and citations - not just your website.",
+        upgradeFromDIY: "Yes! Once Pro launches (Q1 2026), you can upgrade seamlessly. Your current data carries over automatically.",
+
+        multipleDomains: "Free & DIY: 1 domain only. Pro: 1 domain. Enterprise: 10 domains. For tracking multiple domains, join the Enterprise waitlist.",
+
+        brandVisibilityIndex: "Available in Pro & Enterprise. It measures how AI engines perceive your brand across the web through news mentions, reviews, social proof, and citations - not just your website.",
 
         cancelation: "You can cancel anytime from your dashboard or Stripe portal. Your access continues until the end of your billing period. No partial refunds.",
 
-        joinWaitlist: "Premium ($99/mo, Q1 2026) and Agency ($499/mo, mid 2026) are on waitlist. Join to be notified first and get early-bird pricing. Visit the upgrade page or contact aivisibility@xeo.marketing."
+        joinWaitlist: "Pro ($99-$149/mo, Q1 2026) and Enterprise ($349-$499/mo, mid 2026) are on waitlist. Join to be notified first and get early-bird pricing. Visit the upgrade page or contact aivisibility@xeo.marketing.",
+
+        launchPromo: "We're currently running a launch promotion with discounts on monthly DIY subscriptions. Check the pricing page for current offers."
     }
 };
 
 // System prompt for AI assistant
-const systemPrompt = `You are a helpful AI support assistant for AI Visibility Score, a tool that helps websites improve their visibility in AI search engines like ChatGPT, Perplexity, and Claude.
+const systemPrompt = `You are XeoAI, the friendly AI support assistant for Visible2AI - the AI Visibility Score tool that helps businesses optimize their websites to appear in AI-powered search results like ChatGPT, Perplexity, Claude, and Google AI Overviews.
 
 ⚠️ CRITICAL ANTI-HALLUCINATION RULES (MUST FOLLOW):
 1. ONLY use information from the knowledge base provided below - NEVER make up details
@@ -202,27 +223,30 @@ const systemPrompt = `You are a helpful AI support assistant for AI Visibility S
 3. If you don't know something, say "I don't have that information" and direct users to aivisibility@xeo.marketing
 4. DO NOT invent features, prices, or plan details that aren't in the knowledge base
 5. When referencing the user's plan, ONLY use context.plan - do NOT guess their specific price
-6. Premium and Agency plans are NOT YET AVAILABLE - they are waitlist only
+6. Pro and Enterprise plans are NOT YET AVAILABLE - they are waitlist only (COMING SOON)
 
 Your role is to:
 1. Answer questions about pricing, plans, and features USING ONLY THE KNOWLEDGE BASE
 2. Help users navigate the dashboard
 3. Provide technical troubleshooting support
-4. Explain how the tool works
+4. Explain how the AI Visibility Score works and why it matters for AI search
 5. Help with account issues like password resets
+6. Explain the difference between monthly and annual billing options
 
 Be friendly, concise, and helpful. Use the knowledge base provided to give ACCURATE information only.
 
 ✅ VERIFIED PRICING (always accurate):
 
-Free Plan ($0/month) - ACTIVE:
+Free Plan ($0) - ACTIVE:
 - 2 scans/month, homepage only
-- AI Visibility Score with 8-category breakdown
+- AI Visibility Score (0-1000) with 8-category breakdown
 - Top 3 priority recommendations
 - Email verification required
 - Perfect for: Testing the tool
 
-DIY Plan ($29/month) - ACTIVE:
+DIY Plan - ACTIVE:
+- Monthly: $29/month
+- Annual: $19/month (billed annually at $228/year) - SAVE 34%
 - 25 scans/month, 5 pages per domain
 - Up to 15 detailed recommendations with code snippets
 - Industry-specific FAQ schema (JSON-LD)
@@ -231,7 +255,9 @@ DIY Plan ($29/month) - ACTIVE:
 - Cancel anytime
 - Perfect for: Small businesses tracking key pages
 
-Premium Plan ($99/month) - WAITLIST ONLY (launches Q1 2026):
+Pro Plan - COMING SOON (Q1 2026):
+- Monthly: $149/month
+- Annual: $99/month (billed annually at $1,188/year) - SAVE 34%
 - 50 scans/month, 25 pages per domain
 - Dual indexes: Website + Brand Visibility Index
 - Up to 25 recommendations
@@ -239,8 +265,10 @@ Premium Plan ($99/month) - WAITLIST ONLY (launches Q1 2026):
 - Outside-in crawl, PDF export, priority support
 - Perfect for: Mid-size businesses, agencies
 
-Agency Plan ($499/month) - WAITLIST ONLY (launches mid 2026):
-- All Premium features × 10 domains
+Enterprise Plan - COMING SOON (Mid 2026):
+- Monthly: $499/month
+- Annual: $349/month (billed annually at $4,188/year) - SAVE 30%
+- All Pro features × 10 domains
 - Team management, white-label reports
 - Perfect for: Agencies managing multiple clients
 
@@ -248,10 +276,18 @@ KEY FACTS:
 - Scans reset on the 1st of each month (NO ROLLOVER)
 - All pages must be from the SAME domain
 - Homepage is locked and required for paid plans
-- Competitor tracking: DIY = score-only, Premium = full analysis
-- PDF export only available in Premium & Agency
+- Competitor tracking: DIY = score-only, Pro = full analysis
+- PDF export only available in Pro & Enterprise
+- Annual billing saves 30-34% compared to monthly
 
-When users ask about Premium or Agency, remind them these are WAITLIST ONLY and not yet purchasable.
+When users ask about Pro or Enterprise, remind them these are COMING SOON (waitlist only) and not yet purchasable.
+
+TONE GUIDELINES:
+- Be helpful and encouraging about improving AI visibility
+- Keep responses concise but informative
+- Use clear language, avoid jargon
+- If unsure, direct to support email: aivisibility@xeo.marketing
+- Celebrate user progress and encourage implementation of recommendations
 
 Always be encouraging and positive about the user's progress in improving their AI visibility!`;
 
