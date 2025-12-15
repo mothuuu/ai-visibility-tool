@@ -14,6 +14,10 @@
             --pink: #f31c7e;
             --purple: #7D41A5;
             --teal: #4DACA6;
+            --pastel-cyan: #E8F7FA;
+            --pastel-pink: #FDF0F5;
+            --pastel-purple: #F5F0F9;
+            --pastel-teal: #E8F5F4;
         }
 
         * {
@@ -27,6 +31,209 @@
             line-height: 1.6;
             color: #2d3748;
             overflow-x: hidden;
+        }
+
+        /* ================================ */
+        /* FLOATING DECORATIVE SHAPES       */
+        /* ================================ */
+        .floating-shape {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .floating-ring {
+            position: absolute;
+            border-radius: 50%;
+            background: transparent;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .floating-dot {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .floating-triangle {
+            position: absolute;
+            width: 0;
+            height: 0;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .floating-squiggle {
+            position: absolute;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Gradient Blobs */
+        .shape-cyan-large {
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(0,185,218,0.15) 0%, transparent 70%);
+        }
+
+        .shape-cyan-medium {
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, rgba(0,185,218,0.12) 0%, transparent 70%);
+        }
+
+        .shape-pink-large {
+            width: 280px;
+            height: 280px;
+            background: radial-gradient(circle, rgba(243,28,126,0.12) 0%, transparent 70%);
+        }
+
+        .shape-pink-medium {
+            width: 180px;
+            height: 180px;
+            background: radial-gradient(circle, rgba(243,28,126,0.1) 0%, transparent 70%);
+        }
+
+        .shape-purple-large {
+            width: 250px;
+            height: 250px;
+            background: radial-gradient(circle, rgba(125,65,165,0.12) 0%, transparent 70%);
+        }
+
+        .shape-purple-medium {
+            width: 150px;
+            height: 150px;
+            background: radial-gradient(circle, rgba(125,65,165,0.1) 0%, transparent 70%);
+        }
+
+        .shape-teal-medium {
+            width: 180px;
+            height: 180px;
+            background: radial-gradient(circle, rgba(77,172,166,0.12) 0%, transparent 70%);
+        }
+
+        /* Rings */
+        .ring-cyan {
+            width: 120px;
+            height: 120px;
+            border: 3px solid rgba(0,185,218,0.25);
+        }
+
+        .ring-cyan-small {
+            width: 80px;
+            height: 80px;
+            border: 2px solid rgba(0,185,218,0.2);
+        }
+
+        .ring-pink {
+            width: 100px;
+            height: 100px;
+            border: 3px solid rgba(243,28,126,0.2);
+        }
+
+        .ring-pink-small {
+            width: 60px;
+            height: 60px;
+            border: 2px solid rgba(243,28,126,0.18);
+        }
+
+        .ring-purple {
+            width: 90px;
+            height: 90px;
+            border: 3px solid rgba(125,65,165,0.2);
+        }
+
+        /* Dots */
+        .dot-cyan {
+            width: 12px;
+            height: 12px;
+            background: var(--cyan);
+            opacity: 0.5;
+        }
+
+        .dot-cyan-large {
+            width: 18px;
+            height: 18px;
+            background: var(--cyan);
+            opacity: 0.4;
+        }
+
+        .dot-pink {
+            width: 10px;
+            height: 10px;
+            background: var(--hot-pink);
+            opacity: 0.45;
+        }
+
+        .dot-pink-large {
+            width: 16px;
+            height: 16px;
+            background: var(--hot-pink);
+            opacity: 0.35;
+        }
+
+        .dot-purple {
+            width: 14px;
+            height: 14px;
+            background: var(--purple);
+            opacity: 0.4;
+        }
+
+        .dot-teal {
+            width: 10px;
+            height: 10px;
+            background: var(--teal);
+            opacity: 0.5;
+        }
+
+        /* Triangles */
+        .triangle-cyan-up {
+            border-left: 25px solid transparent;
+            border-right: 25px solid transparent;
+            border-bottom: 40px solid rgba(0,185,218,0.15);
+        }
+
+        .triangle-cyan-down {
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 35px solid rgba(0,185,218,0.12);
+        }
+
+        .triangle-pink-up {
+            border-left: 30px solid transparent;
+            border-right: 30px solid transparent;
+            border-bottom: 50px solid rgba(243,28,126,0.12);
+        }
+
+        .triangle-pink-down {
+            border-left: 18px solid transparent;
+            border-right: 18px solid transparent;
+            border-top: 30px solid rgba(243,28,126,0.1);
+        }
+
+        .triangle-purple-up {
+            border-left: 22px solid transparent;
+            border-right: 22px solid transparent;
+            border-bottom: 38px solid rgba(125,65,165,0.12);
+        }
+
+        .triangle-teal-down {
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 25px solid rgba(77,172,166,0.15);
+        }
+
+        /* Hide shapes on mobile for performance */
+        @media (max-width: 968px) {
+            .floating-shape,
+            .floating-ring,
+            .floating-triangle,
+            .floating-squiggle {
+                display: none;
+            }
         }
 
         /* Navigation */
