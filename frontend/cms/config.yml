@@ -1,0 +1,279 @@
+# Decap CMS Configuration for Visible2AI
+# Documentation: https://decapcms.org/docs/
+
+backend:
+  name: git-gateway
+  branch: main  # Branch to update (change if using different branch)
+
+# Local development - uncomment to test locally without auth
+# local_backend: true
+
+# Media/image uploads
+media_folder: "frontend/images/uploads"  # Where uploaded images are stored
+public_folder: "/images/uploads"          # Public URL path for images
+
+# Site URL for preview links
+site_url: https://www.visible2ai.com
+display_url: https://www.visible2ai.com
+
+# Logo in the CMS
+logo_url: /logo.png
+
+# Slug settings
+slug:
+  encoding: "ascii"
+  clean_accents: true
+  sanitize_replacement: "-"
+
+# ===========================================
+# COLLECTIONS - Define editable content types
+# ===========================================
+
+collections:
+  # ---------------------
+  # BLOG POSTS
+  # ---------------------
+  - name: "blog"
+    label: "Blog Posts"
+    label_singular: "Blog Post"
+    folder: "frontend/content/blog"
+    create: true
+    slug: "{{slug}}"
+    preview_path: "blog/{{slug}}"
+    summary: "{{title}} - {{date | date('MMM D, YYYY')}}"
+    sortable_fields: ["date", "title"]
+    view_filters:
+      - label: "Published"
+        field: published
+        pattern: true
+      - label: "Drafts"
+        field: published
+        pattern: false
+    view_groups:
+      - label: "Category"
+        field: category
+    fields:
+      - label: "Published"
+        name: "published"
+        widget: "boolean"
+        default: false
+        hint: "Toggle to publish or unpublish this post"
+
+      - label: "Title"
+        name: "title"
+        widget: "string"
+        required: true
+        hint: "The main headline of your blog post"
+
+      - label: "Publish Date"
+        name: "date"
+        widget: "datetime"
+        format: "YYYY-MM-DD"
+        date_format: "MMMM D, YYYY"
+        time_format: false
+        required: true
+
+      - label: "Author"
+        name: "author"
+        widget: "string"
+        default: "Visible2AI Team"
+        required: true
+
+      - label: "Category"
+        name: "category"
+        widget: "select"
+        options:
+          - { label: "Guide", value: "guide" }
+          - { label: "Industry News", value: "industry-news" }
+          - { label: "Media Mention", value: "media-mention" }
+          - { label: "Company News", value: "news" }
+          - { label: "Case Study", value: "case-study" }
+        default: "guide"
+        required: true
+
+      - label: "Featured Image"
+        name: "featured_image"
+        widget: "image"
+        required: true
+        hint: "Main image displayed in hero and cards (recommended: 1200x450px)"
+        media_library:
+          config:
+            max_file_size: 5000000  # 5MB
+
+      - label: "Featured Image Alt Text"
+        name: "featured_image_alt"
+        widget: "string"
+        required: true
+        hint: "Describe the image for accessibility"
+
+      - label: "Excerpt"
+        name: "excerpt"
+        widget: "text"
+        required: true
+        hint: "Short summary shown on blog listing page (150-200 characters)"
+        pattern: ['.{50,300}', "Excerpt should be 50-300 characters"]
+
+      - label: "Dateline"
+        name: "dateline"
+        widget: "string"
+        required: false
+        hint: "Optional location/date line (e.g., 'San Francisco, USA')"
+
+      - label: "Read Time"
+        name: "read_time"
+        widget: "string"
+        default: "5 min read"
+        hint: "Estimated reading time"
+
+      - label: "Body Content"
+        name: "body"
+        widget: "markdown"
+        required: true
+        hint: "Main article content - use headings, lists, quotes, and images"
+        buttons:
+          - bold
+          - italic
+          - link
+          - heading-two
+          - heading-three
+          - quote
+          - bulleted-list
+          - numbered-list
+        editor_components:
+          - image
+          - code-block
+
+      - label: "Tags"
+        name: "tags"
+        widget: "list"
+        required: false
+        hint: "Add relevant tags (press Enter after each tag)"
+        field:
+          widget: "string"
+
+      - label: "SEO - Meta Description"
+        name: "meta_description"
+        widget: "text"
+        required: false
+        hint: "Description for search engines (150-160 characters)"
+        pattern: ['.{0,160}', "Keep under 160 characters for SEO"]
+
+      - label: "Featured Post"
+        name: "featured"
+        widget: "boolean"
+        default: false
+        hint: "Show this post in the featured section on the blog page"
+
+  # ---------------------
+  # PAGE CONTENT
+  # ---------------------
+  - name: "pages"
+    label: "Page Content"
+    label_singular: "Page"
+    files:
+      # Homepage Content
+      - name: "homepage"
+        label: "Homepage"
+        file: "frontend/content/pages/homepage.json"
+        fields:
+          - label: "Hero Section"
+            name: "hero"
+            widget: "object"
+            collapsed: true
+            fields:
+              - { label: "Headline", name: "headline", widget: "string" }
+              - { label: "Subheadline", name: "subheadline", widget: "text" }
+              - { label: "CTA Button Text", name: "cta_text", widget: "string" }
+
+          - label: "Problem Section"
+            name: "problem"
+            widget: "object"
+            collapsed: true
+            fields:
+              - { label: "Title", name: "title", widget: "string" }
+              - { label: "Description", name: "description", widget: "text" }
+
+          - label: "Social Proof Stats"
+            name: "stats"
+            widget: "list"
+            max: 4
+            fields:
+              - { label: "Number", name: "number", widget: "string" }
+              - { label: "Label", name: "label", widget: "string" }
+
+      # About Page Content
+      - name: "about"
+        label: "About Page"
+        file: "frontend/content/pages/about.json"
+        fields:
+          - label: "Hero Title"
+            name: "hero_title"
+            widget: "string"
+
+          - label: "Hero Description"
+            name: "hero_description"
+            widget: "text"
+
+          - label: "Mission Statement"
+            name: "mission"
+            widget: "markdown"
+
+          - label: "Team Members"
+            name: "team"
+            widget: "list"
+            fields:
+              - { label: "Name", name: "name", widget: "string" }
+              - { label: "Role", name: "role", widget: "string" }
+              - { label: "Photo", name: "photo", widget: "image", required: false }
+              - { label: "Bio", name: "bio", widget: "text" }
+
+  # ---------------------
+  # SITE SETTINGS
+  # ---------------------
+  - name: "settings"
+    label: "Site Settings"
+    files:
+      - name: "general"
+        label: "General Settings"
+        file: "frontend/content/settings/general.json"
+        fields:
+          - label: "Site Name"
+            name: "site_name"
+            widget: "string"
+            default: "Visible2AI"
+
+          - label: "Site Description"
+            name: "site_description"
+            widget: "text"
+
+          - label: "Contact Email"
+            name: "contact_email"
+            widget: "string"
+
+          - label: "Social Links"
+            name: "social"
+            widget: "object"
+            collapsed: true
+            fields:
+              - { label: "Twitter/X URL", name: "twitter", widget: "string", required: false }
+              - { label: "LinkedIn URL", name: "linkedin", widget: "string", required: false }
+              - { label: "Facebook URL", name: "facebook", widget: "string", required: false }
+
+      - name: "navigation"
+        label: "Navigation"
+        file: "frontend/content/settings/navigation.json"
+        fields:
+          - label: "Main Navigation"
+            name: "main_nav"
+            widget: "list"
+            fields:
+              - { label: "Label", name: "label", widget: "string" }
+              - { label: "URL", name: "url", widget: "string" }
+              - { label: "Open in New Tab", name: "new_tab", widget: "boolean", default: false }
+
+          - label: "Footer Links"
+            name: "footer_links"
+            widget: "list"
+            fields:
+              - { label: "Label", name: "label", widget: "string" }
+              - { label: "URL", name: "url", widget: "string" }

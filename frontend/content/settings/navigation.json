@@ -1,0 +1,15 @@
+{
+  "main_nav": [
+    { "label": "Home", "url": "/", "new_tab": false },
+    { "label": "About", "url": "/about.html", "new_tab": false },
+    { "label": "How It Works", "url": "/how-it-works.html", "new_tab": false },
+    { "label": "Blog", "url": "/blog.html", "new_tab": false }
+  ],
+  "footer_links": [
+    { "label": "Home", "url": "/" },
+    { "label": "About", "url": "/about.html" },
+    { "label": "How It Works", "url": "/how-it-works.html" },
+    { "label": "Blog", "url": "/blog.html" },
+    { "label": "Sign In", "url": "/auth.html" }
+  ]
+}

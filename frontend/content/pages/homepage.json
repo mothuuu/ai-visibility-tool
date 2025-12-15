@@ -1,0 +1,16 @@
+{
+  "hero": {
+    "headline": "Is Your Business Visible to AI?",
+    "subheadline": "Discover how ChatGPT, Perplexity, and Claude see your brand. Get your free AI Visibility Score in 60 seconds.",
+    "cta_text": "Check Your Score Free"
+  },
+  "problem": {
+    "title": "The Problem",
+    "description": "68% of B2B buyers now use AI assistants for research. If AI can't find you, neither can your customers."
+  },
+  "stats": [
+    { "number": "68%", "label": "of B2B buyers use AI for research" },
+    { "number": "3x", "label": "more likely to convert from AI referrals" },
+    { "number": "45%", "label": "of searches will be AI-powered by 2026" }
+  ]
+}
