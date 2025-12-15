@@ -400,10 +400,33 @@
         /* Content Sections */
         .section {
             padding: 80px 5%;
+            position: relative;
+            overflow: hidden;
         }
 
-        .section:nth-child(even) {
-            background: #f8f9fa;
+        /* Alternating pastel backgrounds */
+        .section:nth-of-type(1) {
+            background: var(--pastel-purple);
+        }
+
+        .section:nth-of-type(2) {
+            background: var(--pastel-cyan);
+        }
+
+        .section:nth-of-type(3) {
+            background: var(--pastel-pink);
+        }
+
+        .section:nth-of-type(4) {
+            background: var(--pastel-teal);
+        }
+
+        .section:nth-of-type(5) {
+            background: var(--pastel-purple);
+        }
+
+        .section:nth-of-type(6) {
+            background: var(--pastel-cyan);
         }
 
         .section-container {
@@ -413,6 +436,8 @@
             grid-template-columns: 1fr 1fr;
             gap: 60px;
             align-items: center;
+            position: relative;
+            z-index: 2;
         }
 
         .section-container.reverse {
@@ -517,12 +542,16 @@
         /* Use Cases Section */
         .use-cases-section {
             padding: 80px 5%;
-            background: #ffffff;
+            background: var(--pastel-pink);
+            position: relative;
+            overflow: hidden;
         }
 
         .use-cases-container {
             max-width: 1200px;
             margin: 0 auto;
+            position: relative;
+            z-index: 2;
         }
 
         .use-cases-header {
@@ -965,6 +994,19 @@
 
     <!-- Section 1: Get Started in Seconds -->
     <section class="section fade-in">
+        <!-- Floating Shapes -->
+        <div class="floating-shape shape-cyan-large" style="top: -100px; right: -80px;"></div>
+        <div class="floating-shape shape-pink-medium" style="bottom: 50px; left: -50px;"></div>
+        <div class="floating-ring ring-purple" style="top: 20%; left: 8%;"></div>
+        <div class="floating-ring ring-cyan-small" style="bottom: 30%; right: 12%;"></div>
+        <div class="floating-dot dot-cyan" style="top: 15%; right: 25%;"></div>
+        <div class="floating-dot dot-pink" style="bottom: 20%; left: 20%;"></div>
+        <div class="floating-dot dot-purple" style="top: 60%; right: 8%;"></div>
+        <div class="floating-triangle triangle-cyan-up" style="top: 30%; right: 5%;"></div>
+        <div class="floating-triangle triangle-pink-down" style="bottom: 15%; left: 12%;"></div>
+        <svg class="floating-squiggle" style="top: 25%; left: 3%; width: 120px; height: 40px; opacity: 0.3;" viewBox="0 0 120 40">
+            <path d="M0 20 Q30 0, 60 20 T120 20" stroke="#00B9DA" stroke-width="3" fill="none"/>
+        </svg>
         <div class="section-container">
             <div class="section-content">
                 <h2 class="section-title">No Learning Curve. No Tech Skills. Just Results.</h2>
@@ -986,6 +1028,20 @@
 
     <!-- Section 2: Know Exactly What's Holding You Back -->
     <section class="section fade-in">
+        <!-- Floating Shapes -->
+        <div class="floating-shape shape-purple-large" style="top: -80px; left: -100px;"></div>
+        <div class="floating-shape shape-pink-large" style="bottom: -100px; right: -80px;"></div>
+        <div class="floating-shape shape-teal-medium" style="top: 50%; right: 5%;"></div>
+        <div class="floating-ring ring-pink" style="top: 15%; right: 20%;"></div>
+        <div class="floating-ring ring-cyan" style="bottom: 20%; left: 10%;"></div>
+        <div class="floating-dot dot-pink-large" style="top: 25%; left: 15%;"></div>
+        <div class="floating-dot dot-cyan-large" style="bottom: 35%; right: 18%;"></div>
+        <div class="floating-dot dot-teal" style="top: 70%; left: 25%;"></div>
+        <div class="floating-triangle triangle-purple-up" style="bottom: 25%; left: 5%;"></div>
+        <div class="floating-triangle triangle-teal-down" style="top: 20%; right: 10%;"></div>
+        <svg class="floating-squiggle" style="bottom: 10%; right: 8%; width: 100px; height: 35px; opacity: 0.25;" viewBox="0 0 100 35">
+            <path d="M0 17 Q25 0, 50 17 T100 17" stroke="#f31c7e" stroke-width="2.5" fill="none"/>
+        </svg>
         <div class="section-container reverse">
             <div class="section-content">
                 <h2 class="section-title">Stop Guessing. Start Fixing What Actually Matters.</h2>
@@ -1004,6 +1060,18 @@
 
     <!-- Section 3: Implement Fixes Without Hiring an Expert -->
     <section class="section fade-in">
+        <!-- Floating Shapes -->
+        <div class="floating-shape shape-cyan-medium" style="top: -60px; right: 10%;"></div>
+        <div class="floating-shape shape-purple-medium" style="bottom: -40px; left: 5%;"></div>
+        <div class="floating-ring ring-pink-small" style="top: 30%; left: 8%;"></div>
+        <div class="floating-ring ring-cyan-small" style="bottom: 25%; right: 15%;"></div>
+        <div class="floating-dot dot-cyan" style="top: 20%; right: 30%;"></div>
+        <div class="floating-dot dot-purple" style="bottom: 40%; left: 18%;"></div>
+        <div class="floating-triangle triangle-cyan-down" style="top: 15%; left: 15%;"></div>
+        <div class="floating-triangle triangle-pink-up" style="bottom: 20%; right: 5%;"></div>
+        <svg class="floating-squiggle" style="top: 60%; right: 3%; width: 80px; height: 30px; opacity: 0.25;" viewBox="0 0 80 30">
+            <path d="M0 15 Q20 0, 40 15 T80 15" stroke="#7D41A5" stroke-width="2" fill="none"/>
+        </svg>
         <div class="section-container">
             <div class="section-content">
                 <h2 class="section-title">Copy. Paste. Get Found.</h2>
@@ -1022,6 +1090,18 @@
 
     <!-- Section 4: Improve at Your Own Pace -->
     <section class="section fade-in">
+        <!-- Floating Shapes -->
+        <div class="floating-shape shape-pink-medium" style="top: -50px; left: -60px;"></div>
+        <div class="floating-shape shape-cyan-large" style="bottom: 100px; right: -100px;"></div>
+        <div class="floating-ring ring-purple" style="top: 25%; right: 8%;"></div>
+        <div class="floating-ring ring-pink-small" style="bottom: 40%; left: 12%;"></div>
+        <div class="floating-dot dot-pink" style="top: 15%; left: 25%;"></div>
+        <div class="floating-dot dot-teal" style="bottom: 30%; right: 25%;"></div>
+        <div class="floating-triangle triangle-teal-down" style="top: 35%; left: 5%;"></div>
+        <div class="floating-triangle triangle-purple-up" style="bottom: 15%; right: 12%;"></div>
+        <svg class="floating-squiggle" style="top: 10%; right: 20%; width: 120px; height: 40px; opacity: 0.3;" viewBox="0 0 120 40">
+            <path d="M0 20 Q30 0, 60 20 T120 20" stroke="#00B9DA" stroke-width="3" fill="none"/>
+        </svg>
         <div class="section-container reverse">
             <div class="section-content">
                 <h2 class="section-title">5 Fixes at a Time. Real Progress Without Overwhelm.</h2>
@@ -1042,6 +1122,19 @@
 
     <!-- Section 5: Stay Visible. Stay Ahead. -->
     <section class="section fade-in">
+        <!-- Floating Shapes -->
+        <div class="floating-shape shape-cyan-large" style="top: -100px; right: -80px;"></div>
+        <div class="floating-shape shape-pink-medium" style="bottom: 50px; left: -50px;"></div>
+        <div class="floating-ring ring-purple" style="top: 20%; left: 8%;"></div>
+        <div class="floating-ring ring-cyan-small" style="bottom: 30%; right: 12%;"></div>
+        <div class="floating-dot dot-cyan" style="top: 15%; right: 25%;"></div>
+        <div class="floating-dot dot-pink" style="bottom: 20%; left: 20%;"></div>
+        <div class="floating-dot dot-purple" style="top: 60%; right: 8%;"></div>
+        <div class="floating-triangle triangle-cyan-up" style="top: 30%; right: 5%;"></div>
+        <div class="floating-triangle triangle-pink-down" style="bottom: 15%; left: 12%;"></div>
+        <svg class="floating-squiggle" style="top: 25%; left: 3%; width: 120px; height: 40px; opacity: 0.3;" viewBox="0 0 120 40">
+            <path d="M0 20 Q30 0, 60 20 T120 20" stroke="#00B9DA" stroke-width="3" fill="none"/>
+        </svg>
         <div class="section-container">
             <div class="section-content">
                 <h2 class="section-title">Hit Your Peak &mdash; Then Cruise on Autopilot.</h2>
@@ -1062,6 +1155,20 @@
 
     <!-- Section 6: See How You Stack Up -->
     <section class="section fade-in">
+        <!-- Floating Shapes -->
+        <div class="floating-shape shape-purple-large" style="top: -80px; left: -100px;"></div>
+        <div class="floating-shape shape-pink-large" style="bottom: -100px; right: -80px;"></div>
+        <div class="floating-shape shape-teal-medium" style="top: 50%; right: 5%;"></div>
+        <div class="floating-ring ring-pink" style="top: 15%; right: 20%;"></div>
+        <div class="floating-ring ring-cyan" style="bottom: 20%; left: 10%;"></div>
+        <div class="floating-dot dot-pink-large" style="top: 25%; left: 15%;"></div>
+        <div class="floating-dot dot-cyan-large" style="bottom: 35%; right: 18%;"></div>
+        <div class="floating-dot dot-teal" style="top: 70%; left: 25%;"></div>
+        <div class="floating-triangle triangle-purple-up" style="bottom: 25%; left: 5%;"></div>
+        <div class="floating-triangle triangle-teal-down" style="top: 20%; right: 10%;"></div>
+        <svg class="floating-squiggle" style="bottom: 10%; right: 8%; width: 100px; height: 35px; opacity: 0.25;" viewBox="0 0 100 35">
+            <path d="M0 17 Q25 0, 50 17 T100 17" stroke="#f31c7e" stroke-width="2.5" fill="none"/>
+        </svg>
         <div class="section-container reverse">
             <div class="section-content">
                 <h2 class="section-title">Know Your Competition Before They Know You're Coming.</h2>
@@ -1082,6 +1189,18 @@
 
     <!-- Section 7: Use Cases (Tabbed) -->
     <section class="use-cases-section fade-in">
+        <!-- Floating Shapes -->
+        <div class="floating-shape shape-cyan-medium" style="top: -60px; right: 10%;"></div>
+        <div class="floating-shape shape-purple-medium" style="bottom: -40px; left: 5%;"></div>
+        <div class="floating-ring ring-pink-small" style="top: 30%; left: 8%;"></div>
+        <div class="floating-ring ring-cyan-small" style="bottom: 25%; right: 15%;"></div>
+        <div class="floating-dot dot-cyan" style="top: 20%; right: 30%;"></div>
+        <div class="floating-dot dot-purple" style="bottom: 40%; left: 18%;"></div>
+        <div class="floating-triangle triangle-cyan-down" style="top: 15%; left: 15%;"></div>
+        <div class="floating-triangle triangle-pink-up" style="bottom: 20%; right: 5%;"></div>
+        <svg class="floating-squiggle" style="top: 60%; right: 3%; width: 80px; height: 30px; opacity: 0.25;" viewBox="0 0 80 30">
+            <path d="M0 15 Q20 0, 40 15 T80 15" stroke="#7D41A5" stroke-width="2" fill="none"/>
+        </svg>
         <div class="use-cases-container">
             <div class="use-cases-header">
                 <h2>Built for Every Industry</h2>
