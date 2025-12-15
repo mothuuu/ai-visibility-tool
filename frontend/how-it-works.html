@@ -579,6 +579,63 @@
             margin: 0 15px;
         }
 
+        /* URL Input Form */
+        .url-form {
+            background: white;
+            padding: 12px;
+            border-radius: 60px;
+            max-width: 600px;
+            margin: 0 auto;
+            display: flex;
+            gap: 10px;
+            box-shadow: 0 10px 40px rgba(0,185,218,0.15);
+        }
+
+        .url-input {
+            flex: 1;
+            padding: 16px 24px;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            outline: none;
+            min-width: 0;
+        }
+
+        .url-input::placeholder {
+            color: #a0aec0;
+        }
+
+        .url-btn {
+            padding: 16px 32px;
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--teal) 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .url-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 185, 218, 0.4);
+        }
+
+        /* Footer CTA Form */
+        .final-cta .url-form {
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .final-cta .url-btn {
+            background: linear-gradient(135deg, var(--hot-pink) 0%, var(--purple) 100%);
+        }
+
+        .final-cta .url-btn:hover {
+            box-shadow: 0 6px 20px rgba(243, 28, 126, 0.4);
+        }
+
         /* Content Sections */
         .section {
             padding: 80px 5%;
@@ -1065,6 +1122,32 @@
                 display: none;
             }
 
+            .url-form {
+                flex-direction: column;
+                border-radius: 20px;
+                padding: 15px;
+            }
+
+            .url-input {
+                border-radius: 30px;
+                text-align: center;
+            }
+
+            .url-btn {
+                border-radius: 30px;
+                padding: 16px 24px;
+            }
+
+            .trust-line {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .trust-line span {
+                margin: 0;
+            }
+
             .section-title {
                 font-size: 28px;
             }
@@ -1278,7 +1361,10 @@
                 </div>
             </div>
 
-            <a href="index.html#get-started" class="hero-cta">Get Your Free Score &rarr;</a>
+            <form class="url-form" onsubmit="redirectToScanner(event, 'heroUrlInput')">
+                <input type="text" id="heroUrlInput" class="url-input" placeholder="Enter your website URL (e.g., example.com)" required>
+                <button type="submit" class="url-btn">Get My Score →</button>
+            </form>
 
             <div class="trust-line">
                 <span>✓ No signup required</span>
@@ -1624,7 +1710,10 @@
     <section class="final-cta">
         <h2>Ready to Be the Answer?</h2>
         <p>Get your AI Visibility Score in under 60 seconds. See what's holding you back &mdash; and exactly how to fix it.</p>
-        <a href="index.html#get-started" class="btn-white">Get Your Free Score</a>
+        <form class="url-form" onsubmit="redirectToScanner(event, 'footerUrlInput')">
+            <input type="text" id="footerUrlInput" class="url-input" placeholder="Enter your website URL (e.g., example.com)" required>
+            <button type="submit" class="url-btn">Get My Score →</button>
+        </form>
         <p class="cta-note">Free scan &bull; No credit card &bull; Results in 60 seconds</p>
     </section>
 
@@ -1679,5 +1768,22 @@
 
     <!-- Support Chat Widget -->
     <script src="support-chat.js"></script>
+
+    <!-- URL Form Redirect Script -->
+    <script>
+        function redirectToScanner(event, inputId) {
+            event.preventDefault();
+            const urlInput = document.getElementById(inputId);
+            let url = urlInput.value.trim();
+
+            // Clean up the URL
+            if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://' + url;
+            }
+
+            // Redirect to homepage with URL parameter
+            window.location.href = 'index.html?url=' + encodeURIComponent(url) + '#get-started';
+        }
+    </script>
 </body>
 </html>
