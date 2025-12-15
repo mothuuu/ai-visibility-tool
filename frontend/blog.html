@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog | Visible2AI - AI Visibility Insights</title>
+    <meta name="description" content="Expert guides, industry news, and strategies to get your business recommended by AI assistants like ChatGPT, Perplexity, and Claude.">
+    <meta name="keywords" content="AI visibility blog, AEO strategies, AI search optimization, ChatGPT visibility, AI marketing insights">
+    <meta name="author" content="Visible2AI">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://www.visible2ai.com/blog">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+    <link rel="shortcut icon" href="/favicon.ico?v=2">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://www.visible2ai.com/blog">
+    <meta property="og:title" content="Blog | Visible2AI - AI Visibility Insights">
+    <meta property="og:description" content="Expert guides, industry news, and strategies to get your business recommended by AI assistants.">
+    <meta property="og:image" content="https://www.visible2ai.com/og-blog.png">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Blog | Visible2AI - AI Visibility Insights">
+    <meta name="twitter:description" content="Expert guides, industry news, and strategies to get your business recommended by AI assistants.">
+
+    <style>
+        :root {
+            --cyan: #00B9DA;
+            --hot-pink: #f31c7e;
+            --purple: #7D41A5;
+            --teal: #4DACA6;
+            --pastel-cyan: #E8F7FA;
+            --pastel-purple: #F5F0F9;
+            --pastel-pink: #FDF0F5;
+            --pastel-blue: #EEF6FC;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #2d3748;
+            background: #f8f9fa;
+        }
+
+        /* ================================ */
+        /* NAVIGATION                       */
+        /* ================================ */
+        .navbar {
+            background: white;
+            padding: 20px 5%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+        }
+
+        .logo img {
+            height: 50px;
+            width: auto;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .nav-link {
+            color: #2d3748;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-link:hover {
+            color: var(--hot-pink);
+        }
+
+        .nav-link.active {
+            color: var(--cyan);
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 12px 28px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+
+        .btn-signin {
+            background: white;
+            color: var(--hot-pink);
+            border: 2px solid var(--hot-pink);
+        }
+
+        .btn-signin:hover {
+            background: var(--hot-pink);
+            color: white;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--hot-pink) 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(0, 185, 218, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 185, 218, 0.4);
+        }
+
+        /* ================================ */
+        /* BLOG HEADER                      */
+        /* ================================ */
+        .blog-header {
+            background: linear-gradient(135deg, var(--pastel-cyan) 0%, var(--pastel-purple) 100%);
+            padding: 80px 5% 120px;
+            text-align: center;
+        }
+
+        .blog-header h1 {
+            font-size: 48px;
+            font-weight: 800;
+            color: #1a202c;
+            margin-bottom: 15px;
+        }
+
+        .blog-header p {
+            font-size: 20px;
+            color: #4a5568;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* ================================ */
+        /* FEATURED ARTICLE                 */
+        /* ================================ */
+        .featured-section {
+            max-width: 1200px;
+            margin: -60px auto 60px;
+            padding: 0 5%;
+        }
+
+        .featured-article {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .featured-image img {
+            width: 100%;
+            height: 400px;
+            object-fit: cover;
+        }
+
+        .featured-content {
+            padding: 50px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .featured-tag {
+            display: inline-block;
+            background: var(--hot-pink);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 50px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            width: fit-content;
+        }
+
+        .featured-content h2 {
+            font-size: 32px;
+            font-weight: 800;
+            color: #1a202c;
+            margin-bottom: 15px;
+            line-height: 1.3;
+        }
+
+        .featured-date {
+            color: #718096;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .featured-excerpt {
+            color: #4a5568;
+            font-size: 16px;
+            line-height: 1.8;
+            margin-bottom: 30px;
+        }
+
+        .read-more-btn {
+            display: inline-block;
+            background: var(--hot-pink);
+            color: white;
+            padding: 16px 36px;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 16px;
+            text-decoration: none;
+            width: fit-content;
+            transition: all 0.3s;
+        }
+
+        .read-more-btn:hover {
+            background: var(--purple);
+            transform: translateY(-2px);
+        }
+
+        /* ================================ */
+        /* ARTICLES GRID                    */
+        /* ================================ */
+        .articles-section {
+            max-width: 1200px;
+            margin: 0 auto 80px;
+            padding: 0 5%;
+        }
+
+        .section-title {
+            font-size: 28px;
+            font-weight: 800;
+            color: #1a202c;
+            margin-bottom: 40px;
+        }
+
+        .articles-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+        }
+
+        .article-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            transition: all 0.3s;
+        }
+
+        .article-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+        }
+
+        .article-image img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+
+        .article-content {
+            padding: 25px;
+        }
+
+        /* Category Tag Colors */
+        .article-tag {
+            display: inline-block;
+            color: white;
+            padding: 5px 14px;
+            border-radius: 50px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 15px;
+            background: var(--cyan);
+        }
+
+        .article-tag.media-mention { background: var(--cyan); }
+        .article-tag.industry-news { background: var(--teal); }
+        .article-tag.guide { background: var(--purple); }
+        .article-tag.news { background: var(--hot-pink); }
+
+        .article-content h3 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a202c;
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+
+        .article-content h3 a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .article-content h3 a:hover {
+            color: var(--hot-pink);
+        }
+
+        .article-excerpt {
+            color: #718096;
+            font-size: 14px;
+            line-height: 1.7;
+            margin-bottom: 15px;
+        }
+
+        .article-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .article-date {
+            color: #a0aec0;
+            font-size: 13px;
+        }
+
+        .article-link {
+            color: var(--cyan);
+            font-weight: 600;
+            font-size: 14px;
+            text-decoration: none;
+        }
+
+        .article-link:hover {
+            color: var(--hot-pink);
+        }
+
+        /* ================================ */
+        /* NEWSLETTER SECTION               */
+        /* ================================ */
+        .newsletter-section {
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+            padding: 80px 5%;
+            text-align: center;
+        }
+
+        .newsletter-content {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .newsletter-section h2 {
+            color: white;
+            font-size: 36px;
+            font-weight: 800;
+            margin-bottom: 15px;
+        }
+
+        .newsletter-section p {
+            color: rgba(255,255,255,0.9);
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+
+        .newsletter-form {
+            display: flex;
+            gap: 10px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .newsletter-input {
+            flex: 1;
+            padding: 16px 24px;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .newsletter-btn {
+            padding: 16px 32px;
+            background: var(--hot-pink);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .newsletter-btn:hover {
+            background: #d91a6a;
+        }
+
+        /* ================================ */
+        /* FOOTER                           */
+        /* ================================ */
+        .footer {
+            background: #2d3748;
+            padding: 40px 5%;
+            text-align: center;
+            color: white;
+        }
+
+        .footer-links {
+            margin-bottom: 20px;
+        }
+
+        .footer-links a {
+            color: white;
+            text-decoration: none;
+            margin: 0 15px;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+
+        .footer-links a:hover {
+            opacity: 1;
+            text-decoration: underline;
+        }
+
+        .footer-text {
+            margin-bottom: 10px;
+            opacity: 0.8;
+        }
+
+        .footer-text a {
+            color: white;
+        }
+
+        .footer-copyright {
+            opacity: 0.6;
+            font-size: 14px;
+        }
+
+        /* ================================ */
+        /* RESPONSIVE                       */
+        /* ================================ */
+        @media (max-width: 968px) {
+            .featured-article {
+                grid-template-columns: 1fr;
+            }
+
+            .featured-image img {
+                height: 300px;
+            }
+
+            .featured-content {
+                padding: 30px;
+            }
+
+            .articles-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .blog-header h1 {
+                font-size: 36px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .articles-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .newsletter-form {
+                flex-direction: column;
+            }
+
+            .featured-content h2 {
+                font-size: 24px;
+            }
+
+            .logo img {
+                height: 38px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="index.html" class="logo"><img src="/logo.png" alt="Visible2AI - AI Visibility Score" /></a>
+        <div class="nav-links">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="about.html" class="nav-link">About</a>
+            <a href="how-it-works.html" class="nav-link">How It Works</a>
+            <a href="blog.html" class="nav-link active">Blog</a>
+        </div>
+        <div class="nav-buttons">
+            <a href="auth.html" class="btn btn-signin">Sign In</a>
+            <a href="index.html#get-started" class="btn btn-primary">Get Started Free</a>
+        </div>
+    </nav>
+
+    <!-- Blog Header -->
+    <section class="blog-header">
+        <h1>AI Visibility Insights</h1>
+        <p>Expert guides, industry news, and strategies to get your business recommended by AI assistants.</p>
+    </section>
+
+    <!-- Featured Article -->
+    <section class="featured-section">
+        <article class="featured-article">
+            <div class="featured-image">
+                <img src="https://images.unsplash.com/photo-1677442136019-21780ecad995?w=800&h=400&fit=crop" alt="AI and Business Growth">
+            </div>
+            <div class="featured-content">
+                <span class="featured-tag">Featured</span>
+                <h2>The Complete Guide to AI Visibility in 2025</h2>
+                <p class="featured-date">December 15, 2025</p>
+                <p class="featured-excerpt">Discover how AI search engines like ChatGPT, Perplexity, and Claude are reshaping how customers find businesses. Learn the essential strategies to ensure your brand gets recommended when it matters most.</p>
+                <a href="blog-post-template.html" class="read-more-btn">Read Full Story</a>
+            </div>
+        </article>
+    </section>
+
+    <!-- Articles Grid -->
+    <section class="articles-section">
+        <h2 class="section-title">Latest Articles</h2>
+        <div class="articles-grid">
+            <!-- Article Card 1 -->
+            <article class="article-card">
+                <div class="article-image">
+                    <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&h=200&fit=crop" alt="AEO vs SEO">
+                </div>
+                <div class="article-content">
+                    <span class="article-tag guide">Guide</span>
+                    <h3><a href="blog-post-template.html">AEO vs SEO: What's the Difference and Why It Matters</a></h3>
+                    <p class="article-excerpt">Traditional SEO focuses on ranking in search results. AEO focuses on being the answer AI recommends.</p>
+                    <div class="article-meta">
+                        <span class="article-date">Dec 12, 2025</span>
+                        <a href="blog-post-template.html" class="article-link">Read More &rarr;</a>
+                    </div>
+                </div>
+            </article>
+
+            <!-- Article Card 2 -->
+            <article class="article-card">
+                <div class="article-image">
+                    <img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=200&fit=crop" alt="Schema Markup">
+                </div>
+                <div class="article-content">
+                    <span class="article-tag industry-news">Industry News</span>
+                    <h3><a href="blog-post-template.html">How Schema Markup Helps AI Understand Your Business</a></h3>
+                    <p class="article-excerpt">Structured data is the language AI speaks. Learn how to implement it correctly.</p>
+                    <div class="article-meta">
+                        <span class="article-date">Dec 10, 2025</span>
+                        <a href="blog-post-template.html" class="article-link">Read More &rarr;</a>
+                    </div>
+                </div>
+            </article>
+
+            <!-- Article Card 3 -->
+            <article class="article-card">
+                <div class="article-image">
+                    <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=200&fit=crop" alt="AI Statistics">
+                </div>
+                <div class="article-content">
+                    <span class="article-tag media-mention">Media Mention</span>
+                    <h3><a href="blog-post-template.html">68% of B2B Buyers Now Use AI for Research</a></h3>
+                    <p class="article-excerpt">New study reveals the rapid shift toward AI-assisted purchasing decisions.</p>
+                    <div class="article-meta">
+                        <span class="article-date">Dec 8, 2025</span>
+                        <a href="blog-post-template.html" class="article-link">Read More &rarr;</a>
+                    </div>
+                </div>
+            </article>
+
+            <!-- Article Card 4 -->
+            <article class="article-card">
+                <div class="article-image">
+                    <img src="https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=400&h=200&fit=crop" alt="Content Strategy">
+                </div>
+                <div class="article-content">
+                    <span class="article-tag guide">Guide</span>
+                    <h3><a href="blog-post-template.html">5 Content Strategies That Make AI Recommend You</a></h3>
+                    <p class="article-excerpt">Create content that positions your brand as the authoritative answer.</p>
+                    <div class="article-meta">
+                        <span class="article-date">Dec 5, 2025</span>
+                        <a href="blog-post-template.html" class="article-link">Read More &rarr;</a>
+                    </div>
+                </div>
+            </article>
+
+            <!-- Article Card 5 -->
+            <article class="article-card">
+                <div class="article-image">
+                    <img src="https://images.unsplash.com/photo-1553877522-43269d4ea984?w=400&h=200&fit=crop" alt="Competitor Analysis">
+                </div>
+                <div class="article-content">
+                    <span class="article-tag news">News</span>
+                    <h3><a href="blog-post-template.html">Visible2AI Launches Competitor Scanning Feature</a></h3>
+                    <p class="article-excerpt">Now you can see exactly where your competitors rank in AI visibility.</p>
+                    <div class="article-meta">
+                        <span class="article-date">Dec 3, 2025</span>
+                        <a href="blog-post-template.html" class="article-link">Read More &rarr;</a>
+                    </div>
+                </div>
+            </article>
+
+            <!-- Article Card 6 -->
+            <article class="article-card">
+                <div class="article-image">
+                    <img src="https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=400&h=200&fit=crop" alt="Technical SEO">
+                </div>
+                <div class="article-content">
+                    <span class="article-tag guide">Guide</span>
+                    <h3><a href="blog-post-template.html">Technical Foundations for AI Visibility Success</a></h3>
+                    <p class="article-excerpt">Site speed, mobile optimization, and the technical factors AI considers.</p>
+                    <div class="article-meta">
+                        <span class="article-date">Dec 1, 2025</span>
+                        <a href="blog-post-template.html" class="article-link">Read More &rarr;</a>
+                    </div>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    <!-- Newsletter Section -->
+    <section class="newsletter-section">
+        <div class="newsletter-content">
+            <h2>Stay Ahead of the AI Curve</h2>
+            <p>Get weekly insights on AI visibility, AEO strategies, and industry trends delivered to your inbox.</p>
+            <form class="newsletter-form">
+                <input type="email" class="newsletter-input" placeholder="Enter your email" required>
+                <button type="submit" class="newsletter-btn">Subscribe</button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-links">
+            <a href="index.html">Home</a>
+            <a href="about.html">About</a>
+            <a href="how-it-works.html">How It Works</a>
+            <a href="blog.html">Blog</a>
+            <a href="auth.html">Sign In</a>
+        </div>
+        <div class="footer-text">Powered by Xeo AI Hub & <a href="https://xeo.marketing/" target="_blank" rel="noopener noreferrer">Xeo Marketing</a></div>
+        <div class="footer-copyright">&copy; 2025 AI Visibility Score. All rights reserved.</div>
+    </footer>
+
+    <!-- Support Chat Widget -->
+    <script src="support-chat.js"></script>
+</body>
+</html>
