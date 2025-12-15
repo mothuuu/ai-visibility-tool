@@ -42,6 +42,8 @@
             --pastel-pink: #FDF0F5;
             --pastel-purple: #F5F0F9;
             --pastel-teal: #E8F5F4;
+            --pastel-blue: #EEF6FC;
+            --light-cyan: #D4F1F9;
         }
 
         * {
@@ -354,47 +356,227 @@
             font-weight: 700;
         }
 
-        /* Hero Section */
+        /* ================================ */
+        /* HERO SECTION - BLUE VERSION      */
+        /* ================================ */
         .hero {
-            background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+            background: linear-gradient(180deg, var(--pastel-cyan) 0%, var(--pastel-blue) 100%);
             padding: 80px 5% 100px;
-            text-align: center;
+            position: relative;
+            overflow: hidden;
+            min-height: 600px;
         }
 
+        /* Hero-specific shape overrides for larger cyan shapes */
+        .hero .shape-cyan-large {
+            width: 350px;
+            height: 350px;
+            background: radial-gradient(circle, rgba(0,185,218,0.15) 0%, transparent 70%);
+        }
+
+        .hero .shape-teal-large {
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(77,172,166,0.12) 0%, transparent 70%);
+        }
+
+        .hero .shape-purple-medium {
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, rgba(125,65,165,0.08) 0%, transparent 70%);
+        }
+
+        .ring-teal {
+            width: 100px;
+            height: 100px;
+            border: 3px solid rgba(77,172,166,0.22);
+        }
+
+        .dot-teal-large {
+            width: 16px;
+            height: 16px;
+            background: var(--teal);
+            opacity: 0.45;
+        }
+
+        /* Hero Content */
         .hero-content {
             max-width: 900px;
             margin: 0 auto;
+            text-align: center;
+            position: relative;
+            z-index: 10;
         }
 
         .hero-badge {
             display: inline-block;
-            background: linear-gradient(135deg, rgba(0, 185, 218, 0.1) 0%, rgba(243, 28, 126, 0.1) 100%);
+            background: linear-gradient(135deg, rgba(0,185,218,0.2) 0%, rgba(77,172,166,0.2) 100%);
+            color: var(--cyan);
             padding: 10px 24px;
             border-radius: 50px;
             font-size: 14px;
-            font-weight: 600;
+            font-weight: 700;
             margin-bottom: 25px;
-            color: #00B9DA;
-            border: 1px solid rgba(0, 185, 218, 0.3);
+            border: 1px solid rgba(0,185,218,0.25);
         }
 
         .hero h1 {
-            font-size: 56px;
+            font-size: 52px;
             font-weight: 800;
-            margin-bottom: 25px;
+            color: #1a202c;
+            margin-bottom: 20px;
             line-height: 1.2;
-            color: #1a1a2e;
+        }
+
+        .hero h1 .gradient-text {
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--teal) 50%, var(--purple) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .hero-subtitle {
-            font-size: 22px;
-            margin-bottom: 40px;
-            line-height: 1.6;
+            font-size: 20px;
             color: #4a5568;
+            margin-bottom: 40px;
+            line-height: 1.7;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
         }
 
         .hero-subtitle strong {
-            color: #1a1a2e;
+            color: var(--cyan);
+        }
+
+        /* Process Flow Visual */
+        .process-flow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            margin: 50px 0 40px;
+            position: relative;
+        }
+
+        .process-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .step-circle {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 42px;
+            box-shadow: 0 8px 30px rgba(0,185,218,0.15);
+            border: 3px solid transparent;
+            background-clip: padding-box;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .step-circle::before {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--cyan), var(--teal));
+            z-index: -1;
+        }
+
+        .step-circle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 40px rgba(0,185,218,0.25);
+        }
+
+        .step-label {
+            margin-top: 15px;
+            font-weight: 700;
+            font-size: 16px;
+            color: #2d3748;
+        }
+
+        .step-desc {
+            font-size: 13px;
+            color: #718096;
+            margin-top: 5px;
+        }
+
+        /* Connector Line - Cyan/Teal */
+        .connector {
+            width: 80px;
+            height: 4px;
+            position: relative;
+            margin: 0 -10px;
+            margin-bottom: 50px;
+        }
+
+        .connector-line {
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                90deg,
+                var(--cyan) 0px,
+                var(--cyan) 8px,
+                transparent 8px,
+                transparent 16px
+            );
+            border-radius: 2px;
+        }
+
+        .connector-arrow {
+            position: absolute;
+            right: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-left: 12px solid var(--cyan);
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+        }
+
+        /* CTA Button - Cyan dominant */
+        .hero-cta {
+            display: inline-block;
+            padding: 18px 42px;
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--teal) 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            box-shadow: 0 8px 30px rgba(0, 185, 218, 0.35);
+        }
+
+        .hero-cta:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(0, 185, 218, 0.45);
+        }
+
+        /* Trust Line */
+        .trust-line {
+            margin-top: 30px;
+            font-size: 14px;
+            color: #718096;
+        }
+
+        .trust-line span {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 15px;
         }
 
         /* Content Sections */
@@ -845,6 +1027,44 @@
                 font-size: 18px;
             }
 
+            .process-flow {
+                flex-direction: column;
+                gap: 30px;
+            }
+
+            .connector {
+                width: 4px;
+                height: 40px;
+                margin: 0;
+            }
+
+            .connector-line {
+                background: repeating-linear-gradient(
+                    180deg,
+                    var(--cyan) 0px,
+                    var(--cyan) 8px,
+                    transparent 8px,
+                    transparent 16px
+                );
+            }
+
+            .connector-arrow {
+                right: 50%;
+                top: auto;
+                bottom: -8px;
+                transform: translateX(50%);
+                border-left: 8px solid transparent;
+                border-right: 8px solid transparent;
+                border-top: 12px solid var(--cyan);
+            }
+
+            .hero .floating-shape,
+            .hero .floating-ring,
+            .hero .floating-triangle,
+            .hero .floating-squiggle {
+                display: none;
+            }
+
             .section-title {
                 font-size: 28px;
             }
@@ -982,13 +1202,89 @@
         </div>
     </nav>
 
-    <!-- Hero Section -->
+    <!-- Hero Section - Blue/Cyan Version -->
     <header class="hero">
+        <!-- Floating Shapes - Cyan/Teal dominant -->
+        <div class="floating-shape shape-cyan-large" style="top: -120px; right: -100px;"></div>
+        <div class="floating-shape shape-teal-large" style="bottom: -100px; left: -80px;"></div>
+        <div class="floating-shape shape-cyan-medium" style="top: 50%; left: -60px;"></div>
+        <div class="floating-shape shape-purple-medium" style="bottom: 20%; right: 5%;"></div>
+
+        <div class="floating-ring ring-cyan" style="top: 15%; left: 8%;"></div>
+        <div class="floating-ring ring-teal" style="bottom: 25%; right: 12%;"></div>
+        <div class="floating-ring ring-cyan-small" style="top: 45%; right: 18%;"></div>
+        <div class="floating-ring ring-purple" style="bottom: 40%; left: 15%;"></div>
+
+        <div class="floating-dot dot-cyan" style="top: 20%; right: 30%;"></div>
+        <div class="floating-dot dot-teal" style="bottom: 35%; left: 12%;"></div>
+        <div class="floating-dot dot-cyan-large" style="top: 55%; left: 22%;"></div>
+        <div class="floating-dot dot-teal-large" style="bottom: 20%; right: 25%;"></div>
+        <div class="floating-dot dot-cyan" style="top: 70%; right: 8%;"></div>
+        <div class="floating-dot dot-teal" style="top: 25%; left: 28%;"></div>
+        <div class="floating-dot dot-purple" style="bottom: 50%; right: 5%;"></div>
+
+        <div class="floating-triangle triangle-cyan-up" style="top: 30%; right: 8%;"></div>
+        <div class="floating-triangle triangle-teal-down" style="bottom: 30%; left: 20%;"></div>
+        <div class="floating-triangle triangle-cyan-down" style="top: 65%; left: 5%;"></div>
+
+        <svg class="floating-squiggle" style="top: 20%; left: 5%; width: 100px; height: 35px; opacity: 0.35;" viewBox="0 0 100 35">
+            <path d="M0 17 Q25 0, 50 17 T100 17" stroke="#00B9DA" stroke-width="2.5" fill="none"/>
+        </svg>
+        <svg class="floating-squiggle" style="bottom: 15%; right: 8%; width: 80px; height: 30px; opacity: 0.3;" viewBox="0 0 80 30">
+            <path d="M0 15 Q20 0, 40 15 T80 15" stroke="#4DACA6" stroke-width="2" fill="none"/>
+        </svg>
+        <svg class="floating-squiggle" style="top: 50%; right: 3%; width: 60px; height: 25px; opacity: 0.25;" viewBox="0 0 60 25">
+            <path d="M0 12 Q15 0, 30 12 T60 12" stroke="#00B9DA" stroke-width="2" fill="none"/>
+        </svg>
+
+        <!-- Hero Content -->
         <div class="hero-content">
-            <span class="hero-badge">How It Works</span>
-            <h1>Turn AI Into Your Next Lead Source</h1>
-            <p class="hero-subtitle"><strong>68% of B2B buyers</strong> now research with AI assistants. When they ask for solutions like yours, make sure you're the answer &mdash; not your competitors.</p>
-            <a href="index.html#get-started" class="btn btn-primary btn-large">Get Your Free Score &rarr;</a>
+            <div class="hero-badge">How It Works</div>
+
+            <h1>Turn AI Into Your <span class="gradient-text">Next Lead Source</span></h1>
+
+            <p class="hero-subtitle">
+                <strong>68% of B2B buyers</strong> now research with AI assistants. When they ask for solutions like yours, make sure you're the answer &mdash; not your competitors.
+            </p>
+
+            <!-- Process Flow Visual -->
+            <div class="process-flow">
+                <div class="process-step">
+                    <div class="step-circle">🔗</div>
+                    <div class="step-label">1. Enter URL</div>
+                    <div class="step-desc">Paste your website</div>
+                </div>
+
+                <div class="connector">
+                    <div class="connector-line"></div>
+                    <div class="connector-arrow"></div>
+                </div>
+
+                <div class="process-step">
+                    <div class="step-circle">🔬</div>
+                    <div class="step-label">2. We Analyze</div>
+                    <div class="step-desc">47 AI factors scanned</div>
+                </div>
+
+                <div class="connector">
+                    <div class="connector-line"></div>
+                    <div class="connector-arrow"></div>
+                </div>
+
+                <div class="process-step">
+                    <div class="step-circle">📊</div>
+                    <div class="step-label">3. Get Results</div>
+                    <div class="step-desc">Score + action plan</div>
+                </div>
+            </div>
+
+            <a href="index.html#get-started" class="hero-cta">Get Your Free Score &rarr;</a>
+
+            <div class="trust-line">
+                <span>✓ No signup required</span>
+                <span>⚡ Results in 30 seconds</span>
+                <span>💳 No credit card</span>
+            </div>
         </div>
     </header>
 
