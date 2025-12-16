@@ -129,6 +129,17 @@ body {
   font-weight: 600;
 }
 
+/* Keep text WHITE on hover when active */
+.nav-item.active:hover {
+  color: var(--white);
+}
+
+/* Icon color should also stay white when active */
+.nav-item.active .nav-icon {
+  color: var(--white);
+  opacity: 1;
+}
+
 .nav-icon {
   font-size: 18px;
   width: 20px;
