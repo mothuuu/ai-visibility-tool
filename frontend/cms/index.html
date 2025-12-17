@@ -10,7 +10,6 @@
     <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 
     <style>
-        /* Loading state styling */
         body {
             margin: 0;
             padding: 0;
@@ -63,16 +62,171 @@
     <script src="https://unpkg.com/decap-cms@^3.0.0/dist/decap-cms.js"></script>
 
     <script>
-        // Hide loading state once CMS is ready
-        if (typeof CMS !== 'undefined') {
-            CMS.registerEventListener({
-                name: 'preSave',
-                handler: ({ entry }) => {
-                    // You can add pre-save hooks here if needed
-                    return entry.get('data');
+        // Initialize CMS with inline config (avoids config.yml 404 issues)
+        window.CMS_MANUAL_INIT = true;
+
+        CMS.init({
+            config: {
+                load_config_file: false,
+
+                backend: {
+                    name: 'git-gateway',
+                    branch: 'main'
                 },
-            });
-        }
+
+                media_folder: 'frontend/images/uploads',
+                public_folder: '/images/uploads',
+
+                site_url: 'https://www.visible2ai.com',
+                display_url: 'https://www.visible2ai.com',
+                logo_url: '/logo.png',
+
+                slug: {
+                    encoding: 'ascii',
+                    clean_accents: true,
+                    sanitize_replacement: '-'
+                },
+
+                collections: [
+                    // Blog Posts
+                    {
+                        name: 'blog',
+                        label: 'Blog Posts',
+                        label_singular: 'Blog Post',
+                        folder: 'frontend/content/blog',
+                        create: true,
+                        slug: '{{slug}}',
+                        summary: '{{title}} - {{date}}',
+                        sortable_fields: ['date', 'title'],
+                        fields: [
+                            { label: 'Published', name: 'published', widget: 'boolean', default: false, hint: 'Toggle to publish or unpublish this post' },
+                            { label: 'Title', name: 'title', widget: 'string', required: true },
+                            { label: 'Publish Date', name: 'date', widget: 'datetime', format: 'YYYY-MM-DD', date_format: 'MMMM D, YYYY', time_format: false, required: true },
+                            { label: 'Author', name: 'author', widget: 'string', default: 'Visible2AI Team', required: true },
+                            {
+                                label: 'Category',
+                                name: 'category',
+                                widget: 'select',
+                                options: [
+                                    { label: 'Guide', value: 'guide' },
+                                    { label: 'Industry News', value: 'industry-news' },
+                                    { label: 'Media Mention', value: 'media-mention' },
+                                    { label: 'Company News', value: 'news' },
+                                    { label: 'Case Study', value: 'case-study' }
+                                ],
+                                default: 'guide',
+                                required: true
+                            },
+                            { label: 'Featured Image', name: 'featured_image', widget: 'image', required: true, hint: 'Main image (recommended: 1200x450px)' },
+                            { label: 'Featured Image Alt Text', name: 'featured_image_alt', widget: 'string', required: true },
+                            { label: 'Excerpt', name: 'excerpt', widget: 'text', required: true, hint: 'Short summary for blog listing (150-200 chars)' },
+                            { label: 'Dateline', name: 'dateline', widget: 'string', required: false, hint: 'Optional: San Francisco, USA' },
+                            { label: 'Read Time', name: 'read_time', widget: 'string', default: '5 min read' },
+                            { label: 'Body Content', name: 'body', widget: 'markdown', required: true },
+                            { label: 'Tags', name: 'tags', widget: 'list', required: false, field: { widget: 'string' } },
+                            { label: 'SEO Description', name: 'meta_description', widget: 'text', required: false, hint: 'For search engines (150-160 chars)' },
+                            { label: 'Featured Post', name: 'featured', widget: 'boolean', default: false, hint: 'Show in featured section' }
+                        ]
+                    },
+
+                    // Page Content
+                    {
+                        name: 'pages',
+                        label: 'Page Content',
+                        files: [
+                            {
+                                name: 'homepage',
+                                label: 'Homepage',
+                                file: 'frontend/content/pages/homepage.json',
+                                fields: [
+                                    {
+                                        label: 'Hero Section',
+                                        name: 'hero',
+                                        widget: 'object',
+                                        collapsed: true,
+                                        fields: [
+                                            { label: 'Headline', name: 'headline', widget: 'string' },
+                                            { label: 'Subheadline', name: 'subheadline', widget: 'text' },
+                                            { label: 'CTA Button Text', name: 'cta_text', widget: 'string' }
+                                        ]
+                                    },
+                                    {
+                                        label: 'Problem Section',
+                                        name: 'problem',
+                                        widget: 'object',
+                                        collapsed: true,
+                                        fields: [
+                                            { label: 'Title', name: 'title', widget: 'string' },
+                                            { label: 'Description', name: 'description', widget: 'text' }
+                                        ]
+                                    },
+                                    {
+                                        label: 'Stats',
+                                        name: 'stats',
+                                        widget: 'list',
+                                        max: 4,
+                                        fields: [
+                                            { label: 'Number', name: 'number', widget: 'string' },
+                                            { label: 'Label', name: 'label', widget: 'string' }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                name: 'about',
+                                label: 'About Page',
+                                file: 'frontend/content/pages/about.json',
+                                fields: [
+                                    { label: 'Hero Title', name: 'hero_title', widget: 'string' },
+                                    { label: 'Hero Description', name: 'hero_description', widget: 'text' },
+                                    { label: 'Mission Statement', name: 'mission', widget: 'markdown' },
+                                    {
+                                        label: 'Team Members',
+                                        name: 'team',
+                                        widget: 'list',
+                                        fields: [
+                                            { label: 'Name', name: 'name', widget: 'string' },
+                                            { label: 'Role', name: 'role', widget: 'string' },
+                                            { label: 'Photo', name: 'photo', widget: 'image', required: false },
+                                            { label: 'Bio', name: 'bio', widget: 'text' }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+
+                    // Site Settings
+                    {
+                        name: 'settings',
+                        label: 'Site Settings',
+                        files: [
+                            {
+                                name: 'general',
+                                label: 'General Settings',
+                                file: 'frontend/content/settings/general.json',
+                                fields: [
+                                    { label: 'Site Name', name: 'site_name', widget: 'string', default: 'Visible2AI' },
+                                    { label: 'Site Description', name: 'site_description', widget: 'text' },
+                                    { label: 'Contact Email', name: 'contact_email', widget: 'string' },
+                                    {
+                                        label: 'Social Links',
+                                        name: 'social',
+                                        widget: 'object',
+                                        collapsed: true,
+                                        fields: [
+                                            { label: 'Twitter/X URL', name: 'twitter', widget: 'string', required: false },
+                                            { label: 'LinkedIn URL', name: 'linkedin', widget: 'string', required: false },
+                                            { label: 'Facebook URL', name: 'facebook', widget: 'string', required: false }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        });
 
         // Remove loading screen after CMS initializes
         window.addEventListener('load', function() {
@@ -81,7 +235,7 @@
                 if (loading) {
                     loading.style.display = 'none';
                 }
-            }, 1000);
+            }, 1500);
         });
     </script>
 </body>
