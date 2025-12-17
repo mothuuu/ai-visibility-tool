@@ -8,6 +8,14 @@
 
     <!-- Netlify Identity Widget for Authentication -->
     <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+    <script>
+        // Point Netlify Identity to the correct site (not the current domain)
+        if (window.netlifyIdentity) {
+            window.netlifyIdentity.init({
+                APIUrl: 'https://graceful-meerkat-0c25da.netlify.app/.netlify/identity'
+            });
+        }
+    </script>
 
     <style>
         body {
