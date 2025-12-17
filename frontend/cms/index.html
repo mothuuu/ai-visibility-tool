@@ -49,6 +49,11 @@
             to { transform: rotate(360deg); }
         }
     </style>
+
+    <!-- CRITICAL: Must set this BEFORE loading decap-cms.js -->
+    <script>
+        window.CMS_MANUAL_INIT = true;
+    </script>
 </head>
 <body>
     <!-- Loading state while CMS loads -->
@@ -62,9 +67,7 @@
     <script src="https://unpkg.com/decap-cms@^3.0.0/dist/decap-cms.js"></script>
 
     <script>
-        // Initialize CMS with inline config (avoids config.yml 404 issues)
-        window.CMS_MANUAL_INIT = true;
-
+        // Initialize CMS with inline config
         CMS.init({
             config: {
                 load_config_file: false,
@@ -123,7 +126,7 @@
                             { label: 'Dateline', name: 'dateline', widget: 'string', required: false, hint: 'Optional: San Francisco, USA' },
                             { label: 'Read Time', name: 'read_time', widget: 'string', default: '5 min read' },
                             { label: 'Body Content', name: 'body', widget: 'markdown', required: true },
-                            { label: 'Tags', name: 'tags', widget: 'list', required: false, field: { widget: 'string' } },
+                            { label: 'Tags', name: 'tags', widget: 'list', required: false, field: { name: 'tag', widget: 'string' } },
                             { label: 'SEO Description', name: 'meta_description', widget: 'text', required: false, hint: 'For search engines (150-160 chars)' },
                             { label: 'Featured Post', name: 'featured', widget: 'boolean', default: false, hint: 'Show in featured section' }
                         ]
