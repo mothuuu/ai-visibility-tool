@@ -6,17 +6,6 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Content Manager | Visible2AI</title>
 
-    <!-- Netlify Identity Widget for Authentication -->
-    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
-    <script>
-        // Point Netlify Identity to the correct site (not the current domain)
-        if (window.netlifyIdentity) {
-            window.netlifyIdentity.init({
-                APIUrl: 'https://graceful-meerkat-0c25da.netlify.app/.netlify/identity'
-            });
-        }
-    </script>
-
     <style>
         body {
             margin: 0;
@@ -70,6 +59,16 @@
         <p class="loading-text">Loading Content Manager...</p>
         <div class="loading-spinner"></div>
     </div>
+
+    <!-- Netlify Identity Widget - loaded in body so DOM is ready -->
+    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+
+    <script>
+        // Initialize identity widget with external Netlify site BEFORE CMS loads
+        window.netlifyIdentity.init({
+            APIUrl: 'https://graceful-meerkat-0c25da.netlify.app/.netlify/identity'
+        });
+    </script>
 
     <!-- Decap CMS Script -->
     <script src="https://unpkg.com/decap-cms@^3.0.0/dist/decap-cms.js"></script>
