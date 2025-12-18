@@ -732,39 +732,93 @@ const $ = cheerio.load(html);
    * Extract navigation links for section detection
    * IMPORTANT: Call this BEFORE extractContent() which removes nav/header/footer
    * Fix for Issue #2 + #9: Blog/FAQ detection now uses navigation links
+   *
+   * Per rulebook section "4.2 Navigation Structure":
+   * - Extract links from nav, header, AND footer elements
+   * - Track nav elements with metadata
+   * - Detect key pages (home, about, services, blog, faq, contact, pricing, team)
    */
   extractNavigation($) {
-    const links = [];
+    const navElements = [];
+    const allNavLinks = [];
 
-    // Extract links from nav and header elements
-    $('nav a, header a').each((i, el) => {
+    // Extract navigation elements with metadata
+    $('nav, [role="navigation"]').each((i, el) => {
+      const links = [];
+      $(el).find('a').each((j, link) => {
+        const href = $(link).attr('href') || '';
+        const text = $(link).text().trim();
+        if (href && text && href !== '#') {
+          links.push({
+            href,
+            text,
+            inDropdown: $(link).closest('[class*="dropdown"], [class*="submenu"], [class*="menu-item-has-children"]').length > 0
+          });
+        }
+      });
+      navElements.push({
+        hasAriaLabel: !!$(el).attr('aria-label'),
+        ariaLabel: $(el).attr('aria-label') || null,
+        linkCount: links.length,
+        links: links
+      });
+      allNavLinks.push(...links);
+    });
+
+    // Also extract header/footer links (per rulebook)
+    $('header a, footer a').each((i, el) => {
       const href = $(el).attr('href') || '';
       const text = $(el).text().trim();
-      if (href && text && href !== '#') {
-        links.push({ href, text });
+      if (href && text && href !== '#' && !allNavLinks.find(l => l.href === href)) {
+        allNavLinks.push({ href, text, inDropdown: false });
       }
     });
 
-    // Detect section links
-    const hasBlogLink = links.some(l => /\/blog|\/news|\/articles/i.test(l.href) || /blog|news/i.test(l.text));
-    const hasFAQLink = links.some(l => /\/faq|\/frequently-asked/i.test(l.href) || /faq|frequently asked/i.test(l.text));
-    const hasAboutLink = links.some(l => /\/about/i.test(l.href) || /about/i.test(l.text));
-    const hasContactLink = links.some(l => /\/contact/i.test(l.href) || /contact/i.test(l.text));
-    const hasServicesLink = links.some(l => /\/services/i.test(l.href) || /services/i.test(l.text));
-    const hasPricingLink = links.some(l => /\/pricing/i.test(l.href) || /pricing/i.test(l.text));
+    // Detect key pages from nav links (per rulebook vocabulary)
+    const keyPages = {
+      home: allNavLinks.some(l => l.href === '/' || /^\/?(index\.html?)?$/i.test(l.href) || /home/i.test(l.text)),
+      about: allNavLinks.some(l => /\/about/i.test(l.href) || /about/i.test(l.text)),
+      services: allNavLinks.some(l => /\/service/i.test(l.href) || /service/i.test(l.text)),
+      blog: allNavLinks.some(l => /\/blog|\/news|\/articles/i.test(l.href) || /blog|news/i.test(l.text)),
+      faq: allNavLinks.some(l => /\/faq|\/frequently-asked|\/questions/i.test(l.href) || /faq|frequently asked|questions/i.test(l.text)),
+      contact: allNavLinks.some(l => /\/contact/i.test(l.href) || /contact/i.test(l.text)),
+      pricing: allNavLinks.some(l => /\/pricing|\/plans/i.test(l.href) || /pricing|plans/i.test(l.text)),
+      team: allNavLinks.some(l => /\/team|\/about.*team/i.test(l.href) || /team|our team/i.test(l.text))
+    };
+
+    const keyPageCount = Object.values(keyPages).filter(Boolean).length;
+
+    // Legacy property names for backwards compatibility
+    const hasBlogLink = keyPages.blog;
+    const hasFAQLink = keyPages.faq;
+    const hasAboutLink = keyPages.about;
+    const hasContactLink = keyPages.contact;
+    const hasServicesLink = keyPages.services;
+    const hasPricingLink = keyPages.pricing;
 
     console.log('[Detection] Navigation analysis:', {
-      totalLinks: links.length,
-      hasBlogLink,
-      hasFAQLink,
-      hasAboutLink,
-      hasContactLink,
-      hasServicesLink,
-      hasPricingLink
+      navElementCount: navElements.length,
+      totalLinks: allNavLinks.length,
+      keyPageCount,
+      keyPages
     });
 
     return {
-      links,
+      // New structure per rulebook
+      detected: navElements.length > 0,
+      navElements,
+      totalNavLinks: allNavLinks.length,
+      allNavLinks,
+      keyPages,
+      keyPageCount,
+      hasSemanticNav: $('nav').length > 0,
+      hasHeader: $('header').length > 0,
+      hasFooter: $('footer').length > 0,
+      hasMain: $('main').length > 0,
+      hasMobileMenu: $('[class*="mobile"], [class*="hamburger"], [class*="menu-toggle"]').length > 0,
+
+      // Legacy properties for backwards compatibility
+      links: allNavLinks,
       hasBlogLink,
       hasFAQLink,
       hasAboutLink,

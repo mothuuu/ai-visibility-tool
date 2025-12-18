@@ -429,22 +429,41 @@ class SiteCrawler {
   /**
    * Analyze discovered URLs for key sections
    * Fix for Issue #2 + #9: This data is passed to detection functions
+   * Per rulebook "Cross-Cutting Rules" → Rule 4
    */
   analyzeDiscoveredSections() {
     const allUrls = this.getAllDiscoveredUrls();
 
     const discoveredSections = {
-      hasBlogUrl: allUrls.some(url => /\/blog|\/news|\/articles/i.test(url)),
-      hasFaqUrl: allUrls.some(url => /\/faq|\/frequently-asked/i.test(url)),
-      hasAboutUrl: allUrls.some(url => /\/about/i.test(url)),
-      hasContactUrl: allUrls.some(url => /\/contact/i.test(url)),
-      hasServicesUrl: allUrls.some(url => /\/services/i.test(url)),
-      hasPricingUrl: allUrls.some(url => /\/pricing/i.test(url)),
-      blogUrls: allUrls.filter(url => /\/blog|\/news|\/articles/i.test(url)),
-      faqUrls: allUrls.filter(url => /\/faq|\/frequently-asked/i.test(url)),
+      // Key section detection
+      hasBlogUrl: allUrls.some(url => /\/(blog|news|articles)(\/|$)/i.test(url)),
+      hasFaqUrl: allUrls.some(url => /\/(faq|frequently-asked|questions)(\/|$)/i.test(url)),
+      hasAboutUrl: allUrls.some(url => /\/(about|about-us)(\/|$)/i.test(url)),
+      hasContactUrl: allUrls.some(url => /\/(contact)(\/|$)/i.test(url)),
+      hasServicesUrl: allUrls.some(url => /\/(services|solutions)(\/|$)/i.test(url)),
+      hasPricingUrl: allUrls.some(url => /\/(pricing|plans)(\/|$)/i.test(url)),
+      hasTeamUrl: allUrls.some(url => /\/(team|our-team)(\/|$)/i.test(url)),
+
+      // Specific URL lists for debugging
+      blogUrls: allUrls.filter(url => /\/(blog|news|articles)/i.test(url)),
+      faqUrls: allUrls.filter(url => /\/(faq|frequently-asked)/i.test(url)),
+
+      // Total count
+      totalDiscoveredUrls: allUrls.length
     };
 
-    console.log('[Detection] Crawler discovered sections:', discoveredSections);
+    console.log('[Detection] Crawler discovered sections:', {
+      hasBlogUrl: discoveredSections.hasBlogUrl,
+      hasFaqUrl: discoveredSections.hasFaqUrl,
+      hasAboutUrl: discoveredSections.hasAboutUrl,
+      hasContactUrl: discoveredSections.hasContactUrl,
+      hasServicesUrl: discoveredSections.hasServicesUrl,
+      hasPricingUrl: discoveredSections.hasPricingUrl,
+      hasTeamUrl: discoveredSections.hasTeamUrl,
+      totalDiscoveredUrls: discoveredSections.totalDiscoveredUrls,
+      blogUrlCount: discoveredSections.blogUrls.length,
+      faqUrlCount: discoveredSections.faqUrls.length
+    });
 
     return discoveredSections;
   }
