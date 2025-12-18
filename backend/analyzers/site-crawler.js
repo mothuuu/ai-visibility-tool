@@ -1,5 +1,6 @@
 const axios = require('axios');
 const ContentExtractor = require('./content-extractor');
+const VOCABULARY = require('../config/detection-vocabulary');
 
 /**
  * Site Crawler - Multi-Page Analysis
@@ -349,22 +350,35 @@ class SiteCrawler {
       home: 10,      // Homepage
       about: 9,      // About pages
       blog: 8,       // Blog posts
-      service: 7,    // Service/product pages
+      services: 7,   // Service/product pages
       contact: 6,    // Contact pages
       faq: 5,        // FAQ pages
+      pricing: 4,    // Pricing pages
+      team: 3,       // Team pages
       other: 1       // Everything else
     };
 
     const scored = urls.map(url => {
       let score = priorities.other;
-      const lower = url.toLowerCase();
 
-      if (lower === this.baseUrl.toLowerCase() || lower.endsWith('/')) score = priorities.home;
-      else if (lower.includes('/about')) score = priorities.about;
-      else if (lower.includes('/blog') || lower.includes('/article')) score = priorities.blog;
-      else if (lower.includes('/service') || lower.includes('/product')) score = priorities.service;
-      else if (lower.includes('/contact')) score = priorities.contact;
-      else if (lower.includes('/faq')) score = priorities.faq;
+      // Use centralized VOCABULARY patterns for consistent detection
+      if (url.toLowerCase() === this.baseUrl.toLowerCase() || VOCABULARY.URL_PATTERNS.home.test(url)) {
+        score = priorities.home;
+      } else if (VOCABULARY.URL_PATTERNS.about.test(url)) {
+        score = priorities.about;
+      } else if (VOCABULARY.URL_PATTERNS.blog.test(url)) {
+        score = priorities.blog;
+      } else if (VOCABULARY.URL_PATTERNS.services.test(url)) {
+        score = priorities.services;
+      } else if (VOCABULARY.URL_PATTERNS.contact.test(url)) {
+        score = priorities.contact;
+      } else if (VOCABULARY.URL_PATTERNS.faq.test(url)) {
+        score = priorities.faq;
+      } else if (VOCABULARY.URL_PATTERNS.pricing.test(url)) {
+        score = priorities.pricing;
+      } else if (VOCABULARY.URL_PATTERNS.team.test(url)) {
+        score = priorities.team;
+      }
 
       return { url, score };
     });
@@ -434,19 +448,23 @@ class SiteCrawler {
   analyzeDiscoveredSections() {
     const allUrls = this.getAllDiscoveredUrls();
 
+    // Use centralized VOCABULARY patterns for consistent detection
     const discoveredSections = {
-      // Key section detection
-      hasBlogUrl: allUrls.some(url => /\/(blog|news|articles)(\/|$)/i.test(url)),
-      hasFaqUrl: allUrls.some(url => /\/(faq|frequently-asked|questions)(\/|$)/i.test(url)),
-      hasAboutUrl: allUrls.some(url => /\/(about|about-us)(\/|$)/i.test(url)),
-      hasContactUrl: allUrls.some(url => /\/(contact)(\/|$)/i.test(url)),
-      hasServicesUrl: allUrls.some(url => /\/(services|solutions)(\/|$)/i.test(url)),
-      hasPricingUrl: allUrls.some(url => /\/(pricing|plans)(\/|$)/i.test(url)),
-      hasTeamUrl: allUrls.some(url => /\/(team|our-team)(\/|$)/i.test(url)),
+      // Key section detection using VOCABULARY URL patterns
+      hasBlogUrl: allUrls.some(url => VOCABULARY.URL_PATTERNS.blog.test(url)),
+      hasFaqUrl: allUrls.some(url => VOCABULARY.URL_PATTERNS.faq.test(url)),
+      hasAboutUrl: allUrls.some(url => VOCABULARY.URL_PATTERNS.about.test(url)),
+      hasContactUrl: allUrls.some(url => VOCABULARY.URL_PATTERNS.contact.test(url)),
+      hasServicesUrl: allUrls.some(url => VOCABULARY.URL_PATTERNS.services.test(url)),
+      hasPricingUrl: allUrls.some(url => VOCABULARY.URL_PATTERNS.pricing.test(url)),
+      hasTeamUrl: allUrls.some(url => VOCABULARY.URL_PATTERNS.team.test(url)),
+      hasCareersUrl: allUrls.some(url => VOCABULARY.URL_PATTERNS.careers.test(url)),
+      hasPortfolioUrl: allUrls.some(url => VOCABULARY.URL_PATTERNS.portfolio.test(url)),
+      hasLegalUrl: allUrls.some(url => VOCABULARY.URL_PATTERNS.legal.test(url)),
 
       // Specific URL lists for debugging
-      blogUrls: allUrls.filter(url => /\/(blog|news|articles)/i.test(url)),
-      faqUrls: allUrls.filter(url => /\/(faq|frequently-asked)/i.test(url)),
+      blogUrls: allUrls.filter(url => VOCABULARY.URL_PATTERNS.blog.test(url)),
+      faqUrls: allUrls.filter(url => VOCABULARY.URL_PATTERNS.faq.test(url)),
 
       // Total count
       totalDiscoveredUrls: allUrls.length
@@ -460,6 +478,9 @@ class SiteCrawler {
       hasServicesUrl: discoveredSections.hasServicesUrl,
       hasPricingUrl: discoveredSections.hasPricingUrl,
       hasTeamUrl: discoveredSections.hasTeamUrl,
+      hasCareersUrl: discoveredSections.hasCareersUrl,
+      hasPortfolioUrl: discoveredSections.hasPortfolioUrl,
+      hasLegalUrl: discoveredSections.hasLegalUrl,
       totalDiscoveredUrls: discoveredSections.totalDiscoveredUrls,
       blogUrlCount: discoveredSections.blogUrls.length,
       faqUrlCount: discoveredSections.faqUrls.length
