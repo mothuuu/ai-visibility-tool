@@ -14,18 +14,18 @@ const VOCABULARY = {
   // Used for detecting page types from URLs
   // ============================================
   URL_PATTERNS: {
-    blog: /\/(blog|news|articles|insights|resources\/blog)(\/|$)/i,
-    faq: /\/(faq|frequently-asked|questions|help-center|support\/faq)(\/|$)/i,
-    about: /\/(about|about-us|who-we-are|our-story|company)(\/|$)/i,
-    contact: /\/(contact|contact-us|get-in-touch|reach-us)(\/|$)/i,
-    services: /\/(services|solutions|what-we-do|offerings)(\/|$)/i,
-    pricing: /\/(pricing|plans|packages|cost|rates)(\/|$)/i,
-    team: /\/(team|our-team|people|leadership|staff)(\/|$)/i,
-    careers: /\/(careers|jobs|hiring|work-with-us|join-us)(\/|$)/i,
-    legal: /\/(privacy|terms|legal|cookie-policy|gdpr|disclaimer)(\/|$)/i,
     home: /^\/?(index\.html?)?$/i,
-    portfolio: /\/(portfolio|work|projects|case-studies)(\/|$)/i,
-    testimonials: /\/(testimonials|reviews|clients|success-stories)(\/|$)/i
+    about: /\/(about|about-us|who-we-are|our-story|company)(\.html?|\/|$)/i,
+    services: /\/(services|solutions|what-we-do|offerings)(\.html?|\/|$)/i,
+    blog: /\/(blog|news|articles|insights|resources|updates|journal|posts)(\.html?|\/|$)/i,
+    faq: /\/(faq|faqs|frequently-asked|help|support|questions)(\.html?|\/|$)/i,
+    contact: /\/(contact|contact-us|get-in-touch|reach-us)(\.html?|\/|$)/i,
+    pricing: /\/(pricing|plans|packages|cost|rates)(\.html?|\/|$)/i,
+    team: /\/(team|people|about-us\/team|our-team|staff|leadership)(\.html?|\/|$)/i,
+    careers: /\/(careers|jobs|work-with-us|join-us|hiring)(\.html?|\/|$)/i,
+    portfolio: /\/(portfolio|work|projects|case-studies|clients)(\.html?|\/|$)/i,
+    testimonials: /\/(testimonials|reviews|clients|success-stories)(\.html?|\/|$)/i,
+    legal: /\/(privacy|terms|legal|cookie-policy|gdpr|disclaimer)(\.html?|\/|$)/i
   },
 
   // ============================================
