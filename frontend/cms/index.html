@@ -60,30 +60,21 @@
         <div class="loading-spinner"></div>
     </div>
 
-    <!-- Netlify Identity Widget - loaded in body so DOM is ready -->
-    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
-
-    <script>
-        // Initialize identity widget with external Netlify site BEFORE CMS loads
-        window.netlifyIdentity.init({
-            APIUrl: 'https://graceful-meerkat-0c25da.netlify.app/.netlify/identity'
-        });
-    </script>
-
     <!-- Decap CMS Script -->
     <script src="https://unpkg.com/decap-cms@^3.0.0/dist/decap-cms.js"></script>
 
     <script>
-        // Initialize CMS with inline config
+        // Initialize CMS with GitHub backend
         CMS.init({
             config: {
                 load_config_file: false,
 
                 backend: {
-                    name: 'git-gateway',
+                    name: 'github',
+                    repo: 'mothuuu/ai-visibility-tool',
                     branch: 'main',
-                    identity_url: 'https://graceful-meerkat-0c25da.netlify.app/.netlify/identity',
-                    gateway_url: 'https://graceful-meerkat-0c25da.netlify.app/.netlify/git'
+                    base_url: 'https://api.netlify.com',
+                    auth_endpoint: 'auth'
                 },
 
                 media_folder: 'frontend/images/uploads',
