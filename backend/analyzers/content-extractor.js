@@ -2,6 +2,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const { URL } = require('url');
 const EntityAnalyzer = require('./entity-analyzer');
+const VOCABULARY = require('../config/detection-vocabulary');
 
 /**
  * Content Extractor for V5 Rubric Analysis
@@ -429,20 +430,8 @@ const $ = cheerio.load(html);
       }
     });
 
-    // Method 2: Detect FAQ sections by class/id (common patterns)
-    const faqSelectors = [
-      '[class*="faq" i], [id*="faq" i]',
-      '[class*="question" i], [id*="question" i]',
-      '[class*="accordion" i]',
-      '[class*="collapse" i]',
-      '[class*="toggle" i]',
-      '[class*="expandable" i]',
-      '[class*="q-and-a" i], [class*="qa-" i]',
-      '[data-accordion]',
-      '[data-toggle="collapse"]',
-      '[data-bs-toggle="collapse"]',
-      'details'
-    ].join(', ');
+    // Method 2: Detect FAQ sections by class/id using centralized VOCABULARY
+    const faqSelectors = VOCABULARY.getSelectorString('faq', 'containers');
 
     $(faqSelectors).each((idx, el) => {
       const $el = $(el);
@@ -523,7 +512,8 @@ const $ = cheerio.load(html);
 
     // Method 3: Detect FAQ sections by heading text containing "FAQ" or "Frequently Asked"
     // Find sections with FAQ-related headings, then extract Q&A within
-    const faqHeadingRegex = /\b(faq|frequently\s*asked|q\s*&\s*a|q&a|common\s*questions|questions?\s*and\s*answers?)\b/i;
+    // Using centralized VOCABULARY pattern
+    const faqHeadingRegex = VOCABULARY.TEXT_PATTERNS.questions.faqHeadings;
 
     $('h1, h2, h3, h4').each((idx, headingEl) => {
       const $heading = $(headingEl);
@@ -774,16 +764,49 @@ const $ = cheerio.load(html);
       }
     });
 
-    // Detect key pages from nav links (per rulebook vocabulary)
+    // Detect key pages from nav links using centralized VOCABULARY
     const keyPages = {
-      home: allNavLinks.some(l => l.href === '/' || /^\/?(index\.html?)?$/i.test(l.href) || /home/i.test(l.text)),
-      about: allNavLinks.some(l => /\/about/i.test(l.href) || /about/i.test(l.text)),
-      services: allNavLinks.some(l => /\/service/i.test(l.href) || /service/i.test(l.text)),
-      blog: allNavLinks.some(l => /\/blog|\/news|\/articles/i.test(l.href) || /blog|news/i.test(l.text)),
-      faq: allNavLinks.some(l => /\/faq|\/frequently-asked|\/questions/i.test(l.href) || /faq|frequently asked|questions/i.test(l.text)),
-      contact: allNavLinks.some(l => /\/contact/i.test(l.href) || /contact/i.test(l.text)),
-      pricing: allNavLinks.some(l => /\/pricing|\/plans/i.test(l.href) || /pricing|plans/i.test(l.text)),
-      team: allNavLinks.some(l => /\/team|\/about.*team/i.test(l.href) || /team|our team/i.test(l.text))
+      home: allNavLinks.some(l =>
+        l.href === '/' ||
+        VOCABULARY.URL_PATTERNS.home.test(l.href) ||
+        VOCABULARY.matchesNavKeyword(l.text, 'home')
+      ),
+      about: allNavLinks.some(l =>
+        VOCABULARY.URL_PATTERNS.about.test(l.href) ||
+        VOCABULARY.matchesNavKeyword(l.text, 'about')
+      ),
+      services: allNavLinks.some(l =>
+        VOCABULARY.URL_PATTERNS.services.test(l.href) ||
+        VOCABULARY.matchesNavKeyword(l.text, 'services')
+      ),
+      blog: allNavLinks.some(l =>
+        VOCABULARY.URL_PATTERNS.blog.test(l.href) ||
+        VOCABULARY.matchesNavKeyword(l.text, 'blog')
+      ),
+      faq: allNavLinks.some(l =>
+        VOCABULARY.URL_PATTERNS.faq.test(l.href) ||
+        VOCABULARY.matchesNavKeyword(l.text, 'faq')
+      ),
+      contact: allNavLinks.some(l =>
+        VOCABULARY.URL_PATTERNS.contact.test(l.href) ||
+        VOCABULARY.matchesNavKeyword(l.text, 'contact')
+      ),
+      pricing: allNavLinks.some(l =>
+        VOCABULARY.URL_PATTERNS.pricing.test(l.href) ||
+        VOCABULARY.matchesNavKeyword(l.text, 'pricing')
+      ),
+      team: allNavLinks.some(l =>
+        VOCABULARY.URL_PATTERNS.team.test(l.href) ||
+        VOCABULARY.matchesNavKeyword(l.text, 'team')
+      ),
+      careers: allNavLinks.some(l =>
+        VOCABULARY.URL_PATTERNS.careers.test(l.href) ||
+        VOCABULARY.matchesNavKeyword(l.text, 'careers')
+      ),
+      portfolio: allNavLinks.some(l =>
+        VOCABULARY.URL_PATTERNS.portfolio.test(l.href) ||
+        VOCABULARY.matchesNavKeyword(l.text, 'portfolio')
+      )
     };
 
     const keyPageCount = Object.values(keyPages).filter(Boolean).length;

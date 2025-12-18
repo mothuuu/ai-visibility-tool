@@ -4,6 +4,8 @@
  * Extracts concrete facts from scanEvidence for use in prescriptive recommendations
  */
 
+const VOCABULARY = require('../../config/detection-vocabulary');
+
 /**
  * Main extraction function
  * @param {Object} scanEvidence - Complete scan evidence
@@ -87,8 +89,9 @@ function detectFAQ(scanEvidence) {
   const h2s = scanEvidence.content?.headings?.h2 || [];
   const hasFAQSchema = scanEvidence.technical?.hasFAQSchema || false;
 
-  // Existing checks for on-page FAQ content
-  const hasOnPageFAQ = faqs.length > 0 || h2s.some(h => /faq/i.test(h)) || hasFAQSchema;
+  // Existing checks for on-page FAQ content using centralized VOCABULARY
+  const faqPattern = VOCABULARY.TEXT_PATTERNS.questions.faqHeadings;
+  const hasOnPageFAQ = faqs.length > 0 || h2s.some(h => faqPattern.test(h)) || hasFAQSchema;
 
   // Fix for Issue #2 + #9: Check crawler discoveries
   const crawlerFoundFAQ = scanEvidence.siteMetrics?.discoveredSections?.hasFaqUrl ||
@@ -112,19 +115,27 @@ function detectFAQ(scanEvidence) {
 }
 
 function detectPricing(html) {
-  return /pricing|plans|subscribe|buy now|\$\d+/i.test(html);
+  // Check for pricing keywords and price patterns
+  const pricingKeywords = VOCABULARY.KEYWORDS.navLinkText.pricing;
+  const hasPricingKeyword = pricingKeywords.some(kw => new RegExp(kw, 'i').test(html));
+  const hasPricePattern = /\$\d+|\d+\.\d{2}|subscribe|buy now/i.test(html);
+  return hasPricingKeyword || hasPricePattern;
 }
 
 function detectContact(html) {
-  return /contact|email|phone|get in touch|reach us/i.test(html);
+  // Check for contact patterns using VOCABULARY
+  const hasEmail = VOCABULARY.TEXT_PATTERNS.contact.email.test(html);
+  const hasPhone = VOCABULARY.TEXT_PATTERNS.contact.phone.test(html);
+  const hasContactKeyword = /contact|get in touch|reach us/i.test(html);
+  return hasEmail || hasPhone || hasContactKeyword;
 }
 
 function detectBlog(scanEvidence) {
   const url = scanEvidence.url || '';
   const hasArticleSchema = scanEvidence.technical?.hasArticleSchema || false;
 
-  // Check current page
-  const currentPageIsBlog = /\/(blog|news|articles)(\/|$)/i.test(url);
+  // Check current page using centralized VOCABULARY
+  const currentPageIsBlog = VOCABULARY.URL_PATTERNS.blog.test(url);
 
   // Fix for Issue #2 + #9: Check crawler discoveries
   const crawlerFoundBlog = scanEvidence.siteMetrics?.discoveredSections?.hasBlogUrl ||
@@ -149,12 +160,12 @@ function detectBlog(scanEvidence) {
 function detectLocalBusiness(scanEvidence) {
   const html = scanEvidence.html || '';
   const hasLocalSchema = scanEvidence.technical?.hasLocalBusinessSchema || false;
-  
-  // Check for address patterns
-  const hasAddress = /\d+\s+[A-Z][a-z]+\s+(Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd)/i.test(html);
-  const hasPhone = /\(\d{3}\)\s*\d{3}-\d{4}|\d{3}-\d{3}-\d{4}/i.test(html);
+
+  // Check for address patterns using centralized VOCABULARY
+  const hasAddress = VOCABULARY.TEXT_PATTERNS.address.usStreet.test(html);
+  const hasPhone = VOCABULARY.TEXT_PATTERNS.contact.phone.test(html);
   const hasMap = /maps\.google|google\.com\/maps|mapbox/i.test(html);
-  
+
   return hasLocalSchema || (hasAddress && hasPhone) || hasMap;
 }
 
