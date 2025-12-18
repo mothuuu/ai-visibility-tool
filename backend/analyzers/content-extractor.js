@@ -3,6 +3,12 @@ const cheerio = require('cheerio');
 const { URL } = require('url');
 const EntityAnalyzer = require('./entity-analyzer');
 const VOCABULARY = require('../config/detection-vocabulary');
+const {
+  CONFIDENCE_LEVELS,
+  EVIDENCE_SOURCES,
+  EVIDENCE_SCHEMAS,
+  createEvidence
+} = require('../config/diagnostic-types');
 
 /**
  * Content Extractor for V5 Rubric Analysis
@@ -56,6 +62,9 @@ const $ = cheerio.load(html);
       // Run entity analysis
       const entityAnalyzer = new EntityAnalyzer(evidence);
       evidence.entities = entityAnalyzer.analyze();
+
+      // Generate diagnostic evidence summaries
+      evidence.diagnosticEvidence = this.generateDiagnosticEvidence(evidence);
 
       return evidence;
     } catch (error) {
@@ -1093,6 +1102,283 @@ const $ = cheerio.load(html);
       semanticButtons: $('button').length,
       divClickHandlers: $('div[onclick], div[role="button"]').length
     };
+  }
+
+  /**
+   * Generate diagnostic evidence summaries using standardized schemas
+   * Per rulebook "Data Storage Schema" and "Diagnostic Output Contract"
+   * @param {Object} evidence - Raw extracted evidence
+   * @returns {Object} - Standardized evidence object for each subfactor
+   */
+  generateDiagnosticEvidence(evidence) {
+    const diagnosticEvidence = {};
+
+    // ----------------------------------------
+    // Organization Schema Evidence
+    // ----------------------------------------
+    const orgSchema = (evidence.technical?.structuredData || []).find(
+      s => s.type === 'Organization' || s.type === 'Corporation' || s.type === 'LocalBusiness'
+    );
+    diagnosticEvidence.organizationSchema = EVIDENCE_SCHEMAS.organizationSchema.create({
+      detected: !!orgSchema,
+      source: orgSchema ? EVIDENCE_SOURCES.JSON_LD : EVIDENCE_SOURCES.HEURISTIC,
+      confidence: orgSchema ? CONFIDENCE_LEVELS.HIGH : CONFIDENCE_LEVELS.LOW,
+      name: orgSchema?.raw?.name || evidence.metadata?.ogTitle || null,
+      description: orgSchema?.raw?.description || evidence.metadata?.description || null,
+      url: orgSchema?.raw?.url || evidence.url || null,
+      logo: orgSchema?.raw?.logo || evidence.metadata?.ogImage || null,
+      sameAs: orgSchema?.raw?.sameAs || [],
+      contactPoint: orgSchema?.raw?.contactPoint || null,
+      address: orgSchema?.raw?.address || null,
+      founders: orgSchema?.raw?.founder ? [orgSchema.raw.founder].flat() : [],
+      foundingDate: orgSchema?.raw?.foundingDate || null,
+      numberOfEmployees: orgSchema?.raw?.numberOfEmployees || null
+    });
+
+    // ----------------------------------------
+    // FAQ Content Evidence
+    // ----------------------------------------
+    const faqs = evidence.content?.faqs || [];
+    const avgAnswerLength = faqs.length > 0
+      ? Math.round(faqs.reduce((sum, f) => sum + (f.answer?.length || 0), 0) / faqs.length)
+      : 0;
+    diagnosticEvidence.faqContent = EVIDENCE_SCHEMAS.faqContent.create({
+      detected: faqs.length > 0 || evidence.technical?.hasFAQSchema,
+      source: evidence.technical?.hasFAQSchema ? EVIDENCE_SOURCES.JSON_LD :
+              faqs.length > 0 ? EVIDENCE_SOURCES.SEMANTIC_HTML : EVIDENCE_SOURCES.HEURISTIC,
+      confidence: evidence.technical?.hasFAQSchema ? CONFIDENCE_LEVELS.HIGH :
+                  faqs.length > 0 ? CONFIDENCE_LEVELS.MEDIUM : CONFIDENCE_LEVELS.LOW,
+      faqs: faqs.slice(0, 10), // First 10 for diagnostic
+      faqCount: faqs.length,
+      hasSchema: evidence.technical?.hasFAQSchema || false,
+      hasSectionHeading: faqs.some(f => f.source === 'section'),
+      isAccordion: faqs.some(f => f.source === 'aria' || f.source === 'html'),
+      averageAnswerLength: avgAnswerLength
+    });
+
+    // ----------------------------------------
+    // Blog Presence Evidence
+    // ----------------------------------------
+    const hasBlogNav = evidence.navigation?.keyPages?.blog || evidence.navigation?.hasBlogLink;
+    diagnosticEvidence.blogPresence = EVIDENCE_SCHEMAS.blogPresence.create({
+      detected: hasBlogNav || evidence.technical?.hasArticleSchema,
+      source: evidence.technical?.hasArticleSchema ? EVIDENCE_SOURCES.JSON_LD :
+              hasBlogNav ? EVIDENCE_SOURCES.NAVIGATION_LINK : EVIDENCE_SOURCES.HEURISTIC,
+      confidence: evidence.technical?.hasArticleSchema ? CONFIDENCE_LEVELS.HIGH :
+                  hasBlogNav ? CONFIDENCE_LEVELS.MEDIUM : CONFIDENCE_LEVELS.LOW,
+      hasBlogSection: hasBlogNav,
+      blogUrl: null, // Would need crawler to find
+      postCount: 0, // Would need crawler to count
+      hasRssFeed: evidence.technical?.hasRSSFeed || false,
+      hasArticleSchema: evidence.technical?.hasArticleSchema || false,
+      categories: [],
+      latestPostDate: evidence.metadata?.publishedTime || null
+    });
+
+    // ----------------------------------------
+    // Navigation Structure Evidence
+    // ----------------------------------------
+    const nav = evidence.navigation || {};
+    diagnosticEvidence.navigationStructure = EVIDENCE_SCHEMAS.navigationStructure.create({
+      detected: nav.detected || nav.navElements?.length > 0,
+      source: nav.hasSemanticNav ? EVIDENCE_SOURCES.SEMANTIC_HTML : EVIDENCE_SOURCES.CSS_CLASS,
+      confidence: nav.hasSemanticNav ? CONFIDENCE_LEVELS.HIGH : CONFIDENCE_LEVELS.MEDIUM,
+      hasSemanticNav: nav.hasSemanticNav || false,
+      hasAriaLabel: nav.navElements?.some(n => n.hasAriaLabel) || false,
+      navElementCount: nav.navElements?.length || 0,
+      totalLinks: nav.totalNavLinks || nav.links?.length || 0,
+      keyPages: nav.keyPages || {},
+      keyPageCount: nav.keyPageCount || 0,
+      hasDropdowns: nav.allNavLinks?.some(l => l.inDropdown) || false,
+      hasMobileMenu: nav.hasMobileMenu || false,
+      hasBreadcrumbs: evidence.structure?.hasBreadcrumbs || false
+    });
+
+    // ----------------------------------------
+    // Heading Hierarchy Evidence
+    // ----------------------------------------
+    const headings = evidence.content?.headings || {};
+    const h1Count = headings.h1?.length || 0;
+    const skippedLevels = this.detectSkippedHeadingLevels(headings);
+    diagnosticEvidence.headingHierarchy = EVIDENCE_SCHEMAS.headingHierarchy.create({
+      detected: h1Count > 0,
+      source: EVIDENCE_SOURCES.SEMANTIC_HTML,
+      confidence: h1Count === 1 ? CONFIDENCE_LEVELS.HIGH :
+                  h1Count > 0 ? CONFIDENCE_LEVELS.MEDIUM : CONFIDENCE_LEVELS.LOW,
+      h1Count: h1Count,
+      h1Text: headings.h1 || [],
+      hasProperHierarchy: h1Count === 1 && skippedLevels.length === 0,
+      skippedLevels: skippedLevels,
+      headingCounts: {
+        h1: headings.h1?.length || 0,
+        h2: headings.h2?.length || 0,
+        h3: headings.h3?.length || 0,
+        h4: headings.h4?.length || 0,
+        h5: headings.h5?.length || 0,
+        h6: headings.h6?.length || 0
+      },
+      questionHeadings: [...(headings.h2 || []), ...(headings.h3 || []), ...(headings.h4 || [])]
+        .filter(h => h.includes('?')).slice(0, 10)
+    });
+
+    // ----------------------------------------
+    // Schema Markup Evidence
+    // ----------------------------------------
+    const structuredData = evidence.technical?.structuredData || [];
+    diagnosticEvidence.schemaMarkup = EVIDENCE_SCHEMAS.schemaMarkup.create({
+      detected: structuredData.length > 0,
+      source: EVIDENCE_SOURCES.JSON_LD,
+      confidence: structuredData.length > 0 ? CONFIDENCE_LEVELS.HIGH : CONFIDENCE_LEVELS.LOW,
+      hasJsonLd: structuredData.length > 0,
+      hasMicrodata: false, // Would need to check for itemtype/itemprop
+      schemaTypes: structuredData.map(s => s.type),
+      schemaCount: structuredData.length,
+      isValid: true, // Would need validation
+      errors: [],
+      warnings: []
+    });
+
+    // ----------------------------------------
+    // Meta Data Evidence
+    // ----------------------------------------
+    const meta = evidence.metadata || {};
+    diagnosticEvidence.metaData = EVIDENCE_SCHEMAS.metaData.create({
+      detected: !!(meta.title || meta.description),
+      source: EVIDENCE_SOURCES.META_TAG,
+      confidence: meta.title && meta.description ? CONFIDENCE_LEVELS.HIGH : CONFIDENCE_LEVELS.MEDIUM,
+      title: meta.title || null,
+      titleLength: meta.title?.length || 0,
+      description: meta.description || null,
+      descriptionLength: meta.description?.length || 0,
+      hasOpenGraph: !!(meta.ogTitle || meta.ogDescription || meta.ogImage),
+      hasTwitterCard: !!(meta.twitterCard || meta.twitterTitle),
+      hasCanonical: evidence.technical?.hasCanonical || false,
+      canonicalUrl: evidence.technical?.canonicalUrl || meta.canonical || null,
+      robots: meta.robots || evidence.technical?.robotsMeta || null
+    });
+
+    // ----------------------------------------
+    // Semantic HTML Evidence
+    // ----------------------------------------
+    const structure = evidence.structure || {};
+    diagnosticEvidence.semanticHtml = EVIDENCE_SCHEMAS.semanticHtml.create({
+      detected: structure.hasMain || structure.hasArticle || structure.hasSection,
+      source: EVIDENCE_SOURCES.SEMANTIC_HTML,
+      confidence: structure.hasMain ? CONFIDENCE_LEVELS.HIGH : CONFIDENCE_LEVELS.MEDIUM,
+      hasMain: structure.hasMain || false,
+      hasArticle: structure.hasArticle || false,
+      hasSection: structure.hasSection || false,
+      hasAside: structure.hasAside || false,
+      hasNav: structure.hasNav || false,
+      hasHeader: structure.hasHeader || false,
+      hasFooter: structure.hasFooter || false,
+      landmarkCount: structure.landmarks || 0,
+      ariaLandmarks: []
+    });
+
+    // ----------------------------------------
+    // Alt Text Evidence
+    // ----------------------------------------
+    const media = evidence.media || {};
+    const altCoverage = media.imageCount > 0
+      ? Math.round((media.imagesWithAlt / media.imageCount) * 100)
+      : 100;
+    diagnosticEvidence.altText = EVIDENCE_SCHEMAS.altText.create({
+      detected: media.imageCount > 0,
+      source: EVIDENCE_SOURCES.SEMANTIC_HTML,
+      confidence: altCoverage >= 80 ? CONFIDENCE_LEVELS.HIGH :
+                  altCoverage >= 50 ? CONFIDENCE_LEVELS.MEDIUM : CONFIDENCE_LEVELS.LOW,
+      totalImages: media.imageCount || 0,
+      imagesWithAlt: media.imagesWithAlt || 0,
+      imagesWithoutAlt: media.imagesWithoutAlt || 0,
+      altCoverage: altCoverage,
+      decorativeImages: 0, // Would need analysis
+      descriptiveAltCount: media.images?.filter(img => img.alt && img.alt.length > 10).length || 0
+    });
+
+    // ----------------------------------------
+    // Content Depth Evidence
+    // ----------------------------------------
+    const content = evidence.content || {};
+    diagnosticEvidence.contentDepth = EVIDENCE_SCHEMAS.contentDepth.create({
+      detected: (content.wordCount || 0) > 100,
+      source: EVIDENCE_SOURCES.BODY_TEXT,
+      confidence: (content.wordCount || 0) > 500 ? CONFIDENCE_LEVELS.HIGH :
+                  (content.wordCount || 0) > 200 ? CONFIDENCE_LEVELS.MEDIUM : CONFIDENCE_LEVELS.LOW,
+      wordCount: content.wordCount || 0,
+      paragraphCount: content.paragraphs?.length || 0,
+      averageSentenceLength: 0, // Would need calculation
+      hasLists: (content.lists?.length || 0) > 0,
+      listCount: content.lists?.length || 0,
+      hasTables: (content.tables?.length || 0) > 0,
+      tableCount: content.tables?.length || 0,
+      hasMedia: (media.imageCount || 0) + (media.videoCount || 0) > 0,
+      mediaCount: (media.imageCount || 0) + (media.videoCount || 0) + (media.audioCount || 0)
+    });
+
+    // ----------------------------------------
+    // Content Freshness Evidence
+    // ----------------------------------------
+    const currentYear = new Date().getFullYear();
+    const containsCurrentYear = (content.bodyText || '').includes(String(currentYear));
+    diagnosticEvidence.contentFreshness = EVIDENCE_SCHEMAS.contentFreshness.create({
+      detected: !!(meta.lastModified || meta.publishedTime),
+      source: meta.lastModified ? EVIDENCE_SOURCES.META_TAG : EVIDENCE_SOURCES.HEURISTIC,
+      confidence: meta.lastModified || meta.publishedTime ? CONFIDENCE_LEVELS.MEDIUM : CONFIDENCE_LEVELS.LOW,
+      lastModified: meta.lastModified || evidence.technical?.lastModified || null,
+      publishedDate: meta.publishedTime || null,
+      hasDateSchema: false, // Would need to check schemas
+      containsCurrentYear: containsCurrentYear,
+      dateReferences: [],
+      estimatedAge: null
+    });
+
+    // ----------------------------------------
+    // Local Business Evidence
+    // ----------------------------------------
+    const localSchema = structuredData.find(s => s.type === 'LocalBusiness');
+    diagnosticEvidence.localBusiness = EVIDENCE_SCHEMAS.localBusiness.create({
+      detected: !!localSchema || evidence.technical?.hasLocalBusinessSchema,
+      source: localSchema ? EVIDENCE_SOURCES.JSON_LD : EVIDENCE_SOURCES.HEURISTIC,
+      confidence: localSchema ? CONFIDENCE_LEVELS.HIGH : CONFIDENCE_LEVELS.LOW,
+      hasLocalSchema: evidence.technical?.hasLocalBusinessSchema || false,
+      businessName: localSchema?.raw?.name || null,
+      address: localSchema?.raw?.address || null,
+      phone: localSchema?.raw?.telephone || null,
+      email: localSchema?.raw?.email || null,
+      hours: localSchema?.raw?.openingHours || null,
+      hasMap: false, // Would need to detect
+      coordinates: localSchema?.raw?.geo || null,
+      serviceArea: localSchema?.raw?.areaServed || null
+    });
+
+    console.log('[DiagnosticEvidence] Generated evidence for', Object.keys(diagnosticEvidence).length, 'subfactors');
+
+    return diagnosticEvidence;
+  }
+
+  /**
+   * Helper to detect skipped heading levels (e.g., H2 -> H4)
+   */
+  detectSkippedHeadingLevels(headings) {
+    const skipped = [];
+    const levels = [1, 2, 3, 4, 5, 6];
+    let lastLevel = 0;
+
+    for (const level of levels) {
+      const count = headings[`h${level}`]?.length || 0;
+      if (count > 0) {
+        if (lastLevel > 0 && level > lastLevel + 1) {
+          // Skipped one or more levels
+          for (let i = lastLevel + 1; i < level; i++) {
+            skipped.push(`H${lastLevel} -> H${level} (missing H${i})`);
+          }
+        }
+        lastLevel = level;
+      }
+    }
+
+    return skipped;
   }
 
   /**
