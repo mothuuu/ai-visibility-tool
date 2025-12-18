@@ -91,10 +91,12 @@ function detectFAQ(scanEvidence) {
   const hasOnPageFAQ = faqs.length > 0 || h2s.some(h => /faq/i.test(h)) || hasFAQSchema;
 
   // Fix for Issue #2 + #9: Check crawler discoveries
-  const crawlerFoundFAQ = scanEvidence.siteMetrics?.discoveredSections?.hasFaqUrl || false;
+  const crawlerFoundFAQ = scanEvidence.siteMetrics?.discoveredSections?.hasFaqUrl ||
+                          scanEvidence.crawler?.discoveredSections?.hasFaqUrl || false;
 
-  // Fix for Issue #2 + #9: Check navigation links (if available)
-  const navHasFAQLink = scanEvidence.navigation?.hasFAQLink || false;
+  // Fix for Issue #2 + #9: Check navigation links (multiple possible locations)
+  const navigation = scanEvidence.navigation || scanEvidence.content?.navigation || {};
+  const navHasFAQLink = navigation.hasFAQLink || navigation.keyPages?.faq || false;
 
   const result = hasOnPageFAQ || crawlerFoundFAQ || navHasFAQLink;
 
@@ -122,13 +124,15 @@ function detectBlog(scanEvidence) {
   const hasArticleSchema = scanEvidence.technical?.hasArticleSchema || false;
 
   // Check current page
-  const currentPageIsBlog = /\/blog|\/news|\/articles/i.test(url);
+  const currentPageIsBlog = /\/(blog|news|articles)(\/|$)/i.test(url);
 
   // Fix for Issue #2 + #9: Check crawler discoveries
-  const crawlerFoundBlog = scanEvidence.siteMetrics?.discoveredSections?.hasBlogUrl || false;
+  const crawlerFoundBlog = scanEvidence.siteMetrics?.discoveredSections?.hasBlogUrl ||
+                           scanEvidence.crawler?.discoveredSections?.hasBlogUrl || false;
 
-  // Fix for Issue #2 + #9: Check navigation links (if available)
-  const navHasBlogLink = scanEvidence.navigation?.hasBlogLink || false;
+  // Fix for Issue #2 + #9: Check navigation links (multiple possible locations)
+  const navigation = scanEvidence.navigation || scanEvidence.content?.navigation || {};
+  const navHasBlogLink = navigation.hasBlogLink || navigation.keyPages?.blog || false;
 
   const result = currentPageIsBlog || hasArticleSchema || crawlerFoundBlog || navHasBlogLink;
 
