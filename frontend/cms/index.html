@@ -47,7 +47,7 @@
         }
     </style>
 
-    <!-- CRITICAL: Must set this BEFORE loading decap-cms.js -->
+    <!-- CRITICAL: Must set this BEFORE loading CMS -->
     <script>
         window.CMS_MANUAL_INIT = true;
     </script>
@@ -60,11 +60,11 @@
         <div class="loading-spinner"></div>
     </div>
 
-    <!-- Decap CMS Script -->
-    <script src="https://unpkg.com/decap-cms@^3.0.0/dist/decap-cms.js"></script>
+    <!-- Sveltia CMS - drop-in replacement with better GitHub OAuth -->
+    <script src="https://unpkg.com/@sveltia/cms/dist/sveltia-cms.js"></script>
 
     <script>
-        // Initialize CMS with GitHub backend
+        // Initialize CMS with GitHub backend using PKCE (no external auth server needed)
         CMS.init({
             config: {
                 load_config_file: false,
@@ -72,10 +72,7 @@
                 backend: {
                     name: 'github',
                     repo: 'mothuuu/ai-visibility-tool',
-                    branch: 'main',
-                    base_url: 'https://api.netlify.com',
-                    auth_endpoint: 'auth',
-                    site_domain: 'graceful-meerkat-0c25da.netlify.app'
+                    branch: 'main'
                 },
 
                 media_folder: 'frontend/images/uploads',
