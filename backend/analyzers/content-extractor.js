@@ -29,6 +29,9 @@ class ContentExtractor {
    */
   async extract() {
     try {
+      console.log('=== EXTRACTION START ===');
+      console.log('URL:', this.url);
+
       const fetchResult = await this.fetchHTML();
 const html = fetchResult.html; // Extract the HTML string from the object
 const $ = cheerio.load(html);
@@ -65,6 +68,12 @@ const $ = cheerio.load(html);
 
       // Generate diagnostic evidence summaries
       evidence.diagnosticEvidence = this.generateDiagnosticEvidence(evidence);
+
+      // DEBUG: Log extracted data before returning
+      console.log('EXTRACTED navigation:', JSON.stringify(evidence.navigation?.keyPages || 'NO NAVIGATION'));
+      console.log('EXTRACTED faqs count:', evidence.content?.faqs?.length || 0);
+      console.log('EXTRACTED hasNav:', evidence.structure?.hasNav);
+      console.log('=== EXTRACTION END ===');
 
       return evidence;
     } catch (error) {
@@ -245,8 +254,17 @@ const $ = cheerio.load(html);
     // IMPORTANT: Extract FAQs BEFORE removing footer (FAQs are often in footer!)
     const faqs = this.extractFAQs($, structuredData);
 
+    // DEBUG: Log counts before removal
+    console.log('BEFORE REMOVAL - nav count:', $('nav').length);
+    console.log('BEFORE REMOVAL - header count:', $('header').length);
+    console.log('BEFORE REMOVAL - faq elements:', $('[class*="faq"]').length);
+
     // Remove script, style, and navigation elements
     $('script, style, nav, header, footer, aside').remove();
+
+    // DEBUG: Log counts after removal
+    console.log('AFTER REMOVAL - nav count:', $('nav').length);
+    console.log('AFTER REMOVAL - faq elements:', $('[class*="faq"]').length);
 
     const headings = {
       h1: [],
