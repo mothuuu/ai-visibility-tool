@@ -3858,20 +3858,5 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
             }
         })();
     </script>
-
-    <!-- Netlify Identity Widget - Required for CMS Authentication -->
-    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
-    <script>
-        // Redirect to CMS after login
-        if (window.netlifyIdentity) {
-            window.netlifyIdentity.on("init", user => {
-                if (!user) {
-                    window.netlifyIdentity.on("login", () => {
-                        document.location.href = "/cms/";
-                    });
-                }
-            });
-        }
-    </script>
 </body>
 </html>
