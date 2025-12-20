@@ -131,33 +131,82 @@ function extractAnchors(html) {
   return anchors.slice(0, 10); // Max 10
 }
 
+/**
+ * RULEBOOK v1.2 Section 2.2.6: FAQ Detection - Complete Specification
+ * Returns all required evidence fields for multi-source detection
+ */
 function detectFAQ(scanEvidence, diagnostics) {
   const faqs = scanEvidence.content?.faqs || [];
   const h2s = scanEvidence.content?.headings?.h2 || [];
   const hasFAQSchema = scanEvidence.technical?.hasFAQSchema || false;
+  const schemaFAQCount = faqs.filter(f => f.source === 'schema').length;
 
   // Existing checks for on-page FAQ content using centralized VOCABULARY
   const faqPattern = VOCABULARY.TEXT_PATTERNS.questions.faqHeadings;
   const hasFAQHeading = h2s.some(h => faqPattern.test(h));
-  const hasOnPageFAQ = faqs.length > 0 || hasFAQHeading || hasFAQSchema;
+  const faqHeadingText = h2s.find(h => faqPattern.test(h)) || null;
+  const hasOnPageFAQs = faqs.length > 0;
+  const onPageFAQCount = faqs.length;
 
-  // Fix for Issue #2 + #9: Check crawler discoveries
+  // RULEBOOK v1.2: Check crawler discoveries with full URL details
   const crawlerFoundFAQ = scanEvidence.siteMetrics?.discoveredSections?.hasFaqUrl ||
                           scanEvidence.crawler?.discoveredSections?.hasFaqUrl || false;
+  const faqPageUrl = scanEvidence.siteMetrics?.discoveredSections?.faqUrl ||
+                     scanEvidence.crawler?.discoveredSections?.faqUrl || null;
+  const faqPageUrls = scanEvidence.siteMetrics?.discoveredSections?.faqUrls ||
+                      scanEvidence.crawler?.discoveredSections?.faqUrls || [];
 
-  // Fix for Issue #2 + #9: Check navigation links (multiple possible locations)
+  // RULEBOOK v1.2: Check navigation links with href and text details
   const navigation = scanEvidence.navigation || scanEvidence.content?.navigation || {};
-  const navHasFAQLink = navigation.hasFAQLink || navigation.keyPages?.faq || false;
+  const allNavLinks = navigation.allNavLinks || navigation.links || [];
 
-  const detected = hasOnPageFAQ || crawlerFoundFAQ || navHasFAQLink;
+  // Find FAQ link in navigation
+  let hasFAQNavLink = navigation.hasFAQLink || navigation.keyPages?.faq || false;
+  let faqNavLinkHref = null;
+  let faqNavLinkText = null;
+
+  // Search for FAQ link details
+  for (const link of allNavLinks) {
+    const href = link.href || '';
+    const text = (link.text || '').toLowerCase();
+    if (VOCABULARY.URL_PATTERNS.faq.test(href) || VOCABULARY.matchesNavKeyword(text, 'faq')) {
+      hasFAQNavLink = true;
+      faqNavLinkHref = href;
+      faqNavLinkText = link.text;
+      break;
+    }
+  }
+
+  // RULEBOOK v1.2: Accept FAQ presence if ANY of these is true
+  const detected = hasOnPageFAQs || hasFAQSchema || hasFAQNavLink || crawlerFoundFAQ;
+
+  // Determine source with priority: schema > content > heading > navigation > crawler
+  let source = 'none';
+  let confidence = 'low';
+  if (hasFAQSchema) {
+    source = 'schema';
+    confidence = 'high';
+  } else if (hasOnPageFAQs) {
+    source = 'content';
+    confidence = 'medium';
+  } else if (hasFAQHeading) {
+    source = 'heading';
+    confidence = 'medium';
+  } else if (hasFAQNavLink) {
+    source = 'navigation';
+    confidence = 'medium';
+  } else if (crawlerFoundFAQ) {
+    source = 'crawler';
+    confidence = 'medium';
+  }
 
   // Build reasoning string
   const reasons = [];
-  if (faqs.length > 0) reasons.push(`${faqs.length} FAQs extracted from page`);
-  if (hasFAQSchema) reasons.push('FAQPage schema present');
-  if (hasFAQHeading) reasons.push('FAQ section heading found');
-  if (crawlerFoundFAQ) reasons.push('FAQ URL discovered by crawler');
-  if (navHasFAQLink) reasons.push('FAQ link in navigation');
+  if (hasOnPageFAQs) reasons.push(`${onPageFAQCount} FAQs extracted from page`);
+  if (hasFAQSchema) reasons.push(`FAQPage schema with ${schemaFAQCount} items`);
+  if (hasFAQHeading) reasons.push(`FAQ heading found: "${faqHeadingText}"`);
+  if (hasFAQNavLink) reasons.push(`FAQ nav link: ${faqNavLinkText} -> ${faqNavLinkHref}`);
+  if (crawlerFoundFAQ) reasons.push(`Crawler found FAQ: ${faqPageUrl}`);
 
   const reasoning = detected
     ? reasons.join('; ')
@@ -167,8 +216,8 @@ function detectFAQ(scanEvidence, diagnostics) {
   if (diagnostics) {
     const sources = [];
     if (hasFAQSchema) sources.push(EVIDENCE_SOURCES.JSON_LD);
-    if (faqs.length > 0) sources.push(EVIDENCE_SOURCES.SEMANTIC_HTML);
-    if (navHasFAQLink) sources.push(EVIDENCE_SOURCES.NAVIGATION_LINK);
+    if (hasOnPageFAQs) sources.push(EVIDENCE_SOURCES.SEMANTIC_HTML);
+    if (hasFAQNavLink) sources.push(EVIDENCE_SOURCES.NAVIGATION_LINK);
     if (crawlerFoundFAQ) sources.push(EVIDENCE_SOURCES.CRAWLER);
 
     diagnostics.addDecision({
@@ -177,21 +226,60 @@ function detectFAQ(scanEvidence, diagnostics) {
       result: detected,
       score: detected ? 1 : 0,
       maxScore: 1,
-      evidence: { faqs: faqs.length, hasFAQSchema, hasFAQHeading, crawlerFoundFAQ, navHasFAQLink },
+      evidence: {
+        // RULEBOOK v1.2 Section 2.2.6: All required evidence fields
+        detected,
+        count: onPageFAQCount,
+        source,
+        confidence,
+        hasFAQSchema,
+        schemaFAQCount,
+        hasOnPageFAQs,
+        onPageFAQCount,
+        hasFAQHeading,
+        faqHeadingText,
+        hasFAQNavLink,
+        faqNavLinkHref,
+        faqNavLinkText,
+        crawlerFoundFAQ,
+        faqPageUrl,
+        faqPageUrls
+      },
       reasoning,
       sources: sources.length > 0 ? sources : [EVIDENCE_SOURCES.HEURISTIC]
     });
   }
 
   console.log('[Detection] FAQ detected:', detected, {
-    hasOnPageFAQ,
-    faqCount: faqs.length,
+    source,
+    confidence,
+    onPageFAQCount,
     hasFAQSchema,
-    crawlerFoundFAQ,
-    navHasFAQLink
+    hasFAQNavLink,
+    crawlerFoundFAQ
   });
 
-  return { detected, reasoning, sources: { faqs: faqs.length, hasFAQSchema, crawlerFoundFAQ, navHasFAQLink } };
+  // RULEBOOK v1.2: Return complete evidence object
+  return {
+    detected,
+    count: onPageFAQCount,
+    source,
+    confidence,
+    reasoning,
+    // All required evidence fields
+    hasFAQSchema,
+    schemaFAQCount,
+    hasOnPageFAQs,
+    onPageFAQCount,
+    hasFAQHeading,
+    faqHeadingText,
+    hasFAQNavLink,
+    faqNavLinkHref,
+    faqNavLinkText,
+    crawlerFoundFAQ,
+    faqPageUrl,
+    faqPageUrls
+  };
 }
 
 function detectPricing(html, scanEvidence, diagnostics) {
@@ -268,41 +356,97 @@ function detectContact(html, diagnostics) {
   return { detected, reasoning, sources: { hasEmail, hasPhone, hasContactKeyword } };
 }
 
+/**
+ * RULEBOOK v1.2 Section 2.4.4: Blog Detection - Complete Specification
+ * Returns all required evidence fields for multi-source detection
+ */
 function detectBlog(scanEvidence, diagnostics) {
   const url = scanEvidence.url || '';
   const hasArticleSchema = scanEvidence.technical?.hasArticleSchema || false;
 
+  // Get article schema type if present
+  const structuredData = scanEvidence.technical?.structuredData || [];
+  const articleSchema = structuredData.find(s =>
+    ['Article', 'BlogPosting', 'NewsArticle', 'TechArticle'].includes(s.type)
+  );
+  const articleSchemaType = articleSchema?.type || null;
+
   // Check current page using centralized VOCABULARY
   const currentPageIsBlog = VOCABULARY.URL_PATTERNS.blog.test(url);
 
-  // Fix for Issue #2 + #9: Check crawler discoveries
+  // RULEBOOK v1.2: Check crawler discoveries with full URL details
   const crawlerFoundBlog = scanEvidence.siteMetrics?.discoveredSections?.hasBlogUrl ||
                            scanEvidence.crawler?.discoveredSections?.hasBlogUrl || false;
+  const blogPageUrl = scanEvidence.siteMetrics?.discoveredSections?.blogUrl ||
+                      scanEvidence.crawler?.discoveredSections?.blogUrl || null;
+  const blogPageUrls = scanEvidence.siteMetrics?.discoveredSections?.blogUrls ||
+                       scanEvidence.crawler?.discoveredSections?.blogUrls || [];
 
-  // Fix for Issue #2 + #9: Check navigation links (multiple possible locations)
+  // RULEBOOK v1.2: Check sitemap discoveries
+  const sitemapFoundBlog = scanEvidence.siteMetrics?.sitemap?.hasBlogUrls ||
+                           scanEvidence.crawler?.sitemap?.hasBlogUrls || false;
+  const sitemapBlogUrls = scanEvidence.siteMetrics?.sitemap?.blogUrls ||
+                          scanEvidence.crawler?.sitemap?.blogUrls || [];
+
+  // RULEBOOK v1.2: Check navigation links with href and text details
   const navigation = scanEvidence.navigation || scanEvidence.content?.navigation || {};
-  const navHasBlogLink = navigation.hasBlogLink || navigation.keyPages?.blog || false;
+  const allNavLinks = navigation.allNavLinks || navigation.links || [];
 
-  const detected = currentPageIsBlog || hasArticleSchema || crawlerFoundBlog || navHasBlogLink;
+  // Find blog link in navigation
+  let hasBlogNavLink = navigation.hasBlogLink || navigation.keyPages?.blog || false;
+  let blogNavLinkHref = null;
+  let blogNavLinkText = null;
+
+  // Search for blog link details
+  for (const link of allNavLinks) {
+    const href = link.href || '';
+    const text = (link.text || '').toLowerCase();
+    if (VOCABULARY.URL_PATTERNS.blog.test(href) || VOCABULARY.matchesNavKeyword(text, 'blog')) {
+      hasBlogNavLink = true;
+      blogNavLinkHref = href;
+      blogNavLinkText = link.text;
+      break;
+    }
+  }
+
+  // RULEBOOK v1.2: Check ALL sources for detection
+  const detected = currentPageIsBlog || hasArticleSchema || hasBlogNavLink ||
+                   crawlerFoundBlog || sitemapFoundBlog;
+
+  // Determine source with priority: url > schema > navigation > crawler > sitemap
+  let source = 'none';
+  if (currentPageIsBlog) {
+    source = 'url';
+  } else if (hasArticleSchema) {
+    source = 'schema';
+  } else if (hasBlogNavLink) {
+    source = 'navigation';
+  } else if (crawlerFoundBlog) {
+    source = 'crawler';
+  } else if (sitemapFoundBlog) {
+    source = 'sitemap';
+  }
 
   // Build reasoning
   const reasons = [];
   if (currentPageIsBlog) reasons.push('Current URL matches blog pattern');
-  if (hasArticleSchema) reasons.push('Article/BlogPosting schema present');
-  if (crawlerFoundBlog) reasons.push('Blog URL discovered by crawler');
-  if (navHasBlogLink) reasons.push('Blog link in navigation');
+  if (hasArticleSchema) reasons.push(`${articleSchemaType} schema present`);
+  if (hasBlogNavLink) reasons.push(`Blog nav link: ${blogNavLinkText} -> ${blogNavLinkHref}`);
+  if (crawlerFoundBlog) reasons.push(`Crawler found blog: ${blogPageUrl}`);
+  if (sitemapFoundBlog) reasons.push(`Sitemap contains ${sitemapBlogUrls.length} blog URLs`);
 
   const reasoning = detected
     ? reasons.join('; ')
-    : 'No blog URL, schema, nav link, or discovered URL';
+    : 'No blog URL, schema, nav link, crawler, or sitemap discovery';
 
   // Add decision to diagnostics
   if (diagnostics) {
     const sources = [];
     if (currentPageIsBlog) sources.push(EVIDENCE_SOURCES.URL_PATTERN);
     if (hasArticleSchema) sources.push(EVIDENCE_SOURCES.JSON_LD);
-    if (navHasBlogLink) sources.push(EVIDENCE_SOURCES.NAVIGATION_LINK);
+    if (hasBlogNavLink) sources.push(EVIDENCE_SOURCES.NAVIGATION_LINK);
     if (crawlerFoundBlog) sources.push(EVIDENCE_SOURCES.CRAWLER);
+    if (sitemapFoundBlog) sources.push(EVIDENCE_SOURCES.SITEMAP || 'sitemap');
 
     diagnostics.addDecision({
       subfactor: 'blog_presence',
@@ -310,20 +454,54 @@ function detectBlog(scanEvidence, diagnostics) {
       result: detected,
       score: detected ? 1 : 0,
       maxScore: 1,
-      evidence: { currentPageIsBlog, hasArticleSchema, crawlerFoundBlog, navHasBlogLink },
+      evidence: {
+        // RULEBOOK v1.2 Section 2.4.4: All required evidence fields
+        detected,
+        source,
+        currentPageIsBlog,
+        hasArticleSchema,
+        articleSchemaType,
+        hasBlogNavLink,
+        blogNavLinkHref,
+        blogNavLinkText,
+        crawlerFoundBlog,
+        blogPageUrl,
+        blogPageUrls,
+        sitemapFoundBlog,
+        sitemapBlogUrls
+      },
       reasoning,
       sources: sources.length > 0 ? sources : [EVIDENCE_SOURCES.HEURISTIC]
     });
   }
 
   console.log('[Detection] Blog detected:', detected, {
+    source,
     currentPageIsBlog,
     hasArticleSchema,
+    hasBlogNavLink,
     crawlerFoundBlog,
-    navHasBlogLink
+    sitemapFoundBlog
   });
 
-  return { detected, reasoning, sources: { currentPageIsBlog, hasArticleSchema, crawlerFoundBlog, navHasBlogLink } };
+  // RULEBOOK v1.2: Return complete evidence object
+  return {
+    detected,
+    source,
+    reasoning,
+    // All required evidence fields
+    currentPageIsBlog,
+    hasArticleSchema,
+    articleSchemaType,
+    hasBlogNavLink,
+    blogNavLinkHref,
+    blogNavLinkText,
+    crawlerFoundBlog,
+    blogPageUrl,
+    blogPageUrls,
+    sitemapFoundBlog,
+    sitemapBlogUrls
+  };
 }
 
 function detectLocalBusiness(scanEvidence, diagnostics) {

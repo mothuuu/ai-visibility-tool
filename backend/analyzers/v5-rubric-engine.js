@@ -278,27 +278,51 @@ class V5RubricEngine {
    * Category 6: Technical Setup & Structured Data (18%)
    * PURE FUNCTION - depends only on evidence
    */
+  /**
+   * RULEBOOK v1.2 Section 10.2: Null/not_measured score states
+   * Do NOT default to 50 for unmeasurable factors. Use null instead.
+   */
   analyzeTechnicalSetup(evidence) {
     const subfactors = {};
-    
+
     subfactors.crawlerAccessScore = this.assessCrawlerAccess(evidence.technical, evidence.performance);
     subfactors.structuredDataScore = this.assessStructuredData(evidence.technical);
     subfactors.canonicalHreflangScore = this.assessCanonicalHreflang(evidence.technical);
     subfactors.openGraphScore = this.assessOpenGraph(evidence.metadata);
-    subfactors.sitemapScore = evidence.technical.hasSitemapLink ? 100 : 50;
-    subfactors.indexNowScore = 0;
-    subfactors.rssFeedScore = evidence.technical.hasRSSFeed ? 100 : 0;
-    
-    const categoryScore = (
-      subfactors.crawlerAccessScore * 0.30 +
-      subfactors.structuredDataScore * 0.30 +
-      subfactors.canonicalHreflangScore * 0.10 +
-      subfactors.openGraphScore * 0.05 +
-      subfactors.sitemapScore * 0.10 +
-      subfactors.indexNowScore * 0.10 +
-      subfactors.rssFeedScore * 0.05
-    );
-    
+
+    // RULEBOOK v1.2: Use actual detection, not default values
+    subfactors.sitemapScore = evidence.technical.hasSitemapLink ? 100 : 0;
+
+    // RULEBOOK v1.2: Use new IndexNow detection
+    subfactors.indexNowScore = evidence.technical.indexNow?.detected ? 100 : 0;
+
+    // RULEBOOK v1.2: Use new RSS/Atom feed detection
+    subfactors.rssFeedScore = evidence.technical.feeds?.detected ? 100 : 0;
+
+    // Calculate weighted score, skipping null values
+    const weights = {
+      crawlerAccessScore: 0.30,
+      structuredDataScore: 0.30,
+      canonicalHreflangScore: 0.10,
+      openGraphScore: 0.05,
+      sitemapScore: 0.10,
+      indexNowScore: 0.10,
+      rssFeedScore: 0.05
+    };
+
+    let totalWeight = 0;
+    let weightedSum = 0;
+
+    for (const [key, weight] of Object.entries(weights)) {
+      const score = subfactors[key];
+      if (score !== null && score !== undefined) {
+        weightedSum += score * weight;
+        totalWeight += weight;
+      }
+    }
+
+    const categoryScore = totalWeight > 0 ? weightedSum / totalWeight * 100 / 100 : 0;
+
     return {
       score: Math.round(categoryScore),
       subfactors,
@@ -309,23 +333,41 @@ class V5RubricEngine {
   /**
    * Category 7: Trust, Authority & Verification (12%)
    * PURE FUNCTION - depends only on evidence
+   *
+   * RULEBOOK v1.2 Section 10.2: Null/not_measured score states
    */
   analyzeTrustAuthority(evidence) {
     const subfactors = {};
-    
+
     subfactors.authorBiosScore = this.assessAuthorBios(evidence.content, evidence.metadata);
     subfactors.certificationsScore = this.assessCertifications(evidence.content);
-    subfactors.domainAuthorityScore = 60; // Would need external API
+    // RULEBOOK v1.2: Use null for unmeasurable factors, not default 60
+    subfactors.domainAuthorityScore = null; // Would need external API
     subfactors.thoughtLeadershipScore = this.assessThoughtLeadership(evidence.content, evidence.structure);
-    subfactors.thirdPartyProfilesScore = this.assessThirdPartyProfiles(evidence.content);
-    
-    const categoryScore = (
-      subfactors.authorBiosScore * 0.25 +
-      subfactors.certificationsScore * 0.15 +
-      subfactors.domainAuthorityScore * 0.25 +
-      subfactors.thoughtLeadershipScore * 0.20 +
-      subfactors.thirdPartyProfilesScore * 0.15
-    );
+    // RULEBOOK v1.2: Use new thirdPartyProfiles evidence
+    subfactors.thirdPartyProfilesScore = this.assessThirdPartyProfiles(evidence.thirdPartyProfiles || evidence.content);
+
+    // Calculate weighted score, skipping null values (RULEBOOK v1.2)
+    const weights = {
+      authorBiosScore: 0.25,
+      certificationsScore: 0.15,
+      domainAuthorityScore: 0.25,
+      thoughtLeadershipScore: 0.20,
+      thirdPartyProfilesScore: 0.15
+    };
+
+    let totalWeight = 0;
+    let weightedSum = 0;
+
+    for (const [key, weight] of Object.entries(weights)) {
+      const score = subfactors[key];
+      if (score !== null && score !== undefined) {
+        weightedSum += score * weight;
+        totalWeight += weight;
+      }
+    }
+
+    const categoryScore = totalWeight > 0 ? (weightedSum / totalWeight) : 0;
     
     return {
       score: Math.round(categoryScore),
@@ -842,11 +884,40 @@ class V5RubricEngine {
     return Math.min(100, score);
   }
 
-  assessThirdPartyProfiles(content) {
+  /**
+   * RULEBOOK v1.2 Section 9.5: Third-party profile assessment
+   * Uses new thirdPartyProfiles evidence from sameAs + footer links
+   */
+  assessThirdPartyProfiles(profilesOrContent) {
+    // Handle both new thirdPartyProfiles format and legacy content format
+    if (profilesOrContent?.profiles && Array.isArray(profilesOrContent.profiles)) {
+      // New RULEBOOK v1.2 format
+      const profiles = profilesOrContent.profiles;
+      const count = profiles.length;
+      const hasSameAs = profilesOrContent.hasSameAs;
+      const hasBusiness = profilesOrContent.businessProfiles?.length > 0;
+
+      // Higher score for schema-based profiles (sameAs)
+      let score = 0;
+      if (count >= 5) score = 100;
+      else if (count >= 3) score = 80;
+      else if (count >= 2) score = 60;
+      else if (count >= 1) score = 40;
+
+      // Bonus for sameAs in schema (proper implementation)
+      if (hasSameAs) score = Math.min(100, score + 15);
+
+      // Bonus for business review profiles
+      if (hasBusiness) score = Math.min(100, score + 10);
+
+      return score;
+    }
+
+    // Legacy format fallback
     const platforms = ['g2', 'clutch', 'google', 'reviews', 'testimonial', 'rating', 'trustpilot'];
-    const text = content.bodyText.toLowerCase();
+    const text = profilesOrContent?.bodyText?.toLowerCase() || '';
     const mentions = platforms.filter(p => text.includes(p)).length;
-    
+
     if (mentions >= 3) return 100;
     if (mentions >= 2) return 70;
     if (mentions >= 1) return 40;
