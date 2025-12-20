@@ -721,6 +721,602 @@
             font-weight: 500;
         }
 
+        /* Feature image styling */
+        .feature-image {
+            max-width: 800px;
+            width: 100%;
+            height: auto;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+            margin: 0 auto;
+            display: block;
+        }
+
+        .feature-image.gif-animation {
+            max-width: 600px;
+        }
+
+        /* Mockup Container Styles */
+        .mockup-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            overflow: hidden;
+            max-width: 100%;
+        }
+
+        .mockup-header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #2d3748 100%);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .mockup-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .mockup-dot.red { background: #ff5f56; }
+        .mockup-dot.yellow { background: #ffbd2e; }
+        .mockup-dot.green { background: #27ca40; }
+
+        .mockup-body {
+            padding: 24px;
+            background: #f8f9fa;
+        }
+
+        /* Score Display Mockup */
+        .score-display {
+            text-align: center;
+            padding: 30px;
+            background: white;
+            border-radius: 16px;
+            margin-bottom: 20px;
+        }
+
+        .score-circle {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: conic-gradient(var(--cyan) 0deg, var(--cyan) 259deg, #e9ecef 259deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            position: relative;
+        }
+
+        .score-circle-inner {
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .score-number {
+            font-size: 32px;
+            font-weight: 800;
+            color: #1a1a2e;
+        }
+
+        .score-label {
+            font-size: 12px;
+            color: #718096;
+        }
+
+        .score-grade {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--teal) 100%);
+            color: white;
+            padding: 6px 20px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        /* Pillar Bars */
+        .pillar-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .pillar-item {
+            background: white;
+            padding: 14px 16px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .pillar-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .pillar-icon.good { background: #d4edda; color: #155724; }
+        .pillar-icon.warn { background: #fff3cd; color: #856404; }
+        .pillar-icon.bad { background: #f8d7da; color: #721c24; }
+
+        .pillar-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .pillar-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 4px;
+        }
+
+        .pillar-bar-bg {
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .pillar-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+        }
+
+        .pillar-bar-fill.high { background: linear-gradient(90deg, #27ca40, #4DACA6); }
+        .pillar-bar-fill.medium { background: linear-gradient(90deg, #ffbd2e, #ffc107); }
+        .pillar-bar-fill.low { background: linear-gradient(90deg, #ff5f56, #dc3545); }
+
+        .pillar-score {
+            font-size: 12px;
+            font-weight: 700;
+            color: #4a5568;
+            margin-left: 8px;
+        }
+
+        /* Recommendation Card Mockup */
+        .rec-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+
+        .rec-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .rec-priority {
+            background: var(--hot-pink);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .rec-priority.medium { background: #ffc107; color: #1a1a2e; }
+        .rec-priority.low { background: #6c757d; }
+
+        .rec-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin-bottom: 4px;
+        }
+
+        .rec-pillar {
+            font-size: 12px;
+            color: var(--purple);
+            font-weight: 600;
+        }
+
+        .rec-section {
+            margin-bottom: 16px;
+        }
+
+        .rec-section-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .rec-section-content {
+            font-size: 14px;
+            color: #4a5568;
+            line-height: 1.6;
+        }
+
+        .rec-steps {
+            background: var(--pastel-cyan);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .rec-step {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .rec-step:last-child {
+            margin-bottom: 0;
+        }
+
+        .rec-step-num {
+            width: 24px;
+            height: 24px;
+            background: var(--cyan);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .rec-step-text {
+            font-size: 13px;
+            color: #2d3748;
+        }
+
+        .rec-code {
+            background: #1a1a2e;
+            color: #00ff88;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            margin-top: 12px;
+        }
+
+        /* Queue Mockup */
+        .queue-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .queue-item {
+            background: white;
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .queue-item.active {
+            border: 2px solid var(--cyan);
+            background: var(--pastel-cyan);
+        }
+
+        .queue-item.locked {
+            opacity: 0.6;
+        }
+
+        .queue-num {
+            width: 32px;
+            height: 32px;
+            background: var(--cyan);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .queue-item.locked .queue-num {
+            background: #adb5bd;
+        }
+
+        .queue-content {
+            flex: 1;
+        }
+
+        .queue-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 2px;
+        }
+
+        .queue-meta {
+            font-size: 12px;
+            color: #718096;
+        }
+
+        .queue-status {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+
+        .queue-status.ready {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .queue-status.locked {
+            background: #e9ecef;
+            color: #6c757d;
+        }
+
+        .queue-timer {
+            text-align: center;
+            margin-top: 16px;
+            padding: 16px;
+            background: white;
+            border-radius: 12px;
+        }
+
+        .queue-timer-label {
+            font-size: 12px;
+            color: #718096;
+            margin-bottom: 4px;
+        }
+
+        .queue-timer-value {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--purple);
+        }
+
+        /* Optimization Mode Mockup */
+        .opt-status {
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .opt-status-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .opt-status-text {
+            font-size: 16px;
+            font-weight: 700;
+            color: #155724;
+        }
+
+        .opt-score-row {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 20px;
+        }
+
+        .opt-score-item {
+            text-align: center;
+        }
+
+        .opt-score-value {
+            font-size: 36px;
+            font-weight: 800;
+            color: #1a1a2e;
+        }
+
+        .opt-score-grade {
+            font-size: 24px;
+            color: var(--teal);
+        }
+
+        .opt-score-label {
+            font-size: 12px;
+            color: #718096;
+        }
+
+        .opt-monitor {
+            background: white;
+            border-radius: 12px;
+            padding: 16px 20px;
+        }
+
+        .opt-monitor-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .opt-monitor-row:last-child {
+            border-bottom: none;
+        }
+
+        .opt-monitor-label {
+            font-size: 14px;
+            color: #4a5568;
+        }
+
+        .opt-monitor-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+
+        .opt-monitor-value.success {
+            color: #155724;
+        }
+
+        /* Competitor Comparison Mockup */
+        .comp-header {
+            display: grid;
+            grid-template-columns: 1fr 80px 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .comp-site {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .comp-site.you {
+            border: 2px solid var(--cyan);
+        }
+
+        .comp-site-label {
+            font-size: 11px;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .comp-site-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin-bottom: 8px;
+        }
+
+        .comp-site-score {
+            font-size: 28px;
+            font-weight: 800;
+        }
+
+        .comp-site.you .comp-site-score {
+            color: var(--cyan);
+        }
+
+        .comp-site.them .comp-site-score {
+            color: #718096;
+        }
+
+        .comp-vs {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 700;
+            color: #adb5bd;
+        }
+
+        .comp-pillars {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .comp-pillar-row {
+            display: grid;
+            grid-template-columns: 50px 1fr 50px 1fr 50px;
+            gap: 8px;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f1f3f4;
+        }
+
+        .comp-pillar-row:last-child {
+            border-bottom: none;
+        }
+
+        .comp-pillar-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: #4a5568;
+            grid-column: 1 / -1;
+            margin-bottom: 4px;
+        }
+
+        .comp-pillar-score {
+            font-size: 13px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .comp-pillar-score.win { color: #155724; }
+        .comp-pillar-score.lose { color: #dc3545; }
+
+        .comp-pillar-bar {
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .comp-pillar-fill {
+            height: 100%;
+            border-radius: 4px;
+        }
+
+        .comp-pillar-fill.you { background: var(--cyan); }
+        .comp-pillar-fill.them { background: #adb5bd; }
+
+        .comp-summary {
+            background: var(--pastel-cyan);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-top: 16px;
+            text-align: center;
+        }
+
+        .comp-summary-text {
+            font-size: 14px;
+            font-weight: 600;
+            color: #155724;
+        }
+
+        @media (max-width: 768px) {
+            .feature-image {
+                max-width: 100%;
+                border-radius: 8px;
+            }
+
+            .pillar-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .comp-header {
+                grid-template-columns: 1fr;
+            }
+
+            .comp-vs {
+                padding: 10px 0;
+            }
+
+            .comp-pillar-row {
+                grid-template-columns: 40px 1fr 40px;
+            }
+
+            .opt-score-row {
+                flex-direction: column;
+                gap: 20px;
+            }
+        }
+
         /* Use Cases Section */
         .use-cases-section {
             padding: 80px 5%;
@@ -1327,7 +1923,7 @@
             </div>
             <div class="section-image">
                 <div class="image-stack">
-                    <img src="/animation (1).gif" alt="Visible2AI mobile scan animation showing how easy it is to scan your website" loading="lazy">
+                    <img src="/animation (1).gif" alt="Visible2AI mobile scan animation showing how easy it is to scan your website" class="feature-image gif-animation" loading="lazy" width="600">
                 </div>
             </div>
         </div>
@@ -1360,7 +1956,91 @@
                 </ul>
             </div>
             <div class="section-image">
-                <img src="Scan_result_and_score.png" alt="Visible2AI scan results page showing AI Visibility Score breakdown across 8 pillars" loading="lazy">
+                <!-- Scan Results Mockup -->
+                <div class="mockup-container">
+                    <div class="mockup-header">
+                        <div class="mockup-dot red"></div>
+                        <div class="mockup-dot yellow"></div>
+                        <div class="mockup-dot green"></div>
+                    </div>
+                    <div class="mockup-body">
+                        <div class="score-display">
+                            <div class="score-circle">
+                                <div class="score-circle-inner">
+                                    <div class="score-number">724</div>
+                                    <div class="score-label">/ 1000</div>
+                                </div>
+                            </div>
+                            <div class="score-grade">B+</div>
+                        </div>
+                        <div class="pillar-grid">
+                            <div class="pillar-item">
+                                <div class="pillar-icon good">&#x2713;</div>
+                                <div class="pillar-info">
+                                    <div class="pillar-name">AI Readability</div>
+                                    <div class="pillar-bar-bg"><div class="pillar-bar-fill high" style="width: 92%"></div></div>
+                                </div>
+                                <span class="pillar-score">92</span>
+                            </div>
+                            <div class="pillar-item">
+                                <div class="pillar-icon good">&#x2713;</div>
+                                <div class="pillar-info">
+                                    <div class="pillar-name">Content Structure</div>
+                                    <div class="pillar-bar-bg"><div class="pillar-bar-fill high" style="width: 88%"></div></div>
+                                </div>
+                                <span class="pillar-score">88</span>
+                            </div>
+                            <div class="pillar-item">
+                                <div class="pillar-icon warn">!</div>
+                                <div class="pillar-info">
+                                    <div class="pillar-name">Search Readiness</div>
+                                    <div class="pillar-bar-bg"><div class="pillar-bar-fill medium" style="width: 71%"></div></div>
+                                </div>
+                                <span class="pillar-score">71</span>
+                            </div>
+                            <div class="pillar-item">
+                                <div class="pillar-icon good">&#x2713;</div>
+                                <div class="pillar-info">
+                                    <div class="pillar-name">Trust & Authority</div>
+                                    <div class="pillar-bar-bg"><div class="pillar-bar-fill high" style="width: 85%"></div></div>
+                                </div>
+                                <span class="pillar-score">85</span>
+                            </div>
+                            <div class="pillar-item">
+                                <div class="pillar-icon bad">&#x2717;</div>
+                                <div class="pillar-info">
+                                    <div class="pillar-name">Content Freshness</div>
+                                    <div class="pillar-bar-bg"><div class="pillar-bar-fill low" style="width: 52%"></div></div>
+                                </div>
+                                <span class="pillar-score">52</span>
+                            </div>
+                            <div class="pillar-item">
+                                <div class="pillar-icon warn">!</div>
+                                <div class="pillar-info">
+                                    <div class="pillar-name">Technical Setup</div>
+                                    <div class="pillar-bar-bg"><div class="pillar-bar-fill medium" style="width: 68%"></div></div>
+                                </div>
+                                <span class="pillar-score">68</span>
+                            </div>
+                            <div class="pillar-item">
+                                <div class="pillar-icon good">&#x2713;</div>
+                                <div class="pillar-info">
+                                    <div class="pillar-name">Speed & UX</div>
+                                    <div class="pillar-bar-bg"><div class="pillar-bar-fill high" style="width: 90%"></div></div>
+                                </div>
+                                <span class="pillar-score">90</span>
+                            </div>
+                            <div class="pillar-item">
+                                <div class="pillar-icon warn">!</div>
+                                <div class="pillar-info">
+                                    <div class="pillar-name">Voice Optimization</div>
+                                    <div class="pillar-bar-bg"><div class="pillar-bar-fill medium" style="width: 78%"></div></div>
+                                </div>
+                                <span class="pillar-score">78</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -1390,7 +2070,62 @@
                 </ul>
             </div>
             <div class="section-image">
-                <img src="recommendations_2.png" alt="Visible2AI recommendation detail showing finding, explanation, and step-by-step implementation guide" loading="lazy">
+                <!-- Recommendation Detail Mockup -->
+                <div class="mockup-container">
+                    <div class="mockup-header">
+                        <div class="mockup-dot red"></div>
+                        <div class="mockup-dot yellow"></div>
+                        <div class="mockup-dot green"></div>
+                    </div>
+                    <div class="mockup-body">
+                        <div class="rec-card">
+                            <div class="rec-header">
+                                <div>
+                                    <span class="rec-priority">High Priority</span>
+                                </div>
+                            </div>
+                            <div class="rec-title">Add FAQ Schema Markup to Key Pages</div>
+                            <div class="rec-pillar">AI Readability &bull; +45 points potential</div>
+
+                            <div class="rec-section">
+                                <div class="rec-section-title">Finding</div>
+                                <div class="rec-section-content">Your website lacks FAQ schema markup, which AI engines use to understand and surface your content in conversational responses.</div>
+                            </div>
+
+                            <div class="rec-section">
+                                <div class="rec-section-title">Why It Matters</div>
+                                <div class="rec-section-content">Pages with FAQ schema are 2.3x more likely to be cited by AI assistants when answering related questions.</div>
+                            </div>
+
+                            <div class="rec-section">
+                                <div class="rec-section-title">How to Fix</div>
+                                <div class="rec-steps">
+                                    <div class="rec-step">
+                                        <div class="rec-step-num">1</div>
+                                        <div class="rec-step-text">Copy the schema code below</div>
+                                    </div>
+                                    <div class="rec-step">
+                                        <div class="rec-step-num">2</div>
+                                        <div class="rec-step-text">Paste it in your page's &lt;head&gt; section</div>
+                                    </div>
+                                    <div class="rec-step">
+                                        <div class="rec-step-num">3</div>
+                                        <div class="rec-step-text">Update the questions and answers with your content</div>
+                                    </div>
+                                </div>
+                                <div class="rec-code">&lt;script type="application/ld+json"&gt;
+{
+  "@type": "FAQPage",
+  "mainEntity": [{
+    "@type": "Question",
+    "name": "Your question here?"
+  }]
+}
+&lt;/script&gt;</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -1420,8 +2155,61 @@
                 </ul>
             </div>
             <div class="section-image">
-                <div class="placeholder-box">
-                    [Screenshot: Recommendation Queue]
+                <!-- Recommendation Queue Mockup -->
+                <div class="mockup-container">
+                    <div class="mockup-header">
+                        <div class="mockup-dot red"></div>
+                        <div class="mockup-dot yellow"></div>
+                        <div class="mockup-dot green"></div>
+                    </div>
+                    <div class="mockup-body">
+                        <div class="queue-list">
+                            <div class="queue-item active">
+                                <div class="queue-num">1</div>
+                                <div class="queue-content">
+                                    <div class="queue-title">Add FAQ Schema to Homepage</div>
+                                    <div class="queue-meta">AI Readability &bull; +45 pts</div>
+                                </div>
+                                <span class="queue-status ready">Ready</span>
+                            </div>
+                            <div class="queue-item active">
+                                <div class="queue-num">2</div>
+                                <div class="queue-content">
+                                    <div class="queue-title">Optimize Meta Descriptions</div>
+                                    <div class="queue-meta">Search Readiness &bull; +32 pts</div>
+                                </div>
+                                <span class="queue-status ready">Ready</span>
+                            </div>
+                            <div class="queue-item active">
+                                <div class="queue-num">3</div>
+                                <div class="queue-content">
+                                    <div class="queue-title">Add Organization Schema</div>
+                                    <div class="queue-meta">Trust & Authority &bull; +28 pts</div>
+                                </div>
+                                <span class="queue-status ready">Ready</span>
+                            </div>
+                            <div class="queue-item locked">
+                                <div class="queue-num">4</div>
+                                <div class="queue-content">
+                                    <div class="queue-title">Improve Content Freshness</div>
+                                    <div class="queue-meta">Content Freshness &bull; +38 pts</div>
+                                </div>
+                                <span class="queue-status locked">Locked</span>
+                            </div>
+                            <div class="queue-item locked">
+                                <div class="queue-num">5</div>
+                                <div class="queue-content">
+                                    <div class="queue-title">Add HowTo Schema</div>
+                                    <div class="queue-meta">AI Readability &bull; +25 pts</div>
+                                </div>
+                                <span class="queue-status locked">Locked</span>
+                            </div>
+                        </div>
+                        <div class="queue-timer">
+                            <div class="queue-timer-label">Next recommendations unlock in</div>
+                            <div class="queue-timer-value">3 days, 14 hours</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1453,8 +2241,51 @@
                 </ul>
             </div>
             <div class="section-image">
-                <div class="placeholder-box">
-                    [Screenshot: Optimization Mode]
+                <!-- Optimization Mode Mockup -->
+                <div class="mockup-container">
+                    <div class="mockup-header">
+                        <div class="mockup-dot red"></div>
+                        <div class="mockup-dot yellow"></div>
+                        <div class="mockup-dot green"></div>
+                    </div>
+                    <div class="mockup-body">
+                        <div class="opt-status">
+                            <div class="opt-status-icon">&#x2713;</div>
+                            <div class="opt-status-text">Optimization Mode Active</div>
+                        </div>
+                        <div class="opt-score-row">
+                            <div class="opt-score-item">
+                                <div class="opt-score-value">872</div>
+                                <div class="opt-score-label">Current Score</div>
+                            </div>
+                            <div class="opt-score-item">
+                                <div class="opt-score-grade">A</div>
+                                <div class="opt-score-label">Grade</div>
+                            </div>
+                        </div>
+                        <div class="opt-monitor">
+                            <div class="opt-monitor-row">
+                                <span class="opt-monitor-label">Status</span>
+                                <span class="opt-monitor-value success">Monitoring Active</span>
+                            </div>
+                            <div class="opt-monitor-row">
+                                <span class="opt-monitor-label">Last Scan</span>
+                                <span class="opt-monitor-value">2 hours ago</span>
+                            </div>
+                            <div class="opt-monitor-row">
+                                <span class="opt-monitor-label">Score Change (7d)</span>
+                                <span class="opt-monitor-value success">+12 points</span>
+                            </div>
+                            <div class="opt-monitor-row">
+                                <span class="opt-monitor-label">New Issues</span>
+                                <span class="opt-monitor-value success">None detected</span>
+                            </div>
+                            <div class="opt-monitor-row">
+                                <span class="opt-monitor-label">Next Auto-Scan</span>
+                                <span class="opt-monitor-value">In 22 hours</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1487,8 +2318,75 @@
                 </ul>
             </div>
             <div class="section-image">
-                <div class="placeholder-box">
-                    [Screenshot: Competitor Comparison]
+                <!-- Competitor Comparison Mockup -->
+                <div class="mockup-container">
+                    <div class="mockup-header">
+                        <div class="mockup-dot red"></div>
+                        <div class="mockup-dot yellow"></div>
+                        <div class="mockup-dot green"></div>
+                    </div>
+                    <div class="mockup-body">
+                        <div class="comp-header">
+                            <div class="comp-site you">
+                                <div class="comp-site-label">Your Site</div>
+                                <div class="comp-site-name">yourbusiness.com</div>
+                                <div class="comp-site-score">724 <small>B+</small></div>
+                            </div>
+                            <div class="comp-vs">VS</div>
+                            <div class="comp-site them">
+                                <div class="comp-site-label">Competitor</div>
+                                <div class="comp-site-name">competitor.com</div>
+                                <div class="comp-site-score">658 <small>C+</small></div>
+                            </div>
+                        </div>
+                        <div class="comp-pillars">
+                            <div class="comp-pillar-row">
+                                <div class="comp-pillar-name">AI Readability</div>
+                                <span class="comp-pillar-score win">95</span>
+                                <div class="comp-pillar-bar"><div class="comp-pillar-fill you" style="width: 95%"></div></div>
+                                <div class="comp-pillar-bar"><div class="comp-pillar-fill them" style="width: 78%"></div></div>
+                                <span class="comp-pillar-score lose">78</span>
+                            </div>
+                            <div class="comp-pillar-row">
+                                <div class="comp-pillar-name">Search Readiness</div>
+                                <span class="comp-pillar-score lose">85</span>
+                                <div class="comp-pillar-bar"><div class="comp-pillar-fill you" style="width: 85%"></div></div>
+                                <div class="comp-pillar-bar"><div class="comp-pillar-fill them" style="width: 92%"></div></div>
+                                <span class="comp-pillar-score win">92</span>
+                            </div>
+                            <div class="comp-pillar-row">
+                                <div class="comp-pillar-name">Content Structure</div>
+                                <span class="comp-pillar-score win">92</span>
+                                <div class="comp-pillar-bar"><div class="comp-pillar-fill you" style="width: 92%"></div></div>
+                                <div class="comp-pillar-bar"><div class="comp-pillar-fill them" style="width: 88%"></div></div>
+                                <span class="comp-pillar-score lose">88</span>
+                            </div>
+                            <div class="comp-pillar-row">
+                                <div class="comp-pillar-name">Speed & UX</div>
+                                <span class="comp-pillar-score lose">88</span>
+                                <div class="comp-pillar-bar"><div class="comp-pillar-fill you" style="width: 88%"></div></div>
+                                <div class="comp-pillar-bar"><div class="comp-pillar-fill them" style="width: 91%"></div></div>
+                                <span class="comp-pillar-score win">91</span>
+                            </div>
+                            <div class="comp-pillar-row">
+                                <div class="comp-pillar-name">Trust & Authority</div>
+                                <span class="comp-pillar-score win">82</span>
+                                <div class="comp-pillar-bar"><div class="comp-pillar-fill you" style="width: 82%"></div></div>
+                                <div class="comp-pillar-bar"><div class="comp-pillar-fill them" style="width: 71%"></div></div>
+                                <span class="comp-pillar-score lose">71</span>
+                            </div>
+                            <div class="comp-pillar-row">
+                                <div class="comp-pillar-name">Technical Setup</div>
+                                <span class="comp-pillar-score win">78</span>
+                                <div class="comp-pillar-bar"><div class="comp-pillar-fill you" style="width: 78%"></div></div>
+                                <div class="comp-pillar-bar"><div class="comp-pillar-fill them" style="width: 62%"></div></div>
+                                <span class="comp-pillar-score lose">62</span>
+                            </div>
+                            <div class="comp-summary">
+                                <div class="comp-summary-text">&#x2713; You're winning in 4 of 6 pillars! Focus on Search Readiness and Speed to overtake.</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
