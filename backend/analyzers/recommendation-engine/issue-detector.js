@@ -347,8 +347,89 @@ function analyzeHeadingHierarchy(headings) {
 }
 
 // ========================================
-// DETECT ISSUES ACROSS ALL PAGES (DIY+)
+// RULEBOOK v1.2 Section 4.5.2: detectMultiPageIssues() as Default
 // ========================================
+
+/**
+ * RULEBOOK v1.2 Section 4.5.2: Default issue detection
+ * When crawl data exists, detectMultiPageIssues MUST be the default detection mode.
+ *
+ * @param {Object} scanEvidence - Complete scan evidence including siteMetrics
+ * @returns {Object} - Issues with site-wide context
+ */
+function detectIssues(scanEvidence) {
+  const hasCrawlData = scanEvidence.siteMetrics?.totalDiscoveredUrls > 0 ||
+                       scanEvidence.crawler?.totalDiscoveredUrls > 0;
+
+  if (hasCrawlData) {
+    console.log('[IssueDetector] RULEBOOK v1.2: Using site-wide detection (crawl data found)');
+    return detectSiteWideIssues(scanEvidence);
+  } else {
+    console.log('[IssueDetector] RULEBOOK v1.2: Using single-page detection (no crawl data)');
+    return detectPageIssues(scanEvidence.v5Scores || {}, scanEvidence);
+  }
+}
+
+/**
+ * RULEBOOK v1.2: Site-wide issue detection
+ * Only flags as missing if NOT found across ENTIRE site
+ */
+function detectSiteWideIssues(scanEvidence) {
+  const siteMetrics = scanEvidence.siteMetrics || scanEvidence.crawler || {};
+  const issues = [];
+
+  // Site-level confirmations per RULEBOOK v1.2
+  const siteHasBlog = siteMetrics.discoveredSections?.hasBlogUrl ||
+                      siteMetrics.pagesWithArticleSchema > 0;
+
+  const siteHasFAQ = siteMetrics.discoveredSections?.hasFaqUrl ||
+                     siteMetrics.totalFAQsFound > 0;
+
+  // Only flag as missing if NOT found across ENTIRE site
+  if (!siteHasBlog) {
+    issues.push({
+      category: 'aiSearchReadiness',
+      subfactor: 'pillarPagesScore',
+      currentScore: 0,
+      threshold: 60,
+      gap: 60,
+      severity: 'high',
+      priority: 30,
+      evidence: { siteWideScan: true, pagesChecked: siteMetrics.totalDiscoveredUrls },
+      pageUrl: scanEvidence.url,
+      siteWideIssue: true,
+      description: 'No blog section found across entire site'
+    });
+  }
+
+  if (!siteHasFAQ) {
+    issues.push({
+      category: 'aiSearchReadiness',
+      subfactor: 'faqContentScore',
+      currentScore: 0,
+      threshold: 70,
+      gap: 70,
+      severity: 'high',
+      priority: 35,
+      evidence: { siteWideScan: true, pagesChecked: siteMetrics.totalDiscoveredUrls },
+      pageUrl: scanEvidence.url,
+      siteWideIssue: true,
+      description: 'No FAQ content found across entire site'
+    });
+  }
+
+  // Also run page-level detection for current page
+  const pageIssues = detectPageIssues(scanEvidence.v5Scores || {}, scanEvidence);
+
+  // Filter out blog/FAQ issues from page-level if site has them
+  const filteredPageIssues = pageIssues.filter(issue => {
+    if (siteHasBlog && issue.subfactor === 'pillarPagesScore') return false;
+    if (siteHasFAQ && issue.subfactor === 'faqContentScore') return false;
+    return true;
+  });
+
+  return [...issues, ...filteredPageIssues];
+}
 
 /**
  * Detect issues across multiple pages (for DIY/Pro plans)
@@ -360,7 +441,7 @@ function detectMultiPageIssues(scannedPages) {
 
   for (const page of scannedPages) {
     const pageIssues = detectPageIssues(page.v5Scores, page.evidence);
-    
+
     allPageIssues.push({
       url: page.url,
       score: page.overallScore,
@@ -383,6 +464,8 @@ function detectMultiPageIssues(scannedPages) {
 // ========================================
 
 module.exports = {
+  detectIssues, // RULEBOOK v1.2: Default function that chooses detection mode
+  detectSiteWideIssues, // RULEBOOK v1.2: Site-wide detection
   detectPageIssues,
   detectMultiPageIssues,
   calculateSeverity,

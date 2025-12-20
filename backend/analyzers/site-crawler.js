@@ -62,8 +62,8 @@ class SiteCrawler {
 
       console.log(`[Crawler] Successfully crawled ${this.pageEvidences.length} pages`);
 
-      // Aggregate evidence from all pages
-      return this.aggregateEvidence();
+      // Aggregate evidence from all pages (now async for robots.txt parsing)
+      return await this.aggregateEvidence();
 
     } catch (error) {
       console.error('[Crawler] Crawl failed:', error);
@@ -490,9 +490,100 @@ class SiteCrawler {
   }
 
   /**
+   * RULEBOOK v1.2 Section 11.4.5: Robots.txt AI Crawler Parsing
+   * Checks if site blocks specific AI crawlers
+   */
+  async parseRobotsTxt() {
+    const AI_CRAWLERS = [
+      'GPTBot', 'ChatGPT-User', 'Claude-Web', 'Anthropic-AI', 'ClaudeBot',
+      'PerplexityBot', 'Google-Extended', 'CCBot', 'Bytespider', 'Amazonbot', 'Cohere-ai'
+    ];
+
+    try {
+      const urlObj = new URL(this.baseUrl);
+      const robotsUrl = `${urlObj.origin}/robots.txt`;
+
+      console.log(`[Crawler] RULEBOOK v1.2: Fetching robots.txt from ${robotsUrl}`);
+
+      const response = await axios.get(robotsUrl, {
+        timeout: 5000,
+        headers: { 'User-Agent': this.options.userAgent }
+      });
+
+      const lines = response.data.split('\n');
+      const result = {
+        found: true,
+        allowsAllAI: true,
+        blockedAICrawlers: [],
+        hasAISpecificRules: false,
+        rawContent: response.data.substring(0, 2000) // Store first 2K chars for debugging
+      };
+
+      let currentUA = null;
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+
+        if (trimmedLine.toLowerCase().startsWith('user-agent:')) {
+          currentUA = trimmedLine.substring(11).trim();
+        } else if (trimmedLine.toLowerCase().startsWith('disallow:') && currentUA) {
+          const path = trimmedLine.substring(9).trim();
+
+          // Check if this is an AI crawler being blocked
+          for (const crawler of AI_CRAWLERS) {
+            if (currentUA.toLowerCase() === crawler.toLowerCase() ||
+                currentUA === '*' && AI_CRAWLERS.some(c => c.toLowerCase() === crawler.toLowerCase())) {
+              if (path === '/' || path === '/*') {
+                result.hasAISpecificRules = true;
+                if (!result.blockedAICrawlers.includes(crawler) && currentUA !== '*') {
+                  result.blockedAICrawlers.push(crawler);
+                  result.allowsAllAI = false;
+                }
+              }
+            }
+          }
+
+          // Check for specific AI crawler blocks
+          if (currentUA !== '*') {
+            const matchingCrawler = AI_CRAWLERS.find(c =>
+              currentUA.toLowerCase() === c.toLowerCase()
+            );
+            if (matchingCrawler && (path === '/' || path === '/*')) {
+              result.hasAISpecificRules = true;
+              if (!result.blockedAICrawlers.includes(matchingCrawler)) {
+                result.blockedAICrawlers.push(matchingCrawler);
+                result.allowsAllAI = false;
+              }
+            }
+          }
+        }
+      }
+
+      console.log(`[Crawler] RULEBOOK v1.2: Robots.txt analysis:`, {
+        found: result.found,
+        allowsAllAI: result.allowsAllAI,
+        blockedAICrawlers: result.blockedAICrawlers,
+        hasAISpecificRules: result.hasAISpecificRules
+      });
+
+      return result;
+
+    } catch (error) {
+      console.log(`[Crawler] RULEBOOK v1.2: Could not fetch robots.txt: ${error.message}`);
+      return {
+        found: false,
+        allowsAllAI: true, // Assume allowed if no robots.txt
+        blockedAICrawlers: [],
+        hasAISpecificRules: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
    * Aggregate evidence from all crawled pages into site-wide metrics
    */
-  aggregateEvidence() {
+  async aggregateEvidence() {
     if (this.pageEvidences.length === 0) {
       throw new Error('No pages successfully crawled');
     }
@@ -502,12 +593,17 @@ class SiteCrawler {
     // Fix for Issue #2 + #9: Analyze discovered URLs for key sections
     const discoveredSections = this.analyzeDiscoveredSections();
 
+    // RULEBOOK v1.2 Section 11.4.5: Parse robots.txt for AI crawler rules
+    const robotsTxt = await this.parseRobotsTxt();
+
     const aggregated = {
       siteUrl: this.baseUrl,
       pageCount: this.pageEvidences.length,
       pages: this.pageEvidences,
       sitemapDetected: this.sitemapDetected || false,
       sitemapLocation: this.detectedSitemapLocation || null,  // Which sitemap file was found
+      // RULEBOOK v1.2: Robots.txt AI crawler analysis
+      robotsTxt,
 
       // Site-wide metrics for scoring
       siteMetrics: {

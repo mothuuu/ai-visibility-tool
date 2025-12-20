@@ -26,39 +26,63 @@ class ContentExtractor {
 
   /**
    * Main extraction method - orchestrates all content gathering
+   *
+   * RULEBOOK v1.2 Section 1.5.2: Clone DOM Approach
+   * Creates two DOM copies - one for structure/navigation, one for content cleanup
    */
   async extract() {
     try {
-      console.log('=== EXTRACTION START ===');
+      console.log('=== EXTRACTION START (Rulebook v1.2) ===');
       console.log('URL:', this.url);
 
       const fetchResult = await this.fetchHTML();
-const html = fetchResult.html; // Extract the HTML string from the object
-const $ = cheerio.load(html);
+      const html = fetchResult.html;
 
-      // Extract technical data first (includes JSON-LD parsing)
-      const technical = this.extractTechnical($, html);
+      // RULEBOOK v1.2: Clone DOM Approach - two separate DOM instances
+      // Clone 1: Full DOM for structure, navigation, structured data (never modified)
+      const $full = cheerio.load(html);
+      // Clone 2: For content extraction after cleanup (nav/header/footer removed)
+      const $content = cheerio.load(html);
 
-      // CRITICAL: Extract structure and navigation BEFORE extractContent() removes nav/header/footer
-      // Fix for Issue #5: Navigation scoring was always returning false because
-      // extractStructure() was called AFTER extractContent() removed the elements
-      const structure = this.extractStructure($);
-      const navigation = this.extractNavigation($);
+      // PHASE A: Extract from FULL DOM (before any removal)
+      console.log('[Rulebook v1.2] PHASE A: Extracting from full DOM...');
+      const technical = this.extractTechnical($full, fetchResult);
+      const structure = this.extractStructure($full);
+      const navigation = this.extractNavigation($full);
+      const metadata = this.extractMetadata($full);
+      const media = this.extractMedia($full);
+      const accessibility = this.extractAccessibility($full);
+
+      // Extract FAQs from FULL DOM (before footer removal!)
+      const faqs = this.extractFAQs($full, technical.structuredData);
+
+      // RULEBOOK v1.2 Section 9.5: Extract third-party profiles (sameAs + footer)
+      const thirdPartyProfiles = this.extractThirdPartyProfiles($full, technical.structuredData);
 
       console.log('[Detection] Navigation links extracted:', navigation.links.length);
       console.log('[Detection] Structure extracted - hasNav:', structure.hasNav, 'hasHeader:', structure.hasHeader, 'hasFooter:', structure.hasFooter);
+      console.log('[Detection] FAQs extracted from full DOM:', faqs.length);
+      console.log('[Detection] Third-party profiles found:', thirdPartyProfiles.profiles.length);
 
+      // PHASE B: Extract from CLEANED DOM (after removal)
+      console.log('[Rulebook v1.2] PHASE B: Extracting content from cleaned DOM...');
+      $content('script, style, nav, header, footer, aside').remove();
+      const content = this.extractContentFromCleanedDOM($content, faqs);
+
+      // PHASE C: Assemble complete evidence object
+      console.log('[Rulebook v1.2] PHASE C: Assembling evidence...');
       const evidence = {
         url: this.url,
-        html: html, // Store HTML for analysis
-        metadata: this.extractMetadata($),
-        technical: technical, // Already extracted
-        structure: structure, // Extracted BEFORE content removal
-        navigation: navigation, // Extracted BEFORE content removal
-        content: this.extractContent($, technical.structuredData), // Pass structuredData to extractContent - this removes nav/header/footer
-        media: this.extractMedia($),
+        html: html,
+        metadata: metadata,
+        technical: technical,
+        structure: structure,
+        navigation: navigation,
+        content: content,
+        media: media,
         performance: await this.checkPerformance(),
-        accessibility: this.extractAccessibility($),
+        accessibility: accessibility,
+        thirdPartyProfiles: thirdPartyProfiles, // RULEBOOK v1.2 Section 9.5
         timestamp: new Date().toISOString()
       };
 
@@ -248,23 +272,52 @@ const $ = cheerio.load(html);
   }
 
   /**
-   * Extract main content - text, headings, paragraphs
+   * RULEBOOK v1.2 Section 7.3.4: Adaptive Content Limits by Page Type
    */
-  extractContent($, structuredData = []) {
-    // IMPORTANT: Extract FAQs BEFORE removing footer (FAQs are often in footer!)
-    const faqs = this.extractFAQs($, structuredData);
+  getContentLimits(pageType = 'default') {
+    const CONTENT_LIMITS = {
+      default: { maxParagraphs: 100, maxCharsTotal: 25000 },
+      homepage: { maxParagraphs: 150, maxCharsTotal: 30000 },
+      blog: { maxParagraphs: 200, maxCharsTotal: 50000 },
+      faq: { maxParagraphs: 300, maxCharsTotal: 40000 }
+    };
+    return CONTENT_LIMITS[pageType] || CONTENT_LIMITS.default;
+  }
 
-    // DEBUG: Log counts before removal
-    console.log('BEFORE REMOVAL - nav count:', $('nav').length);
-    console.log('BEFORE REMOVAL - header count:', $('header').length);
-    console.log('BEFORE REMOVAL - faq elements:', $('[class*="faq"]').length);
+  /**
+   * RULEBOOK v1.2 Section 7.3.3: Smart Content Filtering
+   * No blind <20 char discard - keep meaningful short content
+   */
+  filterContent(text) {
+    const trimmed = text.trim();
 
-    // Remove script, style, and navigation elements
-    $('script, style, nav, header, footer, aside').remove();
+    // Keep if meaningful short content
+    if (trimmed.length < 20) {
+      if (/\?$/.test(trimmed)) return true;              // Questions
+      if (/^[A-Z][^.!?]*$/.test(trimmed)) return true;   // Heading-like
+      if (/price|cost|free|contact/i.test(trimmed)) return true;  // Key terms
+      return false;
+    }
 
-    // DEBUG: Log counts after removal
-    console.log('AFTER REMOVAL - nav count:', $('nav').length);
-    console.log('AFTER REMOVAL - faq elements:', $('[class*="faq"]').length);
+    // Discard boilerplate
+    if (/^(copyright|©|all rights reserved|loading|please wait)/i.test(trimmed)) return false;
+
+    return true;
+  }
+
+  /**
+   * RULEBOOK v1.2: Extract content from already-cleaned DOM
+   * This method is called AFTER nav/header/footer have been removed
+   * FAQs are passed in (already extracted from full DOM)
+   *
+   * Includes:
+   * - Section 7.3.1: List item extraction as content units
+   * - Section 7.3.2: Accordion/details/tab extraction
+   * - Section 7.3.3: Smart content filtering
+   * - Section 7.3.4: Adaptive content limits by page type
+   */
+  extractContentFromCleanedDOM($, faqs = [], pageType = 'default') {
+    const limits = this.getContentLimits(pageType);
 
     const headings = {
       h1: [],
@@ -282,15 +335,59 @@ const $ = cheerio.load(html);
       });
     }
 
-    // Extract paragraphs with intelligent prioritization
+    // RULEBOOK v1.2 Section 7.3.1: Extract list items as content units
+    const listItems = [];
+    $('ul li, ol li').each((i, el) => {
+      const text = $(el).text().trim();
+      if (text.length >= 10) {
+        listItems.push({
+          text,
+          type: $(el).parent().is('ol') ? 'ordered' : 'unordered'
+        });
+      }
+    });
+
+    // RULEBOOK v1.2 Section 7.3.2: Extract accordion/tab content
+    const accordions = [];
+
+    // details/summary elements
+    $('details').each((i, el) => {
+      const summary = $(el).find('summary').text().trim();
+      const answer = $(el).clone().find('summary').remove().end().text().trim();
+      if (summary && answer) {
+        accordions.push({ question: summary, answer, source: 'details' });
+      }
+    });
+
+    // aria-expanded patterns
+    $('[aria-expanded]').each((i, el) => {
+      const controlsId = $(el).attr('aria-controls');
+      const question = $(el).text().trim();
+      if (controlsId) {
+        const answer = $(`#${controlsId}`).text().trim();
+        if (question && answer && answer.length > 10) {
+          accordions.push({ question, answer, source: 'aria-expanded' });
+        }
+      }
+    });
+
+    // CSS accordion patterns
+    $('.accordion-item, .faq-item, [class*="accordion"]').each((i, el) => {
+      const header = $(el).find('[class*="header"], [class*="title"]').first().text().trim();
+      const body = $(el).find('[class*="body"], [class*="content"]').first().text().trim();
+      if (header && body) {
+        accordions.push({ question: header, answer: body, source: 'css' });
+      }
+    });
+
+    // Extract paragraphs with intelligent prioritization and smart filtering
     const allParagraphs = [];
     $('p').each((idx, el) => {
       const $el = $(el);
       const text = $el.text().trim();
 
-      // Skip very short paragraphs or common boilerplate patterns
-      if (text.length < 20) return;
-      if (text.match(/^(copyright|©|all rights reserved|privacy policy|terms of service)/i)) return;
+      // RULEBOOK v1.2 Section 7.3.3: Smart content filtering
+      if (!this.filterContent(text)) return;
 
       // Check if paragraph is likely hidden
       const style = $el.attr('style') || '';
@@ -402,14 +499,27 @@ const $ = cheerio.load(html);
 
     return {
       headings,
-      paragraphs: paragraphs.slice(0, 50), // First 50 paragraphs
+      paragraphs: paragraphs.slice(0, limits.maxParagraphs), // RULEBOOK v1.2: Adaptive limits
       lists,
+      listItems, // RULEBOOK v1.2 Section 7.3.1
       tables,
       faqs: faqs, // FAQs extracted before footer removal
+      accordions, // RULEBOOK v1.2 Section 7.3.2
       wordCount,
       textLength: bodyText.length,
-      bodyText: bodyText.substring(0, 10000) // First 10K chars for analysis
+      bodyText: bodyText.substring(0, limits.maxCharsTotal) // RULEBOOK v1.2: Adaptive limits
     };
+  }
+
+  /**
+   * Legacy extractContent method for backward compatibility
+   * DEPRECATED: Use extractContentFromCleanedDOM with clone DOM approach instead
+   */
+  extractContent($, structuredData = []) {
+    console.warn('[ContentExtractor] WARNING: Using deprecated extractContent method. Consider using clone DOM approach.');
+    const faqs = this.extractFAQs($, structuredData);
+    $('script, style, nav, header, footer, aside').remove();
+    return this.extractContentFromCleanedDOM($, faqs);
   }
 
   /**
@@ -746,6 +856,108 @@ const $ = cheerio.load(html);
   }
 
   /**
+   * RULEBOOK v1.2 Section 9.5: Third-Party Profile Detection
+   * Extracts social and third-party profile links from:
+   * 1. JSON-LD sameAs property in Organization/Person schema
+   * 2. Footer links to known social platforms
+   */
+  extractThirdPartyProfiles($, structuredData = []) {
+    const SOCIAL_PLATFORMS = {
+      linkedin: { pattern: /linkedin\.com\/(company|in)\//i, name: 'LinkedIn' },
+      twitter: { pattern: /twitter\.com\/|x\.com\//i, name: 'Twitter/X' },
+      facebook: { pattern: /facebook\.com\//i, name: 'Facebook' },
+      instagram: { pattern: /instagram\.com\//i, name: 'Instagram' },
+      youtube: { pattern: /youtube\.com\/(channel|c|user|@)/i, name: 'YouTube' },
+      github: { pattern: /github\.com\//i, name: 'GitHub' },
+      crunchbase: { pattern: /crunchbase\.com\/organization\//i, name: 'Crunchbase' },
+      glassdoor: { pattern: /glassdoor\.com\/Overview\//i, name: 'Glassdoor' },
+      trustpilot: { pattern: /trustpilot\.com\/review\//i, name: 'Trustpilot' },
+      bbb: { pattern: /bbb\.org\/us\//i, name: 'BBB' },
+      yelp: { pattern: /yelp\.com\/biz\//i, name: 'Yelp' },
+      tiktok: { pattern: /tiktok\.com\/@/i, name: 'TikTok' },
+      pinterest: { pattern: /pinterest\.com\//i, name: 'Pinterest' }
+    };
+
+    const profiles = [];
+    const profileUrls = new Set();
+
+    // Method 1: Extract from JSON-LD sameAs
+    const orgSchemas = structuredData.filter(s =>
+      ['Organization', 'LocalBusiness', 'Corporation', 'Person'].includes(s.type)
+    );
+
+    for (const schema of orgSchemas) {
+      const sameAs = schema.raw?.sameAs || [];
+      const sameAsArray = Array.isArray(sameAs) ? sameAs : [sameAs];
+
+      for (const url of sameAsArray) {
+        if (!url || profileUrls.has(url)) continue;
+        profileUrls.add(url);
+
+        // Identify platform
+        let platform = 'other';
+        let platformName = 'Other';
+        for (const [key, config] of Object.entries(SOCIAL_PLATFORMS)) {
+          if (config.pattern.test(url)) {
+            platform = key;
+            platformName = config.name;
+            break;
+          }
+        }
+
+        profiles.push({
+          url,
+          platform,
+          platformName,
+          source: 'sameAs',
+          schemaType: schema.type
+        });
+      }
+    }
+
+    // Method 2: Extract from footer links
+    $('footer a[href]').each((i, el) => {
+      const href = $(el).attr('href') || '';
+      if (!href || profileUrls.has(href)) return;
+
+      for (const [key, config] of Object.entries(SOCIAL_PLATFORMS)) {
+        if (config.pattern.test(href)) {
+          profileUrls.add(href);
+          profiles.push({
+            url: href,
+            platform: key,
+            platformName: config.name,
+            source: 'footer',
+            linkText: $(el).text().trim() || null
+          });
+          break;
+        }
+      }
+    });
+
+    // Categorize profiles
+    const socialProfiles = profiles.filter(p =>
+      ['linkedin', 'twitter', 'facebook', 'instagram', 'youtube', 'tiktok', 'pinterest'].includes(p.platform)
+    );
+    const businessProfiles = profiles.filter(p =>
+      ['crunchbase', 'glassdoor', 'bbb', 'yelp', 'trustpilot'].includes(p.platform)
+    );
+    const developerProfiles = profiles.filter(p => p.platform === 'github');
+
+    return {
+      detected: profiles.length > 0,
+      profiles,
+      count: profiles.length,
+      socialProfiles,
+      businessProfiles,
+      developerProfiles,
+      hasSameAs: profiles.some(p => p.source === 'sameAs'),
+      hasFooterLinks: profiles.some(p => p.source === 'footer'),
+      platforms: [...new Set(profiles.map(p => p.platform))]
+    };
+  }
+
+  /**
    * Extract navigation links for section detection
    * IMPORTANT: Call this BEFORE extractContent() which removes nav/header/footer
    * Fix for Issue #2 + #9: Blog/FAQ detection now uses navigation links
@@ -961,38 +1173,67 @@ const $ = cheerio.load(html);
 
   extractTechnical($, htmlData) {
     const html = typeof htmlData === 'string' ? htmlData : htmlData.html;
+    const headers = htmlData?.headers || {};
 
     // Structured data detection (JSON-LD)
+    // RULEBOOK v1.2 Section 3.1.4: JSON-LD @graph Processing with Source Tracking
     const structuredData = [];
     const allSchemaTypes = new Set(); // Track all schema types including nested ones
     const jsonLdScripts = $('script[type="application/ld+json"]');
     console.log(`[ContentExtractor] Found ${jsonLdScripts.length} JSON-LD script tags`);
 
-    jsonLdScripts.each((idx, el) => {
+    jsonLdScripts.each((scriptIndex, el) => {
       try {
         const scriptContent = $(el).html();
-        console.log(`[ContentExtractor] Parsing JSON-LD #${idx + 1}, length: ${scriptContent?.length || 0} chars`);
+        console.log(`[ContentExtractor] Parsing JSON-LD #${scriptIndex + 1}, length: ${scriptContent?.length || 0} chars`);
         const data = JSON.parse(scriptContent);
 
-        // Extract top-level type (can be string or array)
-        let topLevelType = data['@type'] || 'Unknown';
-        if (Array.isArray(topLevelType)) {
-          topLevelType = topLevelType[0]; // Use first type as primary
+        // RULEBOOK v1.2 Section 3.1.4: Handle @graph arrays with source path tracking
+        if (data['@graph'] && Array.isArray(data['@graph'])) {
+          data['@graph'].forEach((item, graphIndex) => {
+            let itemType = item['@type'] || 'Unknown';
+            if (Array.isArray(itemType)) {
+              itemType = itemType[0];
+            }
+
+            structuredData.push({
+              type: itemType,
+              context: data['@context'] || '',
+              raw: item,
+              source: 'json-ld-graph',
+              sourcePath: `script[${scriptIndex}].@graph[${graphIndex}]`, // RULEBOOK v1.2: Source path tracking
+              scriptIndex,
+              graphIndex
+            });
+
+            // Extract all types including nested ones
+            const typesInThisSchema = this.extractAllSchemaTypes(item);
+            typesInThisSchema.forEach(type => allSchemaTypes.add(type));
+          });
+        } else {
+          // Single schema (not @graph)
+          let topLevelType = data['@type'] || 'Unknown';
+          if (Array.isArray(topLevelType)) {
+            topLevelType = topLevelType[0]; // Use first type as primary
+          }
+          console.log(`[ContentExtractor] Successfully parsed: ${topLevelType}`);
+
+          structuredData.push({
+            type: topLevelType,
+            context: data['@context'] || '',
+            raw: data,
+            source: 'json-ld',
+            sourcePath: `script[${scriptIndex}]`, // RULEBOOK v1.2: Source path tracking
+            scriptIndex
+          });
+
+          // Extract all types including nested ones
+          const typesInThisSchema = this.extractAllSchemaTypes(data);
+          typesInThisSchema.forEach(type => allSchemaTypes.add(type));
         }
-        console.log(`[ContentExtractor] Successfully parsed: ${topLevelType}`);
-
-        structuredData.push({
-          type: topLevelType,
-          context: data['@context'] || '',
-          raw: data
-        });
-
-        // Extract all types including nested ones
-        const typesInThisSchema = this.extractAllSchemaTypes(data);
-        typesInThisSchema.forEach(type => allSchemaTypes.add(type));
 
       } catch (e) {
-        console.log(`[ContentExtractor] Failed to parse JSON-LD #${idx + 1}:`, e.message);
+        console.log(`[ContentExtractor] Failed to parse JSON-LD #${scriptIndex + 1}:`, e.message);
       }
     });
 
@@ -1004,6 +1245,89 @@ const $ = cheerio.load(html);
     console.log(`[ContentExtractor] Has Place: ${allSchemaTypes.has('Place')}`);
     console.log(`[ContentExtractor] Has GeoCoordinates: ${allSchemaTypes.has('GeoCoordinates')}`);
 
+    // RULEBOOK v1.2 Section 11.4.1: Canonical Detection (Tag + Header)
+    const canonicalTag = $('link[rel="canonical"]').attr('href') || null;
+    const canonicalHeaderMatch = headers?.link?.match(/<([^>]+)>;\s*rel="canonical"/i);
+    const canonicalHeader = canonicalHeaderMatch ? canonicalHeaderMatch[1] : null;
+    const canonical = {
+      detected: !!(canonicalTag || canonicalHeader),
+      url: canonicalTag || canonicalHeader || null,
+      source: canonicalTag ? 'tag' : (canonicalHeader ? 'header' : null),
+      matchesUrl: (canonicalTag || canonicalHeader) === this.url
+    };
+
+    // RULEBOOK v1.2 Section 11.4.2: Open Graph Detection
+    const openGraph = {
+      title: $('meta[property="og:title"]').attr('content') || null,
+      description: $('meta[property="og:description"]').attr('content') || null,
+      image: $('meta[property="og:image"]').attr('content') || null,
+      url: $('meta[property="og:url"]').attr('content') || null,
+      type: $('meta[property="og:type"]').attr('content') || null
+    };
+
+    // RULEBOOK v1.2 Section 11.4.2: Twitter Card Detection
+    const twitterCard = {
+      card: $('meta[name="twitter:card"]').attr('content') || null,
+      site: $('meta[name="twitter:site"]').attr('content') || null,
+      title: $('meta[name="twitter:title"]').attr('content') || null,
+      description: $('meta[name="twitter:description"]').attr('content') || null,
+      image: $('meta[name="twitter:image"]').attr('content') || null
+    };
+
+    // RULEBOOK v1.2 Section 11.4.3: IndexNow Detection
+    const indexNowKey = $('meta[name="indexnow-key"]').attr('content') || null;
+    const indexNow = {
+      detected: !!indexNowKey,
+      keyLocation: indexNowKey ? 'meta' : null,
+      key: indexNowKey,
+      keyVerified: null // Would require async verification
+    };
+
+    // RULEBOOK v1.2 Section 11.4.4: RSS/Atom Feed Detection
+    const feeds = [];
+    $('link[type="application/rss+xml"]').each((i, el) => {
+      feeds.push({ url: $(el).attr('href'), type: 'rss', title: $(el).attr('title') || null });
+    });
+    $('link[type="application/atom+xml"]').each((i, el) => {
+      feeds.push({ url: $(el).attr('href'), type: 'atom', title: $(el).attr('title') || null });
+    });
+    const feedsResult = {
+      detected: feeds.length > 0,
+      feeds,
+      urls: feeds.map(f => f.url),
+      types: [...new Set(feeds.map(f => f.type))]
+    };
+
+    // RULEBOOK v1.2 Section 8.4: JS-Rendered Site Detection
+    const bodyText = $('body').text().trim();
+    const jsRenderingIndicators = {
+      emptyBody: bodyText.length < 500,
+      hasReactRoot: $('#root, [data-reactroot]').length > 0,
+      hasVueApp: $('[data-v-], [v-cloak]').length > 0,
+      hasAngular: $('[ng-app], app-root').length > 0,
+      hasLoadingState: /loading\.\.\.|please wait/i.test(bodyText),
+      emptyMainContent: $('main, #content, article').text().trim().length < 100
+    };
+    const isJSRendered = jsRenderingIndicators.emptyBody ||
+                         (jsRenderingIndicators.hasReactRoot && jsRenderingIndicators.emptyMainContent) ||
+                         jsRenderingIndicators.hasLoadingState;
+    const jsRendering = {
+      isJSRendered,
+      indicators: jsRenderingIndicators,
+      recommendation: isJSRendered
+        ? 'JS-rendered site; scan may be incomplete without headless rendering'
+        : null
+    };
+
+    // RULEBOOK v1.2: Hreflang detection with language details
+    const hreflangElements = $('link[rel="alternate"][hreflang]');
+    const hreflang = {
+      detected: hreflangElements.length > 0,
+      languages: hreflangElements.map((i, el) => $(el).attr('hreflang')).get(),
+      defaultLang: hreflangElements.filter('[hreflang="x-default"]').attr('href') || null,
+      count: hreflangElements.length
+    };
+
     return {
       // Structured Data
       structuredData,
@@ -1012,37 +1336,51 @@ const $ = cheerio.load(html);
       hasFAQSchema: allSchemaTypes.has('FAQPage'),
       hasArticleSchema: allSchemaTypes.has('Article') || allSchemaTypes.has('BlogPosting'),
       hasBreadcrumbSchema: allSchemaTypes.has('BreadcrumbList'),
-      
-      // Hreflang
-      hreflangTags: $('link[rel="alternate"][hreflang]').length,
-      hreflangLanguages: $('link[rel="alternate"][hreflang]').map((i, el) => $(el).attr('hreflang')).get(),
-      
-      // Canonical
-      hasCanonical: $('link[rel="canonical"]').length > 0,
-      canonicalUrl: $('link[rel="canonical"]').attr('href') || '',
-      
+
+      // RULEBOOK v1.2 Section 11.4.1: Canonical (tag + header)
+      canonical,
+      hasCanonical: canonical.detected,
+      canonicalUrl: canonical.url || '',
+
+      // RULEBOOK v1.2: Hreflang
+      hreflang,
+      hreflangTags: hreflang.count,
+      hreflangLanguages: hreflang.languages,
+
+      // RULEBOOK v1.2 Section 11.4.2: Open Graph + Twitter Card
+      openGraph,
+      twitterCard,
+
+      // RULEBOOK v1.2 Section 11.4.3: IndexNow
+      indexNow,
+
+      // RULEBOOK v1.2 Section 11.4.4: RSS/Atom Feeds
+      feeds: feedsResult,
+      hasRSSFeed: feedsResult.detected,
+
+      // RULEBOOK v1.2 Section 8.4: JS-Rendered Site Detection
+      jsRendering,
+      isJSRendered: jsRendering.isJSRendered,
+
       // Sitemap
-      hasSitemapLink: $('link[rel="sitemap"]').length > 0 || 
+      hasSitemapLink: $('link[rel="sitemap"]').length > 0 ||
                       html.toLowerCase().includes('sitemap.xml'),
-      
-      // RSS/Atom
-      hasRSSFeed: $('link[type="application/rss+xml"], link[type="application/atom+xml"]').length > 0,
-      
+
       // Viewport
       hasViewport: $('meta[name="viewport"]').length > 0,
       viewport: $('meta[name="viewport"]').attr('content') || '',
-      
+
       // Character encoding
-      charset: $('meta[charset]').attr('charset') || 
+      charset: $('meta[charset]').attr('charset') ||
                $('meta[http-equiv="Content-Type"]').attr('content')?.match(/charset=([^;]+)/)?.[1] || '',
-      
+
       // Robots meta
       robotsMeta: $('meta[name="robots"]').attr('content') || '',
-      
+
       // Cache control (from headers if available)
-      cacheControl: htmlData.headers?.['cache-control'] || '',
-      lastModified: htmlData.headers?.['last-modified'] || '',
-      etag: htmlData.headers?.['etag'] || ''
+      cacheControl: headers?.['cache-control'] || '',
+      lastModified: headers?.['last-modified'] || '',
+      etag: headers?.['etag'] || ''
     };
   }
 

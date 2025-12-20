@@ -13,11 +13,13 @@ const VOCABULARY = {
   // URL PATTERNS
   // Used for detecting page types from URLs
   // ============================================
+  // RULEBOOK v1.2 Section 2.4.4: Extended Vocabulary (Synonyms)
   URL_PATTERNS: {
     home: /^\/?(index\.html?)?$/i,
     about: /\/(about|about-us|who-we-are|our-story|company)(\.html?|\/|$)/i,
     services: /\/(services|solutions|what-we-do|offerings)(\.html?|\/|$)/i,
-    blog: /\/(blog|news|articles|insights|resources|updates|journal|posts)(\.html?|\/|$)/i,
+    // RULEBOOK v1.2: Extended blog vocabulary with all synonyms
+    blog: /\/(blog|news|articles|insights|resources|updates|journal|posts|learn|knowledge-base|help-center|guides|library|content|stories|perspectives)(\.html?|\/|$)/i,
     faq: /\/(faq|faqs|frequently-asked|help|support|questions)(\.html?|\/|$)/i,
     contact: /\/(contact|contact-us|get-in-touch|reach-us)(\.html?|\/|$)/i,
     pricing: /\/(pricing|plans|packages|cost|rates)(\.html?|\/|$)/i,
@@ -328,11 +330,13 @@ const VOCABULARY = {
   // ============================================
   KEYWORDS: {
     // Navigation link text patterns
+    // RULEBOOK v1.2 Section 2.4.4: Extended navigation keywords
     navLinkText: {
       home: ['home', 'start', 'main'],
       about: ['about', 'about us', 'who we are', 'our story', 'company'],
       services: ['services', 'solutions', 'what we do', 'offerings', 'products'],
-      blog: ['blog', 'news', 'articles', 'insights', 'resources'],
+      // RULEBOOK v1.2: Extended blog vocabulary with all synonyms
+      blog: ['blog', 'news', 'articles', 'insights', 'resources', 'updates', 'journal', 'learn', 'knowledge', 'guides', 'library', 'content', 'stories', 'perspectives'],
       faq: ['faq', 'frequently asked', 'questions', 'help', 'support'],
       contact: ['contact', 'contact us', 'get in touch', 'reach us'],
       pricing: ['pricing', 'plans', 'packages', 'cost', 'rates'],
