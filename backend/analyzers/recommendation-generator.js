@@ -8,6 +8,7 @@ const { generateRecommendations } = require('./recommendation-engine/rec-generat
 const { generateCustomizedFAQ } = require('./recommendation-engine/faq-customizer');
 const { filterByTier, formatForAPI } = require('./recommendation-engine/tier-filter');
 const { generateEliteRecommendations, prioritizeEliteRecommendations } = require('../utils/elite-recommendation-generator');
+const { extractSiteFacts } = require('./recommendation-engine/fact-extractor');
 
 async function generateCompleteRecommendations(scanResults, tier = 'free', industry = null, userProgress = null, mode = 'optimization') {
   try {
@@ -53,12 +54,33 @@ async function generateCompleteRecommendations(scanResults, tier = 'free', indus
     // OPTIMIZATION MODE: Standard issue-based recommendations
     console.log('🔧 Optimization mode: Generating foundation-building recommendations...');
 
+    // STEP 0: Extract site facts to get FAQ/Blog detection (RULEBOOK v1.2)
+    console.log('🔎 Step 0: Extracting site facts for FAQ/Blog detection...');
+
+    // Ensure scanEvidence exists before extracting facts
+    if (!scanEvidence || Object.keys(scanEvidence).length === 0) {
+      console.warn('   ⚠️ No scanEvidence provided, skipping fact extraction');
+    }
+
+    const { detected_profile, extracted_facts, diagnostics } = extractSiteFacts(scanEvidence || {});
+
+    // Merge detected_profile and extracted_facts into scanEvidence for use by rec-generator
+    const enrichedScanEvidence = {
+      ...scanEvidence,
+      detected_profile,
+      extracted_facts,
+      diagnostics
+    };
+
+    console.log(`   FAQ detected: ${detected_profile.sections?.has_faq || false}`);
+    console.log(`   Blog detected: ${detected_profile.sections?.has_blog || false}`);
+
     // STEP 1: Detect all issues
     console.log('🔍 Step 1: Detecting issues...');
     let allIssues;
 
     if (tier === 'guest' || tier === 'free') {
-      allIssues = detectPageIssues(v5Scores, scanEvidence);
+      allIssues = detectPageIssues(v5Scores, enrichedScanEvidence);
       console.log(`   Found ${allIssues.length} issues on homepage`);
     } else {
       if (scannedPages && Array.isArray(scannedPages) && scannedPages.length > 0) {
@@ -66,7 +88,7 @@ async function generateCompleteRecommendations(scanResults, tier = 'free', indus
         allIssues = multiPageResult.pageBreakdown[0].issues; // Use first page's issues
         console.log(`   Found ${multiPageResult.totalIssues} issues across ${multiPageResult.totalPages} pages`);
       } else {
-        allIssues = detectPageIssues(v5Scores, scanEvidence);
+        allIssues = detectPageIssues(v5Scores, enrichedScanEvidence);
         console.log(`   Found ${allIssues.length} issues on homepage (single page mode)`);
       }
     }
@@ -75,7 +97,7 @@ async function generateCompleteRecommendations(scanResults, tier = 'free', indus
     console.log('💡 Step 2: Generating recommendations (Hybrid Mode)...');
     const recommendations = await generateRecommendations(
       allIssues,
-      scanEvidence,
+      enrichedScanEvidence,  // Use enriched evidence with detected_profile
       tier === 'guest' ? 'free' : tier, // Use free tier logic for guest
       industry
     );
@@ -86,7 +108,7 @@ async function generateCompleteRecommendations(scanResults, tier = 'free', indus
     let customizedFAQ = null;
     if (tier !== 'free' && tier !== 'guest' && industry) {
       try {
-        customizedFAQ = await generateCustomizedFAQ(industry, scanEvidence);
+        customizedFAQ = await generateCustomizedFAQ(industry, enrichedScanEvidence);
         console.log(`   Generated ${customizedFAQ.faqCount} customized FAQs`);
       } catch (error) {
         console.error('   ⚠️  FAQ generation failed:', error.message);
@@ -98,7 +120,7 @@ async function generateCompleteRecommendations(scanResults, tier = 'free', indus
     // STEP 4: Filter and format by tier
     console.log('🎚️  Step 4: Applying tier filtering...');
     const filteredResults = filterByTier(recommendations, customizedFAQ, tier, {
-      url: scanEvidence.url,
+      url: enrichedScanEvidence.url,
       scannedAt: new Date().toISOString()
     }, userProgress); // Pass userProgress for DIY progressive unlock
     console.log(`   Filtered to ${filteredResults.recommendations.length} recommendations for ${tier} tier`);
@@ -123,7 +145,13 @@ async function getPageRecommendations(pageScores, pageEvidence, tier = 'free') {
 }
 
 async function getMultiPageRecommendations(scannedPages, tier = 'diy', industry = null) {
+  // Use first page's evidence as primary scanEvidence for fact extraction
+  const primaryEvidence = scannedPages?.[0]?.evidence || scannedPages?.[0]?.scanEvidence || {};
+  const primaryScores = scannedPages?.[0]?.v5Scores || {};
+
   const scanResults = {
+    v5Scores: primaryScores,
+    scanEvidence: primaryEvidence,
     scannedPages: scannedPages
   };
 
