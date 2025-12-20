@@ -461,11 +461,19 @@ router.post('/analyze', authenticateToken, async (req, res) => {
         ORDER BY impact_score DESC
       `, [activeContext.primaryScanId]);
 
-      // Attach existing recommendations to scan result
-      scanResult.recommendations = existingRecs.rows;
+      // 🔥 NEW: Update findings based on CURRENT scan evidence
+      const updatedRecs = await updateRecommendationFindings(
+        existingRecs.rows,
+        scanResult.detailedAnalysis?.scanEvidence || {},
+        scan.id
+      );
+
+      // Attach updated recommendations to scan result
+      scanResult.recommendations = updatedRecs;
       scanResult.reusedFromContext = true;
       scanResult.primaryScanId = activeContext.primaryScanId;
       console.log(`   ✓ Reused ${existingRecs.rows.length} recommendations from scan ${activeContext.primaryScanId}`);
+      console.log(`   ✓ Updated ${updatedRecs.filter(r => r.findingsUpdated).length} findings based on current evidence`);
     } else {
       // FREE USER FREEZE LOGIC (two-level check)
       const FREE_MONTHLY_REC_LIMIT = 3;
@@ -2181,5 +2189,139 @@ router.post('/:id/detection/:detectionId/confirm', authenticateToken, async (req
     res.status(500).json({ error: 'Failed to confirm detection' });
   }
 });
+
+/**
+ * Update recommendation findings based on current scan evidence
+ * Recommendations stay the same, but findings reflect current detected state
+ */
+async function updateRecommendationFindings(recommendations, scanEvidence, currentScanId) {
+  const { extractSiteFacts } = require('../analyzers/recommendation-engine/fact-extractor');
+
+  // Extract current facts from scan evidence
+  const { detected_profile } = extractSiteFacts(scanEvidence);
+
+  const updatedRecs = [];
+
+  for (const rec of recommendations) {
+    const updated = { ...rec, findingsUpdated: false };
+    const subfactor = rec.category?.toLowerCase() || '';
+
+    // Determine current detection status based on subfactor
+    let currentlyDetected = false;
+    let detectionDetails = {};
+
+    // Check detection status for each subfactor type
+    if (subfactor.includes('faq') || rec.recommendation_text?.toLowerCase().includes('faq')) {
+      const faqCount = scanEvidence.content?.faqs?.length || 0;
+      const hasFaqSchema = scanEvidence.technical?.hasFAQSchema || false;
+      currentlyDetected = faqCount > 0 || hasFaqSchema;
+      detectionDetails = {
+        faqCount,
+        hasFaqSchema,
+        source: hasFaqSchema ? 'schema' : (faqCount > 0 ? 'html' : 'none')
+      };
+    }
+    else if (subfactor.includes('blog') || subfactor.includes('pillar') || rec.recommendation_text?.toLowerCase().includes('blog')) {
+      const hasBlogNav = scanEvidence.navigation?.keyPages?.blog || scanEvidence.navigation?.hasBlogLink;
+      const hasArticleSchema = scanEvidence.technical?.hasArticleSchema;
+      const crawlerFoundBlog = scanEvidence.siteMetrics?.discoveredSections?.hasBlogUrl;
+      currentlyDetected = hasBlogNav || hasArticleSchema || crawlerFoundBlog;
+      detectionDetails = {
+        hasBlogNav,
+        hasArticleSchema,
+        crawlerFoundBlog
+      };
+    }
+    else if (subfactor.includes('sitemap') || rec.recommendation_text?.toLowerCase().includes('sitemap')) {
+      currentlyDetected = scanEvidence.siteMetrics?.sitemapDetected ||
+                          scanEvidence.technical?.hasSitemapLink || false;
+      detectionDetails = {
+        sitemapDetected: currentlyDetected,
+        sitemapLocation: scanEvidence.siteMetrics?.sitemapLocation || null
+      };
+    }
+    else if (subfactor.includes('schema') || subfactor.includes('structured')) {
+      const schemaCount = scanEvidence.technical?.structuredData?.length || 0;
+      currentlyDetected = schemaCount > 0;
+      detectionDetails = {
+        schemaCount,
+        types: scanEvidence.technical?.structuredData?.map(s => s.type) || []
+      };
+    }
+    else if (subfactor.includes('geo') || subfactor.includes('local')) {
+      currentlyDetected = scanEvidence.technical?.hasLocalBusinessSchema ||
+                          scanEvidence.metadata?.geoRegion || false;
+      detectionDetails = {
+        hasLocalSchema: scanEvidence.technical?.hasLocalBusinessSchema,
+        geoRegion: scanEvidence.metadata?.geoRegion
+      };
+    }
+    else if (subfactor.includes('thought') || subfactor.includes('authority') || subfactor.includes('author')) {
+      const hasAuthorSchema = scanEvidence.technical?.structuredData?.some(s => s.type === 'Person');
+      const hasArticleSchema = scanEvidence.technical?.hasArticleSchema;
+      currentlyDetected = hasAuthorSchema || hasArticleSchema;
+      detectionDetails = {
+        hasAuthorSchema,
+        hasArticleSchema
+      };
+    }
+    else if (subfactor.includes('linked') || subfactor.includes('internal')) {
+      const internalLinks = scanEvidence.structure?.internalLinks || 0;
+      currentlyDetected = internalLinks >= 5;
+      detectionDetails = {
+        internalLinkCount: internalLinks,
+        threshold: 5
+      };
+    }
+
+    // Update finding status if detection changed
+    if (currentlyDetected) {
+      // Update the findings field to reflect current state
+      const originalFindings = rec.findings || '';
+
+      // Create updated findings text
+      let updatedFindings = originalFindings;
+      if (originalFindings.toLowerCase().includes('missing') ||
+          originalFindings.toLowerCase().includes('not detected') ||
+          originalFindings.toLowerCase().includes('no ')) {
+
+        updatedFindings = `✅ **Status: Now Detected**\n\nThis item has been implemented since the recommendation was created.\n\n**Detection Details:**\n${JSON.stringify(detectionDetails, null, 2)}\n\n---\n**Original Finding:**\n${originalFindings}`;
+        updated.findingsUpdated = true;
+        updated.autoDetectedAt = new Date().toISOString();
+
+        console.log(`   🔍 Updated finding for ${rec.category}: Missing → Detected`);
+      }
+
+      updated.findings = updatedFindings;
+      updated.currentDetectionStatus = 'detected';
+      updated.detectionDetails = detectionDetails;
+    } else {
+      updated.currentDetectionStatus = 'missing';
+      updated.detectionDetails = detectionDetails;
+    }
+
+    updatedRecs.push(updated);
+  }
+
+  // Persist updated findings to database
+  for (const rec of updatedRecs) {
+    if (rec.findingsUpdated) {
+      try {
+        await db.query(
+          `UPDATE scan_recommendations
+           SET findings = $1,
+               auto_detected_at = $2,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $3`,
+          [rec.findings, rec.autoDetectedAt, rec.id]
+        );
+      } catch (err) {
+        console.error(`Failed to update finding for rec ${rec.id}:`, err.message);
+      }
+    }
+  }
+
+  return updatedRecs;
+}
 
 module.exports = router;
