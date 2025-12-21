@@ -1,9 +1,14 @@
 /**
  * EVIDENCE CONTRACT
- * 
+ *
  * Single source of truth for what the content extractor returns.
  * All scoring functions depend ONLY on this contract.
  */
+
+const CONTRACT_VERSION = '2.0.0';
+
+const REQUIRED_NAMESPACES = ['url', 'timestamp', 'navigation', 'structure', 'content', 'technical'];
+const EXPECTED_NAMESPACES = ['crawler', 'siteMetrics'];
 
 const EvidenceContract = {
   metadata: {
@@ -58,23 +63,43 @@ const EvidenceContract = {
   url: '', html: '', timestamp: ''
 };
 
-function validateEvidence(evidence) {
+function validateEvidence(evidence, options = {}) {
   const errors = [];
-  const requiredKeys = ['metadata', 'content', 'structure', 'media', 'technical', 'performance', 'accessibility', 'url', 'timestamp'];
-  
-  for (const key of requiredKeys) {
-    if (!(key in evidence)) errors.push(`Missing required key: ${key}`);
+  const warnings = [];
+
+  if (!evidence.contractVersion) {
+    warnings.push('Missing contractVersion');
   }
-  
+
+  for (const ns of REQUIRED_NAMESPACES) {
+    if (!evidence[ns]) errors.push(`Missing required: ${ns}`);
+  }
+
+  for (const ns of EXPECTED_NAMESPACES) {
+    if (!evidence[ns]) warnings.push(`Missing expected: ${ns}`);
+  }
+
+  if (evidence.navigation && !evidence.navigation.footerLinks) {
+    warnings.push('navigation.footerLinks missing');
+  }
+
+  if (evidence.structure && !evidence.structure.headingHierarchy) {
+    warnings.push('structure.headingHierarchy missing');
+  }
+
+  // Legacy validation (backward compatibility)
   if (evidence.metadata && typeof evidence.metadata !== 'object') errors.push('metadata must be an object');
   if (evidence.content) {
     if (!Array.isArray(evidence.content.paragraphs)) errors.push('content.paragraphs must be an array');
     if (!evidence.content.headings || typeof evidence.content.headings !== 'object') errors.push('content.headings must be an object');
   }
-  if (evidence.structure && typeof evidence.structure.headingCount !== 'object') errors.push('structure.headingCount must be an object');
-  if (evidence.media && !Array.isArray(evidence.media.images)) errors.push('media.images must be an array');
-  
-  return { valid: errors.length === 0, errors };
+
+  const valid = errors.length === 0;
+  if (!valid || warnings.length > 0) {
+    console.log('[EvidenceContract] Validation:', { valid, errors, warnings });
+  }
+
+  return { valid, errors, warnings, contractVersion: evidence.contractVersion || 'unknown' };
 }
 
 function createMockEvidence(overrides = {}) {
@@ -166,4 +191,4 @@ function getEvidenceField(evidence, path) {
   return path.split('.').reduce((obj, key) => obj?.[key], evidence);
 }
 
-module.exports = { EvidenceContract, validateEvidence, createMockEvidence, getEvidenceField };
+module.exports = { CONTRACT_VERSION, REQUIRED_NAMESPACES, EvidenceContract, validateEvidence, createMockEvidence, getEvidenceField };
