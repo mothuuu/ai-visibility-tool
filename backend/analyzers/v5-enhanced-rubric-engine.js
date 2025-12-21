@@ -1,6 +1,7 @@
 const SiteCrawler = require('./site-crawler');
 const ContentExtractor = require('./content-extractor');
 const { detectCertifications, calculateCertificationScore } = require('./recommendation-engine/certification-detector');
+const { buildScanEvidence } = require('./evidence-builder');
 
 /**
  * V5 Enhanced Rubric Scoring Engine
@@ -73,20 +74,55 @@ class V5EnhancedRubricEngine {
           }
         }
 
-        // Create enhanced evidence object with aggregated FAQ data
+        // Use evidence builder for standardized structure (evidence contract v2.0)
+        const baseEvidence = buildScanEvidence({
+          pageExtract: {
+            url: this.url,
+            navigation: firstPageEvidence.navigation,
+            structure: firstPageEvidence.structure,
+            content: firstPageEvidence.content,
+            technical: firstPageEvidence.technical
+          },
+          crawlResult: {
+            discoveredSections: this.siteData.siteMetrics?.discoveredSections || {},
+            totalDiscoveredUrls: this.siteData.pageCount || 0,
+            robotsTxt: {},
+            sitemap: {
+              detected: this.siteData.sitemapDetected || false,
+              location: this.siteData.sitemapLocation || null
+            }
+          },
+          scanContext: {
+            url: this.url,
+            scanId: Date.now().toString(),
+            timestamp: new Date().toISOString()
+          }
+        });
+
+        // Enhance with aggregated multi-page data
         this.evidence = {
-          ...firstPageEvidence,
+          ...baseEvidence,
+          // Preserve all firstPageEvidence fields not in baseEvidence
+          metadata: firstPageEvidence.metadata,
+          media: firstPageEvidence.media,
+          performance: firstPageEvidence.performance,
+          accessibility: firstPageEvidence.accessibility,
+          entities: firstPageEvidence.entities,
+          html: firstPageEvidence.html,
+          // Override with aggregated content
           content: {
+            ...baseEvidence.content,
             ...firstPageEvidence.content,
             faqs: allFAQs  // Use aggregated FAQs from all pages
           },
           technical: {
+            ...baseEvidence.technical,
             ...firstPageEvidence.technical,
             hasFAQSchema: hasFAQSchema,  // True if ANY page has FAQ schema
-            hasSitemap: this.siteData.sitemapDetected || false,  // CRITICAL FIX: Pass sitemap detection
-            sitemapDetected: this.siteData.sitemapDetected || false,  // Alternative property name
-            sitemapLocation: this.siteData.sitemapLocation || null,  // Which sitemap file was detected
-            sitemapPageCount: this.siteData.pageCount || 0  // How many pages were crawled from sitemap
+            hasSitemap: this.siteData.sitemapDetected || false,
+            sitemapDetected: this.siteData.sitemapDetected || false,
+            sitemapLocation: this.siteData.sitemapLocation || null,
+            sitemapPageCount: this.siteData.pageCount || 0
           }
         };
 

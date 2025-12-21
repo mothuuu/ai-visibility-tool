@@ -380,6 +380,21 @@ class ContentExtractor {
       }
     });
 
+    // Extract tab content (evidence contract v2.0)
+    const tabs = [];
+    $('[role="tablist"]').each((i, tablist) => {
+      $(tablist).find('[role="tab"]').each((j, tab) => {
+        const tabId = $(tab).attr('aria-controls');
+        const tabTitle = $(tab).text().trim();
+        if (tabId) {
+          const content = $(`#${tabId}`).text().trim();
+          if (tabTitle && content) {
+            tabs.push({ title: tabTitle, content, source: 'aria-tab' });
+          }
+        }
+      });
+    });
+
     // Extract paragraphs with intelligent prioritization and smart filtering
     const allParagraphs = [];
     $('p').each((idx, el) => {
@@ -505,6 +520,7 @@ class ContentExtractor {
       tables,
       faqs: faqs, // FAQs extracted before footer removal
       accordions, // RULEBOOK v1.2 Section 7.3.2
+      tabs, // Evidence contract v2.0
       wordCount,
       textLength: bodyText.length,
       bodyText: bodyText.substring(0, limits.maxCharsTotal) // RULEBOOK v1.2: Adaptive limits
