@@ -46,7 +46,7 @@ class ContentExtractor {
 
       // PHASE A: Extract from FULL DOM (before any removal)
       console.log('[Rulebook v1.2] PHASE A: Extracting from full DOM...');
-      const technical = this.extractTechnical($full, fetchResult);
+      const technical = await this.extractTechnical($full, fetchResult);
       const structure = this.extractStructure($full);
       const navigation = this.extractNavigation($full);
       const metadata = this.extractMetadata($full);
@@ -1223,7 +1223,7 @@ class ContentExtractor {
     return types;
   }
 
-  extractTechnical($, htmlData) {
+  async extractTechnical($, htmlData) {
     const html = typeof htmlData === 'string' ? htmlData : htmlData.html;
     const headers = htmlData?.headers || {};
 
@@ -1326,14 +1326,9 @@ class ContentExtractor {
       image: $('meta[name="twitter:image"]').attr('content') || null
     };
 
-    // RULEBOOK v1.2 Section 11.4.3: IndexNow Detection
+    // RULEBOOK v1.2 Section 11.4.3: IndexNow Detection with Key Verification
     const indexNowKey = $('meta[name="indexnow-key"]').attr('content') || null;
-    const indexNow = {
-      detected: !!indexNowKey,
-      keyLocation: indexNowKey ? 'meta' : null,
-      key: indexNowKey,
-      keyVerified: null // Would require async verification
-    };
+    const indexNow = await this.verifyIndexNow($, indexNowKey);
 
     // RULEBOOK v1.2 Section 11.4.4: RSS/Atom Feed Detection
     const feeds = [];
@@ -1434,6 +1429,58 @@ class ContentExtractor {
       lastModified: headers?.['last-modified'] || '',
       etag: headers?.['etag'] || ''
     };
+  }
+
+  /**
+   * RULEBOOK v1.2 Step 14: IndexNow Key Verification
+   * Verifies that the IndexNow key file exists at the expected location
+   */
+  async verifyIndexNow($, key) {
+    const result = {
+      detected: false,
+      keyLocation: null,
+      key: null,
+      keyVerified: null,
+      verificationStatus: null,
+      verificationError: null
+    };
+
+    if (!key) {
+      return result;
+    }
+
+    result.detected = true;
+    result.keyLocation = 'meta';
+    result.key = key;
+
+    try {
+      // Build the base URL from this.url
+      const urlObj = new URL(this.url);
+      const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+      const keyFileUrl = `${baseUrl}/${key}.txt`;
+
+      console.log(`[IndexNow] Verifying key file at: ${keyFileUrl}`);
+
+      const response = await axios.head(keyFileUrl, {
+        timeout: 5000,
+        validateStatus: (status) => status < 500, // Accept 2xx, 3xx, 4xx
+        headers: {
+          'User-Agent': this.userAgent
+        }
+      });
+
+      result.keyVerified = response.status === 200;
+      result.verificationStatus = response.status;
+
+      console.log(`[IndexNow] Key verification: ${result.keyVerified ? 'VERIFIED' : 'NOT FOUND'} (status: ${response.status})`);
+
+    } catch (error) {
+      result.keyVerified = false;
+      result.verificationError = error.message;
+      console.log(`[IndexNow] Key verification failed: ${error.message}`);
+    }
+
+    return result;
   }
 
   /**

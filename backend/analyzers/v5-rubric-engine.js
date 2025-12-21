@@ -1,5 +1,6 @@
 const ContentExtractor = require('./content-extractor');
 const { validateEvidence } = require('./evidence-contract');
+const { measured, notMeasured } = require('./score-types');
 
 /**
  * V5 Rubric Scoring Engine
@@ -149,10 +150,21 @@ class V5RubricEngine {
   /**
    * Category 2: AI Search Readiness & Content Depth (20%)
    * PURE FUNCTION - depends only on evidence
+   *
+   * RULEBOOK v1.2 Step 13: Handles tri-state scores
    */
   analyzeAISearchReadiness(evidence) {
     const subfactors = {};
-    
+
+    // Helper to extract numeric score from tri-state or raw value
+    const getScore = (value) => {
+      if (value === null || value === undefined) return 0;
+      if (typeof value === 'object' && value.score !== undefined) {
+        return value.score ?? 0; // null scores become 0 for calculation
+      }
+      return value;
+    };
+
     // All subfactors as pure functions
     subfactors.questionHeadingsScore = this.assessQuestionHeadings(evidence.content.headings);
     subfactors.scannabilityScore = this.assessScannability(evidence.content);
@@ -163,20 +175,20 @@ class V5RubricEngine {
     subfactors.linkedSubpagesScore = this.assessLinkedSubpages(evidence.structure);
     subfactors.painPointsScore = this.assessPainPoints(evidence.content);
     subfactors.geoContentScore = this.assessGeoContent(evidence.metadata, evidence.content);
-    
-    // Weighted category score
+
+    // Weighted category score (using getScore to handle tri-state)
     const categoryScore = (
-      subfactors.questionHeadingsScore * 0.12 +
-      subfactors.scannabilityScore * 0.12 +
-      subfactors.readabilityScore * 0.12 +
-      subfactors.faqScore * 0.12 +
-      subfactors.snippetEligibleScore * 0.10 +
-      subfactors.pillarPagesScore * 0.10 +
-      subfactors.linkedSubpagesScore * 0.10 +
-      subfactors.painPointsScore * 0.12 +
-      subfactors.geoContentScore * 0.10
+      getScore(subfactors.questionHeadingsScore) * 0.12 +
+      getScore(subfactors.scannabilityScore) * 0.12 +
+      getScore(subfactors.readabilityScore) * 0.12 +
+      getScore(subfactors.faqScore) * 0.12 +
+      getScore(subfactors.snippetEligibleScore) * 0.10 +
+      getScore(subfactors.pillarPagesScore) * 0.10 +
+      getScore(subfactors.linkedSubpagesScore) * 0.10 +
+      getScore(subfactors.painPointsScore) * 0.12 +
+      getScore(subfactors.geoContentScore) * 0.10
     );
-    
+
     return {
       score: Math.round(categoryScore),
       subfactors,
@@ -187,10 +199,21 @@ class V5RubricEngine {
   /**
    * Category 3: Content Freshness & Maintenance (8%)
    * PURE FUNCTION - depends only on evidence
+   *
+   * RULEBOOK v1.2 Step 13: Handles tri-state scores
    */
   analyzeContentFreshness(evidence) {
     const subfactors = {};
-    
+
+    // Helper to extract numeric score from tri-state or raw value
+    const getScore = (value) => {
+      if (value === null || value === undefined) return 0;
+      if (typeof value === 'object' && value.score !== undefined) {
+        return value.score ?? 0;
+      }
+      return value;
+    };
+
     subfactors.lastUpdatedScore = this.assessLastUpdated(evidence.metadata, evidence.content);
     subfactors.versioningScore = this.assessVersioning(evidence.content);
     subfactors.timeSensitiveScore = this.assessTimeSensitiveContent(evidence.content);
@@ -198,17 +221,17 @@ class V5RubricEngine {
     subfactors.liveDataScore = this.assessLiveData(evidence.content);
     subfactors.httpFreshnessScore = this.assessHTTPFreshness(evidence.technical);
     subfactors.editorialCalendarScore = this.assessEditorialCalendar(evidence.content);
-    
+
     const categoryScore = (
-      subfactors.lastUpdatedScore * 0.25 +
-      subfactors.versioningScore * 0.15 +
-      subfactors.timeSensitiveScore * 0.15 +
-      subfactors.auditProcessScore * 0.15 +
-      subfactors.liveDataScore * 0.10 +
-      subfactors.httpFreshnessScore * 0.10 +
-      subfactors.editorialCalendarScore * 0.10
+      getScore(subfactors.lastUpdatedScore) * 0.25 +
+      getScore(subfactors.versioningScore) * 0.15 +
+      getScore(subfactors.timeSensitiveScore) * 0.15 +
+      getScore(subfactors.auditProcessScore) * 0.15 +
+      getScore(subfactors.liveDataScore) * 0.10 +
+      getScore(subfactors.httpFreshnessScore) * 0.10 +
+      getScore(subfactors.editorialCalendarScore) * 0.10
     );
-    
+
     return {
       score: Math.round(categoryScore),
       subfactors,
@@ -507,28 +530,39 @@ class V5RubricEngine {
     return Math.min(100, score);
   }
 
+  /**
+   * RULEBOOK v1.2 Step 13: Tri-state scoring
+   * Returns notMeasured for insufficient text instead of 50
+   */
   calculateFleschScore(text) {
-    if (!text || text.length < 100) return 50;
-    
+    if (!text || text.length < 100) {
+      return notMeasured('Insufficient text for readability analysis');
+    }
+
     const words = text.split(/\s+/).length;
     const sentences = text.split(/[.!?]+/).length;
     const syllables = this.countSyllables(text);
-    
-    if (words === 0 || sentences === 0) return 50;
-    
+
+    if (words === 0 || sentences === 0) {
+      return notMeasured('No sentences found for readability');
+    }
+
     const avgWordsPerSentence = words / sentences;
     const avgSyllablesPerWord = syllables / words;
-    
+
     // Flesch Reading Ease formula
     const flesch = 206.835 - (1.015 * avgWordsPerSentence) - (84.6 * avgSyllablesPerWord);
-    
+
     // Convert to 0-100 score (higher Flesch = easier to read = higher score)
     // Flesch 60-70 = good, aim for 60+
-    if (flesch >= 60) return 100;
-    if (flesch >= 50) return 80;
-    if (flesch >= 40) return 60;
-    if (flesch >= 30) return 40;
-    return 20;
+    let score;
+    if (flesch >= 60) score = 100;
+    else if (flesch >= 50) score = 80;
+    else if (flesch >= 40) score = 60;
+    else if (flesch >= 30) score = 40;
+    else score = 20;
+
+    return measured(score, ['content.paragraphs', 'content.bodyText']);
   }
 
   countSyllables(text) {
@@ -644,18 +678,25 @@ class V5RubricEngine {
     return 40;
   }
 
+  /**
+   * RULEBOOK v1.2 Step 13: Tri-state scoring
+   * Returns notMeasured when no last-modified date found
+   */
   assessAuditProcess(metadata) {
     // Check for freshness signals in metadata
     if (metadata.lastModified) {
       const lastMod = new Date(metadata.lastModified);
       const daysSince = (Date.now() - lastMod.getTime()) / (1000 * 60 * 60 * 24);
-      
-      if (daysSince < 30) return 100;
-      if (daysSince < 90) return 80;
-      if (daysSince < 180) return 60;
-      return 40;
+
+      let score;
+      if (daysSince < 30) score = 100;
+      else if (daysSince < 90) score = 80;
+      else if (daysSince < 180) score = 60;
+      else score = 40;
+
+      return measured(score, ['metadata.lastModified']);
     }
-    return 50;
+    return notMeasured('No lastModified metadata found');
   }
 
   assessLiveData(content) {

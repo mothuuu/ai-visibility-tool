@@ -22,6 +22,7 @@ const guestRateLimiter = createGuestRateLimiter({ maxScansPerDay: 5, db });
 const V5EnhancedRubricEngine = require('../analyzers/v5-enhanced-rubric-engine'); // Import the ENHANCED class
 const V5RubricEngine = V5EnhancedRubricEngine; // Alias for compatibility
 const { generateCompleteRecommendations } = require('../analyzers/recommendation-generator');
+const { measured, notMeasured, isMeasured } = require('../analyzers/score-types');
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -1630,18 +1631,33 @@ async function performCompetitorScan(url) {
  * Transform V5 categories structure to flat subfactor scores
  * The new V5 engine returns nested objects and different key names
  * This function flattens and renames to match what the issue detector expects
+ *
+ * RULEBOOK v1.2 Step 12: Tri-state scoring
+ * Returns { score, state, evidenceRefs } for measured scores
+ * Returns { score: null, state: 'not_measured', reason } for unmeasurable
  */
 function transformV5ToSubfactors(v5Categories) {
+  // Helper to convert raw scores to tri-state format
+  const toTriState = (rawScore, name, multiplier = 1) => {
+    if (rawScore === undefined || rawScore === null) {
+      return notMeasured(`${name} not measured`);
+    }
+    // Already tri-state format
+    if (rawScore.state) return rawScore;
+    // Convert numeric score
+    return measured(Math.round(rawScore * multiplier));
+  };
+
   const subfactors = {};
 
   // AI Readability - Scale from 0-2/0-10 to 0-100 and rename keys
   if (v5Categories.aiReadability) {
     const ar = v5Categories.aiReadability;
     subfactors.aiReadability = {
-      altTextScore: (ar.altText || 0) * 50,  // 0-2 scale → 0-100
-      captionsTranscriptsScore: (ar.transcription || 0) * 10,  // 0-10 scale → 0-100
-      interactiveAccessScore: (ar.interactive || 0) * 50,  // 0-2 scale → 0-100
-      crossMediaScore: (ar.crossMedia || 0) * 50  // 0-2 scale → 0-100
+      altTextScore: toTriState(ar.altText, 'altText', 50),  // 0-2 scale → 0-100
+      captionsTranscriptsScore: toTriState(ar.transcription, 'captions', 10),  // 0-10 scale → 0-100
+      interactiveAccessScore: toTriState(ar.interactive, 'interactive', 50),  // 0-2 scale → 0-100
+      crossMediaScore: toTriState(ar.crossMedia, 'crossMedia', 50)  // 0-2 scale → 0-100
     };
   }
 
@@ -1652,16 +1668,16 @@ function transformV5ToSubfactors(v5Categories) {
     const topical = asr.subfactors?.topicalAuthority || {};  // CRITICAL FIX: Added .subfactors
 
     subfactors.aiSearchReadiness = {
-      questionHeadingsScore: (directAnswer.factors?.questionDensity || 0) * 50,  // 0-2 → 0-100 (hybrid scoring)
-      scannabilityScore: (directAnswer.factors?.scannability || 0) * 50,  // 0-2 → 0-100
-      readabilityScore: (directAnswer.factors?.readability || 0) * 50,  // 0-2 → 0-100 (factor max is 2.0)
-      faqSchemaScore: (directAnswer.factors?.faqSchema || 0) * 50,  // 0-2 → 0-100 (FAQ schema markup)
-      faqContentScore: (directAnswer.factors?.faqContent || 0) * 50,  // 0-2 → 0-100 (visible FAQ content)
-      snippetEligibleScore: (directAnswer.factors?.answerCompleteness || 0) * 50,  // 0-2 → 0-100
-      pillarPagesScore: (topical.factors?.pillarPages || 0) * 50,  // 0-2 → 0-100 (max is 2.0, not 3.0)
-      linkedSubpagesScore: (topical.factors?.semanticLinking || 0) * 50,  // 0-2 → 0-100 (max is 2.0)
-      painPointsScore: (topical.factors?.contentDepth || 0) * 50,  // 0-2 → 0-100 (max is 2.0)
-      geoContentScore: 50  // Default middle value if not available
+      questionHeadingsScore: toTriState(directAnswer.factors?.questionDensity, 'questionHeadings', 50),
+      scannabilityScore: toTriState(directAnswer.factors?.scannability, 'scannability', 50),
+      readabilityScore: toTriState(directAnswer.factors?.readability, 'readability', 50),
+      faqSchemaScore: toTriState(directAnswer.factors?.faqSchema, 'faqSchema', 50),
+      faqContentScore: toTriState(directAnswer.factors?.faqContent, 'faqContent', 50),
+      snippetEligibleScore: toTriState(directAnswer.factors?.answerCompleteness, 'snippetEligible', 50),
+      pillarPagesScore: toTriState(topical.factors?.pillarPages, 'pillarPages', 50),
+      linkedSubpagesScore: toTriState(topical.factors?.semanticLinking, 'linkedSubpages', 50),
+      painPointsScore: toTriState(topical.factors?.contentDepth, 'painPoints', 50),
+      geoContentScore: notMeasured('geoContent requires external data')  // RULEBOOK v1.2: Use not_measured, not 50
     };
   }
 
@@ -1669,13 +1685,13 @@ function transformV5ToSubfactors(v5Categories) {
   if (v5Categories.contentFreshness) {
     const cf = v5Categories.contentFreshness;
     subfactors.contentFreshness = {
-      lastUpdatedScore: (cf.lastModified || 0) * 50,  // 0-2 → 0-100
-      versioningScore: (cf.versioning || 0) * 50,  // 0-2 → 0-100
-      timeSensitiveScore: (cf.timeSensitive || 0) * 50,  // 0-2 → 0-100
-      auditProcessScore: (cf.auditProcess || 0) * 50,  // 0-2 → 0-100
-      liveDataScore: (cf.realTimeInfo || 0) * 50,  // 0-2 → 0-100
-      httpFreshnessScore: 50,  // Not in new structure, use default
-      editorialCalendarScore: 50  // Not in new structure, use default
+      lastUpdatedScore: toTriState(cf.lastModified, 'lastUpdated', 50),
+      versioningScore: toTriState(cf.versioning, 'versioning', 50),
+      timeSensitiveScore: toTriState(cf.timeSensitive, 'timeSensitive', 50),
+      auditProcessScore: toTriState(cf.auditProcess, 'auditProcess', 50),
+      liveDataScore: toTriState(cf.realTimeInfo, 'liveData', 50),
+      httpFreshnessScore: notMeasured('httpFreshness not in V5 structure'),
+      editorialCalendarScore: notMeasured('editorialCalendar not in V5 structure')
     };
   }
 
@@ -1686,11 +1702,11 @@ function transformV5ToSubfactors(v5Categories) {
     const entity = cs.subfactors?.entityRecognition || {};  // CRITICAL FIX: Added .subfactors
 
     subfactors.contentStructure = {
-      headingHierarchyScore: (semantic.factors?.headingHierarchy || 0) * 66.7,  // 0-1.5 → 0-100
-      navigationScore: (semantic.factors?.contentSectioning || 0) * 66.7,  // 0-1.5 → 0-100
-      entityCuesScore: (entity.factors?.namedEntities || 0) * 66.7,  // 0-1.5 → 0-100
-      accessibilityScore: (semantic.factors?.accessibility || 0) * 66.7,  // 0-1.5 → 0-100
-      geoMetaScore: (entity.factors?.geoEntities || 0) * 66.7  // 0-1.5 → 0-100
+      headingHierarchyScore: toTriState(semantic.factors?.headingHierarchy, 'headingHierarchy', 66.7),
+      navigationScore: toTriState(semantic.factors?.contentSectioning, 'navigation', 66.7),
+      entityCuesScore: toTriState(entity.factors?.namedEntities, 'entityCues', 66.7),
+      accessibilityScore: toTriState(semantic.factors?.accessibility, 'accessibility', 66.7),
+      geoMetaScore: toTriState(entity.factors?.geoEntities, 'geoMeta', 66.7)
     };
   }
 
@@ -1698,11 +1714,11 @@ function transformV5ToSubfactors(v5Categories) {
   if (v5Categories.speedUX) {
     const su = v5Categories.speedUX;
     subfactors.speedUX = {
-      lcpScore: (su.lcp || 0) * 100,  // 0-1 → 0-100
-      clsScore: (su.cls || 0) * 100,  // 0-1 → 0-100
-      inpScore: (su.inp || 0) * 100,  // 0-1 → 0-100
-      mobileScore: (su.mobile || 0) * 100,  // 0-1 → 0-100
-      crawlerResponseScore: (su.crawlerResponse || 0) * 100  // 0-1 → 0-100
+      lcpScore: toTriState(su.lcp, 'lcp', 100),
+      clsScore: toTriState(su.cls, 'cls', 100),
+      inpScore: toTriState(su.inp, 'inp', 100),
+      mobileScore: toTriState(su.mobile, 'mobile', 100),
+      crawlerResponseScore: toTriState(su.crawlerResponse, 'crawlerResponse', 100)
     };
   }
 
@@ -1713,13 +1729,13 @@ function transformV5ToSubfactors(v5Categories) {
     const structured = ts.subfactors?.structuredData || {};  // CRITICAL FIX: Added .subfactors
 
     subfactors.technicalSetup = {
-      crawlerAccessScore: (crawler.factors?.robotsTxt || 0) * 55.6,  // 0-1.8 → 0-100
-      structuredDataScore: (structured.factors?.schemaMarkup || 0) * 55.6,  // 0-1.8 → 0-100
-      canonicalHreflangScore: 50,  // Not in new structure, use default
-      openGraphScore: 50,  // Not in new structure, use default
-      sitemapScore: (crawler.factors?.sitemap || 0) * 55.6,  // 0-1.8 → 0-100 (FIXED: was reading serverResponse!)
-      indexNowScore: 50,  // Not in new structure, use default
-      rssFeedScore: 50  // Not in new structure, use default
+      crawlerAccessScore: toTriState(crawler.factors?.robotsTxt, 'crawlerAccess', 55.6),
+      structuredDataScore: toTriState(structured.factors?.schemaMarkup, 'structuredData', 55.6),
+      canonicalHreflangScore: notMeasured('canonical/hreflang not in V5 structure'),
+      openGraphScore: notMeasured('openGraph not in V5 structure'),
+      sitemapScore: toTriState(crawler.factors?.sitemap, 'sitemap', 55.6),
+      indexNowScore: notMeasured('indexNow requires key verification'),  // Will be measured in Step 14
+      rssFeedScore: notMeasured('rssFeed not in V5 structure')
     };
   }
 
@@ -1730,14 +1746,14 @@ function transformV5ToSubfactors(v5Categories) {
     const authority = ta.subfactors?.authorityNetwork || {};  // CRITICAL FIX: Added .subfactors
 
     subfactors.trustAuthority = {
-      authorBiosScore: (eeat.factors?.authorProfiles || 0) * 50,  // 0-2 → 0-100
-      certificationsScore: (eeat.factors?.credentials || 0) * 50,  // 0-2 → 0-100 (legacy)
-      professionalCertifications: (eeat.factors?.professionalCertifications || 0) * 83.3,  // 0-1.2 → 0-100
-      teamCredentials: (eeat.factors?.teamCredentials || 0) * 83.3,  // 0-1.2 → 0-100
-      industryMemberships: (authority.factors?.industryMemberships || 0) * 83.3,  // 0-1.2 → 0-100
-      domainAuthorityScore: (authority.factors?.domainAuthority || 0) * 33,  // 0-3 → 0-100
-      thoughtLeadershipScore: (authority.factors?.thoughtLeadership || 0) * 33,  // 0-3 → 0-100
-      thirdPartyProfilesScore: (authority.factors?.socialAuthority || 0) * 50  // 0-2 → 0-100
+      authorBiosScore: toTriState(eeat.factors?.authorProfiles, 'authorBios', 50),
+      certificationsScore: toTriState(eeat.factors?.credentials, 'certifications', 50),
+      professionalCertifications: toTriState(eeat.factors?.professionalCertifications, 'professionalCerts', 83.3),
+      teamCredentials: toTriState(eeat.factors?.teamCredentials, 'teamCreds', 83.3),
+      industryMemberships: toTriState(authority.factors?.industryMemberships, 'industryMemberships', 83.3),
+      domainAuthorityScore: notMeasured('domainAuthority requires external API'),  // RULEBOOK v1.2: not_measured
+      thoughtLeadershipScore: toTriState(authority.factors?.thoughtLeadership, 'thoughtLeadership', 33),
+      thirdPartyProfilesScore: toTriState(authority.factors?.socialAuthority, 'thirdPartyProfiles', 50)
     };
   }
 
@@ -1748,11 +1764,11 @@ function transformV5ToSubfactors(v5Categories) {
     const voice = vo.subfactors?.voiceSearch || {};  // CRITICAL FIX: Added .subfactors
 
     subfactors.voiceOptimization = {
-      longTailScore: (conversational.factors?.longTail || 0) * 83,  // 0-1.2 → 0-100
-      localIntentScore: (conversational.factors?.localIntent || 0) * 83,  // 0-1.2 → 0-100
-      conversationalTermsScore: (voice.factors?.conversationalFlow || 0) * 83,  // 0-1.2 → 0-100
-      snippetFormatScore: (conversational.factors?.snippetOptimization || 0) * 83,  // 0-1.2 → 0-100 (hybrid scoring)
-      multiTurnScore: (conversational.factors?.followUpQuestions || 0) * 83  // 0-1.2 → 0-100
+      longTailScore: toTriState(conversational.factors?.longTail, 'longTail', 83),
+      localIntentScore: toTriState(conversational.factors?.localIntent, 'localIntent', 83),
+      conversationalTermsScore: toTriState(voice.factors?.conversationalFlow, 'conversationalTerms', 83),
+      snippetFormatScore: toTriState(conversational.factors?.snippetOptimization, 'snippetFormat', 83),
+      multiTurnScore: toTriState(conversational.factors?.followUpQuestions, 'multiTurn', 83)
     };
   }
 
