@@ -2050,7 +2050,7 @@ function getRenderCount() {
 }
 
 /**
- * H4: Create a render context for a scan (concurrency-safe)
+ * G4: Create a render context for a scan (concurrency-safe)
  * Call once at the start of each scan and pass through the pipeline
  * @param {Object} options - Context options
  * @param {string} options.tier - User tier (guest, free, diy, pro, agency)
@@ -2062,13 +2062,61 @@ function createRenderContext(options = {}) {
   const budget = RENDER_CONFIG.tierBudgets[tier] || RENDER_CONFIG.tierBudgets.diy;
 
   return {
+    scanId: options.scanId || `scan_${Date.now()}`,
     tier,
     budget,
     rendered: 0,
-    scanId: options.scanId || `scan_${Date.now()}`,
     startTime: Date.now(),
+    maxTotalTime: RENDER_CONFIG.maxRenderTimePerScan || 60000,
     pages: []  // Track which pages were rendered
   };
+}
+
+/**
+ * G4: Check if rendering is allowed (budget and time checks only)
+ * Use this for quick budget checks without content analysis
+ * @param {Object} renderContext - Render context from createRenderContext
+ * @returns {Object} { allowed: boolean, reason?: string }
+ */
+function canRender(renderContext) {
+  if (!renderContext) {
+    return { allowed: false, reason: 'no_context' };
+  }
+
+  // Budget check
+  if (renderContext.rendered >= renderContext.budget) {
+    return { allowed: false, reason: 'budget_exhausted' };
+  }
+
+  // Time budget check
+  const elapsed = Date.now() - renderContext.startTime;
+  if (elapsed > renderContext.maxTotalTime) {
+    return { allowed: false, reason: 'time_budget_exhausted' };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * G4: Record a successful render (call after render completes)
+ * @param {Object} renderContext - Render context to update
+ * @param {Object} pageInfo - Optional info about rendered page
+ * @returns {Object} Updated render context
+ */
+function recordRender(renderContext, pageInfo = {}) {
+  if (!renderContext) return renderContext;
+
+  renderContext.rendered++;
+  if (pageInfo.url) {
+    renderContext.pages.push({
+      url: pageInfo.url,
+      duration: pageInfo.duration || 0,
+      htmlLength: pageInfo.htmlLength || 0,
+      timestamp: Date.now()
+    });
+  }
+
+  return renderContext;
 }
 
 /**
@@ -2481,8 +2529,10 @@ module.exports = {
   findChromePath,
   RENDER_CONFIG,
 
-  // H4: Per-scan headless budget (concurrency-safe)
+  // G4: Per-scan headless budget (concurrency-safe)
   createRenderContext,
+  canRender,
+  recordRender,
   getRenderContextSummary,
 
   // Legacy (deprecated - use createRenderContext instead)
