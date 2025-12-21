@@ -18,23 +18,25 @@ const VOCABULARY = {
   // ============================================
   URL_PATTERNS: {
     home: /^\/?(index\.html?)?$/i,
-    about: /(\/|#)(about|about-us|who-we-are|our-story|company|our-company|our-team)(\.html?|\/|$)/i,
-    services: /(\/|#)(services|solutions|what-we-do|offerings|capabilities|expertise)(\.html?|\/|$)/i,
+    // Fix: Added ^ to match relative URLs like "about.html" (not just "/about.html")
+    about: /(^|\/|#)(about|about-us|who-we-are|our-story|company|our-company|our-team)(\.html?|\/|$)/i,
+    services: /(^|\/|#)(services|solutions|what-we-do|offerings|capabilities|expertise)(\.html?|\/|$)/i,
     // RULEBOOK v1.2: Extended blog vocabulary with all synonyms + anchor link support
-    blog: /(\/|#)(blog|news|articles|insights|resources|updates|journal|posts|learn|knowledge-base|help-center|guides|library|content|stories|perspectives|thought-leadership|whitepapers|case-studies)(\.html?|\/|$)/i,
-    faq: /(\/|#)(faq|faqs|frequently-asked|frequently-asked-questions|help|support|questions|answers|q-and-a|knowledge-base|support-center)(\.html?|\/|$)/i,
-    contact: /(\/|#)(contact|contact-us|get-in-touch|reach-us|locations|offices)(\.html?|\/|$)/i,
-    pricing: /(\/|#)(pricing|plans|packages|cost|rates|quote|get-a-quote)(\.html?|\/|$)/i,
-    team: /(\/|#)(team|people|about-us\/team|our-team|staff|leadership)(\.html?|\/|$)/i,
-    careers: /(\/|#)(careers|jobs|work-with-us|join-us|hiring|opportunities|openings)(\.html?|\/|$)/i,
-    portfolio: /(\/|#)(portfolio|work|projects|case-studies|clients)(\.html?|\/|$)/i,
-    testimonials: /(\/|#)(testimonials|reviews|clients|success-stories)(\.html?|\/|$)/i,
-    legal: /(\/|#)(privacy|terms|legal|cookie-policy|gdpr|disclaimer)(\.html?|\/|$)/i,
+    // Fix: Added ^ to match relative URLs like "blog.html" (not just "/blog.html")
+    blog: /(^|\/|#)(blog|news|articles|insights|resources|updates|journal|posts|learn|knowledge-base|help-center|guides|library|content|stories|perspectives|thought-leadership|whitepapers|case-studies)(\.html?|\/|$)/i,
+    faq: /(^|\/|#)(faq|faqs|frequently-asked|frequently-asked-questions|help|support|questions|answers|q-and-a|knowledge-base|support-center)(\.html?|\/|$)/i,
+    contact: /(^|\/|#)(contact|contact-us|get-in-touch|reach-us|locations|offices)(\.html?|\/|$)/i,
+    pricing: /(^|\/|#)(pricing|plans|packages|cost|rates|quote|get-a-quote)(\.html?|\/|$)/i,
+    team: /(^|\/|#)(team|people|about-us\/team|our-team|staff|leadership)(\.html?|\/|$)/i,
+    careers: /(^|\/|#)(careers|jobs|work-with-us|join-us|hiring|opportunities|openings)(\.html?|\/|$)/i,
+    portfolio: /(^|\/|#)(portfolio|work|projects|case-studies|clients)(\.html?|\/|$)/i,
+    testimonials: /(^|\/|#)(testimonials|reviews|clients|success-stories)(\.html?|\/|$)/i,
+    legal: /(^|\/|#)(privacy|terms|legal|cookie-policy|gdpr|disclaimer)(\.html?|\/|$)/i,
     // RULEBOOK v1.2 Step C3: Additional patterns for comprehensive classification
-    docs: /(\/|#)(docs|documentation|api|developers|reference|developer|dev|sdk)(\/|\.html?|$)/i,
-    support: /(\/|#)(support|help-center|help|customer-service)(\/|\.html?|$)/i,
-    privacy: /(\/|#)(privacy|privacy-policy|data-protection|gdpr)(\/|\.html?|$)/i,
-    terms: /(\/|#)(terms|terms-of-service|tos|terms-and-conditions)(\/|\.html?|$)/i
+    docs: /(^|\/|#)(docs|documentation|api|developers|reference|developer|dev|sdk)(\/|\.html?|$)/i,
+    support: /(^|\/|#)(support|help-center|help|customer-service)(\/|\.html?|$)/i,
+    privacy: /(^|\/|#)(privacy|privacy-policy|data-protection|gdpr)(\/|\.html?|$)/i,
+    terms: /(^|\/|#)(terms|terms-of-service|tos|terms-and-conditions)(\/|\.html?|$)/i
   },
 
   // ============================================
