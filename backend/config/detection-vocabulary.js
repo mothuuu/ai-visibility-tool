@@ -12,9 +12,10 @@ const VOCABULARY = {
   // ============================================
   // URL PATTERNS
   // Used for detecting page types from URLs
-  // ============================================
   // RULEBOOK v1.2 Section 2.4.4: Extended Vocabulary (Synonyms)
   // RULEBOOK v1.2 Section 2.2.6: Updated to match anchor links (#faq) for single-page sites
+  // RULEBOOK v1.2 Step C3: Central patterns for sitemap classification
+  // ============================================
   URL_PATTERNS: {
     home: /^\/?(index\.html?)?$/i,
     about: /(\/|#)(about|about-us|who-we-are|our-story|company)(\.html?|\/|$)/i,
@@ -28,7 +29,29 @@ const VOCABULARY = {
     careers: /(\/|#)(careers|jobs|work-with-us|join-us|hiring)(\.html?|\/|$)/i,
     portfolio: /(\/|#)(portfolio|work|projects|case-studies|clients)(\.html?|\/|$)/i,
     testimonials: /(\/|#)(testimonials|reviews|clients|success-stories)(\.html?|\/|$)/i,
-    legal: /(\/|#)(privacy|terms|legal|cookie-policy|gdpr|disclaimer)(\.html?|\/|$)/i
+    legal: /(\/|#)(privacy|terms|legal|cookie-policy|gdpr|disclaimer)(\.html?|\/|$)/i,
+    // RULEBOOK v1.2 Step C3: Additional patterns for comprehensive classification
+    docs: /(\/|#)(docs|documentation|api|developers|reference|developer|dev)(\/|\.html?|$)/i,
+    support: /(\/|#)(support|help-center|help|customer-service)(\/|\.html?|$)/i,
+    privacy: /(\/|#)(privacy|privacy-policy|data-protection|gdpr)(\/|\.html?|$)/i,
+    terms: /(\/|#)(terms|terms-of-service|tos|terms-and-conditions)(\/|\.html?|$)/i
+  },
+
+  // ============================================
+  // NAV TEXT PATTERNS (RULEBOOK v1.2 Step C3)
+  // For classifying navigation link text
+  // ============================================
+  NAV_TEXT_PATTERNS: {
+    blog: /^(blog|news|articles|insights|resources|updates|journal|learn)$/i,
+    faq: /^(faq|faqs|help|support|questions|q&a)$/i,
+    about: /^(about|about us|our story|who we are|company)$/i,
+    contact: /^(contact|contact us|get in touch|reach us)$/i,
+    services: /^(services|solutions|what we do|offerings)$/i,
+    pricing: /^(pricing|plans|packages|cost|buy)$/i,
+    team: /^(team|our team|people|leadership)$/i,
+    careers: /^(careers|jobs|work with us|join us|hiring)$/i,
+    docs: /^(docs|documentation|api|developers)$/i,
+    support: /^(support|help|help center|customer service)$/i
   },
 
   // ============================================
@@ -498,6 +521,77 @@ const VOCABULARY = {
     }
 
     return { isAuthoritative: false, category: null };
+  },
+
+  // ============================================
+  // RULEBOOK v1.2 Step C3: Classification Functions
+  // Central URL and text classification for consistency
+  // ============================================
+
+  /**
+   * Classify a URL against vocabulary
+   * @param {string} url - URL to classify
+   * @returns {string[]} Array of matching categories
+   */
+  classifyUrl(url) {
+    const matches = [];
+    for (const [category, pattern] of Object.entries(this.URL_PATTERNS)) {
+      if (pattern.test(url)) {
+        matches.push(category);
+      }
+    }
+    return matches;
+  },
+
+  /**
+   * Classify nav link text
+   * @param {string} text - Navigation link text
+   * @returns {string|null} Category or null
+   */
+  classifyNavText(text) {
+    const normalized = text.trim();
+    for (const [category, pattern] of Object.entries(this.NAV_TEXT_PATTERNS)) {
+      if (pattern.test(normalized)) {
+        return category;
+      }
+    }
+    return null;
+  },
+
+  /**
+   * Classify array of URLs (for sitemap classification)
+   * Used by site-crawler.js for sitemap URL classification
+   * @param {string[]} urls - Array of URLs to classify
+   * @returns {Object} Categorized URL lists with boolean flags
+   */
+  classifyUrls(urls) {
+    const capitalize = (str) => str.charAt(0).toUpperCase() + str.slice(1);
+    const result = {};
+
+    // Initialize result object for all categories
+    for (const category of Object.keys(this.URL_PATTERNS)) {
+      result[`${category}Urls`] = [];
+      result[`has${capitalize(category)}Urls`] = false;
+    }
+
+    // Classify each URL
+    for (const url of urls) {
+      const categories = this.classifyUrl(url);
+      for (const cat of categories) {
+        result[`${cat}Urls`].push(url);
+      }
+    }
+
+    // Set boolean flags
+    for (const category of Object.keys(this.URL_PATTERNS)) {
+      result[`has${capitalize(category)}Urls`] = result[`${category}Urls`].length > 0;
+    }
+
+    // Add total count
+    result.totalClassified = Object.keys(this.URL_PATTERNS)
+      .reduce((sum, cat) => sum + result[`${cat}Urls`].length, 0);
+
+    return result;
   }
 };
 
