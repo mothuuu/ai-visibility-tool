@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEO vs SEO: What's the Difference? | Visible2AI</title>
+    <meta name="description" content="Learn the key differences between SEO (Search Engine Optimization) and AEO (Answer Engine Optimization). Discover how to optimize your website for AI assistants like ChatGPT, Claude, and Perplexity.">
+    <meta name="keywords" content="AEO, SEO, Answer Engine Optimization, Search Engine Optimization, AI visibility, ChatGPT optimization, AI search">
+    <meta name="author" content="Visible2AI Team">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://www.visible2ai.com/blog/aeo-vs-seo.html">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+    <link rel="shortcut icon" href="/favicon.ico?v=2">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.visible2ai.com/blog/aeo-vs-seo.html">
+    <meta property="og:title" content="AEO vs SEO: What's the Difference?">
+    <meta property="og:description" content="Learn the key differences between SEO and AEO. Discover how to optimize for AI assistants like ChatGPT, Claude, and Perplexity.">
+    <meta property="og:image" content="https://www.visible2ai.com/og-aeo-vs-seo.png">
+    <meta property="article:published_time" content="2025-12-12T00:00:00Z">
+    <meta property="article:author" content="Visible2AI Team">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="AEO vs SEO: What's the Difference?">
+    <meta name="twitter:description" content="Traditional SEO focuses on ranking. AEO focuses on being the answer AI recommends.">
+
+    <!-- Article Schema -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": "AEO vs SEO: What's the Difference?",
+        "description": "Learn the key differences between SEO (Search Engine Optimization) and AEO (Answer Engine Optimization). Discover how to optimize your website for AI assistants like ChatGPT, Claude, and Perplexity.",
+        "image": "https://www.visible2ai.com/og-aeo-vs-seo.png",
+        "datePublished": "2025-12-12T00:00:00Z",
+        "dateModified": "2025-12-12T00:00:00Z",
+        "author": {
+            "@type": "Organization",
+            "name": "Visible2AI",
+            "url": "https://www.visible2ai.com"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "Visible2AI",
+            "url": "https://www.visible2ai.com",
+            "logo": {
+                "@type": "ImageObject",
+                "url": "https://www.visible2ai.com/logo.png"
+            }
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://www.visible2ai.com/blog/aeo-vs-seo.html"
+        },
+        "keywords": ["AEO", "SEO", "Answer Engine Optimization", "AI visibility", "ChatGPT", "Claude", "Perplexity"],
+        "articleSection": "Guide",
+        "wordCount": 2000
+    }
+    </script>
+
+    <style>
+        :root {
+            --cyan: #00B9DA;
+            --hot-pink: #f31c7e;
+            --purple: #7D41A5;
+            --teal: #4DACA6;
+            --pastel-cyan: #E8F7FA;
+            --pastel-purple: #F5F0F9;
+            --pastel-pink: #FDF0F5;
+            --pastel-blue: #EEF6FC;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #2d3748;
+            background: #f8f9fa;
+        }
+
+        /* Navigation */
+        .navbar {
+            background: white;
+            padding: 20px 5%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+        }
+
+        .logo img {
+            height: 50px;
+            width: auto;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .nav-link {
+            color: #2d3748;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-link:hover {
+            color: var(--hot-pink);
+        }
+
+        .nav-link.active {
+            color: var(--cyan);
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 12px 28px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+
+        .btn-signin {
+            background: white;
+            color: var(--hot-pink);
+            border: 2px solid var(--hot-pink);
+        }
+
+        .btn-signin:hover {
+            background: var(--hot-pink);
+            color: white;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--hot-pink) 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(0, 185, 218, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 185, 218, 0.4);
+        }
+
+        /* Article Hero */
+        .article-hero {
+            position: relative;
+            padding: 80px 5% 120px;
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+            text-align: center;
+        }
+
+        .hero-content {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .category-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.4);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 50px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 25px;
+        }
+
+        .hero-content h1 {
+            font-size: 48px;
+            font-weight: 800;
+            color: white;
+            margin-bottom: 20px;
+            line-height: 1.2;
+        }
+
+        .hero-subtitle {
+            font-size: 22px;
+            color: rgba(255,255,255,0.9);
+            margin-bottom: 30px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .article-meta {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            color: rgba(255,255,255,0.8);
+            font-size: 15px;
+        }
+
+        .article-meta .divider {
+            width: 1px;
+            height: 20px;
+            background: rgba(255,255,255,0.3);
+        }
+
+        /* Main Content */
+        .article-container {
+            max-width: 800px;
+            margin: -60px auto 60px;
+            padding: 0 20px;
+        }
+
+        .article-card {
+            background: white;
+            border-radius: 20px;
+            padding: 60px;
+            box-shadow: 0 10px 50px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .article-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 40px;
+            right: 40px;
+            height: 4px;
+            background: linear-gradient(90deg, var(--cyan) 0%, var(--purple) 100%);
+            border-radius: 0 0 4px 4px;
+        }
+
+        .article-content {
+            font-size: 18px;
+            line-height: 1.9;
+            color: #4a5568;
+        }
+
+        .article-content p {
+            margin-bottom: 25px;
+        }
+
+        .article-content h2 {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--purple);
+            margin: 45px 0 20px;
+        }
+
+        .article-content h3 {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--cyan);
+            margin: 35px 0 15px;
+        }
+
+        .article-content strong {
+            color: #2d3748;
+        }
+
+        .article-content a {
+            color: var(--cyan);
+            text-decoration: none;
+            border-bottom: 2px solid transparent;
+            transition: border-color 0.3s;
+        }
+
+        .article-content a:hover {
+            border-bottom-color: var(--cyan);
+        }
+
+        .article-content blockquote {
+            border-left: 4px solid var(--cyan);
+            padding: 20px 25px;
+            margin: 35px 0;
+            font-style: italic;
+            color: #4a5568;
+            font-size: 20px;
+            background: var(--pastel-cyan);
+            border-radius: 0 12px 12px 0;
+        }
+
+        .article-content ul,
+        .article-content ol {
+            margin: 25px 0;
+            padding-left: 30px;
+        }
+
+        .article-content li {
+            margin-bottom: 12px;
+        }
+
+        /* Highlight Box */
+        .highlight-box {
+            background: linear-gradient(135deg, var(--pastel-cyan) 0%, var(--pastel-purple) 100%);
+            padding: 25px 30px;
+            border-radius: 12px;
+            margin: 30px 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #2d3748;
+            text-align: center;
+        }
+
+        /* Comparison Table */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+            font-size: 15px;
+        }
+
+        .comparison-table th {
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+            color: white;
+            padding: 16px 20px;
+            text-align: left;
+            font-weight: 700;
+        }
+
+        .comparison-table td {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e2e8f0;
+            vertical-align: top;
+        }
+
+        .comparison-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .comparison-table tr:hover {
+            background: var(--pastel-cyan);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .stat-card {
+            background: var(--pastel-cyan);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--purple);
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #4a5568;
+            margin-top: 5px;
+        }
+
+        /* Numbered Steps */
+        .numbered-steps {
+            counter-reset: step-counter;
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .numbered-steps li {
+            counter-increment: step-counter;
+            position: relative;
+            padding-left: 50px;
+            margin-bottom: 25px;
+        }
+
+        .numbered-steps li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 36px;
+            height: 36px;
+            background: var(--cyan);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .numbered-steps li strong {
+            display: block;
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+            border-radius: 20px;
+            padding: 50px;
+            margin-top: 50px;
+            text-align: center;
+            color: white;
+        }
+
+        .cta-section h3 {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 15px;
+            color: white;
+        }
+
+        .cta-section p {
+            font-size: 18px;
+            margin-bottom: 30px;
+            opacity: 0.95;
+        }
+
+        .cta-btn {
+            display: inline-block;
+            padding: 18px 40px;
+            background: white;
+            color: var(--purple);
+            border: none;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 18px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .cta-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        /* Footer */
+        .footer {
+            background: #2d3748;
+            padding: 40px 5%;
+            text-align: center;
+            color: white;
+        }
+
+        .footer-links {
+            margin-bottom: 20px;
+        }
+
+        .footer-links a {
+            color: white;
+            text-decoration: none;
+            margin: 0 15px;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+
+        .footer-links a:hover {
+            opacity: 1;
+            text-decoration: underline;
+        }
+
+        .footer-text {
+            margin-bottom: 10px;
+            opacity: 0.8;
+        }
+
+        .footer-text a {
+            color: white;
+        }
+
+        .footer-copyright {
+            opacity: 0.6;
+            font-size: 14px;
+        }
+
+        /* Responsive */
+        @media (max-width: 968px) {
+            .hero-content h1 {
+                font-size: 36px;
+            }
+
+            .hero-subtitle {
+                font-size: 18px;
+            }
+
+            .article-card {
+                padding: 40px 30px;
+            }
+
+            .article-card::before {
+                left: 20px;
+                right: 20px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .comparison-table {
+                font-size: 13px;
+            }
+
+            .comparison-table th,
+            .comparison-table td {
+                padding: 12px 10px;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .article-meta {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .article-meta .divider {
+                display: none;
+            }
+
+            .hero-content h1 {
+                font-size: 28px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .logo img {
+                height: 38px;
+            }
+
+            .cta-section {
+                padding: 30px 20px;
+            }
+
+            .numbered-steps li {
+                padding-left: 45px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="/index.html" class="logo"><img src="/logo.png" alt="Visible2AI - AI Visibility Score" /></a>
+        <div class="nav-links">
+            <a href="/index.html" class="nav-link">Home</a>
+            <a href="/about.html" class="nav-link">About</a>
+            <a href="/how-it-works.html" class="nav-link">How It Works</a>
+            <a href="/blog.html" class="nav-link">Blog</a>
+            <a href="/blog/" class="nav-link active">News</a>
+        </div>
+        <div class="nav-buttons">
+            <a href="/auth.html" class="btn btn-signin">Sign In</a>
+            <a href="/index.html#get-started" class="btn btn-primary">Get Started Free</a>
+        </div>
+    </nav>
+
+    <!-- Article Hero -->
+    <header class="article-hero">
+        <div class="hero-content">
+            <div class="category-badge">Guide</div>
+            <h1>AEO vs SEO: What's the Difference?</h1>
+            <p class="hero-subtitle">Traditional SEO focuses on ranking. AEO focuses on being the answer AI recommends.</p>
+            <div class="article-meta">
+                <span>By Visible2AI Team</span>
+                <div class="divider"></div>
+                <span>December 12, 2025</span>
+                <div class="divider"></div>
+                <span>10 min read</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Article Content -->
+    <main class="article-container">
+        <article class="article-card">
+            <div class="article-content">
+                <p>If you've spent any time in digital marketing, you know SEO — Search Engine Optimization. It's been the backbone of online visibility for over two decades. But there's a new acronym making waves: <strong>AEO, or Answer Engine Optimization</strong>.</p>
+
+                <p>The difference isn't just semantic. It represents a fundamental shift in how people find information online — and how businesses need to position themselves to be found.</p>
+
+                <div class="highlight-box">
+                    Here's the bottom line: <strong>SEO helps you rank. AEO helps you get recommended.</strong>
+                </div>
+
+                <h2>What is SEO? (A Quick Refresher)</h2>
+
+                <p>Search Engine Optimization is the practice of optimizing your website to rank higher in search engine results pages (SERPs) — primarily Google. The goal is to appear on page one when someone searches for keywords related to your business.</p>
+
+                <p><strong>Traditional SEO focuses on:</strong></p>
+
+                <ul>
+                    <li><strong>Keyword optimization:</strong> Including target keywords in titles, headers, and content</li>
+                    <li><strong>Backlink building:</strong> Earning links from other websites to signal authority</li>
+                    <li><strong>Technical optimization:</strong> Ensuring fast load times, mobile responsiveness, and crawlability</li>
+                    <li><strong>Content creation:</strong> Publishing high-quality content that matches search intent</li>
+                    <li><strong>On-page optimization:</strong> Meta descriptions, alt text, URL structure, and internal linking</li>
+                </ul>
+
+                <p>SEO is a mature discipline with well-established best practices. Tools like Semrush, Ahrefs, and Moz have made it accessible to businesses of all sizes. And it still matters — Google processes over 8.5 billion searches per day.</p>
+
+                <h2>What is AEO? (The New Frontier)</h2>
+
+                <p>Answer Engine Optimization is the practice of optimizing your content to be surfaced and recommended by AI-powered answer engines — tools like <strong>ChatGPT, Claude, Perplexity, Google's AI Overviews, and Microsoft Copilot</strong>.</p>
+
+                <p>Unlike traditional search engines that return a list of links, answer engines provide direct responses to questions. They synthesize information from multiple sources and present a single, authoritative answer — often without requiring the user to click through to any website.</p>
+
+                <p><strong>AEO focuses on:</strong></p>
+
+                <ul>
+                    <li><strong>Being the source AI cites:</strong> Getting mentioned and linked in AI-generated responses</li>
+                    <li><strong>Entity recognition:</strong> Ensuring AI systems understand who you are as a business</li>
+                    <li><strong>Structured data:</strong> Using schema markup so AI can parse your content accurately</li>
+                    <li><strong>Conversational content:</strong> Writing in Q&A format that mirrors how people ask questions</li>
+                    <li><strong>Topical authority:</strong> Demonstrating deep expertise that AI systems trust</li>
+                    <li><strong>Third-party validation:</strong> Building citations on external platforms that AI systems reference</li>
+                </ul>
+
+                <h2>Why This Shift Matters for Your Business</h2>
+
+                <p>The way buyers research products and services is fundamentally changing. According to recent studies:</p>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">68%</div>
+                        <div class="stat-label">of B2B buyers use AI assistants for research</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">40%</div>
+                        <div class="stat-label">of Gen Z prefer AI chatbots over Google</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">200M+</div>
+                        <div class="stat-label">weekly active ChatGPT users</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">Millions</div>
+                        <div class="stat-label">of daily Perplexity AI queries</div>
+                    </div>
+                </div>
+
+                <p>When someone asks ChatGPT <em>"What's the best CRM for small businesses?"</em> or <em>"Which marketing agencies specialize in B2B tech?"</em> — AI provides a curated list of recommendations. <strong>If you're not on that list, you're invisible to a growing segment of your potential customers.</strong></p>
+
+                <h2>SEO vs AEO: Key Differences</h2>
+
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th>Factor</th>
+                            <th>SEO</th>
+                            <th>AEO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Goal</strong></td>
+                            <td>Rank on page 1 of search results</td>
+                            <td>Be recommended in AI responses</td>
+                        </tr>
+                        <tr>
+                            <td><strong>User Experience</strong></td>
+                            <td>User clicks link, visits your site</td>
+                            <td>User gets answer directly, may not visit site</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Content Format</strong></td>
+                            <td>Long-form, keyword-optimized pages</td>
+                            <td>Q&A format, concise answers, structured data</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Primary Signal</strong></td>
+                            <td>Backlinks and domain authority</td>
+                            <td>Entity recognition and topical authority</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Technical Focus</strong></td>
+                            <td>Page speed, mobile-first, crawlability</td>
+                            <td>Schema markup, structured data, JSON-LD</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Competition</strong></td>
+                            <td>10 organic spots on page 1</td>
+                            <td>Often only 3-5 recommendations given</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Measurement</strong></td>
+                            <td>Rankings, traffic, click-through rate</td>
+                            <td>AI mentions, citations, recommendation rate</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h2>Do You Need Both SEO and AEO?</h2>
+
+                <p><strong>Yes.</strong> But the emphasis depends on your audience and industry.</p>
+
+                <p>SEO isn't going away. Google still dominates search, and organic traffic remains valuable. But if you're only optimizing for traditional search, you're missing a rapidly growing channel.</p>
+
+                <p><strong>Think of it this way:</strong></p>
+                <ol>
+                    <li><strong>SEO gets you found</strong> when someone searches for solutions</li>
+                    <li><strong>AEO gets you recommended</strong> when someone asks for advice</li>
+                </ol>
+
+                <p>The good news? Many AEO best practices also improve your SEO. Structured data, comprehensive FAQ content, clear entity definitions, and topical authority all benefit both channels.</p>
+
+                <h2>How to Get Started with AEO</h2>
+
+                <p>Ready to optimize for AI visibility? Here are the key steps:</p>
+
+                <ol class="numbered-steps">
+                    <li>
+                        <strong>Audit your current AI visibility</strong>
+                        Before you can improve, you need to know where you stand. Ask ChatGPT, Claude, and Perplexity questions your customers might ask. Are you being recommended? What competitors show up instead?
+                    </li>
+                    <li>
+                        <strong>Implement schema markup</strong>
+                        Add Organization, FAQPage, Product, and other relevant schema types. This structured data helps AI systems understand your content accurately.
+                    </li>
+                    <li>
+                        <strong>Create FAQ content</strong>
+                        Answer the questions your customers actually ask. Use natural, conversational language. Structure content in clear Q&A format.
+                    </li>
+                    <li>
+                        <strong>Build entity recognition</strong>
+                        Get listed on industry directories, build Wikipedia-style authority, earn press coverage, and establish consistent NAP (Name, Address, Phone) across the web.
+                    </li>
+                    <li>
+                        <strong>Monitor and iterate</strong>
+                        Track your AI visibility over time. Test different content formats. Analyze which competitors are winning and why.
+                    </li>
+                </ol>
+
+                <h2>The Bottom Line</h2>
+
+                <p>SEO and AEO aren't competing strategies — they're complementary. SEO helps you rank in search results. AEO helps you become the answer AI recommends.</p>
+
+                <p>As AI assistants become more prevalent in how people research and make decisions, AEO will only grow in importance. The businesses that start optimizing now will have a significant advantage over those who wait.</p>
+
+                <blockquote>
+                    Don't just rank. Get recommended.
+                </blockquote>
+            </div>
+
+            <!-- CTA Box -->
+            <div class="cta-section">
+                <h3>Want to Know Your AI Visibility Score?</h3>
+                <p>Visible2AI scans your website across 47 ranking factors and shows you exactly how to improve.</p>
+                <a href="/index.html#get-started" class="cta-btn">Get Your Free Score</a>
+            </div>
+        </article>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-links">
+            <a href="/index.html">Home</a>
+            <a href="/about.html">About</a>
+            <a href="/how-it-works.html">How It Works</a>
+            <a href="/blog.html">Blog</a>
+            <a href="/auth.html">Sign In</a>
+        </div>
+        <div class="footer-text">Powered by Xeo AI Hub & <a href="https://xeo.marketing/" target="_blank" rel="noopener noreferrer">Xeo Marketing</a></div>
+        <div class="footer-copyright">&copy; 2025 AI Visibility Score. All rights reserved.</div>
+    </footer>
+
+    <!-- Support Chat Widget -->
+    <script src="/support-chat.js"></script>
+</body>
+</html>

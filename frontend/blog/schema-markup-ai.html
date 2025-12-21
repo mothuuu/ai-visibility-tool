@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Schema Markup Helps AI Understand Your Business | Visible2AI</title>
+    <meta name="description" content="Learn how structured data and schema markup help AI assistants like ChatGPT, Claude, and Perplexity understand and recommend your business. Includes code examples.">
+    <meta name="keywords" content="schema markup, structured data, JSON-LD, AI visibility, ChatGPT optimization, AI search, AEO">
+    <meta name="author" content="Visible2AI Team">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://www.visible2ai.com/blog/schema-markup-ai.html">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+    <link rel="shortcut icon" href="/favicon.ico?v=2">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.visible2ai.com/blog/schema-markup-ai.html">
+    <meta property="og:title" content="How Schema Markup Helps AI Understand Your Business">
+    <meta property="og:description" content="Structured data is the language AI speaks. Learn how to implement schema markup for better AI visibility.">
+    <meta property="og:image" content="https://www.visible2ai.com/og-schema-markup.png">
+    <meta property="article:published_time" content="2025-12-10T00:00:00Z">
+    <meta property="article:author" content="Visible2AI Team">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="How Schema Markup Helps AI Understand Your Business">
+    <meta name="twitter:description" content="Structured data is the language AI speaks. Learn how to implement it correctly.">
+
+    <!-- Article Schema -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": "How Schema Markup Helps AI Understand Your Business",
+        "description": "Learn how structured data and schema markup help AI assistants like ChatGPT, Claude, and Perplexity understand and recommend your business.",
+        "image": "https://www.visible2ai.com/og-schema-markup.png",
+        "datePublished": "2025-12-10T00:00:00Z",
+        "dateModified": "2025-12-10T00:00:00Z",
+        "author": {
+            "@type": "Organization",
+            "name": "Visible2AI",
+            "url": "https://www.visible2ai.com"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "Visible2AI",
+            "url": "https://www.visible2ai.com",
+            "logo": {
+                "@type": "ImageObject",
+                "url": "https://www.visible2ai.com/logo.png"
+            }
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://www.visible2ai.com/blog/schema-markup-ai.html"
+        },
+        "keywords": ["schema markup", "structured data", "JSON-LD", "AI visibility", "AEO"],
+        "articleSection": "News",
+        "wordCount": 2500
+    }
+    </script>
+
+    <style>
+        :root {
+            --cyan: #00B9DA;
+            --hot-pink: #f31c7e;
+            --purple: #7D41A5;
+            --teal: #4DACA6;
+            --pastel-cyan: #E8F7FA;
+            --pastel-purple: #F5F0F9;
+            --pastel-pink: #FDF0F5;
+            --pastel-blue: #EEF6FC;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #2d3748;
+            background: #f8f9fa;
+        }
+
+        /* Navigation */
+        .navbar {
+            background: white;
+            padding: 20px 5%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+        }
+
+        .logo img {
+            height: 50px;
+            width: auto;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .nav-link {
+            color: #2d3748;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-link:hover {
+            color: var(--hot-pink);
+        }
+
+        .nav-link.active {
+            color: var(--cyan);
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 12px 28px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+
+        .btn-signin {
+            background: white;
+            color: var(--hot-pink);
+            border: 2px solid var(--hot-pink);
+        }
+
+        .btn-signin:hover {
+            background: var(--hot-pink);
+            color: white;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--hot-pink) 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(0, 185, 218, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 185, 218, 0.4);
+        }
+
+        /* Article Hero */
+        .article-hero {
+            position: relative;
+            padding: 80px 5% 120px;
+            background: linear-gradient(135deg, var(--teal) 0%, var(--purple) 100%);
+            text-align: center;
+        }
+
+        .hero-content {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .category-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.4);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 50px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 25px;
+        }
+
+        .hero-content h1 {
+            font-size: 48px;
+            font-weight: 800;
+            color: white;
+            margin-bottom: 20px;
+            line-height: 1.2;
+        }
+
+        .hero-subtitle {
+            font-size: 22px;
+            color: rgba(255,255,255,0.9);
+            margin-bottom: 30px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .article-meta {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            color: rgba(255,255,255,0.8);
+            font-size: 15px;
+        }
+
+        .article-meta .divider {
+            width: 1px;
+            height: 20px;
+            background: rgba(255,255,255,0.3);
+        }
+
+        /* Main Content */
+        .article-container {
+            max-width: 800px;
+            margin: -60px auto 60px;
+            padding: 0 20px;
+        }
+
+        .article-card {
+            background: white;
+            border-radius: 20px;
+            padding: 60px;
+            box-shadow: 0 10px 50px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .article-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 40px;
+            right: 40px;
+            height: 4px;
+            background: linear-gradient(90deg, var(--teal) 0%, var(--purple) 100%);
+            border-radius: 0 0 4px 4px;
+        }
+
+        .article-content {
+            font-size: 18px;
+            line-height: 1.9;
+            color: #4a5568;
+        }
+
+        .article-content p {
+            margin-bottom: 25px;
+        }
+
+        .article-content h2 {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--purple);
+            margin: 45px 0 20px;
+        }
+
+        .article-content h3 {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--teal);
+            margin: 35px 0 15px;
+        }
+
+        .article-content strong {
+            color: #2d3748;
+        }
+
+        .article-content a {
+            color: var(--cyan);
+            text-decoration: none;
+            border-bottom: 2px solid transparent;
+            transition: border-color 0.3s;
+        }
+
+        .article-content a:hover {
+            border-bottom-color: var(--cyan);
+        }
+
+        .article-content blockquote {
+            border-left: 4px solid var(--teal);
+            padding: 20px 25px;
+            margin: 35px 0;
+            font-style: italic;
+            color: #4a5568;
+            font-size: 20px;
+            background: var(--pastel-cyan);
+            border-radius: 0 12px 12px 0;
+        }
+
+        .article-content ul,
+        .article-content ol {
+            margin: 25px 0;
+            padding-left: 30px;
+        }
+
+        .article-content li {
+            margin-bottom: 12px;
+        }
+
+        /* Highlight Box */
+        .highlight-box {
+            background: linear-gradient(135deg, var(--pastel-cyan) 0%, var(--pastel-purple) 100%);
+            padding: 25px 30px;
+            border-radius: 12px;
+            margin: 30px 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #2d3748;
+            text-align: center;
+        }
+
+        /* Code Block */
+        .code-block {
+            background: #1a202c;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 25px 0;
+            overflow-x: auto;
+        }
+
+        .code-block pre {
+            margin: 0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #e2e8f0;
+        }
+
+        .code-block .comment {
+            color: #68d391;
+        }
+
+        .code-block .string {
+            color: #fbd38d;
+        }
+
+        .code-block .key {
+            color: #90cdf4;
+        }
+
+        .code-label {
+            display: inline-block;
+            background: var(--teal);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 6px 6px 0 0;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: -1px;
+        }
+
+        /* Schema Types Grid */
+        .schema-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .schema-card {
+            background: var(--pastel-cyan);
+            padding: 25px;
+            border-radius: 12px;
+            border-left: 4px solid var(--teal);
+        }
+
+        .schema-card h4 {
+            color: var(--purple);
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .schema-card p {
+            font-size: 15px;
+            color: #4a5568;
+            margin-bottom: 0;
+        }
+
+        /* Numbered Steps */
+        .numbered-steps {
+            counter-reset: step-counter;
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .numbered-steps li {
+            counter-increment: step-counter;
+            position: relative;
+            padding-left: 50px;
+            margin-bottom: 25px;
+        }
+
+        .numbered-steps li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 36px;
+            height: 36px;
+            background: var(--teal);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .numbered-steps li strong {
+            display: block;
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            background: linear-gradient(135deg, var(--teal) 0%, var(--purple) 100%);
+            border-radius: 20px;
+            padding: 50px;
+            margin-top: 50px;
+            text-align: center;
+            color: white;
+        }
+
+        .cta-section h3 {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 15px;
+            color: white;
+        }
+
+        .cta-section p {
+            font-size: 18px;
+            margin-bottom: 30px;
+            opacity: 0.95;
+        }
+
+        .cta-btn {
+            display: inline-block;
+            padding: 18px 40px;
+            background: white;
+            color: var(--purple);
+            border: none;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 18px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .cta-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        /* Footer */
+        .footer {
+            background: #2d3748;
+            padding: 40px 5%;
+            text-align: center;
+            color: white;
+        }
+
+        .footer-links {
+            margin-bottom: 20px;
+        }
+
+        .footer-links a {
+            color: white;
+            text-decoration: none;
+            margin: 0 15px;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+
+        .footer-links a:hover {
+            opacity: 1;
+            text-decoration: underline;
+        }
+
+        .footer-text {
+            margin-bottom: 10px;
+            opacity: 0.8;
+        }
+
+        .footer-text a {
+            color: white;
+        }
+
+        .footer-copyright {
+            opacity: 0.6;
+            font-size: 14px;
+        }
+
+        /* Responsive */
+        @media (max-width: 968px) {
+            .hero-content h1 {
+                font-size: 36px;
+            }
+
+            .hero-subtitle {
+                font-size: 18px;
+            }
+
+            .article-card {
+                padding: 40px 30px;
+            }
+
+            .article-card::before {
+                left: 20px;
+                right: 20px;
+            }
+
+            .schema-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .code-block pre {
+                font-size: 12px;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .article-meta {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .article-meta .divider {
+                display: none;
+            }
+
+            .hero-content h1 {
+                font-size: 28px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .logo img {
+                height: 38px;
+            }
+
+            .cta-section {
+                padding: 30px 20px;
+            }
+
+            .numbered-steps li {
+                padding-left: 45px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="/index.html" class="logo"><img src="/logo.png" alt="Visible2AI - AI Visibility Score" /></a>
+        <div class="nav-links">
+            <a href="/index.html" class="nav-link">Home</a>
+            <a href="/about.html" class="nav-link">About</a>
+            <a href="/how-it-works.html" class="nav-link">How It Works</a>
+            <a href="/blog.html" class="nav-link">Blog</a>
+            <a href="/blog/" class="nav-link active">News</a>
+        </div>
+        <div class="nav-buttons">
+            <a href="/auth.html" class="btn btn-signin">Sign In</a>
+            <a href="/index.html#get-started" class="btn btn-primary">Get Started Free</a>
+        </div>
+    </nav>
+
+    <!-- Article Hero -->
+    <header class="article-hero">
+        <div class="hero-content">
+            <div class="category-badge">News</div>
+            <h1>How Schema Markup Helps AI Understand Your Business</h1>
+            <p class="hero-subtitle">Structured data is the language AI speaks. Learn how to implement it correctly.</p>
+            <div class="article-meta">
+                <span>By Visible2AI Team</span>
+                <div class="divider"></div>
+                <span>December 10, 2025</span>
+                <div class="divider"></div>
+                <span>12 min read</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Article Content -->
+    <main class="article-container">
+        <article class="article-card">
+            <div class="article-content">
+                <p>When you ask ChatGPT, Claude, or Perplexity about a business, how do these AI systems know what to say? How do they determine which companies to recommend and what information to share about them?</p>
+
+                <p>The answer lies in <strong>structured data</strong> — and more specifically, <strong>schema markup</strong>. It's the hidden code on your website that tells AI exactly who you are, what you do, and why you matter.</p>
+
+                <div class="highlight-box">
+                    Schema markup is like giving AI a perfect cheat sheet about your business. Without it, you're just hoping AI figures things out on its own.
+                </div>
+
+                <h2>What is Schema Markup?</h2>
+
+                <p>Schema markup (also called structured data) is a standardized vocabulary of code that you add to your website to help search engines and AI systems understand your content. It's maintained by <a href="https://schema.org" target="_blank" rel="noopener">Schema.org</a>, a collaborative project founded by Google, Microsoft, Yahoo, and Yandex.</p>
+
+                <p>Think of it like this: your website has content that humans can read. Schema markup provides the same information in a format that machines can perfectly understand. Instead of AI having to infer what your business does from your marketing copy, schema tells it directly.</p>
+
+                <p><strong>There are three main formats for implementing schema:</strong></p>
+
+                <ul>
+                    <li><strong>JSON-LD:</strong> JavaScript Object Notation for Linked Data — the recommended format by Google and the easiest to implement</li>
+                    <li><strong>Microdata:</strong> HTML attributes added directly to your page content</li>
+                    <li><strong>RDFa:</strong> Resource Description Framework in Attributes — similar to microdata but more complex</li>
+                </ul>
+
+                <p>For most websites, <strong>JSON-LD is the way to go</strong>. It sits cleanly in a script tag in your page header and doesn't interfere with your visible content.</p>
+
+                <h2>Why AI Systems Need Schema Markup</h2>
+
+                <p>AI language models like GPT-4, Claude, and the systems behind Perplexity don't just read web pages — they try to understand them. Schema markup makes this understanding explicit rather than inferred.</p>
+
+                <p><strong>Without schema markup:</strong></p>
+                <ul>
+                    <li>AI has to guess what your business is based on context clues</li>
+                    <li>Important details (hours, location, services) may be missed or misunderstood</li>
+                    <li>Your business may be confused with similar-sounding competitors</li>
+                    <li>AI may not recognize you as an authoritative source in your industry</li>
+                </ul>
+
+                <p><strong>With schema markup:</strong></p>
+                <ul>
+                    <li>AI knows exactly what type of entity you are (Organization, LocalBusiness, Product, etc.)</li>
+                    <li>Key information is structured and unambiguous</li>
+                    <li>Your content can be properly attributed and cited</li>
+                    <li>AI can confidently recommend you when users ask relevant questions</li>
+                </ul>
+
+                <h2>The 6 Essential Schema Types for AI Visibility</h2>
+
+                <p>While there are hundreds of schema types, these six are the most critical for helping AI understand and recommend your business:</p>
+
+                <div class="schema-grid">
+                    <div class="schema-card">
+                        <h4>1. Organization</h4>
+                        <p>Establishes your business identity, including name, logo, contact info, and social profiles.</p>
+                    </div>
+                    <div class="schema-card">
+                        <h4>2. LocalBusiness</h4>
+                        <p>For businesses with physical locations — includes address, hours, and geographic service area.</p>
+                    </div>
+                    <div class="schema-card">
+                        <h4>3. FAQPage</h4>
+                        <p>Structures Q&A content in a format AI can directly parse and cite as answers.</p>
+                    </div>
+                    <div class="schema-card">
+                        <h4>4. Product/Service</h4>
+                        <p>Details what you offer, including pricing, features, and availability.</p>
+                    </div>
+                    <div class="schema-card">
+                        <h4>5. Article/BlogPosting</h4>
+                        <p>Marks your content as authoritative information with proper attribution.</p>
+                    </div>
+                    <div class="schema-card">
+                        <h4>6. Review/AggregateRating</h4>
+                        <p>Provides social proof that AI can reference when recommending you.</p>
+                    </div>
+                </div>
+
+                <h2>How to Implement Schema Markup</h2>
+
+                <p>Let's walk through implementing the most important schema types with actual code examples you can adapt for your website.</p>
+
+                <h3>Organization Schema</h3>
+
+                <p>This should be on every page of your website. It tells AI who you are as a business entity.</p>
+
+                <span class="code-label">JSON-LD</span>
+                <div class="code-block">
+<pre><span class="key">&lt;script type="application/ld+json"&gt;</span>
+{
+  <span class="string">"@context"</span>: <span class="string">"https://schema.org"</span>,
+  <span class="string">"@type"</span>: <span class="string">"Organization"</span>,
+  <span class="string">"name"</span>: <span class="string">"Your Company Name"</span>,
+  <span class="string">"url"</span>: <span class="string">"https://www.yourwebsite.com"</span>,
+  <span class="string">"logo"</span>: <span class="string">"https://www.yourwebsite.com/logo.png"</span>,
+  <span class="string">"description"</span>: <span class="string">"Brief description of what your company does"</span>,
+  <span class="string">"foundingDate"</span>: <span class="string">"2020"</span>,
+  <span class="string">"contactPoint"</span>: {
+    <span class="string">"@type"</span>: <span class="string">"ContactPoint"</span>,
+    <span class="string">"telephone"</span>: <span class="string">"+1-555-123-4567"</span>,
+    <span class="string">"contactType"</span>: <span class="string">"customer service"</span>
+  },
+  <span class="string">"sameAs"</span>: [
+    <span class="string">"https://www.linkedin.com/company/yourcompany"</span>,
+    <span class="string">"https://twitter.com/yourcompany"</span>
+  ]
+}
+<span class="key">&lt;/script&gt;</span></pre>
+                </div>
+
+                <h3>FAQPage Schema</h3>
+
+                <p>This is incredibly powerful for AI visibility. When someone asks a question that matches your FAQ, AI systems can directly cite your answer.</p>
+
+                <span class="code-label">JSON-LD</span>
+                <div class="code-block">
+<pre><span class="key">&lt;script type="application/ld+json"&gt;</span>
+{
+  <span class="string">"@context"</span>: <span class="string">"https://schema.org"</span>,
+  <span class="string">"@type"</span>: <span class="string">"FAQPage"</span>,
+  <span class="string">"mainEntity"</span>: [
+    {
+      <span class="string">"@type"</span>: <span class="string">"Question"</span>,
+      <span class="string">"name"</span>: <span class="string">"What services do you offer?"</span>,
+      <span class="string">"acceptedAnswer"</span>: {
+        <span class="string">"@type"</span>: <span class="string">"Answer"</span>,
+        <span class="string">"text"</span>: <span class="string">"We offer AI visibility audits, AEO optimization, and schema markup implementation for businesses looking to be discovered by AI assistants."</span>
+      }
+    },
+    {
+      <span class="string">"@type"</span>: <span class="string">"Question"</span>,
+      <span class="string">"name"</span>: <span class="string">"How much does it cost?"</span>,
+      <span class="string">"acceptedAnswer"</span>: {
+        <span class="string">"@type"</span>: <span class="string">"Answer"</span>,
+        <span class="string">"text"</span>: <span class="string">"Our pricing starts at $X/month. We offer a free trial so you can see your AI visibility score before committing."</span>
+      }
+    }
+  ]
+}
+<span class="key">&lt;/script&gt;</span></pre>
+                </div>
+
+                <h3>Article/BlogPosting Schema</h3>
+
+                <p>For every piece of content you publish, this schema establishes authorship and authority.</p>
+
+                <span class="code-label">JSON-LD</span>
+                <div class="code-block">
+<pre><span class="key">&lt;script type="application/ld+json"&gt;</span>
+{
+  <span class="string">"@context"</span>: <span class="string">"https://schema.org"</span>,
+  <span class="string">"@type"</span>: <span class="string">"Article"</span>,
+  <span class="string">"headline"</span>: <span class="string">"Your Article Title"</span>,
+  <span class="string">"description"</span>: <span class="string">"Brief summary of the article"</span>,
+  <span class="string">"datePublished"</span>: <span class="string">"2025-12-10"</span>,
+  <span class="string">"dateModified"</span>: <span class="string">"2025-12-10"</span>,
+  <span class="string">"author"</span>: {
+    <span class="string">"@type"</span>: <span class="string">"Organization"</span>,
+    <span class="string">"name"</span>: <span class="string">"Your Company"</span>,
+    <span class="string">"url"</span>: <span class="string">"https://www.yourwebsite.com"</span>
+  },
+  <span class="string">"publisher"</span>: {
+    <span class="string">"@type"</span>: <span class="string">"Organization"</span>,
+    <span class="string">"name"</span>: <span class="string">"Your Company"</span>,
+    <span class="string">"logo"</span>: {
+      <span class="string">"@type"</span>: <span class="string">"ImageObject"</span>,
+      <span class="string">"url"</span>: <span class="string">"https://www.yourwebsite.com/logo.png"</span>
+    }
+  }
+}
+<span class="key">&lt;/script&gt;</span></pre>
+                </div>
+
+                <h2>5 Steps to Schema Success</h2>
+
+                <p>Ready to implement schema on your website? Follow these steps:</p>
+
+                <ol class="numbered-steps">
+                    <li>
+                        <strong>Audit your current schema</strong>
+                        Use Google's Rich Results Test or Schema.org's validator to see what structured data you already have. Many CMS platforms add some schema automatically.
+                    </li>
+                    <li>
+                        <strong>Start with Organization schema</strong>
+                        Add this to your site-wide template or header. It establishes your business identity for every page.
+                    </li>
+                    <li>
+                        <strong>Add FAQPage schema to key pages</strong>
+                        Identify your most important landing pages and add FAQ schema with questions your customers actually ask.
+                    </li>
+                    <li>
+                        <strong>Mark up your content with Article schema</strong>
+                        Every blog post and article should have proper Article or BlogPosting schema with author and publication information.
+                    </li>
+                    <li>
+                        <strong>Validate and monitor</strong>
+                        Test your implementation with structured data testing tools. Monitor Google Search Console for schema errors.
+                    </li>
+                </ol>
+
+                <h2>Common Schema Mistakes to Avoid</h2>
+
+                <p>When implementing schema markup, watch out for these common pitfalls:</p>
+
+                <ul>
+                    <li><strong>Fake reviews or ratings:</strong> Never markup reviews that don't actually exist on your site. AI systems can detect this, and it destroys trust.</li>
+                    <li><strong>Invisible content:</strong> Schema should reflect content that's actually visible on the page. Hidden schema is a manipulation red flag.</li>
+                    <li><strong>Wrong schema type:</strong> Using LocalBusiness for a purely online company, or Organization for a person's portfolio site, confuses AI systems.</li>
+                    <li><strong>Outdated information:</strong> Schema with old phone numbers, discontinued products, or former addresses creates trust issues.</li>
+                    <li><strong>Missing required properties:</strong> Each schema type has required and recommended properties. Incomplete schema is worse than no schema.</li>
+                </ul>
+
+                <h2>The Bottom Line</h2>
+
+                <p>Schema markup is no longer optional for businesses that want to be discovered by AI. It's the difference between AI confidently recommending you and AI never knowing you exist.</p>
+
+                <p>The good news? Implementing schema is straightforward. It doesn't require a complete website overhaul — just some well-placed JSON-LD scripts that tell AI exactly what it needs to know about your business.</p>
+
+                <blockquote>
+                    When AI understands your business perfectly, it can recommend you confidently. Schema markup makes that understanding possible.
+                </blockquote>
+            </div>
+
+            <!-- CTA Box -->
+            <div class="cta-section">
+                <h3>See How AI Understands Your Business</h3>
+                <p>Visible2AI scans your website for schema markup and 46 other AI visibility factors. Get your free score.</p>
+                <a href="/index.html#get-started" class="cta-btn">Get Your Free Score</a>
+            </div>
+        </article>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-links">
+            <a href="/index.html">Home</a>
+            <a href="/about.html">About</a>
+            <a href="/how-it-works.html">How It Works</a>
+            <a href="/blog.html">Blog</a>
+            <a href="/auth.html">Sign In</a>
+        </div>
+        <div class="footer-text">Powered by Xeo AI Hub & <a href="https://xeo.marketing/" target="_blank" rel="noopener noreferrer">Xeo Marketing</a></div>
+        <div class="footer-copyright">&copy; 2025 AI Visibility Score. All rights reserved.</div>
+    </footer>
+
+    <!-- Support Chat Widget -->
+    <script src="/support-chat.js"></script>
+</body>
+</html>
