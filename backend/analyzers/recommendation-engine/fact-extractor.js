@@ -136,6 +136,18 @@ function extractAnchors(html) {
  * Returns all required evidence fields for multi-source detection
  */
 function detectFAQ(scanEvidence, diagnostics) {
+  // DEBUG: Log input data to trace detection issues
+  console.log('[Detection] FAQ detectFAQ INPUT:', {
+    hasContent: !!scanEvidence.content,
+    hasTechnical: !!scanEvidence.technical,
+    hasNavigation: !!scanEvidence.navigation,
+    faqsLength: scanEvidence.content?.faqs?.length || 0,
+    h2sLength: scanEvidence.content?.headings?.h2?.length || 0,
+    hasFAQSchemaFlag: scanEvidence.technical?.hasFAQSchema || false,
+    structuredDataCount: scanEvidence.technical?.structuredData?.length || 0,
+    structuredDataTypes: (scanEvidence.technical?.structuredData || []).map(sd => sd.type).join(', ')
+  });
+
   const faqs = scanEvidence.content?.faqs || [];
   const h2s = scanEvidence.content?.headings?.h2 || [];
   const hasFAQSchema = scanEvidence.technical?.hasFAQSchema || false;

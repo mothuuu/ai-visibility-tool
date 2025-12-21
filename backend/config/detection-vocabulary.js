@@ -14,20 +14,21 @@ const VOCABULARY = {
   // Used for detecting page types from URLs
   // ============================================
   // RULEBOOK v1.2 Section 2.4.4: Extended Vocabulary (Synonyms)
+  // RULEBOOK v1.2 Section 2.2.6: Updated to match anchor links (#faq) for single-page sites
   URL_PATTERNS: {
     home: /^\/?(index\.html?)?$/i,
-    about: /\/(about|about-us|who-we-are|our-story|company)(\.html?|\/|$)/i,
-    services: /\/(services|solutions|what-we-do|offerings)(\.html?|\/|$)/i,
-    // RULEBOOK v1.2: Extended blog vocabulary with all synonyms
-    blog: /\/(blog|news|articles|insights|resources|updates|journal|posts|learn|knowledge-base|help-center|guides|library|content|stories|perspectives)(\.html?|\/|$)/i,
-    faq: /\/(faq|faqs|frequently-asked|help|support|questions)(\.html?|\/|$)/i,
-    contact: /\/(contact|contact-us|get-in-touch|reach-us)(\.html?|\/|$)/i,
-    pricing: /\/(pricing|plans|packages|cost|rates)(\.html?|\/|$)/i,
-    team: /\/(team|people|about-us\/team|our-team|staff|leadership)(\.html?|\/|$)/i,
-    careers: /\/(careers|jobs|work-with-us|join-us|hiring)(\.html?|\/|$)/i,
-    portfolio: /\/(portfolio|work|projects|case-studies|clients)(\.html?|\/|$)/i,
-    testimonials: /\/(testimonials|reviews|clients|success-stories)(\.html?|\/|$)/i,
-    legal: /\/(privacy|terms|legal|cookie-policy|gdpr|disclaimer)(\.html?|\/|$)/i
+    about: /(\/|#)(about|about-us|who-we-are|our-story|company)(\.html?|\/|$)/i,
+    services: /(\/|#)(services|solutions|what-we-do|offerings)(\.html?|\/|$)/i,
+    // RULEBOOK v1.2: Extended blog vocabulary with all synonyms + anchor link support
+    blog: /(\/|#)(blog|news|articles|insights|resources|updates|journal|posts|learn|knowledge-base|help-center|guides|library|content|stories|perspectives)(\.html?|\/|$)/i,
+    faq: /(\/|#)(faq|faqs|frequently-asked|help|support|questions)(\.html?|\/|$)/i,
+    contact: /(\/|#)(contact|contact-us|get-in-touch|reach-us)(\.html?|\/|$)/i,
+    pricing: /(\/|#)(pricing|plans|packages|cost|rates)(\.html?|\/|$)/i,
+    team: /(\/|#)(team|people|about-us\/team|our-team|staff|leadership)(\.html?|\/|$)/i,
+    careers: /(\/|#)(careers|jobs|work-with-us|join-us|hiring)(\.html?|\/|$)/i,
+    portfolio: /(\/|#)(portfolio|work|projects|case-studies|clients)(\.html?|\/|$)/i,
+    testimonials: /(\/|#)(testimonials|reviews|clients|success-stories)(\.html?|\/|$)/i,
+    legal: /(\/|#)(privacy|terms|legal|cookie-policy|gdpr|disclaimer)(\.html?|\/|$)/i
   },
 
   // ============================================
