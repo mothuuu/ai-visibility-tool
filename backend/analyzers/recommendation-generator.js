@@ -64,6 +64,14 @@ async function generateCompleteRecommendations(scanResults, tier = 'free', indus
 
     const { detected_profile, extracted_facts, diagnostics } = extractSiteFacts(scanEvidence || {});
 
+    // DEBUG: Log what extractSiteFacts returned
+    console.log('[recommendation-generator] extractSiteFacts returned:', {
+      detected_profile_keys: Object.keys(detected_profile || {}),
+      sections: detected_profile?.sections,
+      has_faq: detected_profile?.sections?.has_faq,
+      has_blog: detected_profile?.sections?.has_blog
+    });
+
     // Merge detected_profile and extracted_facts into scanEvidence for use by rec-generator
     const enrichedScanEvidence = {
       ...scanEvidence,
@@ -71,6 +79,10 @@ async function generateCompleteRecommendations(scanResults, tier = 'free', indus
       extracted_facts,
       diagnostics
     };
+
+    // DEBUG: Verify enrichedScanEvidence has detected_profile
+    console.log('[recommendation-generator] enrichedScanEvidence has detected_profile:', !!enrichedScanEvidence.detected_profile);
+    console.log('[recommendation-generator] enrichedScanEvidence.detected_profile.sections:', enrichedScanEvidence.detected_profile?.sections);
 
     console.log(`   FAQ detected: ${detected_profile.sections?.has_faq || false}`);
     console.log(`   Blog detected: ${detected_profile.sections?.has_blog || false}`);

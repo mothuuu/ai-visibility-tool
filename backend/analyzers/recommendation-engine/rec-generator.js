@@ -601,9 +601,16 @@ async function generateWithChatGPT(issue, scanEvidence, tier, industry) {
 }
 
 function buildChatGPTPrompt(issue, scanEvidence, template, tier, industry) {
+  // DEBUG: Log what we're receiving before normalizeEvidence
+  console.log('[buildChatGPTPrompt] scanEvidence keys:', Object.keys(scanEvidence || {}));
+  console.log('[buildChatGPTPrompt] has detected_profile:', !!scanEvidence?.detected_profile);
+  console.log('[buildChatGPTPrompt] detected_profile.sections:', scanEvidence?.detected_profile?.sections);
+
   const { profile, facts } = normalizeEvidence(scanEvidence);
 
   const siteShape = buildSiteShapeDescription(profile);
+  console.log('[buildChatGPTPrompt] siteShape generated:', siteShape);
+
   const factsSection = buildFactsSection(facts);
   const scoreBreakdown = calculateScoreBreakdown(issue);
   const neededSchemas = determineNeededSchemas(issue, profile, scanEvidence);
