@@ -520,6 +520,26 @@ function detectSiteWideIssues(scanEvidence) {
   // RULEBOOK v1.2: Sitemap classification as additional source
   const sitemap = scanEvidence.siteMetrics?.sitemap || crawler.sitemap || {};
 
+  // DEBUG: Show what data we're working with
+  console.log('[SiteWide] DEBUG - Navigation data:', {
+    hasNavigation: !!scanEvidence.navigation,
+    keyPages: navigation.keyPages,
+    hasBlogLink: navigation.hasBlogLink,
+    hasFAQLink: navigation.hasFAQLink,
+    allNavLinksCount: navigation.allNavLinks?.length || navigation.links?.length || 0
+  });
+  console.log('[SiteWide] DEBUG - Sitemap data:', {
+    hasSitemap: !!sitemap.detected,
+    blogUrls: sitemap.blogUrls?.length || 0,
+    faqUrls: sitemap.faqUrls?.length || 0,
+    hasBlogUrls: sitemap.hasBlogUrls,
+    hasFaqUrls: sitemap.hasFaqUrls
+  });
+  console.log('[SiteWide] DEBUG - Crawler sections:', {
+    hasBlogUrl: crawler.discoveredSections?.hasBlogUrl,
+    hasFaqUrl: crawler.discoveredSections?.hasFaqUrl
+  });
+
   // Blog check - multi-source (evidence contract v2.0 + sitemap classification)
   const blogFound =
     crawler.discoveredSections?.hasBlogUrl ||
