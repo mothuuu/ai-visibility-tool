@@ -8,46 +8,125 @@
  * This is Part 1 of the Recommendation Engine.
  */
 
-const { isMeasured, getScore } = require('../score-types');
+const { isMeasured, getScore, ScoreState } = require('../score-types');
 
 // ========================================
 // HELPER FUNCTIONS: Tri-State Score Handling
 // ========================================
 
 /**
- * Check if a score is below a threshold (handles tri-state scores)
- * @param {number|Object} scoreResult - Raw number or tri-state score object
- * @param {number} threshold - Threshold to compare against
- * @returns {boolean} - True if score is measured and below threshold
+ * Safely get numeric score from tri-state or plain number
+ * @param {number|Object|null|undefined} scoreInput - Score in any format
+ * @returns {Object} - { value: number|null, state: string }
  */
-function scoreBelow(scoreResult, threshold) {
-  if (!scoreResult) return false;
-  if (typeof scoreResult === 'number') return scoreResult < threshold;
-  if (!isMeasured(scoreResult)) return false;
-  return getScore(scoreResult) < threshold;
+function normalizeScore(scoreInput) {
+  if (scoreInput === null || scoreInput === undefined) {
+    return { value: null, state: 'not_measured' };
+  }
+
+  // Plain number (legacy)
+  if (typeof scoreInput === 'number') {
+    return { value: scoreInput, state: 'measured' };
+  }
+
+  // Tri-state object
+  if (typeof scoreInput === 'object' && scoreInput.state) {
+    return {
+      value: scoreInput.score,
+      state: scoreInput.state
+    };
+  }
+
+  return { value: null, state: 'not_measured' };
 }
 
 /**
- * Check if a score is above a threshold (handles tri-state scores)
- * @param {number|Object} scoreResult - Raw number or tri-state score object
+ * Check if score is below threshold (only for measured scores)
+ * @param {number|Object} scoreInput - Raw number or tri-state score object
+ * @param {number} threshold - Threshold to compare against
+ * @returns {boolean} - True if score is measured and below threshold
+ */
+function scoreBelow(scoreInput, threshold) {
+  const { value, state } = normalizeScore(scoreInput);
+  if (state !== 'measured' && state !== ScoreState?.MEASURED) {
+    return false;  // Don't trigger issues for unmeasured
+  }
+  return value !== null && value < threshold;
+}
+
+/**
+ * Check if score is above threshold (only for measured scores)
+ * @param {number|Object} scoreInput - Raw number or tri-state score object
  * @param {number} threshold - Threshold to compare against
  * @returns {boolean} - True if score is measured and above threshold
  */
-function scoreAbove(scoreResult, threshold) {
-  if (!scoreResult) return false;
-  if (typeof scoreResult === 'number') return scoreResult > threshold;
-  if (!isMeasured(scoreResult)) return false;
-  return getScore(scoreResult) > threshold;
+function scoreAbove(scoreInput, threshold) {
+  const { value, state } = normalizeScore(scoreInput);
+  if (state !== 'measured' && state !== ScoreState?.MEASURED) {
+    return false;  // Don't trigger issues for unmeasured
+  }
+  return value !== null && value > threshold;
+}
+
+/**
+ * Check if score is measured and can be evaluated
+ * @param {number|Object} scoreInput - Raw number or tri-state score object
+ * @returns {boolean} - True if score can be evaluated
+ */
+function canEvaluate(scoreInput) {
+  const { state } = normalizeScore(scoreInput);
+  return state === 'measured' || state === ScoreState?.MEASURED;
 }
 
 /**
  * Get numeric value from a score (handles tri-state scores)
- * @param {number|Object} scoreResult - Raw number or tri-state score object
+ * @param {number|Object} scoreInput - Raw number or tri-state score object
  * @returns {number|null} - Numeric score or null if not measured
  */
-function getNumericScore(scoreResult) {
-  if (typeof scoreResult === 'number') return scoreResult;
-  return getScore(scoreResult);
+function getNumericScore(scoreInput) {
+  const { value, state } = normalizeScore(scoreInput);
+  if (state !== 'measured' && state !== ScoreState?.MEASURED) {
+    return null;
+  }
+  return value;
+}
+
+/**
+ * Aggregate subfactor scores, handling unmeasured scores gracefully
+ * @param {Object} subfactors - Object of subfactor scores
+ * @returns {Object} - Aggregated result with score, state, and metadata
+ */
+function aggregateSubfactorScores(subfactors) {
+  const measuredScores = [];
+  const unmeasuredKeys = [];
+
+  for (const [key, score] of Object.entries(subfactors)) {
+    const normalized = normalizeScore(score);
+    if ((normalized.state === 'measured' || normalized.state === ScoreState?.MEASURED) && normalized.value !== null) {
+      measuredScores.push({ key, value: normalized.value });
+    } else {
+      unmeasuredKeys.push(key);
+    }
+  }
+
+  if (measuredScores.length === 0) {
+    return {
+      score: null,
+      state: 'not_measured',
+      reason: 'No subfactors could be measured',
+      unmeasuredKeys
+    };
+  }
+
+  const average = measuredScores.reduce((sum, s) => sum + s.value, 0) / measuredScores.length;
+
+  return {
+    score: Math.round(average),
+    state: 'measured',
+    measuredCount: measuredScores.length,
+    totalCount: Object.keys(subfactors).length,
+    unmeasuredKeys
+  };
 }
 
 // ========================================
@@ -202,12 +281,13 @@ function detectPageIssues(pageScores, pageEvidence) {
     for (const [subfactor, scoreResult] of Object.entries(subfactors)) {
 
       const threshold = ISSUE_THRESHOLDS[category][subfactor];
-      const numericScore = getNumericScore(scoreResult);
 
       // Skip if score is not measured (tri-state handling)
-      if (numericScore === null) {
+      if (!canEvaluate(scoreResult)) {
         continue;
       }
+
+      const numericScore = getNumericScore(scoreResult);
 
       // If score is below threshold, we have an issue!
       if (scoreBelow(scoreResult, threshold)) {

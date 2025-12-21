@@ -16,8 +16,55 @@
 const RULEBOOK_VERSION = '2.1';
 const CONTRACT_VERSION = '2.0.0';
 
-const REQUIRED_NAMESPACES = ['url', 'timestamp', 'navigation', 'structure', 'content', 'technical'];
-const EXPECTED_NAMESPACES = ['crawler', 'siteMetrics'];
+// Required namespaces - validation FAILS if missing
+const REQUIRED_NAMESPACES = [
+  'url',
+  'timestamp',
+  'contractVersion',
+  'navigation',
+  'structure',
+  'content',
+  'technical'
+];
+
+// Expected namespaces - validation WARNS if missing
+const EXPECTED_NAMESPACES = [
+  'crawler',
+  'siteMetrics'
+];
+
+// Future namespaces - defined shape, initially empty/null
+const FUTURE_NAMESPACES = [
+  'aiReadiness',
+  'trust',
+  'voice',
+  'freshness'
+];
+
+// Empty shapes for future namespaces
+const FUTURE_NAMESPACE_SHAPES = {
+  aiReadiness: {
+    questionHeadings: null,
+    snippetEligibility: null,
+    answerability: null
+  },
+  trust: {
+    authorBios: null,
+    testimonials: null,
+    thirdPartyProfiles: null,
+    teamPage: null,
+    caseStudies: null
+  },
+  voice: {
+    speakableContent: null,
+    conversationalQueries: null
+  },
+  freshness: {
+    lastModified: null,
+    publishDate: null,
+    updateFrequency: null
+  }
+};
 
 // RULEBOOK v1.2 Step C6: Required fields per namespace
 // Missing these fields causes validation ERROR (not warning)
@@ -235,6 +282,7 @@ function createMockEvidence(overrides = {}) {
       imagesWithAlt: 2, imagesTotal: 3, hasLangAttribute: true, hasSkipLink: true, tabindex: 3,
       hasInlineStyles: 2, semanticButtons: 8, divClickHandlers: 1
     },
+    contractVersion: CONTRACT_VERSION,
     url: 'https://example.com/test', html: '<html><head><title>Test</title></head><body><h1>Test</h1></body></html>',
     timestamp: '2025-01-15T12:00:00Z'
   };
@@ -269,6 +317,9 @@ module.exports = {
   RULEBOOK_VERSION,
   CONTRACT_VERSION,
   REQUIRED_NAMESPACES,
+  EXPECTED_NAMESPACES,
+  FUTURE_NAMESPACES,
+  FUTURE_NAMESPACE_SHAPES,
   REQUIRED_FIELDS,
   EvidenceContract,
   validateEvidence,
