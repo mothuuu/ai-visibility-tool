@@ -1657,10 +1657,12 @@ async function performCompetitorScan(url) {
 
   try {
     // Run V5 Rubric Engine for scoring only
+    // RULEBOOK v1.2 Step C7: Disable headless for competitor scans (save budget)
     console.log('📊 Running V5 Rubric Engine (scores only)...');
     const engine = new V5RubricEngine(url, {
       maxPages: 25,  // Set to 25 pages per user request
-      timeout: 10000
+      timeout: 10000,
+      allowHeadless: false  // Don't waste headless budget on competitor scans
     });
     const v5Results = await engine.analyze();
 
@@ -1861,11 +1863,14 @@ async function performV5Scan(url, plan, pages = null, userProgress = null, userI
 
   try {
     // Step 1: Create V5 Rubric Engine instance and run analysis
+    // RULEBOOK v1.2 Step C7: Pass tier for headless rendering budget
     console.log('📊 Running V5 Rubric Engine...');
     const engine = new V5RubricEngine(url, {
       maxPages: 25,  // Set to 25 pages per user request
       timeout: 10000,
-      industry: userIndustry  // Pass industry for certification detection
+      industry: userIndustry,  // Pass industry for certification detection
+      tier: plan,  // Pass tier for headless rendering budget
+      allowHeadless: plan !== 'guest' && plan !== 'free'  // Only paid tiers get headless
     });
     const v5Results = await engine.analyze();
 

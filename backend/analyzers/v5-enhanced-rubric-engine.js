@@ -1,5 +1,5 @@
 const SiteCrawler = require('./site-crawler');
-const ContentExtractor = require('./content-extractor');
+const { ContentExtractor, extractWithFallback, resetRenderCounter } = require('./content-extractor');
 const { detectCertifications, calculateCertificationScore } = require('./recommendation-engine/certification-detector');
 const { buildScanEvidence } = require('./evidence-builder');
 
@@ -49,9 +49,12 @@ class V5EnhancedRubricEngine {
       console.log(`[V5-Enhanced] Starting multi-page analysis for: ${this.url}`);
 
       // Step 1: Crawl multiple pages
+      // RULEBOOK v1.2 Step C7: Pass tier for headless rendering budget
       const crawler = new SiteCrawler(this.url, {
         maxPages: this.options.maxPages || 15,
-        timeout: this.options.timeout || 10000
+        timeout: this.options.timeout || 10000,
+        tier: this.options.tier || 'diy',
+        allowHeadless: this.options.allowHeadless !== false
       });
 
       this.siteData = await crawler.crawl();

@@ -1,5 +1,5 @@
 const axios = require('axios');
-const ContentExtractor = require('./content-extractor');
+const { ContentExtractor, extractWithFallback, resetRenderCounter } = require('./content-extractor');
 const VOCABULARY = require('../config/detection-vocabulary');
 
 /**
@@ -24,7 +24,10 @@ class SiteCrawler {
       includeSitemap: options.includeSitemap !== false,
       includeInternalLinks: options.includeInternalLinks !== false,
       respectRobots: options.respectRobots !== false,
-      userAgent: options.userAgent || 'AI-Visibility-Tool/1.0'
+      userAgent: options.userAgent || 'AI-Visibility-Tool/1.0',
+      // RULEBOOK v1.2 Step C7: Headless rendering options
+      allowHeadless: options.allowHeadless !== false,
+      tier: options.tier || 'diy'
     };
     this.visitedUrls = new Set();
     this.pageEvidences = [];
@@ -33,6 +36,9 @@ class SiteCrawler {
     this.allDiscoveredUrls = new Set();
     // RULEBOOK v1.2: Track sitemap-specific URLs for classification
     this.sitemapUrls = [];
+
+    // RULEBOOK v1.2 Step C7: Reset render counter at start of crawl
+    resetRenderCounter();
   }
 
   /**
@@ -402,6 +408,7 @@ class SiteCrawler {
 
   /**
    * Crawl a single page and extract evidence
+   * RULEBOOK v1.2 Step C7: Uses extractWithFallback for headless rendering when needed
    */
   async crawlPage(url) {
     if (this.visitedUrls.has(url)) {
@@ -412,8 +419,19 @@ class SiteCrawler {
     this.visitedUrls.add(url);
 
     try {
-      const extractor = new ContentExtractor(url, this.options);
-      const evidence = await extractor.extract();
+      // RULEBOOK v1.2 Step C7: Use extractWithFallback for JS-rendered sites
+      const evidence = await extractWithFallback(url, {
+        ...this.options,
+        tier: this.options.tier,
+        allowHeadless: this.options.allowHeadless
+      });
+
+      // Log rendering info if headless was attempted
+      if (evidence.technical?.rendered) {
+        console.log(`[Crawler] ✓ Headless rendered ${url} (improvement: +${evidence.technical.contentImprovement} words)`);
+      } else if (evidence.technical?.renderAttempted) {
+        console.log(`[Crawler] ✗ Headless render failed for ${url}: ${evidence.technical.renderError}`);
+      }
 
       // Log FAQ extraction results for this page
       const faqCount = evidence.content?.faqs?.length || 0;

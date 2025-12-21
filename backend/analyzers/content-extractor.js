@@ -11,6 +11,16 @@ const {
   createEvidence
 } = require('../config/diagnostic-types');
 
+// RULEBOOK v1.2 Step C7: Headless rendering for JS-rendered sites
+// Using puppeteer-core (requires Chrome/Chromium installed separately)
+let puppeteer;
+try {
+  puppeteer = require('puppeteer-core');
+} catch (e) {
+  console.warn('[Headless] puppeteer-core not available, headless rendering disabled');
+  puppeteer = null;
+}
+
 /**
  * Content Extractor for V5 Rubric Analysis
  * Fetches and parses website content for scoring
@@ -1928,4 +1938,303 @@ class ContentExtractor {
   }
 }
 
-module.exports = ContentExtractor;
+// ============================================
+// RULEBOOK v1.2 Step C7: Headless Rendering Fallback
+// For JS-rendered sites (React, Vue, Angular SPAs)
+// ============================================
+
+const RENDER_CONFIG = {
+  wordCountThreshold: 50,      // Trigger if below this
+  charCountThreshold: 500,     // Trigger if below this
+  timeout: 15000,              // 15s max per page
+  maxPagesPerScan: 3,          // Budget limit
+
+  // Tier budgets (can be overridden)
+  tierBudgets: {
+    guest: 0,
+    free: 0,
+    diy: 2,
+    pro: 5,
+    agency: 10
+  },
+
+  // Chrome executable paths to try
+  chromePaths: [
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    process.env.CHROME_PATH
+  ].filter(Boolean)
+};
+
+// Track rendered pages per scan (reset at start of each scan)
+let renderedPagesThisScan = 0;
+
+/**
+ * Reset render counter (call at start of each scan)
+ */
+function resetRenderCounter() {
+  renderedPagesThisScan = 0;
+}
+
+/**
+ * Get current render count for this scan
+ */
+function getRenderCount() {
+  return renderedPagesThisScan;
+}
+
+/**
+ * Check if headless rendering should be attempted
+ * @param {Object} extractedContent - Content from static extraction
+ * @param {Object} technical - Technical info including isJSRendered
+ * @param {string} tier - User tier (guest, free, diy, pro, agency)
+ * @returns {Object} Decision with shouldRender and reason
+ */
+function shouldAttemptRender(extractedContent, technical, tier = 'diy') {
+  const budget = RENDER_CONFIG.tierBudgets[tier] || 0;
+
+  // Check if puppeteer available
+  if (!puppeteer) {
+    return { shouldRender: false, reason: 'puppeteer_unavailable' };
+  }
+
+  // Check budget
+  if (renderedPagesThisScan >= budget) {
+    return { shouldRender: false, reason: 'budget_exhausted', budget, used: renderedPagesThisScan };
+  }
+
+  // Check if JS-rendered
+  if (!technical.isJSRendered) {
+    return { shouldRender: false, reason: 'not_js_rendered' };
+  }
+
+  // Check content thresholds
+  const wordCount = extractedContent.wordCount || 0;
+  const paragraphs = extractedContent.paragraphs || [];
+  const charCount = paragraphs.join(' ').length;
+
+  if (wordCount >= RENDER_CONFIG.wordCountThreshold &&
+      charCount >= RENDER_CONFIG.charCountThreshold) {
+    return { shouldRender: false, reason: 'sufficient_content', wordCount, charCount };
+  }
+
+  return {
+    shouldRender: true,
+    reason: 'js_rendered_insufficient_content',
+    metrics: { wordCount, charCount, threshold: RENDER_CONFIG.wordCountThreshold }
+  };
+}
+
+/**
+ * Find Chrome/Chromium executable
+ * @returns {string|null} Path to Chrome executable or null
+ */
+function findChromePath() {
+  const fs = require('fs');
+  for (const path of RENDER_CONFIG.chromePaths) {
+    try {
+      if (fs.existsSync(path)) {
+        console.log('[Headless] Found Chrome at:', path);
+        return path;
+      }
+    } catch (e) {
+      // Continue checking
+    }
+  }
+  console.warn('[Headless] No Chrome executable found');
+  return null;
+}
+
+/**
+ * Render page with headless browser
+ * @param {string} url - URL to render
+ * @returns {Object} Render result with success, html, duration
+ */
+async function renderWithHeadless(url) {
+  console.log('[Headless] Starting render:', url);
+
+  if (!puppeteer) {
+    return { success: false, error: 'puppeteer not available' };
+  }
+
+  const chromePath = findChromePath();
+  if (!chromePath) {
+    return { success: false, error: 'Chrome executable not found' };
+  }
+
+  let browser = null;
+  const startTime = Date.now();
+
+  try {
+    browser = await puppeteer.launch({
+      executablePath: chromePath,
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process'
+      ]
+    });
+
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 800 });
+    await page.setUserAgent('Mozilla/5.0 (compatible; AIVisibilityBot/1.0; +https://visible2ai.com/bot)');
+
+    // Set timeout
+    page.setDefaultNavigationTimeout(RENDER_CONFIG.timeout);
+
+    await page.goto(url, {
+      waitUntil: 'networkidle2',
+      timeout: RENDER_CONFIG.timeout
+    });
+
+    // Wait for hydration (React/Vue/Angular apps need time to render)
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const renderedHtml = await page.content();
+
+    renderedPagesThisScan++;
+
+    console.log('[Headless] Success:', {
+      url,
+      duration: Date.now() - startTime,
+      htmlLength: renderedHtml.length,
+      renderedThisScan: renderedPagesThisScan
+    });
+
+    return {
+      success: true,
+      html: renderedHtml,
+      duration: Date.now() - startTime
+    };
+
+  } catch (error) {
+    console.error('[Headless] Failed:', url, error.message);
+    return {
+      success: false,
+      error: error.message,
+      duration: Date.now() - startTime
+    };
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {
+        console.warn('[Headless] Failed to close browser:', e.message);
+      }
+    }
+  }
+}
+
+/**
+ * Enhanced extraction with headless fallback
+ * Creates extractor, runs static extraction, then attempts headless if needed
+ * @param {string} url - URL to extract
+ * @param {Object} options - Options including tier, allowHeadless
+ * @returns {Object} Extracted evidence with render metadata
+ */
+async function extractWithFallback(url, options = {}) {
+  const { tier = 'diy', allowHeadless = true } = options;
+
+  // Create extractor and run static extraction
+  const extractor = new ContentExtractor(url, options);
+  const staticResult = await extractor.extract();
+
+  // Check if rendering needed
+  const renderDecision = shouldAttemptRender(
+    staticResult.content,
+    staticResult.technical,
+    tier
+  );
+
+  console.log('[Extract] Render decision:', renderDecision);
+
+  if (!renderDecision.shouldRender || !allowHeadless) {
+    return {
+      ...staticResult,
+      technical: {
+        ...staticResult.technical,
+        rendered: false,
+        renderSource: 'static',
+        renderDecision: renderDecision.reason
+      }
+    };
+  }
+
+  // Attempt headless render
+  console.log('[Extract] Attempting headless render:', renderDecision.reason);
+  const renderResult = await renderWithHeadless(url);
+
+  if (!renderResult.success) {
+    console.warn('[Extract] Headless render failed:', renderResult.error);
+    return {
+      ...staticResult,
+      technical: {
+        ...staticResult.technical,
+        rendered: false,
+        renderSource: 'static',
+        renderAttempted: true,
+        renderError: renderResult.error
+      }
+    };
+  }
+
+  // Re-extract from rendered HTML
+  console.log('[Extract] Re-extracting from rendered HTML...');
+  const renderedExtractor = new ContentExtractor(url, options);
+
+  // Override fetchHTML to return rendered content
+  renderedExtractor.fetchHTML = async () => ({
+    html: renderResult.html,
+    headers: {},
+    statusCode: 200,
+    finalUrl: url
+  });
+
+  const renderedResult = await renderedExtractor.extract();
+
+  // Calculate improvement
+  const staticWordCount = staticResult.content.wordCount || 0;
+  const renderedWordCount = renderedResult.content.wordCount || 0;
+  const improvement = renderedWordCount - staticWordCount;
+
+  console.log('[Extract] Render improvement:', {
+    staticWordCount,
+    renderedWordCount,
+    improvement,
+    renderDuration: renderResult.duration
+  });
+
+  // Return rendered result with metadata
+  return {
+    ...renderedResult,
+    technical: {
+      ...renderedResult.technical,
+      rendered: true,
+      renderSource: 'headless',
+      renderDuration: renderResult.duration,
+      staticWordCount,
+      renderedWordCount,
+      contentImprovement: improvement
+    }
+  };
+}
+
+module.exports = {
+  // Main class export (default behavior)
+  ContentExtractor,
+
+  // RULEBOOK v1.2 Step C7: Headless rendering exports
+  extractWithFallback,
+  resetRenderCounter,
+  getRenderCount,
+  shouldAttemptRender,
+  renderWithHeadless,
+  findChromePath,
+  RENDER_CONFIG
+};

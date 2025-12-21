@@ -1,4 +1,4 @@
-const ContentExtractor = require('./content-extractor');
+const { ContentExtractor } = require('./content-extractor');
 const { validateEvidence } = require('./evidence-contract');
 const { measured, notMeasured } = require('./score-types');
 
