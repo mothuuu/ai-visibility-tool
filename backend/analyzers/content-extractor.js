@@ -3,6 +3,7 @@ const cheerio = require('cheerio');
 const { URL } = require('url');
 const EntityAnalyzer = require('./entity-analyzer');
 const VOCABULARY = require('../config/detection-vocabulary');
+const { safeHead } = require('../utils/safe-http');
 const {
   CONFIDENCE_LEVELS,
   EVIDENCE_SOURCES,
@@ -1434,6 +1435,7 @@ class ContentExtractor {
   /**
    * RULEBOOK v1.2 Step 14: IndexNow Key Verification
    * Verifies that the IndexNow key file exists at the expected location
+   * Uses safe-http utility with SSRF protection and same-domain enforcement
    */
   async verifyIndexNow($, key) {
     const result = {
@@ -1461,18 +1463,22 @@ class ContentExtractor {
 
       console.log(`[IndexNow] Verifying key file at: ${keyFileUrl}`);
 
-      const response = await axios.head(keyFileUrl, {
-        timeout: 5000,
-        validateStatus: (status) => status < 500, // Accept 2xx, 3xx, 4xx
-        headers: {
-          'User-Agent': this.userAgent
-        }
+      // Use safe-http with SSRF protection and same-domain enforcement
+      const response = await safeHead(keyFileUrl, {
+        scanTargetUrl: this.url,
+        requireSameDomain: true,
+        timeout: 5000
       });
 
-      result.keyVerified = response.status === 200;
-      result.verificationStatus = response.status;
-
-      console.log(`[IndexNow] Key verification: ${result.keyVerified ? 'VERIFIED' : 'NOT FOUND'} (status: ${response.status})`);
+      if (response.success) {
+        result.keyVerified = response.status === 200;
+        result.verificationStatus = response.status;
+        console.log(`[IndexNow] Key verification: ${result.keyVerified ? 'VERIFIED' : 'NOT FOUND'} (status: ${response.status})`);
+      } else {
+        result.keyVerified = false;
+        result.verificationError = response.error;
+        console.log(`[IndexNow] Key verification blocked: ${response.error}`);
+      }
 
     } catch (error) {
       result.keyVerified = false;
