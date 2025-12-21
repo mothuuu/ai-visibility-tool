@@ -1127,6 +1127,18 @@ class ContentExtractor {
       )
     };
 
+    // DEBUG: Show all links and which ones match blog/FAQ patterns
+    console.log('[DEBUG] All nav links extracted:', allNavLinks.length);
+    console.log('[DEBUG] Sample links:', allNavLinks.slice(0, 10).map(l => ({ href: l.href, text: l.text })));
+    const blogMatches = allNavLinks.filter(l =>
+      VOCABULARY.URL_PATTERNS.blog.test(l.href) || VOCABULARY.matchesNavKeyword(l.text, 'blog')
+    );
+    const faqMatches = allNavLinks.filter(l =>
+      VOCABULARY.URL_PATTERNS.faq.test(l.href) || VOCABULARY.matchesNavKeyword(l.text, 'faq')
+    );
+    console.log('[DEBUG] Blog pattern matches:', blogMatches.map(l => ({ href: l.href, text: l.text })));
+    console.log('[DEBUG] FAQ pattern matches:', faqMatches.map(l => ({ href: l.href, text: l.text })));
+
     const keyPageCount = Object.values(keyPages).filter(Boolean).length;
 
     // Legacy property names for backwards compatibility
@@ -2141,9 +2153,10 @@ function getRenderContextSummary(renderContext) {
  * @param {Object} extractedContent - Content from static extraction
  * @param {Object} technical - Technical info including isJSRendered
  * @param {string|Object} tierOrContext - User tier string OR render context object
+ * @param {Object} navigation - Navigation extraction result (optional, for P1 empty nav detection)
  * @returns {Object} Decision with shouldRender and reason
  */
-function shouldAttemptRender(extractedContent, technical, tierOrContext = 'diy') {
+function shouldAttemptRender(extractedContent, technical, tierOrContext = 'diy', navigation = null) {
   // Support both old API (tier string) and new API (render context)
   let budget, used, tier;
 
@@ -2172,6 +2185,28 @@ function shouldAttemptRender(extractedContent, technical, tierOrContext = 'diy')
   // Check if JS-rendered
   if (!technical.isJSRendered) {
     return { shouldRender: false, reason: 'not_js_rendered' };
+  }
+
+  // P1: Check for empty nav on JS site (nav may be client-rendered)
+  if (navigation) {
+    const navLinksCount = navigation.allNavLinks?.length || navigation.links?.length || 0;
+    const hasKeyPages = navigation.keyPages?.blog || navigation.keyPages?.faq ||
+                        navigation.keyPages?.about || navigation.keyPages?.contact;
+    const hasEmptyNav = navLinksCount < 3 && !hasKeyPages;
+
+    if (hasEmptyNav) {
+      console.log('[P1] JS site with empty nav - triggering headless render:', {
+        navLinksCount,
+        hasKeyPages,
+        isJSRendered: technical.isJSRendered
+      });
+      return {
+        shouldRender: true,
+        reason: 'js_rendered_empty_nav',
+        metrics: { navLinksCount, hasKeyPages },
+        budgetRemaining: budget - used
+      };
+    }
   }
 
   // Check content thresholds

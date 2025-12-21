@@ -60,6 +60,16 @@ class V5EnhancedRubricEngine {
 
       this.siteData = await crawler.crawl();
 
+      // VERIFICATION: Check sitemap data immediately after crawl
+      console.log('[V5Enhanced] SITEMAP DATA CHECK:', {
+        sitemapExists: !!this.siteData?.sitemap,
+        blogUrls: this.siteData?.sitemap?.blogUrls?.length,
+        faqUrls: this.siteData?.sitemap?.faqUrls?.length,
+        hasBlogUrls: this.siteData?.sitemap?.hasBlogUrls,
+        hasFaqUrls: this.siteData?.sitemap?.hasFaqUrls,
+        sitemapDetected: this.siteData?.sitemap?.detected || this.siteData?.sitemapDetected
+      });
+
       // DEBUG: Check what crawler returned (full sitemap data)
       console.log('[V5Enhanced] DEBUG - crawlerResults:', {
         hasCrawlerResults: !!this.siteData,
