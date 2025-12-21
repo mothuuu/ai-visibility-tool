@@ -29,7 +29,7 @@
         // Inject CSS
         const cssLink = document.createElement('link');
         cssLink.rel = 'stylesheet';
-        cssLink.href = 'support-chat.css';
+        cssLink.href = '/support-chat.css';
         document.head.appendChild(cssLink);
 
         // Create chat HTML
