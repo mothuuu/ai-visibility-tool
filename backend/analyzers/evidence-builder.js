@@ -47,7 +47,7 @@ function buildScanEvidence({ pageExtract, crawlResult, scanContext }) {
 
   // Crawler (from site-wide crawl)
   const crawler = {
-    discoveredSections: crawlResult?.discoveredSections || {},
+    discoveredSections: crawlResult?.discoveredSections || crawlResult?.siteMetrics?.discoveredSections || {},
     totalDiscoveredUrls: crawlResult?.totalDiscoveredUrls || crawlResult?.allDiscoveredUrls?.length || 0,
     robotsTxt: crawlResult?.robotsTxt || {},
     sitemap: crawlResult?.sitemap || {}
@@ -57,7 +57,8 @@ function buildScanEvidence({ pageExtract, crawlResult, scanContext }) {
   const siteMetrics = {
     discoveredSections: crawler.discoveredSections,
     totalDiscoveredUrls: crawler.totalDiscoveredUrls,
-    sitemap: crawler.sitemap
+    sitemap: crawler.sitemap,
+    robotsTxt: crawler.robotsTxt
   };
 
   const evidence = {
@@ -78,7 +79,9 @@ function buildScanEvidence({ pageExtract, crawlResult, scanContext }) {
   console.log('[EvidenceBuilder] Built:', {
     url: evidence.url,
     hasCrawlData: evidence._meta.hasCrawlData,
-    hasBlogUrl: evidence.crawler.discoveredSections?.hasBlogUrl
+    hasBlogUrl: evidence.crawler.discoveredSections?.hasBlogUrl,
+    sitemapBlogUrls: evidence.siteMetrics.sitemap?.blogUrls?.length || 0,
+    sitemapFaqUrls: evidence.siteMetrics.sitemap?.faqUrls?.length || 0
   });
 
   return evidence;

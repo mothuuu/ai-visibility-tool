@@ -31,6 +31,8 @@ class SiteCrawler {
     // Fix for Issue #2 + #9: Track ALL discovered URLs, even ones not crawled
     // This enables blog/FAQ detection from sitemap/internal links
     this.allDiscoveredUrls = new Set();
+    // RULEBOOK v1.2: Track sitemap-specific URLs for classification
+    this.sitemapUrls = [];
   }
 
   /**
@@ -245,6 +247,9 @@ class SiteCrawler {
       }
 
       console.log(`[Crawler] Found ${sitemapUrls.length} page URLs in sitemap`);
+
+      // RULEBOOK v1.2: Store sitemap URLs for classification
+      this.sitemapUrls = [...sitemapUrls];
 
       // Prioritize diverse content types
       return this.prioritizeUrls(sitemapUrls);
@@ -596,6 +601,9 @@ class SiteCrawler {
     // RULEBOOK v1.2 Section 11.4.5: Parse robots.txt for AI crawler rules
     const robotsTxt = await this.parseRobotsTxt();
 
+    // RULEBOOK v1.2: Classify sitemap URLs by content type
+    const sitemapClassification = this.classifySitemapUrls(this.sitemapUrls);
+
     const aggregated = {
       siteUrl: this.baseUrl,
       pageCount: this.pageEvidences.length,
@@ -604,6 +612,13 @@ class SiteCrawler {
       sitemapLocation: this.detectedSitemapLocation || null,  // Which sitemap file was found
       // RULEBOOK v1.2: Robots.txt AI crawler analysis
       robotsTxt,
+      // RULEBOOK v1.2: Sitemap with classified URLs
+      sitemap: {
+        detected: this.sitemapDetected || false,
+        location: this.detectedSitemapLocation || null,
+        totalUrls: this.sitemapUrls.length,
+        ...sitemapClassification
+      },
 
       // Site-wide metrics for scoring
       siteMetrics: {
@@ -777,6 +792,63 @@ class SiteCrawler {
     // Count proper nouns (capitalized words)
     const properNouns = evidence.content.bodyText.match(/\b[A-Z][a-z]+\b/g) || [];
     return [...new Set(properNouns)].length;
+  }
+
+  /**
+   * RULEBOOK v1.2: Classify sitemap URLs by content type
+   * Enables detection of blog/FAQ/pricing pages from sitemap without crawling each page
+   */
+  classifySitemapUrls(urls) {
+    const patterns = {
+      blog: /\/(blog|news|articles|insights|resources|posts|learn)/i,
+      faq: /\/(faq|faqs|help|support|questions)/i,
+      pricing: /\/(pricing|plans|packages)/i,
+      contact: /\/(contact|get-in-touch)/i
+    };
+
+    const result = {
+      blogUrls: [],
+      faqUrls: [],
+      pricingUrls: [],
+      contactUrls: [],
+      hasBlogUrls: false,
+      hasFaqUrls: false,
+      hasPricingUrls: false,
+      hasContactUrls: false,
+      totalClassified: 0
+    };
+
+    for (const url of urls) {
+      if (patterns.blog.test(url)) {
+        result.blogUrls.push(url);
+      }
+      if (patterns.faq.test(url)) {
+        result.faqUrls.push(url);
+      }
+      if (patterns.pricing.test(url)) {
+        result.pricingUrls.push(url);
+      }
+      if (patterns.contact.test(url)) {
+        result.contactUrls.push(url);
+      }
+    }
+
+    result.hasBlogUrls = result.blogUrls.length > 0;
+    result.hasFaqUrls = result.faqUrls.length > 0;
+    result.hasPricingUrls = result.pricingUrls.length > 0;
+    result.hasContactUrls = result.contactUrls.length > 0;
+    result.totalClassified = result.blogUrls.length + result.faqUrls.length +
+                             result.pricingUrls.length + result.contactUrls.length;
+
+    console.log('[Crawler] RULEBOOK v1.2: Sitemap URL classification:', {
+      blogUrls: result.blogUrls.length,
+      faqUrls: result.faqUrls.length,
+      pricingUrls: result.pricingUrls.length,
+      contactUrls: result.contactUrls.length,
+      totalClassified: result.totalClassified
+    });
+
+    return result;
   }
 }
 

@@ -389,15 +389,20 @@ function detectSiteWideIssues(scanEvidence) {
   const technical = scanEvidence.technical || {};
   const content = scanEvidence.content || {};
 
-  // Blog check - multi-source (evidence contract v2.0)
+  // RULEBOOK v1.2: Sitemap classification as additional source
+  const sitemap = scanEvidence.siteMetrics?.sitemap || crawler.sitemap || {};
+
+  // Blog check - multi-source (evidence contract v2.0 + sitemap classification)
   const blogFound =
     crawler.discoveredSections?.hasBlogUrl ||
+    sitemap.hasBlogUrls ||
     navigation.keyPages?.blog ||
     navigation.hasBlogLink ||
     technical.hasArticleSchema;
 
   console.log('[SiteWide] Blog:', {
     crawler: crawler.discoveredSections?.hasBlogUrl,
+    sitemap: sitemap.hasBlogUrls,
     nav: navigation.keyPages?.blog || navigation.hasBlogLink,
     schema: technical.hasArticleSchema
   }, '→', blogFound ? 'FOUND' : 'MISSING');
@@ -418,9 +423,10 @@ function detectSiteWideIssues(scanEvidence) {
     });
   }
 
-  // FAQ check - multi-source (evidence contract v2.0)
+  // FAQ check - multi-source (evidence contract v2.0 + sitemap classification)
   const faqFound =
     crawler.discoveredSections?.hasFaqUrl ||
+    sitemap.hasFaqUrls ||
     navigation.keyPages?.faq ||
     navigation.hasFAQLink ||
     technical.hasFAQSchema ||
@@ -428,6 +434,7 @@ function detectSiteWideIssues(scanEvidence) {
 
   console.log('[SiteWide] FAQ:', {
     crawler: crawler.discoveredSections?.hasFaqUrl,
+    sitemap: sitemap.hasFaqUrls,
     nav: navigation.keyPages?.faq || navigation.hasFAQLink,
     schema: technical.hasFAQSchema,
     content: content.faqs?.length
