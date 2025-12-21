@@ -1942,22 +1942,52 @@ class ContentExtractor {
 // RULEBOOK v1.2 Step C7: Headless Rendering Fallback
 // For JS-rendered sites (React, Vue, Angular SPAs)
 // H4: Per-scan render context for concurrency safety
+// H5: Performance guardrails (timeouts, resource blocking, size limits)
 // ============================================
 
 const RENDER_CONFIG = {
-  wordCountThreshold: 50,      // Trigger if below this
-  charCountThreshold: 500,     // Trigger if below this
-  timeout: 15000,              // 15s max per page
-  maxPagesPerScan: 3,          // Budget limit
+  // Content thresholds (trigger render if below)
+  wordCountThreshold: 50,
+  charCountThreshold: 500,
 
-  // Tier budgets (can be overridden)
+  // H5: Timeouts
+  navigationTimeout: 15000,   // Max time to load page
+  renderTimeout: 20000,       // Max total time including wait
+  waitAfterLoad: 2000,        // Wait for hydration
+
+  // H5: Resource limits
+  maxResponseSize: 5 * 1024 * 1024,  // 5MB max HTML
+
+  // H5: Per-scan limits
+  maxRenderTimePerScan: 60000,  // 60s total render time per scan
+
+  // Tier budgets
   tierBudgets: {
     guest: 0,
     free: 0,
+    freemium: 0,
     diy: 2,
     pro: 5,
+    premium: 5,
     agency: 10
   },
+
+  // H5: Resources to block (performance optimization)
+  blockedResourceTypes: ['image', 'media', 'font', 'stylesheet'],
+
+  // H5: Tracking/analytics domains to block
+  blockedDomains: [
+    'google-analytics.com',
+    'googletagmanager.com',
+    'facebook.net',
+    'doubleclick.net',
+    'hotjar.com',
+    'intercom.io',
+    'segment.io',
+    'mixpanel.com',
+    'amplitude.com',
+    'fullstory.com'
+  ],
 
   // Chrome executable paths to try
   chromePaths: [
@@ -2105,7 +2135,7 @@ function findChromePath() {
 }
 
 /**
- * H4: Render page with headless browser (context-aware)
+ * H4+H5: Render page with headless browser (context-aware, with guardrails)
  * @param {string} url - URL to render
  * @param {Object} renderContext - Optional render context for tracking
  * @returns {Object} Render result with success, html, duration
@@ -2127,10 +2157,29 @@ async function renderWithHeadless(url, renderContext = null) {
     return { success: false, error: 'Chrome executable not found' };
   }
 
+  // H5: Check scan-level time budget
+  if (renderContext) {
+    const scanElapsed = Date.now() - renderContext.startTime;
+    if (scanElapsed > RENDER_CONFIG.maxRenderTimePerScan) {
+      console.warn('[Headless] Scan render time budget exhausted:', {
+        scanId,
+        elapsed: scanElapsed,
+        limit: RENDER_CONFIG.maxRenderTimePerScan
+      });
+      return {
+        success: false,
+        error: 'Scan render time budget exhausted',
+        scanElapsed,
+        scanId
+      };
+    }
+  }
+
   let browser = null;
   const startTime = Date.now();
 
   try {
+    // H5: Enhanced Chrome args for stability and memory limits
     browser = await puppeteer.launch({
       executablePath: chromePath,
       headless: 'new',
@@ -2139,8 +2188,18 @@ async function renderWithHeadless(url, renderContext = null) {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process'
+        '--disable-software-rasterizer',
+        '--disable-extensions',
+        '--disable-background-networking',
+        '--disable-default-apps',
+        '--disable-sync',
+        '--disable-translate',
+        '--metrics-recording-only',
+        '--mute-audio',
+        '--no-first-run',
+        '--safebrowsing-disable-auto-update',
+        // Memory limits
+        '--js-flags=--max-old-space-size=256'
       ]
     });
 
@@ -2148,18 +2207,58 @@ async function renderWithHeadless(url, renderContext = null) {
     await page.setViewport({ width: 1280, height: 800 });
     await page.setUserAgent('Mozilla/5.0 (compatible; AIVisibilityBot/1.0; +https://visible2ai.com/bot)');
 
-    // Set timeout
-    page.setDefaultNavigationTimeout(RENDER_CONFIG.timeout);
+    // H5: Block heavy resources for performance
+    await page.setRequestInterception(true);
+    let blockedCount = 0;
 
-    await page.goto(url, {
-      waitUntil: 'networkidle2',
-      timeout: RENDER_CONFIG.timeout
+    page.on('request', (request) => {
+      const resourceType = request.resourceType();
+      const requestUrl = request.url();
+
+      // Block by resource type
+      if (RENDER_CONFIG.blockedResourceTypes.includes(resourceType)) {
+        blockedCount++;
+        request.abort();
+        return;
+      }
+
+      // Block tracking/analytics domains
+      if (RENDER_CONFIG.blockedDomains.some(domain => requestUrl.includes(domain))) {
+        blockedCount++;
+        request.abort();
+        return;
+      }
+
+      request.continue();
     });
 
-    // Wait for hydration (React/Vue/Angular apps need time to render)
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // H5: Navigate with navigation timeout
+    await page.goto(url, {
+      waitUntil: 'networkidle2',
+      timeout: RENDER_CONFIG.navigationTimeout
+    });
+
+    // H5: Wait for hydration (with overall timeout check)
+    const elapsed = Date.now() - startTime;
+    const remainingTime = RENDER_CONFIG.renderTimeout - elapsed;
+
+    if (remainingTime > RENDER_CONFIG.waitAfterLoad) {
+      await new Promise(resolve => setTimeout(resolve, RENDER_CONFIG.waitAfterLoad));
+    }
 
     const renderedHtml = await page.content();
+
+    // H5: Check response size
+    if (renderedHtml.length > RENDER_CONFIG.maxResponseSize) {
+      const sizeMB = (renderedHtml.length / 1024 / 1024).toFixed(2);
+      console.warn('[Headless] Response too large:', { url, sizeMB, scanId });
+      return {
+        success: false,
+        error: `Response too large: ${sizeMB}MB`,
+        duration: Date.now() - startTime,
+        scanId
+      };
+    }
 
     // Track in context (H4) or global (legacy)
     if (renderContext) {
@@ -2179,31 +2278,44 @@ async function renderWithHeadless(url, renderContext = null) {
       url,
       scanId,
       duration: Date.now() - startTime,
-      htmlLength: renderedHtml.length,
-      rendered: currentCount
+      htmlSize: `${(renderedHtml.length / 1024).toFixed(1)}KB`,
+      rendered: currentCount,
+      blockedRequests: blockedCount
     });
 
     return {
       success: true,
       html: renderedHtml,
       duration: Date.now() - startTime,
-      scanId
+      scanId,
+      blockedRequests: blockedCount
     };
 
   } catch (error) {
-    console.error('[Headless] Failed:', { url, scanId, error: error.message });
+    const duration = Date.now() - startTime;
+    const timedOut = error.name === 'TimeoutError';
+
+    console.error('[Headless] Failed:', {
+      url,
+      scanId,
+      error: error.message,
+      duration,
+      timedOut
+    });
+
     return {
       success: false,
       error: error.message,
-      duration: Date.now() - startTime,
-      scanId
+      duration,
+      scanId,
+      timedOut
     };
   } finally {
     if (browser) {
       try {
         await browser.close();
       } catch (e) {
-        console.warn('[Headless] Failed to close browser:', e.message);
+        console.warn('[Headless] Browser close error:', e.message);
       }
     }
   }
