@@ -1941,6 +1941,7 @@ class ContentExtractor {
 // ============================================
 // RULEBOOK v1.2 Step C7: Headless Rendering Fallback
 // For JS-rendered sites (React, Vue, Angular SPAs)
+// H4: Per-scan render context for concurrency safety
 // ============================================
 
 const RENDER_CONFIG = {
@@ -1968,10 +1969,12 @@ const RENDER_CONFIG = {
   ].filter(Boolean)
 };
 
-// Track rendered pages per scan (reset at start of each scan)
+// DEPRECATED: Global counter - kept for backward compatibility only
+// Use createRenderContext() for new code
 let renderedPagesThisScan = 0;
 
 /**
+ * DEPRECATED: Use createRenderContext() instead
  * Reset render counter (call at start of each scan)
  */
 function resetRenderCounter() {
@@ -1979,6 +1982,7 @@ function resetRenderCounter() {
 }
 
 /**
+ * DEPRECATED: Use renderContext.rendered instead
  * Get current render count for this scan
  */
 function getRenderCount() {
@@ -1986,14 +1990,66 @@ function getRenderCount() {
 }
 
 /**
- * Check if headless rendering should be attempted
+ * H4: Create a render context for a scan (concurrency-safe)
+ * Call once at the start of each scan and pass through the pipeline
+ * @param {Object} options - Context options
+ * @param {string} options.tier - User tier (guest, free, diy, pro, agency)
+ * @param {string} options.scanId - Optional scan identifier for logging
+ * @returns {Object} Render context to pass through the scan
+ */
+function createRenderContext(options = {}) {
+  const tier = options.tier || 'diy';
+  const budget = RENDER_CONFIG.tierBudgets[tier] || RENDER_CONFIG.tierBudgets.diy;
+
+  return {
+    tier,
+    budget,
+    rendered: 0,
+    scanId: options.scanId || `scan_${Date.now()}`,
+    startTime: Date.now(),
+    pages: []  // Track which pages were rendered
+  };
+}
+
+/**
+ * Get render context summary for logging
+ */
+function getRenderContextSummary(renderContext) {
+  if (!renderContext) return { rendered: renderedPagesThisScan, mode: 'global' };
+
+  return {
+    scanId: renderContext.scanId,
+    rendered: renderContext.rendered,
+    budget: renderContext.budget,
+    tier: renderContext.tier,
+    pages: renderContext.pages,
+    duration: Date.now() - renderContext.startTime,
+    mode: 'context'
+  };
+}
+
+/**
+ * H4: Check if headless rendering should be attempted (context-aware)
  * @param {Object} extractedContent - Content from static extraction
  * @param {Object} technical - Technical info including isJSRendered
- * @param {string} tier - User tier (guest, free, diy, pro, agency)
+ * @param {string|Object} tierOrContext - User tier string OR render context object
  * @returns {Object} Decision with shouldRender and reason
  */
-function shouldAttemptRender(extractedContent, technical, tier = 'diy') {
-  const budget = RENDER_CONFIG.tierBudgets[tier] || 0;
+function shouldAttemptRender(extractedContent, technical, tierOrContext = 'diy') {
+  // Support both old API (tier string) and new API (render context)
+  let budget, used, tier;
+
+  if (typeof tierOrContext === 'object' && tierOrContext !== null) {
+    // New API: render context object
+    budget = tierOrContext.budget;
+    used = tierOrContext.rendered;
+    tier = tierOrContext.tier;
+  } else {
+    // Legacy API: tier string with global counter
+    tier = tierOrContext;
+    budget = RENDER_CONFIG.tierBudgets[tier] || 0;
+    used = renderedPagesThisScan;
+  }
 
   // Check if puppeteer available
   if (!puppeteer) {
@@ -2001,8 +2057,8 @@ function shouldAttemptRender(extractedContent, technical, tier = 'diy') {
   }
 
   // Check budget
-  if (renderedPagesThisScan >= budget) {
-    return { shouldRender: false, reason: 'budget_exhausted', budget, used: renderedPagesThisScan };
+  if (used >= budget) {
+    return { shouldRender: false, reason: 'budget_exhausted', budget, used };
   }
 
   // Check if JS-rendered
@@ -2023,7 +2079,8 @@ function shouldAttemptRender(extractedContent, technical, tier = 'diy') {
   return {
     shouldRender: true,
     reason: 'js_rendered_insufficient_content',
-    metrics: { wordCount, charCount, threshold: RENDER_CONFIG.wordCountThreshold }
+    metrics: { wordCount, charCount, threshold: RENDER_CONFIG.wordCountThreshold },
+    budgetRemaining: budget - used
   };
 }
 
@@ -2048,12 +2105,18 @@ function findChromePath() {
 }
 
 /**
- * Render page with headless browser
+ * H4: Render page with headless browser (context-aware)
  * @param {string} url - URL to render
+ * @param {Object} renderContext - Optional render context for tracking
  * @returns {Object} Render result with success, html, duration
  */
-async function renderWithHeadless(url) {
-  console.log('[Headless] Starting render:', url);
+async function renderWithHeadless(url, renderContext = null) {
+  const scanId = renderContext?.scanId || 'global';
+  const budgetInfo = renderContext
+    ? `${renderContext.rendered}/${renderContext.budget}`
+    : `${renderedPagesThisScan}/global`;
+
+  console.log('[Headless] Starting render:', { url, scanId, budget: budgetInfo });
 
   if (!puppeteer) {
     return { success: false, error: 'puppeteer not available' };
@@ -2098,27 +2161,42 @@ async function renderWithHeadless(url) {
 
     const renderedHtml = await page.content();
 
-    renderedPagesThisScan++;
+    // Track in context (H4) or global (legacy)
+    if (renderContext) {
+      renderContext.rendered++;
+      renderContext.pages.push({
+        url,
+        duration: Date.now() - startTime,
+        htmlLength: renderedHtml.length
+      });
+    } else {
+      renderedPagesThisScan++;
+    }
+
+    const currentCount = renderContext ? renderContext.rendered : renderedPagesThisScan;
 
     console.log('[Headless] Success:', {
       url,
+      scanId,
       duration: Date.now() - startTime,
       htmlLength: renderedHtml.length,
-      renderedThisScan: renderedPagesThisScan
+      rendered: currentCount
     });
 
     return {
       success: true,
       html: renderedHtml,
-      duration: Date.now() - startTime
+      duration: Date.now() - startTime,
+      scanId
     };
 
   } catch (error) {
-    console.error('[Headless] Failed:', url, error.message);
+    console.error('[Headless] Failed:', { url, scanId, error: error.message });
     return {
       success: false,
       error: error.message,
-      duration: Date.now() - startTime
+      duration: Date.now() - startTime,
+      scanId
     };
   } finally {
     if (browser) {
@@ -2132,27 +2210,41 @@ async function renderWithHeadless(url) {
 }
 
 /**
- * Enhanced extraction with headless fallback
+ * H4: Enhanced extraction with headless fallback (context-aware)
  * Creates extractor, runs static extraction, then attempts headless if needed
  * @param {string} url - URL to extract
- * @param {Object} options - Options including tier, allowHeadless
+ * @param {Object} options - Options including tier, allowHeadless, renderContext
  * @returns {Object} Extracted evidence with render metadata
  */
 async function extractWithFallback(url, options = {}) {
-  const { tier = 'diy', allowHeadless = true } = options;
+  const {
+    tier = 'diy',
+    allowHeadless = true,
+    renderContext = null  // H4: Pass render context for concurrency safety
+  } = options;
 
   // Create extractor and run static extraction
   const extractor = new ContentExtractor(url, options);
   const staticResult = await extractor.extract();
 
+  // Determine what to pass to shouldAttemptRender
+  // If renderContext provided, use it; otherwise use tier string (legacy)
+  const tierOrContext = renderContext || tier;
+
   // Check if rendering needed
   const renderDecision = shouldAttemptRender(
     staticResult.content,
     staticResult.technical,
-    tier
+    tierOrContext
   );
 
-  console.log('[Extract] Render decision:', renderDecision);
+  const scanId = renderContext?.scanId || 'global';
+  console.log('[Extract] Render decision:', { ...renderDecision, scanId });
+
+  // Warn if headless is enabled but no render context provided
+  if (allowHeadless && !renderContext) {
+    console.warn('[Extract] No renderContext provided - using deprecated global counter');
+  }
 
   if (!renderDecision.shouldRender || !allowHeadless) {
     return {
@@ -2161,17 +2253,18 @@ async function extractWithFallback(url, options = {}) {
         ...staticResult.technical,
         rendered: false,
         renderSource: 'static',
-        renderDecision: renderDecision.reason
+        renderDecision: renderDecision.reason,
+        scanId
       }
     };
   }
 
-  // Attempt headless render
-  console.log('[Extract] Attempting headless render:', renderDecision.reason);
-  const renderResult = await renderWithHeadless(url);
+  // Attempt headless render (pass context for tracking)
+  console.log('[Extract] Attempting headless render:', { reason: renderDecision.reason, scanId });
+  const renderResult = await renderWithHeadless(url, renderContext);
 
   if (!renderResult.success) {
-    console.warn('[Extract] Headless render failed:', renderResult.error);
+    console.warn('[Extract] Headless render failed:', { error: renderResult.error, scanId });
     return {
       ...staticResult,
       technical: {
@@ -2179,7 +2272,8 @@ async function extractWithFallback(url, options = {}) {
         rendered: false,
         renderSource: 'static',
         renderAttempted: true,
-        renderError: renderResult.error
+        renderError: renderResult.error,
+        scanId
       }
     };
   }
@@ -2203,11 +2297,18 @@ async function extractWithFallback(url, options = {}) {
   const renderedWordCount = renderedResult.content.wordCount || 0;
   const improvement = renderedWordCount - staticWordCount;
 
+  // Build budget used string for metadata
+  const budgetUsed = renderContext
+    ? `${renderContext.rendered}/${renderContext.budget}`
+    : `${renderedPagesThisScan}/global`;
+
   console.log('[Extract] Render improvement:', {
     staticWordCount,
     renderedWordCount,
     improvement,
-    renderDuration: renderResult.duration
+    renderDuration: renderResult.duration,
+    scanId,
+    budgetUsed
   });
 
   // Return rendered result with metadata
@@ -2220,7 +2321,9 @@ async function extractWithFallback(url, options = {}) {
       renderDuration: renderResult.duration,
       staticWordCount,
       renderedWordCount,
-      contentImprovement: improvement
+      contentImprovement: improvement,
+      budgetUsed,
+      scanId
     }
   };
 }
@@ -2231,10 +2334,16 @@ module.exports = {
 
   // RULEBOOK v1.2 Step C7: Headless rendering exports
   extractWithFallback,
-  resetRenderCounter,
-  getRenderCount,
   shouldAttemptRender,
   renderWithHeadless,
   findChromePath,
-  RENDER_CONFIG
+  RENDER_CONFIG,
+
+  // H4: Per-scan headless budget (concurrency-safe)
+  createRenderContext,
+  getRenderContextSummary,
+
+  // Legacy (deprecated - use createRenderContext instead)
+  resetRenderCounter,
+  getRenderCount
 };
