@@ -3,12 +3,13 @@
  * File: backend/analyzers/recommendation-generator.js
  */
 
-const { detectPageIssues, detectMultiPageIssues } = require('./recommendation-engine/issue-detector');
+const { detectIssues, detectPageIssues, detectMultiPageIssues } = require('./recommendation-engine/issue-detector');
 const { generateRecommendations } = require('./recommendation-engine/rec-generator');
 const { generateCustomizedFAQ } = require('./recommendation-engine/faq-customizer');
 const { filterByTier, formatForAPI } = require('./recommendation-engine/tier-filter');
 const { generateEliteRecommendations, prioritizeEliteRecommendations } = require('../utils/elite-recommendation-generator');
 const { extractSiteFacts } = require('./recommendation-engine/fact-extractor');
+const { buildScanEvidence } = require('./evidence-builder');
 
 async function generateCompleteRecommendations(scanResults, tier = 'free', industry = null, userProgress = null, mode = 'optimization') {
   try {
@@ -95,29 +96,35 @@ async function generateCompleteRecommendations(scanResults, tier = 'free', indus
       console.log(`   Blog details: hasArticleSchema=${blogDetails?.hasArticleSchema}, hasBlogNavLink=${blogDetails?.hasBlogNavLink}`);
     }
 
-    // STEP 1: Detect all issues
+    // STEP 1: Detect all issues using unified detectIssues (evidence contract v2.0)
     console.log('🔍 Step 1: Detecting issues...');
-    let allIssues;
 
-    if (tier === 'guest' || tier === 'free') {
-      allIssues = detectPageIssues(v5Scores, enrichedScanEvidence);
-      console.log(`   Found ${allIssues.length} issues on homepage`);
-    } else {
-      if (scannedPages && Array.isArray(scannedPages) && scannedPages.length > 0) {
-        const multiPageResult = detectMultiPageIssues(scannedPages);
-        allIssues = multiPageResult.pageBreakdown[0].issues; // Use first page's issues
-        console.log(`   Found ${multiPageResult.totalIssues} issues across ${multiPageResult.totalPages} pages`);
-      } else {
-        allIssues = detectPageIssues(v5Scores, enrichedScanEvidence);
-        console.log(`   Found ${allIssues.length} issues on homepage (single page mode)`);
-      }
+    // Ensure scanEvidence is built with builder if missing contractVersion
+    let finalScanEvidence = enrichedScanEvidence;
+    if (!enrichedScanEvidence?.contractVersion) {
+      console.log('   Building standardized evidence (missing contractVersion)...');
+      finalScanEvidence = buildScanEvidence({
+        pageExtract: enrichedScanEvidence,
+        crawlResult: enrichedScanEvidence.crawler || enrichedScanEvidence.siteMetrics,
+        scanContext: { url: enrichedScanEvidence.url }
+      });
+      // Merge back the detected_profile and other enrichments
+      finalScanEvidence = {
+        ...finalScanEvidence,
+        ...enrichedScanEvidence,
+        v5Scores
+      };
     }
+
+    // Single entry point - detectIssues handles site-wide vs page-level internally
+    const allIssues = detectIssues(finalScanEvidence, { userPlan: tier });
+    console.log(`[Recommendations] Issues from detectIssues: ${allIssues.length}`);
 
     // STEP 2: Generate recommendations (HYBRID: top 5 AI, rest templates)
     console.log('💡 Step 2: Generating recommendations (Hybrid Mode)...');
     const recommendations = await generateRecommendations(
       allIssues,
-      enrichedScanEvidence,  // Use enriched evidence with detected_profile
+      finalScanEvidence,  // Use standardized evidence with detected_profile
       tier === 'guest' ? 'free' : tier, // Use free tier logic for guest
       industry
     );
@@ -128,7 +135,7 @@ async function generateCompleteRecommendations(scanResults, tier = 'free', indus
     let customizedFAQ = null;
     if (tier !== 'free' && tier !== 'guest' && industry) {
       try {
-        customizedFAQ = await generateCustomizedFAQ(industry, enrichedScanEvidence);
+        customizedFAQ = await generateCustomizedFAQ(industry, finalScanEvidence);
         console.log(`   Generated ${customizedFAQ.faqCount} customized FAQs`);
       } catch (error) {
         console.error('   ⚠️  FAQ generation failed:', error.message);
@@ -140,7 +147,7 @@ async function generateCompleteRecommendations(scanResults, tier = 'free', indus
     // STEP 4: Filter and format by tier
     console.log('🎚️  Step 4: Applying tier filtering...');
     const filteredResults = filterByTier(recommendations, customizedFAQ, tier, {
-      url: enrichedScanEvidence.url,
+      url: finalScanEvidence.url,
       scannedAt: new Date().toISOString()
     }, userProgress); // Pass userProgress for DIY progressive unlock
     console.log(`   Filtered to ${filteredResults.recommendations.length} recommendations for ${tier} tier`);
