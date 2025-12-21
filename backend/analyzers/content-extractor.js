@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 const { URL } = require('url');
 const EntityAnalyzer = require('./entity-analyzer');
 const VOCABULARY = require('../config/detection-vocabulary');
-const { safeHead } = require('../utils/safe-http');
+const { safeHead, safeGet } = require('../utils/safe-http');
 const {
   CONFIDENCE_LEVELS,
   EVIDENCE_SOURCES,
@@ -1433,17 +1433,20 @@ class ContentExtractor {
   }
 
   /**
-   * RULEBOOK v1.2 Step 14: IndexNow Key Verification
+   * RULEBOOK v1.2 Step C2: IndexNow Key Verification
    * Verifies that the IndexNow key file exists at the expected location
    * Uses safe-http utility with SSRF protection and same-domain enforcement
+   * Includes HEAD→GET fallback for servers that don't support HEAD
    */
   async verifyIndexNow($, key) {
     const result = {
       detected: false,
       keyLocation: null,
       key: null,
+      keyValue: null,
       keyVerified: null,
       verificationStatus: null,
+      verificationMethod: null,
       verificationError: null
     };
 
@@ -1454,6 +1457,7 @@ class ContentExtractor {
     result.detected = true;
     result.keyLocation = 'meta';
     result.key = key;
+    result.keyValue = key;
 
     try {
       // Build the base URL from this.url
@@ -1464,20 +1468,50 @@ class ContentExtractor {
       console.log(`[IndexNow] Verifying key file at: ${keyFileUrl}`);
 
       // Use safe-http with SSRF protection and same-domain enforcement
-      const response = await safeHead(keyFileUrl, {
+      const headResult = await safeHead(keyFileUrl, {
         scanTargetUrl: this.url,
         requireSameDomain: true,
         timeout: 5000
       });
 
-      if (response.success) {
-        result.keyVerified = response.status === 200;
-        result.verificationStatus = response.status;
-        console.log(`[IndexNow] Key verification: ${result.keyVerified ? 'VERIFIED' : 'NOT FOUND'} (status: ${response.status})`);
+      result.verificationMethod = 'HEAD';
+
+      if (headResult.success) {
+        result.verificationStatus = headResult.status;
+
+        if (headResult.status === 200) {
+          result.keyVerified = true;
+          console.log(`[IndexNow] Key verification: VERIFIED via HEAD (status: 200)`);
+        } else if (headResult.status === 405) {
+          // HEAD not allowed, try GET as fallback
+          console.log(`[IndexNow] HEAD returned 405, trying GET fallback...`);
+
+          const getResult = await safeGet(keyFileUrl, {
+            scanTargetUrl: this.url,
+            requireSameDomain: true,
+            timeout: 5000
+          });
+
+          result.verificationMethod = 'GET';
+          result.verificationStatus = getResult.status;
+
+          if (getResult.success && getResult.status === 200) {
+            // Verify the content matches the key
+            const content = getResult.data?.toString().trim();
+            result.keyVerified = content === key;
+            console.log(`[IndexNow] Key verification via GET: ${result.keyVerified ? 'VERIFIED' : 'CONTENT MISMATCH'}`);
+          } else {
+            result.keyVerified = false;
+            console.log(`[IndexNow] GET fallback failed (status: ${getResult.status})`);
+          }
+        } else {
+          result.keyVerified = false;
+          console.log(`[IndexNow] Key verification: NOT FOUND (status: ${headResult.status})`);
+        }
       } else {
         result.keyVerified = false;
-        result.verificationError = response.error;
-        console.log(`[IndexNow] Key verification blocked: ${response.error}`);
+        result.verificationError = headResult.error;
+        console.log(`[IndexNow] Key verification blocked: ${headResult.error}`);
       }
 
     } catch (error) {
@@ -1485,6 +1519,12 @@ class ContentExtractor {
       result.verificationError = error.message;
       console.log(`[IndexNow] Key verification failed: ${error.message}`);
     }
+
+    console.log('[IndexNow] Verification:', {
+      detected: result.detected,
+      keyVerified: result.keyVerified,
+      method: result.verificationMethod
+    });
 
     return result;
   }
