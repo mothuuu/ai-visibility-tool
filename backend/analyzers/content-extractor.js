@@ -537,6 +537,12 @@ class ContentExtractor {
   extractFAQs($, structuredData = []) {
     const faqs = [];
 
+    // DEBUG: Log input data
+    console.log('[ContentExtractor] extractFAQs INPUT:', {
+      structuredDataCount: structuredData.length,
+      structuredDataTypes: structuredData.map(sd => sd.type).join(', ')
+    });
+
     // Method 0: Extract FAQs from JSON-LD FAQPage schema
     const faqSchemas = structuredData.filter(sd => sd.type === 'FAQPage');
     if (faqSchemas.length > 0) {
