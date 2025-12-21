@@ -7,7 +7,7 @@
  * Run with: node backend/tests/detection-audit.js
  */
 
-const ContentExtractor = require('../analyzers/content-extractor');
+const { ContentExtractor } = require('../analyzers/content-extractor');
 const SiteCrawler = require('../analyzers/site-crawler');
 const V5EnhancedRubricEngine = require('../analyzers/v5-enhanced-rubric-engine');
 const { detectPageIssues } = require('../analyzers/recommendation-engine/issue-detector');

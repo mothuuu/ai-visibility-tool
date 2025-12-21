@@ -1,9 +1,32 @@
 /**
  * EVIDENCE CONTRACT
- * 
+ *
  * Single source of truth for what the content extractor returns.
  * All scoring functions depend ONLY on this contract.
+ *
+ * Rulebook Version: 2.1
+ * Contract Version: 2.0.0
+ *
+ * Contract version changes:
+ * - PATCH (2.0.x): Documentation, optional field additions
+ * - MINOR (2.x.0): New optional namespaces, new fields
+ * - MAJOR (x.0.0): Breaking changes to required fields
  */
+
+const RULEBOOK_VERSION = '2.1';
+const CONTRACT_VERSION = '2.0.0';
+
+const REQUIRED_NAMESPACES = ['url', 'timestamp', 'navigation', 'structure', 'content', 'technical'];
+const EXPECTED_NAMESPACES = ['crawler', 'siteMetrics'];
+
+// RULEBOOK v1.2 Step C6: Required fields per namespace
+// Missing these fields causes validation ERROR (not warning)
+const REQUIRED_FIELDS = {
+  navigation: ['keyPages', 'allNavLinks', 'hasSemanticNav', 'headerLinks', 'navLinks', 'footerLinks'],
+  structure: ['hasNav', 'hasHeader', 'hasFooter', 'hasMain', 'headingCount', 'headingHierarchy'],
+  content: ['paragraphs', 'headings', 'wordCount'],
+  technical: ['structuredData', 'hasFAQSchema', 'hasArticleSchema', 'hasOrganizationSchema', 'isJSRendered']
+};
 
 const EvidenceContract = {
   metadata: {
@@ -58,23 +81,66 @@ const EvidenceContract = {
   url: '', html: '', timestamp: ''
 };
 
-function validateEvidence(evidence) {
+function validateEvidence(evidence, options = {}) {
   const errors = [];
-  const requiredKeys = ['metadata', 'content', 'structure', 'media', 'technical', 'performance', 'accessibility', 'url', 'timestamp'];
-  
-  for (const key of requiredKeys) {
-    if (!(key in evidence)) errors.push(`Missing required key: ${key}`);
+  const warnings = [];
+
+  if (!evidence.contractVersion) {
+    warnings.push('Missing contractVersion');
   }
-  
+
+  // Validate required namespaces
+  for (const ns of REQUIRED_NAMESPACES) {
+    if (!evidence[ns]) errors.push(`Missing required: ${ns}`);
+  }
+
+  // Validate expected namespaces (warnings only)
+  for (const ns of EXPECTED_NAMESPACES) {
+    if (!evidence[ns]) warnings.push(`Missing expected: ${ns}`);
+  }
+
+  // RULEBOOK v1.2 Step C6: Validate required fields per namespace
+  // These are ERRORS, not warnings
+  if (evidence.navigation) {
+    if (!evidence.navigation.footerLinks) {
+      errors.push('navigation.footerLinks required');
+    }
+    if (!evidence.navigation.headerLinks) {
+      errors.push('navigation.headerLinks required');
+    }
+    if (!evidence.navigation.navLinks) {
+      errors.push('navigation.navLinks required');
+    }
+    if (!evidence.navigation.keyPages) {
+      errors.push('navigation.keyPages required');
+    }
+  }
+
+  if (evidence.structure) {
+    if (!Array.isArray(evidence.structure.headingHierarchy)) {
+      errors.push('structure.headingHierarchy required (array)');
+    }
+  }
+
+  if (evidence.technical) {
+    if (evidence.technical.isJSRendered === undefined) {
+      warnings.push('technical.isJSRendered recommended');
+    }
+  }
+
+  // Legacy validation (backward compatibility)
   if (evidence.metadata && typeof evidence.metadata !== 'object') errors.push('metadata must be an object');
   if (evidence.content) {
     if (!Array.isArray(evidence.content.paragraphs)) errors.push('content.paragraphs must be an array');
     if (!evidence.content.headings || typeof evidence.content.headings !== 'object') errors.push('content.headings must be an object');
   }
-  if (evidence.structure && typeof evidence.structure.headingCount !== 'object') errors.push('structure.headingCount must be an object');
-  if (evidence.media && !Array.isArray(evidence.media.images)) errors.push('media.images must be an array');
-  
-  return { valid: errors.length === 0, errors };
+
+  const valid = errors.length === 0;
+  if (!valid || warnings.length > 0) {
+    console.log('[EvidenceContract] Validation:', { valid, errors, warnings, rulebookVersion: RULEBOOK_VERSION });
+  }
+
+  return { valid, errors, warnings, contractVersion: evidence.contractVersion || 'unknown', rulebookVersion: RULEBOOK_VERSION };
 }
 
 function createMockEvidence(overrides = {}) {
@@ -107,7 +173,39 @@ function createMockEvidence(overrides = {}) {
     structure: {
       hasMain: true, hasArticle: true, hasSection: true, hasAside: false, hasNav: true, hasHeader: true, hasFooter: true,
       landmarks: 4, headingCount: { h1: 1, h2: 3, h3: 4, h4: 0, h5: 0, h6: 0 },
+      headingHierarchy: [
+        { level: 1, text: 'Main Heading', index: 0 },
+        { level: 2, text: 'Section One', index: 1 },
+        { level: 3, text: 'Subsection 1.1', index: 2 },
+        { level: 2, text: 'Section Two', index: 3 },
+        { level: 2, text: 'FAQs', index: 4 },
+        { level: 3, text: 'What is this?', index: 5 },
+        { level: 3, text: 'How does it work?', index: 6 }
+      ],
       internalLinks: 12, externalLinks: 5, elementsWithIds: 8, anchorLinks: 3, hasTOC: true, hasBreadcrumbs: true
+    },
+    navigation: {
+      keyPages: { about: '/about', contact: '/contact', services: '/services', faq: '/faq', blog: '/blog' },
+      allNavLinks: ['/about', '/services', '/contact', '/faq', '/blog', '/pricing'],
+      hasSemanticNav: true,
+      headerLinks: [
+        { text: 'Home', href: '/' },
+        { text: 'About', href: '/about' },
+        { text: 'Services', href: '/services' }
+      ],
+      navLinks: [
+        { text: 'About', href: '/about' },
+        { text: 'Services', href: '/services' },
+        { text: 'Blog', href: '/blog' },
+        { text: 'Contact', href: '/contact' }
+      ],
+      footerLinks: [
+        { text: 'Privacy Policy', href: '/privacy' },
+        { text: 'Terms', href: '/terms' },
+        { text: 'Contact', href: '/contact' }
+      ],
+      hasBlogLink: true,
+      hasFAQLink: true
     },
     media: {
       images: [
@@ -125,6 +223,7 @@ function createMockEvidence(overrides = {}) {
         { type: 'FAQPage', context: 'https://schema.org', raw: { '@type': 'FAQPage' } }
       ],
       hasOrganizationSchema: true, hasLocalBusinessSchema: false, hasFAQSchema: true, hasArticleSchema: false, hasBreadcrumbSchema: true,
+      isJSRendered: false,
       hreflangTags: 2, hreflangLanguages: ['en', 'es'], hasCanonical: true, canonicalUrl: 'https://example.com/test',
       hasSitemapLink: true, hasRSSFeed: true, hasViewport: true, viewport: 'width=device-width, initial-scale=1',
       charset: 'UTF-8', robotsMeta: 'index, follow', cacheControl: 'public, max-age=3600',
@@ -166,4 +265,13 @@ function getEvidenceField(evidence, path) {
   return path.split('.').reduce((obj, key) => obj?.[key], evidence);
 }
 
-module.exports = { EvidenceContract, validateEvidence, createMockEvidence, getEvidenceField };
+module.exports = {
+  RULEBOOK_VERSION,
+  CONTRACT_VERSION,
+  REQUIRED_NAMESPACES,
+  REQUIRED_FIELDS,
+  EvidenceContract,
+  validateEvidence,
+  createMockEvidence,
+  getEvidenceField
+};

@@ -3,12 +3,23 @@ const cheerio = require('cheerio');
 const { URL } = require('url');
 const EntityAnalyzer = require('./entity-analyzer');
 const VOCABULARY = require('../config/detection-vocabulary');
+const { safeHead, safeGet } = require('../utils/safe-http');
 const {
   CONFIDENCE_LEVELS,
   EVIDENCE_SOURCES,
   EVIDENCE_SCHEMAS,
   createEvidence
 } = require('../config/diagnostic-types');
+
+// RULEBOOK v1.2 Step C7: Headless rendering for JS-rendered sites
+// Using puppeteer-core (requires Chrome/Chromium installed separately)
+let puppeteer;
+try {
+  puppeteer = require('puppeteer-core');
+} catch (e) {
+  console.warn('[Headless] puppeteer-core not available, headless rendering disabled');
+  puppeteer = null;
+}
 
 /**
  * Content Extractor for V5 Rubric Analysis
@@ -46,7 +57,7 @@ class ContentExtractor {
 
       // PHASE A: Extract from FULL DOM (before any removal)
       console.log('[Rulebook v1.2] PHASE A: Extracting from full DOM...');
-      const technical = this.extractTechnical($full, fetchResult);
+      const technical = await this.extractTechnical($full, fetchResult);
       const structure = this.extractStructure($full);
       const navigation = this.extractNavigation($full);
       const metadata = this.extractMetadata($full);
@@ -380,6 +391,21 @@ class ContentExtractor {
       }
     });
 
+    // Extract tab content (evidence contract v2.0)
+    const tabs = [];
+    $('[role="tablist"]').each((i, tablist) => {
+      $(tablist).find('[role="tab"]').each((j, tab) => {
+        const tabId = $(tab).attr('aria-controls');
+        const tabTitle = $(tab).text().trim();
+        if (tabId) {
+          const content = $(`#${tabId}`).text().trim();
+          if (tabTitle && content) {
+            tabs.push({ title: tabTitle, content, source: 'aria-tab' });
+          }
+        }
+      });
+    });
+
     // Extract paragraphs with intelligent prioritization and smart filtering
     const allParagraphs = [];
     $('p').each((idx, el) => {
@@ -505,6 +531,7 @@ class ContentExtractor {
       tables,
       faqs: faqs, // FAQs extracted before footer removal
       accordions, // RULEBOOK v1.2 Section 7.3.2
+      tabs, // Evidence contract v2.0
       wordCount,
       textLength: bodyText.length,
       bodyText: bodyText.substring(0, limits.maxCharsTotal) // RULEBOOK v1.2: Adaptive limits
@@ -822,6 +849,18 @@ class ContentExtractor {
    * IMPORTANT: Call this BEFORE extractContent() which removes nav/header/footer
    */
   extractStructure($) {
+    // Build heading hierarchy (evidence contract v2.0)
+    const headingHierarchy = [];
+    $('h1, h2, h3, h4, h5, h6').each((i, el) => {
+      const tagName = el.tagName.toLowerCase();
+      headingHierarchy.push({
+        level: parseInt(tagName.substring(1)),
+        text: $(el).text().trim(),
+        id: $(el).attr('id') || null,
+        index: i
+      });
+    });
+
     return {
       // Semantic HTML5 elements
       hasMain: $('main').length > 0,
@@ -835,8 +874,12 @@ class ContentExtractor {
       // ARIA landmarks
       landmarks: $('[role="main"], [role="navigation"], [role="complementary"], [role="contentinfo"]').length,
 
-      // Heading hierarchy
-      headingCount: {
+      // Heading hierarchy (evidence contract v2.0)
+      headingHierarchy,
+      headingCount: headingHierarchy.length,
+
+      // Legacy heading counts for backwards compatibility
+      headingCountByLevel: {
         h1: $('h1').length,
         h2: $('h2').length,
         h3: $('h3').length,
@@ -1009,6 +1052,16 @@ class ContentExtractor {
       }
     });
 
+    // Extract footer links separately for evidence contract compliance
+    const footerLinks = [];
+    $('footer a').each((i, el) => {
+      const href = $(el).attr('href') || '';
+      const text = $(el).text().trim();
+      if (href && text) {
+        footerLinks.push({ href, text, source: 'footer' });
+      }
+    });
+
     // Detect key pages from nav links using centralized VOCABULARY
     const keyPages = {
       home: allNavLinks.some(l =>
@@ -1092,7 +1145,11 @@ class ContentExtractor {
       hasAboutLink,
       hasContactLink,
       hasServicesLink,
-      hasPricingLink
+      hasPricingLink,
+
+      // Footer links (evidence contract v2.0)
+      footerLinks,
+      footerLinkCount: footerLinks.length
     };
   }
 
@@ -1177,7 +1234,7 @@ class ContentExtractor {
     return types;
   }
 
-  extractTechnical($, htmlData) {
+  async extractTechnical($, htmlData) {
     const html = typeof htmlData === 'string' ? htmlData : htmlData.html;
     const headers = htmlData?.headers || {};
 
@@ -1280,14 +1337,9 @@ class ContentExtractor {
       image: $('meta[name="twitter:image"]').attr('content') || null
     };
 
-    // RULEBOOK v1.2 Section 11.4.3: IndexNow Detection
+    // RULEBOOK v1.2 Section 11.4.3: IndexNow Detection with Key Verification
     const indexNowKey = $('meta[name="indexnow-key"]').attr('content') || null;
-    const indexNow = {
-      detected: !!indexNowKey,
-      keyLocation: indexNowKey ? 'meta' : null,
-      key: indexNowKey,
-      keyVerified: null // Would require async verification
-    };
+    const indexNow = await this.verifyIndexNow($, indexNowKey);
 
     // RULEBOOK v1.2 Section 11.4.4: RSS/Atom Feed Detection
     const feeds = [];
@@ -1388,6 +1440,103 @@ class ContentExtractor {
       lastModified: headers?.['last-modified'] || '',
       etag: headers?.['etag'] || ''
     };
+  }
+
+  /**
+   * RULEBOOK v1.2 Step C2: IndexNow Key Verification
+   * Verifies that the IndexNow key file exists at the expected location
+   * Uses safe-http utility with SSRF protection and same-domain enforcement
+   * Includes HEAD→GET fallback for servers that don't support HEAD
+   */
+  async verifyIndexNow($, key) {
+    const result = {
+      detected: false,
+      keyLocation: null,
+      key: null,
+      keyValue: null,
+      keyVerified: null,
+      verificationStatus: null,
+      verificationMethod: null,
+      verificationError: null
+    };
+
+    if (!key) {
+      return result;
+    }
+
+    result.detected = true;
+    result.keyLocation = 'meta';
+    result.key = key;
+    result.keyValue = key;
+
+    try {
+      // Build the base URL from this.url
+      const urlObj = new URL(this.url);
+      const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+      const keyFileUrl = `${baseUrl}/${key}.txt`;
+
+      console.log(`[IndexNow] Verifying key file at: ${keyFileUrl}`);
+
+      // Use safe-http with SSRF protection and same-domain enforcement
+      const headResult = await safeHead(keyFileUrl, {
+        scanTargetUrl: this.url,
+        requireSameDomain: true,
+        timeout: 5000
+      });
+
+      result.verificationMethod = 'HEAD';
+
+      if (headResult.success) {
+        result.verificationStatus = headResult.status;
+
+        if (headResult.status === 200) {
+          result.keyVerified = true;
+          console.log(`[IndexNow] Key verification: VERIFIED via HEAD (status: 200)`);
+        } else if (headResult.status === 405) {
+          // HEAD not allowed, try GET as fallback
+          console.log(`[IndexNow] HEAD returned 405, trying GET fallback...`);
+
+          const getResult = await safeGet(keyFileUrl, {
+            scanTargetUrl: this.url,
+            requireSameDomain: true,
+            timeout: 5000
+          });
+
+          result.verificationMethod = 'GET';
+          result.verificationStatus = getResult.status;
+
+          if (getResult.success && getResult.status === 200) {
+            // Verify the content matches the key
+            const content = getResult.data?.toString().trim();
+            result.keyVerified = content === key;
+            console.log(`[IndexNow] Key verification via GET: ${result.keyVerified ? 'VERIFIED' : 'CONTENT MISMATCH'}`);
+          } else {
+            result.keyVerified = false;
+            console.log(`[IndexNow] GET fallback failed (status: ${getResult.status})`);
+          }
+        } else {
+          result.keyVerified = false;
+          console.log(`[IndexNow] Key verification: NOT FOUND (status: ${headResult.status})`);
+        }
+      } else {
+        result.keyVerified = false;
+        result.verificationError = headResult.error;
+        console.log(`[IndexNow] Key verification blocked: ${headResult.error}`);
+      }
+
+    } catch (error) {
+      result.keyVerified = false;
+      result.verificationError = error.message;
+      console.log(`[IndexNow] Key verification failed: ${error.message}`);
+    }
+
+    console.log('[IndexNow] Verification:', {
+      detected: result.detected,
+      keyVerified: result.keyVerified,
+      method: result.verificationMethod
+    });
+
+    return result;
   }
 
   /**
@@ -1789,4 +1938,524 @@ class ContentExtractor {
   }
 }
 
-module.exports = ContentExtractor;
+// ============================================
+// RULEBOOK v1.2 Step C7: Headless Rendering Fallback
+// For JS-rendered sites (React, Vue, Angular SPAs)
+// H4: Per-scan render context for concurrency safety
+// H5: Performance guardrails (timeouts, resource blocking, size limits)
+// ============================================
+
+const RENDER_CONFIG = {
+  // Content thresholds (trigger render if below)
+  wordCountThreshold: 50,
+  charCountThreshold: 500,
+
+  // H5: Timeouts
+  navigationTimeout: 15000,   // Max time to load page
+  renderTimeout: 20000,       // Max total time including wait
+  waitAfterLoad: 2000,        // Wait for hydration
+
+  // H5: Resource limits
+  maxResponseSize: 5 * 1024 * 1024,  // 5MB max HTML
+
+  // H5: Per-scan limits
+  maxRenderTimePerScan: 60000,  // 60s total render time per scan
+
+  // Tier budgets
+  tierBudgets: {
+    guest: 0,
+    free: 0,
+    freemium: 0,
+    diy: 2,
+    pro: 5,
+    premium: 5,
+    agency: 10
+  },
+
+  // H5: Resources to block (performance optimization)
+  blockedResourceTypes: ['image', 'media', 'font', 'stylesheet'],
+
+  // H5: Tracking/analytics domains to block
+  blockedDomains: [
+    'google-analytics.com',
+    'googletagmanager.com',
+    'facebook.net',
+    'doubleclick.net',
+    'hotjar.com',
+    'intercom.io',
+    'segment.io',
+    'mixpanel.com',
+    'amplitude.com',
+    'fullstory.com'
+  ],
+
+  // Chrome executable paths to try
+  chromePaths: [
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    process.env.CHROME_PATH
+  ].filter(Boolean)
+};
+
+// DEPRECATED: Global counter - kept for backward compatibility only
+// Use createRenderContext() for new code
+let renderedPagesThisScan = 0;
+
+/**
+ * DEPRECATED: Use createRenderContext() instead
+ * Reset render counter (call at start of each scan)
+ */
+function resetRenderCounter() {
+  renderedPagesThisScan = 0;
+}
+
+/**
+ * DEPRECATED: Use renderContext.rendered instead
+ * Get current render count for this scan
+ */
+function getRenderCount() {
+  return renderedPagesThisScan;
+}
+
+/**
+ * H4: Create a render context for a scan (concurrency-safe)
+ * Call once at the start of each scan and pass through the pipeline
+ * @param {Object} options - Context options
+ * @param {string} options.tier - User tier (guest, free, diy, pro, agency)
+ * @param {string} options.scanId - Optional scan identifier for logging
+ * @returns {Object} Render context to pass through the scan
+ */
+function createRenderContext(options = {}) {
+  const tier = options.tier || 'diy';
+  const budget = RENDER_CONFIG.tierBudgets[tier] || RENDER_CONFIG.tierBudgets.diy;
+
+  return {
+    tier,
+    budget,
+    rendered: 0,
+    scanId: options.scanId || `scan_${Date.now()}`,
+    startTime: Date.now(),
+    pages: []  // Track which pages were rendered
+  };
+}
+
+/**
+ * Get render context summary for logging
+ */
+function getRenderContextSummary(renderContext) {
+  if (!renderContext) return { rendered: renderedPagesThisScan, mode: 'global' };
+
+  return {
+    scanId: renderContext.scanId,
+    rendered: renderContext.rendered,
+    budget: renderContext.budget,
+    tier: renderContext.tier,
+    pages: renderContext.pages,
+    duration: Date.now() - renderContext.startTime,
+    mode: 'context'
+  };
+}
+
+/**
+ * H4: Check if headless rendering should be attempted (context-aware)
+ * @param {Object} extractedContent - Content from static extraction
+ * @param {Object} technical - Technical info including isJSRendered
+ * @param {string|Object} tierOrContext - User tier string OR render context object
+ * @returns {Object} Decision with shouldRender and reason
+ */
+function shouldAttemptRender(extractedContent, technical, tierOrContext = 'diy') {
+  // Support both old API (tier string) and new API (render context)
+  let budget, used, tier;
+
+  if (typeof tierOrContext === 'object' && tierOrContext !== null) {
+    // New API: render context object
+    budget = tierOrContext.budget;
+    used = tierOrContext.rendered;
+    tier = tierOrContext.tier;
+  } else {
+    // Legacy API: tier string with global counter
+    tier = tierOrContext;
+    budget = RENDER_CONFIG.tierBudgets[tier] || 0;
+    used = renderedPagesThisScan;
+  }
+
+  // Check if puppeteer available
+  if (!puppeteer) {
+    return { shouldRender: false, reason: 'puppeteer_unavailable' };
+  }
+
+  // Check budget
+  if (used >= budget) {
+    return { shouldRender: false, reason: 'budget_exhausted', budget, used };
+  }
+
+  // Check if JS-rendered
+  if (!technical.isJSRendered) {
+    return { shouldRender: false, reason: 'not_js_rendered' };
+  }
+
+  // Check content thresholds
+  const wordCount = extractedContent.wordCount || 0;
+  const paragraphs = extractedContent.paragraphs || [];
+  const charCount = paragraphs.join(' ').length;
+
+  if (wordCount >= RENDER_CONFIG.wordCountThreshold &&
+      charCount >= RENDER_CONFIG.charCountThreshold) {
+    return { shouldRender: false, reason: 'sufficient_content', wordCount, charCount };
+  }
+
+  return {
+    shouldRender: true,
+    reason: 'js_rendered_insufficient_content',
+    metrics: { wordCount, charCount, threshold: RENDER_CONFIG.wordCountThreshold },
+    budgetRemaining: budget - used
+  };
+}
+
+/**
+ * Find Chrome/Chromium executable
+ * @returns {string|null} Path to Chrome executable or null
+ */
+function findChromePath() {
+  const fs = require('fs');
+  for (const path of RENDER_CONFIG.chromePaths) {
+    try {
+      if (fs.existsSync(path)) {
+        console.log('[Headless] Found Chrome at:', path);
+        return path;
+      }
+    } catch (e) {
+      // Continue checking
+    }
+  }
+  console.warn('[Headless] No Chrome executable found');
+  return null;
+}
+
+/**
+ * H4+H5: Render page with headless browser (context-aware, with guardrails)
+ * @param {string} url - URL to render
+ * @param {Object} renderContext - Optional render context for tracking
+ * @returns {Object} Render result with success, html, duration
+ */
+async function renderWithHeadless(url, renderContext = null) {
+  const scanId = renderContext?.scanId || 'global';
+  const budgetInfo = renderContext
+    ? `${renderContext.rendered}/${renderContext.budget}`
+    : `${renderedPagesThisScan}/global`;
+
+  console.log('[Headless] Starting render:', { url, scanId, budget: budgetInfo });
+
+  if (!puppeteer) {
+    return { success: false, error: 'puppeteer not available' };
+  }
+
+  const chromePath = findChromePath();
+  if (!chromePath) {
+    return { success: false, error: 'Chrome executable not found' };
+  }
+
+  // H5: Check scan-level time budget
+  if (renderContext) {
+    const scanElapsed = Date.now() - renderContext.startTime;
+    if (scanElapsed > RENDER_CONFIG.maxRenderTimePerScan) {
+      console.warn('[Headless] Scan render time budget exhausted:', {
+        scanId,
+        elapsed: scanElapsed,
+        limit: RENDER_CONFIG.maxRenderTimePerScan
+      });
+      return {
+        success: false,
+        error: 'Scan render time budget exhausted',
+        scanElapsed,
+        scanId
+      };
+    }
+  }
+
+  let browser = null;
+  const startTime = Date.now();
+
+  try {
+    // H5: Enhanced Chrome args for stability and memory limits
+    browser = await puppeteer.launch({
+      executablePath: chromePath,
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions',
+        '--disable-background-networking',
+        '--disable-default-apps',
+        '--disable-sync',
+        '--disable-translate',
+        '--metrics-recording-only',
+        '--mute-audio',
+        '--no-first-run',
+        '--safebrowsing-disable-auto-update',
+        // Memory limits
+        '--js-flags=--max-old-space-size=256'
+      ]
+    });
+
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 800 });
+    await page.setUserAgent('Mozilla/5.0 (compatible; AIVisibilityBot/1.0; +https://visible2ai.com/bot)');
+
+    // H5: Block heavy resources for performance
+    await page.setRequestInterception(true);
+    let blockedCount = 0;
+
+    page.on('request', (request) => {
+      const resourceType = request.resourceType();
+      const requestUrl = request.url();
+
+      // Block by resource type
+      if (RENDER_CONFIG.blockedResourceTypes.includes(resourceType)) {
+        blockedCount++;
+        request.abort();
+        return;
+      }
+
+      // Block tracking/analytics domains
+      if (RENDER_CONFIG.blockedDomains.some(domain => requestUrl.includes(domain))) {
+        blockedCount++;
+        request.abort();
+        return;
+      }
+
+      request.continue();
+    });
+
+    // H5: Navigate with navigation timeout
+    await page.goto(url, {
+      waitUntil: 'networkidle2',
+      timeout: RENDER_CONFIG.navigationTimeout
+    });
+
+    // H5: Wait for hydration (with overall timeout check)
+    const elapsed = Date.now() - startTime;
+    const remainingTime = RENDER_CONFIG.renderTimeout - elapsed;
+
+    if (remainingTime > RENDER_CONFIG.waitAfterLoad) {
+      await new Promise(resolve => setTimeout(resolve, RENDER_CONFIG.waitAfterLoad));
+    }
+
+    const renderedHtml = await page.content();
+
+    // H5: Check response size
+    if (renderedHtml.length > RENDER_CONFIG.maxResponseSize) {
+      const sizeMB = (renderedHtml.length / 1024 / 1024).toFixed(2);
+      console.warn('[Headless] Response too large:', { url, sizeMB, scanId });
+      return {
+        success: false,
+        error: `Response too large: ${sizeMB}MB`,
+        duration: Date.now() - startTime,
+        scanId
+      };
+    }
+
+    // Track in context (H4) or global (legacy)
+    if (renderContext) {
+      renderContext.rendered++;
+      renderContext.pages.push({
+        url,
+        duration: Date.now() - startTime,
+        htmlLength: renderedHtml.length
+      });
+    } else {
+      renderedPagesThisScan++;
+    }
+
+    const currentCount = renderContext ? renderContext.rendered : renderedPagesThisScan;
+
+    console.log('[Headless] Success:', {
+      url,
+      scanId,
+      duration: Date.now() - startTime,
+      htmlSize: `${(renderedHtml.length / 1024).toFixed(1)}KB`,
+      rendered: currentCount,
+      blockedRequests: blockedCount
+    });
+
+    return {
+      success: true,
+      html: renderedHtml,
+      duration: Date.now() - startTime,
+      scanId,
+      blockedRequests: blockedCount
+    };
+
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const timedOut = error.name === 'TimeoutError';
+
+    console.error('[Headless] Failed:', {
+      url,
+      scanId,
+      error: error.message,
+      duration,
+      timedOut
+    });
+
+    return {
+      success: false,
+      error: error.message,
+      duration,
+      scanId,
+      timedOut
+    };
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {
+        console.warn('[Headless] Browser close error:', e.message);
+      }
+    }
+  }
+}
+
+/**
+ * H4: Enhanced extraction with headless fallback (context-aware)
+ * Creates extractor, runs static extraction, then attempts headless if needed
+ * @param {string} url - URL to extract
+ * @param {Object} options - Options including tier, allowHeadless, renderContext
+ * @returns {Object} Extracted evidence with render metadata
+ */
+async function extractWithFallback(url, options = {}) {
+  const {
+    tier = 'diy',
+    allowHeadless = true,
+    renderContext = null  // H4: Pass render context for concurrency safety
+  } = options;
+
+  // Create extractor and run static extraction
+  const extractor = new ContentExtractor(url, options);
+  const staticResult = await extractor.extract();
+
+  // Determine what to pass to shouldAttemptRender
+  // If renderContext provided, use it; otherwise use tier string (legacy)
+  const tierOrContext = renderContext || tier;
+
+  // Check if rendering needed
+  const renderDecision = shouldAttemptRender(
+    staticResult.content,
+    staticResult.technical,
+    tierOrContext
+  );
+
+  const scanId = renderContext?.scanId || 'global';
+  console.log('[Extract] Render decision:', { ...renderDecision, scanId });
+
+  // Warn if headless is enabled but no render context provided
+  if (allowHeadless && !renderContext) {
+    console.warn('[Extract] No renderContext provided - using deprecated global counter');
+  }
+
+  if (!renderDecision.shouldRender || !allowHeadless) {
+    return {
+      ...staticResult,
+      technical: {
+        ...staticResult.technical,
+        rendered: false,
+        renderSource: 'static',
+        renderDecision: renderDecision.reason,
+        scanId
+      }
+    };
+  }
+
+  // Attempt headless render (pass context for tracking)
+  console.log('[Extract] Attempting headless render:', { reason: renderDecision.reason, scanId });
+  const renderResult = await renderWithHeadless(url, renderContext);
+
+  if (!renderResult.success) {
+    console.warn('[Extract] Headless render failed:', { error: renderResult.error, scanId });
+    return {
+      ...staticResult,
+      technical: {
+        ...staticResult.technical,
+        rendered: false,
+        renderSource: 'static',
+        renderAttempted: true,
+        renderError: renderResult.error,
+        scanId
+      }
+    };
+  }
+
+  // Re-extract from rendered HTML
+  console.log('[Extract] Re-extracting from rendered HTML...');
+  const renderedExtractor = new ContentExtractor(url, options);
+
+  // Override fetchHTML to return rendered content
+  renderedExtractor.fetchHTML = async () => ({
+    html: renderResult.html,
+    headers: {},
+    statusCode: 200,
+    finalUrl: url
+  });
+
+  const renderedResult = await renderedExtractor.extract();
+
+  // Calculate improvement
+  const staticWordCount = staticResult.content.wordCount || 0;
+  const renderedWordCount = renderedResult.content.wordCount || 0;
+  const improvement = renderedWordCount - staticWordCount;
+
+  // Build budget used string for metadata
+  const budgetUsed = renderContext
+    ? `${renderContext.rendered}/${renderContext.budget}`
+    : `${renderedPagesThisScan}/global`;
+
+  console.log('[Extract] Render improvement:', {
+    staticWordCount,
+    renderedWordCount,
+    improvement,
+    renderDuration: renderResult.duration,
+    scanId,
+    budgetUsed
+  });
+
+  // Return rendered result with metadata
+  return {
+    ...renderedResult,
+    technical: {
+      ...renderedResult.technical,
+      rendered: true,
+      renderSource: 'headless',
+      renderDuration: renderResult.duration,
+      staticWordCount,
+      renderedWordCount,
+      contentImprovement: improvement,
+      budgetUsed,
+      scanId
+    }
+  };
+}
+
+module.exports = {
+  // Main class export (default behavior)
+  ContentExtractor,
+
+  // RULEBOOK v1.2 Step C7: Headless rendering exports
+  extractWithFallback,
+  shouldAttemptRender,
+  renderWithHeadless,
+  findChromePath,
+  RENDER_CONFIG,
+
+  // H4: Per-scan headless budget (concurrency-safe)
+  createRenderContext,
+  getRenderContextSummary,
+
+  // Legacy (deprecated - use createRenderContext instead)
+  resetRenderCounter,
+  getRenderCount
+};

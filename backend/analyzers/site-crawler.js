@@ -1,5 +1,5 @@
 const axios = require('axios');
-const ContentExtractor = require('./content-extractor');
+const { ContentExtractor, extractWithFallback, resetRenderCounter } = require('./content-extractor');
 const VOCABULARY = require('../config/detection-vocabulary');
 
 /**
@@ -24,13 +24,21 @@ class SiteCrawler {
       includeSitemap: options.includeSitemap !== false,
       includeInternalLinks: options.includeInternalLinks !== false,
       respectRobots: options.respectRobots !== false,
-      userAgent: options.userAgent || 'AI-Visibility-Tool/1.0'
+      userAgent: options.userAgent || 'AI-Visibility-Tool/1.0',
+      // RULEBOOK v1.2 Step C7: Headless rendering options
+      allowHeadless: options.allowHeadless !== false,
+      tier: options.tier || 'diy'
     };
     this.visitedUrls = new Set();
     this.pageEvidences = [];
     // Fix for Issue #2 + #9: Track ALL discovered URLs, even ones not crawled
     // This enables blog/FAQ detection from sitemap/internal links
     this.allDiscoveredUrls = new Set();
+    // RULEBOOK v1.2: Track sitemap-specific URLs for classification
+    this.sitemapUrls = [];
+
+    // RULEBOOK v1.2 Step C7: Reset render counter at start of crawl
+    resetRenderCounter();
   }
 
   /**
@@ -246,6 +254,9 @@ class SiteCrawler {
 
       console.log(`[Crawler] Found ${sitemapUrls.length} page URLs in sitemap`);
 
+      // RULEBOOK v1.2: Store sitemap URLs for classification
+      this.sitemapUrls = [...sitemapUrls];
+
       // Prioritize diverse content types
       return this.prioritizeUrls(sitemapUrls);
 
@@ -397,6 +408,7 @@ class SiteCrawler {
 
   /**
    * Crawl a single page and extract evidence
+   * RULEBOOK v1.2 Step C7: Uses extractWithFallback for headless rendering when needed
    */
   async crawlPage(url) {
     if (this.visitedUrls.has(url)) {
@@ -407,8 +419,19 @@ class SiteCrawler {
     this.visitedUrls.add(url);
 
     try {
-      const extractor = new ContentExtractor(url, this.options);
-      const evidence = await extractor.extract();
+      // RULEBOOK v1.2 Step C7: Use extractWithFallback for JS-rendered sites
+      const evidence = await extractWithFallback(url, {
+        ...this.options,
+        tier: this.options.tier,
+        allowHeadless: this.options.allowHeadless
+      });
+
+      // Log rendering info if headless was attempted
+      if (evidence.technical?.rendered) {
+        console.log(`[Crawler] ✓ Headless rendered ${url} (improvement: +${evidence.technical.contentImprovement} words)`);
+      } else if (evidence.technical?.renderAttempted) {
+        console.log(`[Crawler] ✗ Headless render failed for ${url}: ${evidence.technical.renderError}`);
+      }
 
       // Log FAQ extraction results for this page
       const faqCount = evidence.content?.faqs?.length || 0;
@@ -596,6 +619,9 @@ class SiteCrawler {
     // RULEBOOK v1.2 Section 11.4.5: Parse robots.txt for AI crawler rules
     const robotsTxt = await this.parseRobotsTxt();
 
+    // RULEBOOK v1.2: Classify sitemap URLs by content type
+    const sitemapClassification = this.classifySitemapUrls(this.sitemapUrls);
+
     const aggregated = {
       siteUrl: this.baseUrl,
       pageCount: this.pageEvidences.length,
@@ -604,6 +630,13 @@ class SiteCrawler {
       sitemapLocation: this.detectedSitemapLocation || null,  // Which sitemap file was found
       // RULEBOOK v1.2: Robots.txt AI crawler analysis
       robotsTxt,
+      // RULEBOOK v1.2: Sitemap with classified URLs
+      sitemap: {
+        detected: this.sitemapDetected || false,
+        location: this.detectedSitemapLocation || null,
+        totalUrls: this.sitemapUrls.length,
+        ...sitemapClassification
+      },
 
       // Site-wide metrics for scoring
       siteMetrics: {
@@ -777,6 +810,63 @@ class SiteCrawler {
     // Count proper nouns (capitalized words)
     const properNouns = evidence.content.bodyText.match(/\b[A-Z][a-z]+\b/g) || [];
     return [...new Set(properNouns)].length;
+  }
+
+  /**
+   * RULEBOOK v1.2: Classify sitemap URLs by content type
+   * Enables detection of blog/FAQ/pricing pages from sitemap without crawling each page
+   */
+  classifySitemapUrls(urls) {
+    const patterns = {
+      blog: /\/(blog|news|articles|insights|resources|posts|learn)/i,
+      faq: /\/(faq|faqs|help|support|questions)/i,
+      pricing: /\/(pricing|plans|packages)/i,
+      contact: /\/(contact|get-in-touch)/i
+    };
+
+    const result = {
+      blogUrls: [],
+      faqUrls: [],
+      pricingUrls: [],
+      contactUrls: [],
+      hasBlogUrls: false,
+      hasFaqUrls: false,
+      hasPricingUrls: false,
+      hasContactUrls: false,
+      totalClassified: 0
+    };
+
+    for (const url of urls) {
+      if (patterns.blog.test(url)) {
+        result.blogUrls.push(url);
+      }
+      if (patterns.faq.test(url)) {
+        result.faqUrls.push(url);
+      }
+      if (patterns.pricing.test(url)) {
+        result.pricingUrls.push(url);
+      }
+      if (patterns.contact.test(url)) {
+        result.contactUrls.push(url);
+      }
+    }
+
+    result.hasBlogUrls = result.blogUrls.length > 0;
+    result.hasFaqUrls = result.faqUrls.length > 0;
+    result.hasPricingUrls = result.pricingUrls.length > 0;
+    result.hasContactUrls = result.contactUrls.length > 0;
+    result.totalClassified = result.blogUrls.length + result.faqUrls.length +
+                             result.pricingUrls.length + result.contactUrls.length;
+
+    console.log('[Crawler] RULEBOOK v1.2: Sitemap URL classification:', {
+      blogUrls: result.blogUrls.length,
+      faqUrls: result.faqUrls.length,
+      pricingUrls: result.pricingUrls.length,
+      contactUrls: result.contactUrls.length,
+      totalClassified: result.totalClassified
+    });
+
+    return result;
   }
 }
 

@@ -23,6 +23,8 @@
     "nodemailer": "^7.0.9",
     "openai": "^6.5.0",
     "pg": "^8.16.3",
+    "psl": "^1.15.0",
+    "puppeteer-core": "^24.34.0",
     "stripe": "^19.1.0"
   },
   "devDependencies": {

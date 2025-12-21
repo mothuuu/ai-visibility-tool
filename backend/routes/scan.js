@@ -22,6 +22,8 @@ const guestRateLimiter = createGuestRateLimiter({ maxScansPerDay: 5, db });
 const V5EnhancedRubricEngine = require('../analyzers/v5-enhanced-rubric-engine'); // Import the ENHANCED class
 const V5RubricEngine = V5EnhancedRubricEngine; // Alias for compatibility
 const { generateCompleteRecommendations } = require('../analyzers/recommendation-generator');
+const { measured, notMeasured, isMeasured } = require('../analyzers/score-types');
+const { canonicalizeUrl, canonicalizeWithRedirects, getCacheKey } = require('../utils/url-canonicalizer');
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -91,16 +93,16 @@ async function findReusableScanContext({ userId, domain, pageSetHash, withinDays
 // ============================================
 router.post('/guest', guestRateLimiter.middleware(), async (req, res) => {
   try {
-    const { url } = req.body;
+    const { url: userInputUrl } = req.body;
 
-    if (!url) {
+    if (!userInputUrl) {
       return res.status(400).json({ error: 'URL is required' });
     }
 
     // Validate URL format
     let validUrl;
     try {
-      validUrl = new URL(url);
+      validUrl = new URL(userInputUrl.startsWith('http') ? userInputUrl : `https://${userInputUrl}`);
       if (validUrl.protocol !== 'http:' && validUrl.protocol !== 'https:') {
         throw new Error('Invalid protocol');
       }
@@ -110,10 +112,45 @@ router.post('/guest', guestRateLimiter.middleware(), async (req, res) => {
       });
     }
 
-    console.log('🔍 Guest scan requested for:', url);
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RULEBOOK v1.2 Step C5: URL CANONICALIZATION - Do this FIRST before anything else
+    // ═══════════════════════════════════════════════════════════════════════════
+    let urlInfo;
+    try {
+      urlInfo = await canonicalizeWithRedirects(userInputUrl);
+    } catch (e) {
+      console.error('[Scan] Canonicalization failed:', e);
+      urlInfo = {
+        requestedUrl: userInputUrl,
+        canonicalUrl: canonicalizeUrl(userInputUrl),
+        error: e.message
+      };
+    }
 
-    // CHECK CACHE FIRST - prevent redundant analysis
-    const cachedResult = await guestScanCache.getCachedResult(url);
+    const scanTarget = urlInfo.canonicalUrl;
+    const cacheKey = getCacheKey(scanTarget);
+
+    // Store URL metadata for evidence
+    const urlMetadata = {
+      requestedUrl: userInputUrl,
+      normalizedUrl: urlInfo.normalizedUrl,
+      finalUrl: urlInfo.finalUrl,
+      canonicalUrl: urlInfo.canonicalUrl,
+      canonicalWarnings: urlInfo.canonicalWarnings,
+      redirectCount: urlInfo.redirectChain?.length || 0
+    };
+
+    console.log('[Scan] URL canonicalized:', {
+      input: userInputUrl,
+      canonical: scanTarget,
+      redirects: urlMetadata.redirectCount,
+      warnings: urlMetadata.canonicalWarnings
+    });
+
+    console.log('🔍 Guest scan requested for:', scanTarget);
+
+    // CHECK CACHE FIRST - prevent redundant analysis (use canonical URL for cache)
+    const cachedResult = await guestScanCache.getCachedResult(scanTarget);
     if (cachedResult) {
       console.log('📦 Returning cached guest scan result');
 
@@ -124,7 +161,9 @@ router.post('/guest', guestRateLimiter.middleware(), async (req, res) => {
         success: true,
         total_score: cachedResult.totalScore,
         rubric_version: 'V5',
-        url: url,
+        url: scanTarget,
+        requestedUrl: userInputUrl,
+        urlMetadata,
         categories: cachedResult.categories,
         categoryBreakdown: cachedResult.categories,
         categoryWeights: V5_WEIGHTS,
@@ -144,13 +183,14 @@ router.post('/guest', guestRateLimiter.middleware(), async (req, res) => {
     // NO CACHE - Perform fresh V5 rubric scan
     // Use 'guest' tier - NO recommendations shown to anonymous users
     // Skip recommendation generation entirely (guests never see them anyway)
-    const scanResult = await performV5Scan(url, 'guest', null, null, null, 'optimization', true);
+    // Use scanTarget (canonical URL) for all operations
+    const scanResult = await performV5Scan(scanTarget, 'guest', null, null, null, 'optimization', true);
 
     // Record scan for rate limiting (only count fresh scans)
     await req.rateLimiter.recordScan(req);
 
-    // CACHE THE RESULT for future requests
-    await guestScanCache.setCachedResult(url, {
+    // CACHE THE RESULT for future requests (use canonical URL)
+    await guestScanCache.setCachedResult(scanTarget, {
       totalScore: scanResult.totalScore,
       categories: scanResult.categories,
       recommendations: scanResult.recommendations,
@@ -171,7 +211,7 @@ router.post('/guest', guestRateLimiter.middleware(), async (req, res) => {
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)`,
         [
           null, // user_id is NULL for guest scans
-          url,
+          scanTarget,  // Use canonical URL for database storage
           'completed',
           1, // page_count
           'V5',
@@ -199,7 +239,9 @@ router.post('/guest', guestRateLimiter.middleware(), async (req, res) => {
       success: true,
       total_score: scanResult.totalScore,
       rubric_version: 'V5',
-      url: url,
+      url: scanTarget,
+      requestedUrl: userInputUrl,
+      urlMetadata,
       categories: scanResult.categories,
       categoryBreakdown: scanResult.categories,
       categoryWeights: V5_WEIGHTS, // Include weights for display
@@ -227,17 +269,17 @@ router.post('/analyze', authenticateToken, async (req, res) => {
   let scan = null; // Define outside try block for error handling
 
   try {
-    const { url, pages } = req.body;
+    const { url: userInputUrl, pages } = req.body;
     const userId = req.userId;
 
-    if (!url) {
+    if (!userInputUrl) {
       return res.status(400).json({ error: 'URL is required' });
     }
 
     // Validate URL format
     let validUrl;
     try {
-      validUrl = new URL(url);
+      validUrl = new URL(userInputUrl.startsWith('http') ? userInputUrl : `https://${userInputUrl}`);
       if (validUrl.protocol !== 'http:' && validUrl.protocol !== 'https:') {
         throw new Error('Invalid protocol');
       }
@@ -246,6 +288,40 @@ router.post('/analyze', authenticateToken, async (req, res) => {
         error: 'Invalid URL format. Please use http:// or https://'
       });
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RULEBOOK v1.2 Step C5: URL CANONICALIZATION - Do this FIRST before anything else
+    // ═══════════════════════════════════════════════════════════════════════════
+    let urlInfo;
+    try {
+      urlInfo = await canonicalizeWithRedirects(userInputUrl);
+    } catch (e) {
+      console.error('[Scan] Canonicalization failed:', e);
+      urlInfo = {
+        requestedUrl: userInputUrl,
+        canonicalUrl: canonicalizeUrl(userInputUrl),
+        error: e.message
+      };
+    }
+
+    const scanTarget = urlInfo.canonicalUrl;
+
+    // Store URL metadata for evidence
+    const urlMetadata = {
+      requestedUrl: userInputUrl,
+      normalizedUrl: urlInfo.normalizedUrl,
+      finalUrl: urlInfo.finalUrl,
+      canonicalUrl: urlInfo.canonicalUrl,
+      canonicalWarnings: urlInfo.canonicalWarnings,
+      redirectCount: urlInfo.redirectChain?.length || 0
+    };
+
+    console.log('[Scan] URL canonicalized:', {
+      input: userInputUrl,
+      canonical: scanTarget,
+      redirects: urlMetadata.redirectCount,
+      warnings: urlMetadata.canonicalWarnings
+    });
 
     // Get user info (including industry preference and primary domain)
     const userResult = await db.query(
@@ -288,8 +364,8 @@ router.post('/analyze', authenticateToken, async (req, res) => {
       console.log(`👤 User industry preference: ${user.industry}${user.industry_custom ? ` (${user.industry_custom})` : ''}`);
     }
 
-    // Extract domain from scan URL
-    const scanDomain = extractRootDomain(url);
+    // Extract domain from scan URL (use canonical URL)
+    const scanDomain = extractRootDomain(scanTarget);
     if (!scanDomain) {
       return res.status(400).json({ error: 'Unable to extract domain from URL' });
     }
@@ -306,7 +382,7 @@ router.post('/analyze', authenticateToken, async (req, res) => {
         [scanDomain, userId]
       );
       user.primary_domain = scanDomain;
-    } else if (!isPrimaryDomain(url, user.primary_domain)) {
+    } else if (!isPrimaryDomain(scanTarget, user.primary_domain)) {
       // Different domain - this is a competitor scan
       domainType = 'competitor';
       isCompetitorScan = true;
@@ -352,9 +428,9 @@ router.post('/analyze', authenticateToken, async (req, res) => {
     // Validate page count for plan
     const pageCount = pages ? Math.min(pages.length, planLimits.pagesPerScan) : 1;
 
-    console.log(`🔍 Authenticated scan for user ${userId} (${user.plan}) - ${url} [${domainType}]`);
+    console.log(`🔍 Authenticated scan for user ${userId} (${user.plan}) - ${scanTarget} [${domainType}]`);
 
-    const { pageSetHash, normalizedPages } = computePageSetHash(url, pages || []);
+    const { pageSetHash, normalizedPages } = computePageSetHash(scanTarget, pages || []);
 
     // Free users get 30-day context window, paid users get 5-day
     const contextWindowDays = user.plan === 'free' ? 30 : 5;
@@ -377,7 +453,7 @@ router.post('/analyze', authenticateToken, async (req, res) => {
       RETURNING id, url, status, created_at`,
       [
         userId,
-        url,
+        scanTarget,  // Use canonical URL for database storage
         'processing',
         pageCount,
         'V5',
@@ -445,12 +521,12 @@ router.post('/analyze', authenticateToken, async (req, res) => {
     if (isCompetitorScan) {
       // Lightweight competitor scan (scores only, no recommendations)
       console.log(`🔍 Performing lightweight competitor scan (scores only)`);
-      scanResult = await performCompetitorScan(url);
+      scanResult = await performCompetitorScan(scanTarget);
     } else if (shouldReuseRecommendations && activeContext) {
       // Scan with REUSED recommendations (within 5-day window)
       // Perform scoring only, then fetch existing recommendations
       console.log(`🔄 Performing scan with reused recommendations (5-day context active)`);
-      scanResult = await performV5Scan(url, user.plan, pages, userProgress, user.industry, currentMode, true);
+      scanResult = await performV5Scan(scanTarget, user.plan, pages, userProgress, user.industry, currentMode, true);
 
       // Fetch existing recommendations from primary scan
       const existingRecs = await db.query(`
@@ -533,7 +609,7 @@ router.post('/analyze', authenticateToken, async (req, res) => {
 
       // Full V5 rubric scan with NEW recommendations (mode-aware)
       // For Free users who hit their limit, skip recommendation generation
-      scanResult = await performV5Scan(url, user.plan, pages, userProgress, user.industry, currentMode, skipRecsForFreeUser);
+      scanResult = await performV5Scan(scanTarget, user.plan, pages, userProgress, user.industry, currentMode, skipRecsForFreeUser);
 
       // MONTHLY FREEZE: For Free users, attach frozen recommendations
       if (skipRecsForFreeUser) {
@@ -648,13 +724,13 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
         url: pageUrl,
         priority: index + 1 // First page = priority 1, etc.
       }))
-    : [{ url: url, priority: 1 }]; // Just main URL if no pages specified
+    : [{ url: scanTarget, priority: 1 }]; // Just main URL if no pages specified
 
   // Save with hybrid system (pass score for tracking)
   progressInfo = await saveHybridRecommendations(
     scan.id,
     userId,
-    url,
+    scanTarget,
     selectedPages,
     scanResult.recommendations,
     user.plan,
@@ -757,7 +833,7 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
         const competitorResult = await db.query(
           `SELECT id, score_history FROM competitive_tracking
            WHERE user_id = $1 AND competitor_url = $2 AND is_active = true`,
-          [userId, url]
+          [userId, scanTarget]
         );
 
         if (competitorResult.rows.length > 0) {
@@ -805,7 +881,7 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
     // Log usage
     await db.query(
       'INSERT INTO usage_logs (user_id, action, metadata) VALUES ($1, $2, $3)',
-      [userId, 'scan', JSON.stringify({ url, score: scanResult.totalScore, scan_id: scan.id })]
+      [userId, 'scan', JSON.stringify({ url: scanTarget, score: scanResult.totalScore, scan_id: scan.id })]
     );
 
     console.log(`✅ Scan ${scan.id} completed with score: ${scanResult.totalScore}`);
@@ -815,7 +891,9 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
       success: true,
       scan: {
         id: scan.id,
-        url: url,
+        url: scanTarget,
+        requestedUrl: userInputUrl,  // Original user input for reference
+        urlMetadata,  // Full canonicalization metadata
         status: 'completed',
         total_score: scanResult.totalScore,
         rubric_version: 'V5',
@@ -1579,10 +1657,12 @@ async function performCompetitorScan(url) {
 
   try {
     // Run V5 Rubric Engine for scoring only
+    // RULEBOOK v1.2 Step C7: Disable headless for competitor scans (save budget)
     console.log('📊 Running V5 Rubric Engine (scores only)...');
     const engine = new V5RubricEngine(url, {
       maxPages: 25,  // Set to 25 pages per user request
-      timeout: 10000
+      timeout: 10000,
+      allowHeadless: false  // Don't waste headless budget on competitor scans
     });
     const v5Results = await engine.analyze();
 
@@ -1630,18 +1710,33 @@ async function performCompetitorScan(url) {
  * Transform V5 categories structure to flat subfactor scores
  * The new V5 engine returns nested objects and different key names
  * This function flattens and renames to match what the issue detector expects
+ *
+ * RULEBOOK v1.2 Step 12: Tri-state scoring
+ * Returns { score, state, evidenceRefs } for measured scores
+ * Returns { score: null, state: 'not_measured', reason } for unmeasurable
  */
 function transformV5ToSubfactors(v5Categories) {
+  // Helper to convert raw scores to tri-state format
+  const toTriState = (rawScore, name, multiplier = 1) => {
+    if (rawScore === undefined || rawScore === null) {
+      return notMeasured(`${name} not measured`);
+    }
+    // Already tri-state format
+    if (rawScore.state) return rawScore;
+    // Convert numeric score
+    return measured(Math.round(rawScore * multiplier));
+  };
+
   const subfactors = {};
 
   // AI Readability - Scale from 0-2/0-10 to 0-100 and rename keys
   if (v5Categories.aiReadability) {
     const ar = v5Categories.aiReadability;
     subfactors.aiReadability = {
-      altTextScore: (ar.altText || 0) * 50,  // 0-2 scale → 0-100
-      captionsTranscriptsScore: (ar.transcription || 0) * 10,  // 0-10 scale → 0-100
-      interactiveAccessScore: (ar.interactive || 0) * 50,  // 0-2 scale → 0-100
-      crossMediaScore: (ar.crossMedia || 0) * 50  // 0-2 scale → 0-100
+      altTextScore: toTriState(ar.altText, 'altText', 50),  // 0-2 scale → 0-100
+      captionsTranscriptsScore: toTriState(ar.transcription, 'captions', 10),  // 0-10 scale → 0-100
+      interactiveAccessScore: toTriState(ar.interactive, 'interactive', 50),  // 0-2 scale → 0-100
+      crossMediaScore: toTriState(ar.crossMedia, 'crossMedia', 50)  // 0-2 scale → 0-100
     };
   }
 
@@ -1652,16 +1747,16 @@ function transformV5ToSubfactors(v5Categories) {
     const topical = asr.subfactors?.topicalAuthority || {};  // CRITICAL FIX: Added .subfactors
 
     subfactors.aiSearchReadiness = {
-      questionHeadingsScore: (directAnswer.factors?.questionDensity || 0) * 50,  // 0-2 → 0-100 (hybrid scoring)
-      scannabilityScore: (directAnswer.factors?.scannability || 0) * 50,  // 0-2 → 0-100
-      readabilityScore: (directAnswer.factors?.readability || 0) * 50,  // 0-2 → 0-100 (factor max is 2.0)
-      faqSchemaScore: (directAnswer.factors?.faqSchema || 0) * 50,  // 0-2 → 0-100 (FAQ schema markup)
-      faqContentScore: (directAnswer.factors?.faqContent || 0) * 50,  // 0-2 → 0-100 (visible FAQ content)
-      snippetEligibleScore: (directAnswer.factors?.answerCompleteness || 0) * 50,  // 0-2 → 0-100
-      pillarPagesScore: (topical.factors?.pillarPages || 0) * 50,  // 0-2 → 0-100 (max is 2.0, not 3.0)
-      linkedSubpagesScore: (topical.factors?.semanticLinking || 0) * 50,  // 0-2 → 0-100 (max is 2.0)
-      painPointsScore: (topical.factors?.contentDepth || 0) * 50,  // 0-2 → 0-100 (max is 2.0)
-      geoContentScore: 50  // Default middle value if not available
+      questionHeadingsScore: toTriState(directAnswer.factors?.questionDensity, 'questionHeadings', 50),
+      scannabilityScore: toTriState(directAnswer.factors?.scannability, 'scannability', 50),
+      readabilityScore: toTriState(directAnswer.factors?.readability, 'readability', 50),
+      faqSchemaScore: toTriState(directAnswer.factors?.faqSchema, 'faqSchema', 50),
+      faqContentScore: toTriState(directAnswer.factors?.faqContent, 'faqContent', 50),
+      snippetEligibleScore: toTriState(directAnswer.factors?.answerCompleteness, 'snippetEligible', 50),
+      pillarPagesScore: toTriState(topical.factors?.pillarPages, 'pillarPages', 50),
+      linkedSubpagesScore: toTriState(topical.factors?.semanticLinking, 'linkedSubpages', 50),
+      painPointsScore: toTriState(topical.factors?.contentDepth, 'painPoints', 50),
+      geoContentScore: notMeasured('geoContent requires external data')  // RULEBOOK v1.2: Use not_measured, not 50
     };
   }
 
@@ -1669,13 +1764,13 @@ function transformV5ToSubfactors(v5Categories) {
   if (v5Categories.contentFreshness) {
     const cf = v5Categories.contentFreshness;
     subfactors.contentFreshness = {
-      lastUpdatedScore: (cf.lastModified || 0) * 50,  // 0-2 → 0-100
-      versioningScore: (cf.versioning || 0) * 50,  // 0-2 → 0-100
-      timeSensitiveScore: (cf.timeSensitive || 0) * 50,  // 0-2 → 0-100
-      auditProcessScore: (cf.auditProcess || 0) * 50,  // 0-2 → 0-100
-      liveDataScore: (cf.realTimeInfo || 0) * 50,  // 0-2 → 0-100
-      httpFreshnessScore: 50,  // Not in new structure, use default
-      editorialCalendarScore: 50  // Not in new structure, use default
+      lastUpdatedScore: toTriState(cf.lastModified, 'lastUpdated', 50),
+      versioningScore: toTriState(cf.versioning, 'versioning', 50),
+      timeSensitiveScore: toTriState(cf.timeSensitive, 'timeSensitive', 50),
+      auditProcessScore: toTriState(cf.auditProcess, 'auditProcess', 50),
+      liveDataScore: toTriState(cf.realTimeInfo, 'liveData', 50),
+      httpFreshnessScore: notMeasured('httpFreshness not in V5 structure'),
+      editorialCalendarScore: notMeasured('editorialCalendar not in V5 structure')
     };
   }
 
@@ -1686,11 +1781,11 @@ function transformV5ToSubfactors(v5Categories) {
     const entity = cs.subfactors?.entityRecognition || {};  // CRITICAL FIX: Added .subfactors
 
     subfactors.contentStructure = {
-      headingHierarchyScore: (semantic.factors?.headingHierarchy || 0) * 66.7,  // 0-1.5 → 0-100
-      navigationScore: (semantic.factors?.contentSectioning || 0) * 66.7,  // 0-1.5 → 0-100
-      entityCuesScore: (entity.factors?.namedEntities || 0) * 66.7,  // 0-1.5 → 0-100
-      accessibilityScore: (semantic.factors?.accessibility || 0) * 66.7,  // 0-1.5 → 0-100
-      geoMetaScore: (entity.factors?.geoEntities || 0) * 66.7  // 0-1.5 → 0-100
+      headingHierarchyScore: toTriState(semantic.factors?.headingHierarchy, 'headingHierarchy', 66.7),
+      navigationScore: toTriState(semantic.factors?.contentSectioning, 'navigation', 66.7),
+      entityCuesScore: toTriState(entity.factors?.namedEntities, 'entityCues', 66.7),
+      accessibilityScore: toTriState(semantic.factors?.accessibility, 'accessibility', 66.7),
+      geoMetaScore: toTriState(entity.factors?.geoEntities, 'geoMeta', 66.7)
     };
   }
 
@@ -1698,11 +1793,11 @@ function transformV5ToSubfactors(v5Categories) {
   if (v5Categories.speedUX) {
     const su = v5Categories.speedUX;
     subfactors.speedUX = {
-      lcpScore: (su.lcp || 0) * 100,  // 0-1 → 0-100
-      clsScore: (su.cls || 0) * 100,  // 0-1 → 0-100
-      inpScore: (su.inp || 0) * 100,  // 0-1 → 0-100
-      mobileScore: (su.mobile || 0) * 100,  // 0-1 → 0-100
-      crawlerResponseScore: (su.crawlerResponse || 0) * 100  // 0-1 → 0-100
+      lcpScore: toTriState(su.lcp, 'lcp', 100),
+      clsScore: toTriState(su.cls, 'cls', 100),
+      inpScore: toTriState(su.inp, 'inp', 100),
+      mobileScore: toTriState(su.mobile, 'mobile', 100),
+      crawlerResponseScore: toTriState(su.crawlerResponse, 'crawlerResponse', 100)
     };
   }
 
@@ -1713,13 +1808,13 @@ function transformV5ToSubfactors(v5Categories) {
     const structured = ts.subfactors?.structuredData || {};  // CRITICAL FIX: Added .subfactors
 
     subfactors.technicalSetup = {
-      crawlerAccessScore: (crawler.factors?.robotsTxt || 0) * 55.6,  // 0-1.8 → 0-100
-      structuredDataScore: (structured.factors?.schemaMarkup || 0) * 55.6,  // 0-1.8 → 0-100
-      canonicalHreflangScore: 50,  // Not in new structure, use default
-      openGraphScore: 50,  // Not in new structure, use default
-      sitemapScore: (crawler.factors?.sitemap || 0) * 55.6,  // 0-1.8 → 0-100 (FIXED: was reading serverResponse!)
-      indexNowScore: 50,  // Not in new structure, use default
-      rssFeedScore: 50  // Not in new structure, use default
+      crawlerAccessScore: toTriState(crawler.factors?.robotsTxt, 'crawlerAccess', 55.6),
+      structuredDataScore: toTriState(structured.factors?.schemaMarkup, 'structuredData', 55.6),
+      canonicalHreflangScore: notMeasured('canonical/hreflang not in V5 structure'),
+      openGraphScore: notMeasured('openGraph not in V5 structure'),
+      sitemapScore: toTriState(crawler.factors?.sitemap, 'sitemap', 55.6),
+      indexNowScore: notMeasured('indexNow requires key verification'),  // Will be measured in Step 14
+      rssFeedScore: notMeasured('rssFeed not in V5 structure')
     };
   }
 
@@ -1730,14 +1825,14 @@ function transformV5ToSubfactors(v5Categories) {
     const authority = ta.subfactors?.authorityNetwork || {};  // CRITICAL FIX: Added .subfactors
 
     subfactors.trustAuthority = {
-      authorBiosScore: (eeat.factors?.authorProfiles || 0) * 50,  // 0-2 → 0-100
-      certificationsScore: (eeat.factors?.credentials || 0) * 50,  // 0-2 → 0-100 (legacy)
-      professionalCertifications: (eeat.factors?.professionalCertifications || 0) * 83.3,  // 0-1.2 → 0-100
-      teamCredentials: (eeat.factors?.teamCredentials || 0) * 83.3,  // 0-1.2 → 0-100
-      industryMemberships: (authority.factors?.industryMemberships || 0) * 83.3,  // 0-1.2 → 0-100
-      domainAuthorityScore: (authority.factors?.domainAuthority || 0) * 33,  // 0-3 → 0-100
-      thoughtLeadershipScore: (authority.factors?.thoughtLeadership || 0) * 33,  // 0-3 → 0-100
-      thirdPartyProfilesScore: (authority.factors?.socialAuthority || 0) * 50  // 0-2 → 0-100
+      authorBiosScore: toTriState(eeat.factors?.authorProfiles, 'authorBios', 50),
+      certificationsScore: toTriState(eeat.factors?.credentials, 'certifications', 50),
+      professionalCertifications: toTriState(eeat.factors?.professionalCertifications, 'professionalCerts', 83.3),
+      teamCredentials: toTriState(eeat.factors?.teamCredentials, 'teamCreds', 83.3),
+      industryMemberships: toTriState(authority.factors?.industryMemberships, 'industryMemberships', 83.3),
+      domainAuthorityScore: notMeasured('domainAuthority requires external API'),  // RULEBOOK v1.2: not_measured
+      thoughtLeadershipScore: toTriState(authority.factors?.thoughtLeadership, 'thoughtLeadership', 33),
+      thirdPartyProfilesScore: toTriState(authority.factors?.socialAuthority, 'thirdPartyProfiles', 50)
     };
   }
 
@@ -1748,11 +1843,11 @@ function transformV5ToSubfactors(v5Categories) {
     const voice = vo.subfactors?.voiceSearch || {};  // CRITICAL FIX: Added .subfactors
 
     subfactors.voiceOptimization = {
-      longTailScore: (conversational.factors?.longTail || 0) * 83,  // 0-1.2 → 0-100
-      localIntentScore: (conversational.factors?.localIntent || 0) * 83,  // 0-1.2 → 0-100
-      conversationalTermsScore: (voice.factors?.conversationalFlow || 0) * 83,  // 0-1.2 → 0-100
-      snippetFormatScore: (conversational.factors?.snippetOptimization || 0) * 83,  // 0-1.2 → 0-100 (hybrid scoring)
-      multiTurnScore: (conversational.factors?.followUpQuestions || 0) * 83  // 0-1.2 → 0-100
+      longTailScore: toTriState(conversational.factors?.longTail, 'longTail', 83),
+      localIntentScore: toTriState(conversational.factors?.localIntent, 'localIntent', 83),
+      conversationalTermsScore: toTriState(voice.factors?.conversationalFlow, 'conversationalTerms', 83),
+      snippetFormatScore: toTriState(conversational.factors?.snippetOptimization, 'snippetFormat', 83),
+      multiTurnScore: toTriState(conversational.factors?.followUpQuestions, 'multiTurn', 83)
     };
   }
 
@@ -1768,11 +1863,14 @@ async function performV5Scan(url, plan, pages = null, userProgress = null, userI
 
   try {
     // Step 1: Create V5 Rubric Engine instance and run analysis
+    // RULEBOOK v1.2 Step C7: Pass tier for headless rendering budget
     console.log('📊 Running V5 Rubric Engine...');
     const engine = new V5RubricEngine(url, {
       maxPages: 25,  // Set to 25 pages per user request
       timeout: 10000,
-      industry: userIndustry  // Pass industry for certification detection
+      industry: userIndustry,  // Pass industry for certification detection
+      tier: plan,  // Pass tier for headless rendering budget
+      allowHeadless: plan !== 'guest' && plan !== 'free'  // Only paid tiers get headless
     });
     const v5Results = await engine.analyze();
 
