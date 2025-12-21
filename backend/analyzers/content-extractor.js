@@ -1009,6 +1009,16 @@ class ContentExtractor {
       }
     });
 
+    // Extract footer links separately for evidence contract compliance
+    const footerLinks = [];
+    $('footer a').each((i, el) => {
+      const href = $(el).attr('href') || '';
+      const text = $(el).text().trim();
+      if (href && text) {
+        footerLinks.push({ href, text, source: 'footer' });
+      }
+    });
+
     // Detect key pages from nav links using centralized VOCABULARY
     const keyPages = {
       home: allNavLinks.some(l =>
@@ -1092,7 +1102,11 @@ class ContentExtractor {
       hasAboutLink,
       hasContactLink,
       hasServicesLink,
-      hasPricingLink
+      hasPricingLink,
+
+      // Footer links (evidence contract v2.0)
+      footerLinks,
+      footerLinkCount: footerLinks.length
     };
   }
 
