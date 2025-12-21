@@ -353,40 +353,56 @@ function analyzeHeadingHierarchy(headings) {
 /**
  * RULEBOOK v1.2 Section 4.5.2: Default issue detection
  * When crawl data exists, detectMultiPageIssues MUST be the default detection mode.
+ * Evidence contract v2.0: Check _meta.hasCrawlData for standardized detection
  *
  * @param {Object} scanEvidence - Complete scan evidence including siteMetrics
+ * @param {Object} context - Optional context for detection
  * @returns {Object} - Issues with site-wide context
  */
-function detectIssues(scanEvidence) {
-  const hasCrawlData = scanEvidence.siteMetrics?.totalDiscoveredUrls > 0 ||
-                       scanEvidence.crawler?.totalDiscoveredUrls > 0;
+function detectIssues(scanEvidence, context = {}) {
+  const hasCrawlData = !!(
+    scanEvidence._meta?.hasCrawlData ||
+    scanEvidence.siteMetrics?.totalDiscoveredUrls > 0 ||
+    scanEvidence.crawler?.totalDiscoveredUrls > 0
+  );
+
+  console.log('[IssueDetector] detectIssues:', { hasCrawlData });
 
   if (hasCrawlData) {
-    console.log('[IssueDetector] RULEBOOK v1.2: Using site-wide detection (crawl data found)');
+    console.log('[IssueDetector] → Using SITE-WIDE detection');
     return detectSiteWideIssues(scanEvidence);
   } else {
-    console.log('[IssueDetector] RULEBOOK v1.2: Using single-page detection (no crawl data)');
+    console.log('[IssueDetector] → Using PAGE-LEVEL detection');
     return detectPageIssues(scanEvidence.v5Scores || {}, scanEvidence);
   }
 }
 
 /**
  * RULEBOOK v1.2: Site-wide issue detection
- * Only flags as missing if NOT found across ENTIRE site
+ * Evidence contract v2.0: Multi-source detection for blog and FAQ
+ * Only flags as missing if NOT found across ENTIRE site via ANY source
  */
 function detectSiteWideIssues(scanEvidence) {
-  const siteMetrics = scanEvidence.siteMetrics || scanEvidence.crawler || {};
   const issues = [];
+  const crawler = scanEvidence.crawler || scanEvidence.siteMetrics || {};
+  const navigation = scanEvidence.navigation || {};
+  const technical = scanEvidence.technical || {};
+  const content = scanEvidence.content || {};
 
-  // Site-level confirmations per RULEBOOK v1.2
-  const siteHasBlog = siteMetrics.discoveredSections?.hasBlogUrl ||
-                      siteMetrics.pagesWithArticleSchema > 0;
+  // Blog check - multi-source (evidence contract v2.0)
+  const blogFound =
+    crawler.discoveredSections?.hasBlogUrl ||
+    navigation.keyPages?.blog ||
+    navigation.hasBlogLink ||
+    technical.hasArticleSchema;
 
-  const siteHasFAQ = siteMetrics.discoveredSections?.hasFaqUrl ||
-                     siteMetrics.totalFAQsFound > 0;
+  console.log('[SiteWide] Blog:', {
+    crawler: crawler.discoveredSections?.hasBlogUrl,
+    nav: navigation.keyPages?.blog || navigation.hasBlogLink,
+    schema: technical.hasArticleSchema
+  }, '→', blogFound ? 'FOUND' : 'MISSING');
 
-  // Only flag as missing if NOT found across ENTIRE site
-  if (!siteHasBlog) {
+  if (!blogFound) {
     issues.push({
       category: 'aiSearchReadiness',
       subfactor: 'pillarPagesScore',
@@ -395,14 +411,29 @@ function detectSiteWideIssues(scanEvidence) {
       gap: 60,
       severity: 'high',
       priority: 30,
-      evidence: { siteWideScan: true, pagesChecked: siteMetrics.totalDiscoveredUrls },
+      evidence: { siteWideScan: true, pagesChecked: crawler.totalDiscoveredUrls },
       pageUrl: scanEvidence.url,
       siteWideIssue: true,
       description: 'No blog section found across entire site'
     });
   }
 
-  if (!siteHasFAQ) {
+  // FAQ check - multi-source (evidence contract v2.0)
+  const faqFound =
+    crawler.discoveredSections?.hasFaqUrl ||
+    navigation.keyPages?.faq ||
+    navigation.hasFAQLink ||
+    technical.hasFAQSchema ||
+    (content.faqs?.length > 0);
+
+  console.log('[SiteWide] FAQ:', {
+    crawler: crawler.discoveredSections?.hasFaqUrl,
+    nav: navigation.keyPages?.faq || navigation.hasFAQLink,
+    schema: technical.hasFAQSchema,
+    content: content.faqs?.length
+  }, '→', faqFound ? 'FOUND' : 'MISSING');
+
+  if (!faqFound) {
     issues.push({
       category: 'aiSearchReadiness',
       subfactor: 'faqContentScore',
@@ -411,7 +442,7 @@ function detectSiteWideIssues(scanEvidence) {
       gap: 70,
       severity: 'high',
       priority: 35,
-      evidence: { siteWideScan: true, pagesChecked: siteMetrics.totalDiscoveredUrls },
+      evidence: { siteWideScan: true, pagesChecked: crawler.totalDiscoveredUrls },
       pageUrl: scanEvidence.url,
       siteWideIssue: true,
       description: 'No FAQ content found across entire site'
@@ -423,8 +454,8 @@ function detectSiteWideIssues(scanEvidence) {
 
   // Filter out blog/FAQ issues from page-level if site has them
   const filteredPageIssues = pageIssues.filter(issue => {
-    if (siteHasBlog && issue.subfactor === 'pillarPagesScore') return false;
-    if (siteHasFAQ && issue.subfactor === 'faqContentScore') return false;
+    if (blogFound && issue.subfactor === 'pillarPagesScore') return false;
+    if (faqFound && (issue.subfactor === 'faqContentScore' || issue.subfactor === 'faqSchemaScore')) return false;
     return true;
   });
 
