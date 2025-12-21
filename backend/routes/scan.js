@@ -23,6 +23,7 @@ const V5EnhancedRubricEngine = require('../analyzers/v5-enhanced-rubric-engine')
 const V5RubricEngine = V5EnhancedRubricEngine; // Alias for compatibility
 const { generateCompleteRecommendations } = require('../analyzers/recommendation-generator');
 const { measured, notMeasured, isMeasured } = require('../analyzers/score-types');
+const { canonicalizeUrl, canonicalizeWithRedirects, getCacheKey } = require('../utils/url-canonicalizer');
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -92,16 +93,16 @@ async function findReusableScanContext({ userId, domain, pageSetHash, withinDays
 // ============================================
 router.post('/guest', guestRateLimiter.middleware(), async (req, res) => {
   try {
-    const { url } = req.body;
+    const { url: userInputUrl } = req.body;
 
-    if (!url) {
+    if (!userInputUrl) {
       return res.status(400).json({ error: 'URL is required' });
     }
 
     // Validate URL format
     let validUrl;
     try {
-      validUrl = new URL(url);
+      validUrl = new URL(userInputUrl.startsWith('http') ? userInputUrl : `https://${userInputUrl}`);
       if (validUrl.protocol !== 'http:' && validUrl.protocol !== 'https:') {
         throw new Error('Invalid protocol');
       }
@@ -111,10 +112,45 @@ router.post('/guest', guestRateLimiter.middleware(), async (req, res) => {
       });
     }
 
-    console.log('🔍 Guest scan requested for:', url);
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RULEBOOK v1.2 Step C5: URL CANONICALIZATION - Do this FIRST before anything else
+    // ═══════════════════════════════════════════════════════════════════════════
+    let urlInfo;
+    try {
+      urlInfo = await canonicalizeWithRedirects(userInputUrl);
+    } catch (e) {
+      console.error('[Scan] Canonicalization failed:', e);
+      urlInfo = {
+        requestedUrl: userInputUrl,
+        canonicalUrl: canonicalizeUrl(userInputUrl),
+        error: e.message
+      };
+    }
 
-    // CHECK CACHE FIRST - prevent redundant analysis
-    const cachedResult = await guestScanCache.getCachedResult(url);
+    const scanTarget = urlInfo.canonicalUrl;
+    const cacheKey = getCacheKey(scanTarget);
+
+    // Store URL metadata for evidence
+    const urlMetadata = {
+      requestedUrl: userInputUrl,
+      normalizedUrl: urlInfo.normalizedUrl,
+      finalUrl: urlInfo.finalUrl,
+      canonicalUrl: urlInfo.canonicalUrl,
+      canonicalWarnings: urlInfo.canonicalWarnings,
+      redirectCount: urlInfo.redirectChain?.length || 0
+    };
+
+    console.log('[Scan] URL canonicalized:', {
+      input: userInputUrl,
+      canonical: scanTarget,
+      redirects: urlMetadata.redirectCount,
+      warnings: urlMetadata.canonicalWarnings
+    });
+
+    console.log('🔍 Guest scan requested for:', scanTarget);
+
+    // CHECK CACHE FIRST - prevent redundant analysis (use canonical URL for cache)
+    const cachedResult = await guestScanCache.getCachedResult(scanTarget);
     if (cachedResult) {
       console.log('📦 Returning cached guest scan result');
 
@@ -125,7 +161,9 @@ router.post('/guest', guestRateLimiter.middleware(), async (req, res) => {
         success: true,
         total_score: cachedResult.totalScore,
         rubric_version: 'V5',
-        url: url,
+        url: scanTarget,
+        requestedUrl: userInputUrl,
+        urlMetadata,
         categories: cachedResult.categories,
         categoryBreakdown: cachedResult.categories,
         categoryWeights: V5_WEIGHTS,
@@ -145,13 +183,14 @@ router.post('/guest', guestRateLimiter.middleware(), async (req, res) => {
     // NO CACHE - Perform fresh V5 rubric scan
     // Use 'guest' tier - NO recommendations shown to anonymous users
     // Skip recommendation generation entirely (guests never see them anyway)
-    const scanResult = await performV5Scan(url, 'guest', null, null, null, 'optimization', true);
+    // Use scanTarget (canonical URL) for all operations
+    const scanResult = await performV5Scan(scanTarget, 'guest', null, null, null, 'optimization', true);
 
     // Record scan for rate limiting (only count fresh scans)
     await req.rateLimiter.recordScan(req);
 
-    // CACHE THE RESULT for future requests
-    await guestScanCache.setCachedResult(url, {
+    // CACHE THE RESULT for future requests (use canonical URL)
+    await guestScanCache.setCachedResult(scanTarget, {
       totalScore: scanResult.totalScore,
       categories: scanResult.categories,
       recommendations: scanResult.recommendations,
@@ -172,7 +211,7 @@ router.post('/guest', guestRateLimiter.middleware(), async (req, res) => {
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)`,
         [
           null, // user_id is NULL for guest scans
-          url,
+          scanTarget,  // Use canonical URL for database storage
           'completed',
           1, // page_count
           'V5',
@@ -200,7 +239,9 @@ router.post('/guest', guestRateLimiter.middleware(), async (req, res) => {
       success: true,
       total_score: scanResult.totalScore,
       rubric_version: 'V5',
-      url: url,
+      url: scanTarget,
+      requestedUrl: userInputUrl,
+      urlMetadata,
       categories: scanResult.categories,
       categoryBreakdown: scanResult.categories,
       categoryWeights: V5_WEIGHTS, // Include weights for display
@@ -228,17 +269,17 @@ router.post('/analyze', authenticateToken, async (req, res) => {
   let scan = null; // Define outside try block for error handling
 
   try {
-    const { url, pages } = req.body;
+    const { url: userInputUrl, pages } = req.body;
     const userId = req.userId;
 
-    if (!url) {
+    if (!userInputUrl) {
       return res.status(400).json({ error: 'URL is required' });
     }
 
     // Validate URL format
     let validUrl;
     try {
-      validUrl = new URL(url);
+      validUrl = new URL(userInputUrl.startsWith('http') ? userInputUrl : `https://${userInputUrl}`);
       if (validUrl.protocol !== 'http:' && validUrl.protocol !== 'https:') {
         throw new Error('Invalid protocol');
       }
@@ -247,6 +288,40 @@ router.post('/analyze', authenticateToken, async (req, res) => {
         error: 'Invalid URL format. Please use http:// or https://'
       });
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RULEBOOK v1.2 Step C5: URL CANONICALIZATION - Do this FIRST before anything else
+    // ═══════════════════════════════════════════════════════════════════════════
+    let urlInfo;
+    try {
+      urlInfo = await canonicalizeWithRedirects(userInputUrl);
+    } catch (e) {
+      console.error('[Scan] Canonicalization failed:', e);
+      urlInfo = {
+        requestedUrl: userInputUrl,
+        canonicalUrl: canonicalizeUrl(userInputUrl),
+        error: e.message
+      };
+    }
+
+    const scanTarget = urlInfo.canonicalUrl;
+
+    // Store URL metadata for evidence
+    const urlMetadata = {
+      requestedUrl: userInputUrl,
+      normalizedUrl: urlInfo.normalizedUrl,
+      finalUrl: urlInfo.finalUrl,
+      canonicalUrl: urlInfo.canonicalUrl,
+      canonicalWarnings: urlInfo.canonicalWarnings,
+      redirectCount: urlInfo.redirectChain?.length || 0
+    };
+
+    console.log('[Scan] URL canonicalized:', {
+      input: userInputUrl,
+      canonical: scanTarget,
+      redirects: urlMetadata.redirectCount,
+      warnings: urlMetadata.canonicalWarnings
+    });
 
     // Get user info (including industry preference and primary domain)
     const userResult = await db.query(
@@ -289,8 +364,8 @@ router.post('/analyze', authenticateToken, async (req, res) => {
       console.log(`👤 User industry preference: ${user.industry}${user.industry_custom ? ` (${user.industry_custom})` : ''}`);
     }
 
-    // Extract domain from scan URL
-    const scanDomain = extractRootDomain(url);
+    // Extract domain from scan URL (use canonical URL)
+    const scanDomain = extractRootDomain(scanTarget);
     if (!scanDomain) {
       return res.status(400).json({ error: 'Unable to extract domain from URL' });
     }
@@ -307,7 +382,7 @@ router.post('/analyze', authenticateToken, async (req, res) => {
         [scanDomain, userId]
       );
       user.primary_domain = scanDomain;
-    } else if (!isPrimaryDomain(url, user.primary_domain)) {
+    } else if (!isPrimaryDomain(scanTarget, user.primary_domain)) {
       // Different domain - this is a competitor scan
       domainType = 'competitor';
       isCompetitorScan = true;
@@ -353,9 +428,9 @@ router.post('/analyze', authenticateToken, async (req, res) => {
     // Validate page count for plan
     const pageCount = pages ? Math.min(pages.length, planLimits.pagesPerScan) : 1;
 
-    console.log(`🔍 Authenticated scan for user ${userId} (${user.plan}) - ${url} [${domainType}]`);
+    console.log(`🔍 Authenticated scan for user ${userId} (${user.plan}) - ${scanTarget} [${domainType}]`);
 
-    const { pageSetHash, normalizedPages } = computePageSetHash(url, pages || []);
+    const { pageSetHash, normalizedPages } = computePageSetHash(scanTarget, pages || []);
 
     // Free users get 30-day context window, paid users get 5-day
     const contextWindowDays = user.plan === 'free' ? 30 : 5;
@@ -378,7 +453,7 @@ router.post('/analyze', authenticateToken, async (req, res) => {
       RETURNING id, url, status, created_at`,
       [
         userId,
-        url,
+        scanTarget,  // Use canonical URL for database storage
         'processing',
         pageCount,
         'V5',
@@ -446,12 +521,12 @@ router.post('/analyze', authenticateToken, async (req, res) => {
     if (isCompetitorScan) {
       // Lightweight competitor scan (scores only, no recommendations)
       console.log(`🔍 Performing lightweight competitor scan (scores only)`);
-      scanResult = await performCompetitorScan(url);
+      scanResult = await performCompetitorScan(scanTarget);
     } else if (shouldReuseRecommendations && activeContext) {
       // Scan with REUSED recommendations (within 5-day window)
       // Perform scoring only, then fetch existing recommendations
       console.log(`🔄 Performing scan with reused recommendations (5-day context active)`);
-      scanResult = await performV5Scan(url, user.plan, pages, userProgress, user.industry, currentMode, true);
+      scanResult = await performV5Scan(scanTarget, user.plan, pages, userProgress, user.industry, currentMode, true);
 
       // Fetch existing recommendations from primary scan
       const existingRecs = await db.query(`
@@ -534,7 +609,7 @@ router.post('/analyze', authenticateToken, async (req, res) => {
 
       // Full V5 rubric scan with NEW recommendations (mode-aware)
       // For Free users who hit their limit, skip recommendation generation
-      scanResult = await performV5Scan(url, user.plan, pages, userProgress, user.industry, currentMode, skipRecsForFreeUser);
+      scanResult = await performV5Scan(scanTarget, user.plan, pages, userProgress, user.industry, currentMode, skipRecsForFreeUser);
 
       // MONTHLY FREEZE: For Free users, attach frozen recommendations
       if (skipRecsForFreeUser) {
@@ -649,13 +724,13 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
         url: pageUrl,
         priority: index + 1 // First page = priority 1, etc.
       }))
-    : [{ url: url, priority: 1 }]; // Just main URL if no pages specified
+    : [{ url: scanTarget, priority: 1 }]; // Just main URL if no pages specified
 
   // Save with hybrid system (pass score for tracking)
   progressInfo = await saveHybridRecommendations(
     scan.id,
     userId,
-    url,
+    scanTarget,
     selectedPages,
     scanResult.recommendations,
     user.plan,
@@ -758,7 +833,7 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
         const competitorResult = await db.query(
           `SELECT id, score_history FROM competitive_tracking
            WHERE user_id = $1 AND competitor_url = $2 AND is_active = true`,
-          [userId, url]
+          [userId, scanTarget]
         );
 
         if (competitorResult.rows.length > 0) {
@@ -806,7 +881,7 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
     // Log usage
     await db.query(
       'INSERT INTO usage_logs (user_id, action, metadata) VALUES ($1, $2, $3)',
-      [userId, 'scan', JSON.stringify({ url, score: scanResult.totalScore, scan_id: scan.id })]
+      [userId, 'scan', JSON.stringify({ url: scanTarget, score: scanResult.totalScore, scan_id: scan.id })]
     );
 
     console.log(`✅ Scan ${scan.id} completed with score: ${scanResult.totalScore}`);
@@ -816,7 +891,9 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
       success: true,
       scan: {
         id: scan.id,
-        url: url,
+        url: scanTarget,
+        requestedUrl: userInputUrl,  // Original user input for reference
+        urlMetadata,  // Full canonicalization metadata
         status: 'completed',
         total_score: scanResult.totalScore,
         rubric_version: 'V5',

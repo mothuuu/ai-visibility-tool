@@ -52,6 +52,18 @@ function urlsAreEquivalent(url1, url2) {
 }
 
 /**
+ * RULEBOOK v1.2 Step C5: Generate cache key from canonical URL
+ * Used for consistent cache lookups regardless of input URL format
+ * @param {string} url - URL to generate cache key for
+ * @returns {string} Normalized cache key
+ */
+function getCacheKey(url) {
+  const canonical = canonicalizeUrl(url);
+  // Remove protocol for cache key to handle http/https variations
+  return canonical.replace(/^https?:\/\//, '').toLowerCase();
+}
+
+/**
  * RULEBOOK v1.2 Step C4: Full canonicalization with redirect following
  * Returns metadata about the URL journey
  * @param {string} inputUrl - URL to canonicalize
@@ -173,6 +185,7 @@ function parseCanonicalTag(html, baseUrl) {
 module.exports = {
   canonicalizeUrl,
   urlsAreEquivalent,
+  getCacheKey,
   canonicalizeWithRedirects,
   parseCanonicalTag
 };
