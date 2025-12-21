@@ -1,10 +1,14 @@
 const axios = require('axios');
 const dns = require('dns').promises;
 const { URL } = require('url');
+const psl = require('psl');
 
 /**
  * RULEBOOK v1.2 Step C1: Safe HTTP Utility
  * Provides SSRF protection and same-domain enforcement for outbound requests
+ *
+ * H1: Uses Public Suffix List for accurate domain extraction
+ * H2: Manual redirect following with validation at each hop
  */
 
 // Private/reserved IP ranges to block
@@ -35,21 +39,81 @@ function isBlockedIP(ip) {
 }
 
 /**
- * Get registrable domain (e.g., example.com from www.sub.example.com)
+ * H1: Get registrable domain using Public Suffix List
+ * Handles complex TLDs like .co.uk, .com.au, .github.io
+ * @param {string} hostname - Hostname to extract domain from
+ * @returns {string|null} Registrable domain or null
  */
 function getRegistrableDomain(hostname) {
-  const parts = hostname.toLowerCase().split('.');
-  // Simple extraction - for complex TLDs, use 'psl' library
-  if (parts.length >= 2) {
-    return parts.slice(-2).join('.');
+  if (!hostname) return null;
+
+  // Remove port if present
+  const cleanHost = hostname.split(':')[0].toLowerCase();
+
+  // Use PSL to parse
+  const parsed = psl.parse(cleanHost);
+
+  if (parsed.error) {
+    console.warn('[PSL] Parse error:', hostname, parsed.error);
+    // Fallback to simple extraction
+    const parts = cleanHost.split('.');
+    return parts.length >= 2 ? parts.slice(-2).join('.') : cleanHost;
   }
-  return hostname;
+
+  // Return the registrable domain (e.g., example.co.uk)
+  return parsed.domain || cleanHost;
+}
+
+/**
+ * H1: Check if two hostnames share the same registrable domain
+ * @param {string} scanTargetUrl - Original scan target URL
+ * @param {string} requestUrl - URL being requested
+ * @returns {boolean} True if same registrable domain
+ */
+function isSameRegistrableDomain(scanTargetUrl, requestUrl) {
+  try {
+    const scanHost = new URL(scanTargetUrl).hostname;
+    const requestHost = new URL(requestUrl).hostname;
+
+    const scanDomain = getRegistrableDomain(scanHost);
+    const requestDomain = getRegistrableDomain(requestHost);
+
+    if (!scanDomain || !requestDomain) {
+      return false;
+    }
+
+    return scanDomain === requestDomain;
+  } catch (e) {
+    console.warn('[DomainCheck] Parse error:', e.message);
+    return false;
+  }
+}
+
+/**
+ * Check if a string is an IP address (v4 or v6)
+ */
+function isIPAddress(hostname) {
+  // IPv4 pattern
+  const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+  // IPv6 pattern (simplified)
+  const ipv6Pattern = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
+  return ipv4Pattern.test(hostname) || ipv6Pattern.test(hostname);
 }
 
 /**
  * Verify URL doesn't resolve to blocked IP (SSRF protection)
+ * Handles both hostnames (via DNS) and direct IP addresses
  */
 async function checkSSRFSafe(hostname) {
+  // If hostname is already an IP address, check it directly
+  if (isIPAddress(hostname)) {
+    if (isBlockedIP(hostname)) {
+      return { safe: false, reason: `Blocked IP range: ${hostname}` };
+    }
+    return { safe: true };
+  }
+
+  // For hostnames, resolve via DNS
   try {
     const addresses = await dns.resolve4(hostname);
     for (const ip of addresses) {
@@ -65,20 +129,44 @@ async function checkSSRFSafe(hostname) {
 }
 
 /**
- * Check if request URL is on same registrable domain as scan target
+ * H2: Check if status code is a redirect
  */
-function isSameRegistrableDomain(scanTargetUrl, requestUrl) {
+function isRedirect(status) {
+  return [301, 302, 303, 307, 308].includes(status);
+}
+
+/**
+ * H2: Validate a redirect target URL
+ * @param {string} targetUrl - Redirect target URL
+ * @param {string} scanTargetUrl - Original scan target for domain comparison
+ * @param {boolean} requireSameDomain - Whether to enforce same domain
+ * @returns {Object} { safe: boolean, reason?: string }
+ */
+async function validateRedirectTarget(targetUrl, scanTargetUrl, requireSameDomain) {
   try {
-    const scanDomain = getRegistrableDomain(new URL(scanTargetUrl).hostname);
-    const requestDomain = getRegistrableDomain(new URL(requestUrl).hostname);
-    return scanDomain === requestDomain;
+    const targetUrlObj = new URL(targetUrl);
+
+    // Domain check
+    if (requireSameDomain && scanTargetUrl) {
+      if (!isSameRegistrableDomain(scanTargetUrl, targetUrl)) {
+        return { safe: false, reason: 'Redirect crosses domain boundary' };
+      }
+    }
+
+    // SSRF check
+    const ssrfCheck = await checkSSRFSafe(targetUrlObj.hostname);
+    if (!ssrfCheck.safe) {
+      return { safe: false, reason: `SSRF: ${ssrfCheck.reason}` };
+    }
+
+    return { safe: true };
   } catch (e) {
-    return false;
+    return { safe: false, reason: `Invalid redirect URL: ${e.message}` };
   }
 }
 
 /**
- * Make a safe HTTP request with SSRF protection
+ * H2: Make a safe HTTP request with redirect validation at each hop
  * @param {string} url - URL to request
  * @param {Object} options - Request options
  * @param {string} options.scanTargetUrl - Original scan target (for domain matching)
@@ -94,7 +182,7 @@ async function safeRequest(url, options = {}) {
     headers = {}
   } = options;
 
-  // Parse URL
+  // Parse and validate initial URL
   let urlObj;
   try {
     urlObj = new URL(url);
@@ -102,42 +190,101 @@ async function safeRequest(url, options = {}) {
     return { success: false, error: 'Invalid URL', data: null };
   }
 
-  // Same-domain check (if required)
+  // Initial same-domain check
   if (requireSameDomain && scanTargetUrl) {
     if (!isSameRegistrableDomain(scanTargetUrl, url)) {
-      console.warn('[SafeHTTP] Cross-domain request blocked:', { scanTarget: scanTargetUrl, requested: url });
+      console.warn('[SafeHTTP] Cross-domain blocked:', { scan: scanTargetUrl, request: url });
       return { success: false, error: 'Cross-domain request not allowed', data: null };
     }
   }
 
-  // SSRF check
-  const ssrfCheck = await checkSSRFSafe(urlObj.hostname);
-  if (!ssrfCheck.safe) {
-    console.warn('[SafeHTTP] SSRF blocked:', url, ssrfCheck.reason);
-    return { success: false, error: `SSRF blocked: ${ssrfCheck.reason}`, data: null };
+  // Initial SSRF check
+  const initialCheck = await checkSSRFSafe(urlObj.hostname);
+  if (!initialCheck.safe) {
+    console.warn('[SafeHTTP] SSRF blocked (initial):', url, initialCheck.reason);
+    return { success: false, error: `SSRF blocked: ${initialCheck.reason}`, data: null };
   }
 
   try {
+    // Use manual redirect handling for validation
     const response = await axios({
       method,
       url,
       timeout,
-      maxRedirects,
+      maxRedirects: 0,  // Disable auto-redirect
       maxContentLength: SAFE_HTTP_DEFAULTS.maxResponseSize,
       headers: {
         'User-Agent': SAFE_HTTP_DEFAULTS.userAgent,
         ...headers
       },
-      validateStatus: s => s < 500
+      validateStatus: () => true  // Accept all status codes
     });
 
+    // Handle redirects manually
+    let currentUrl = url;
+    let currentResponse = response;
+    let redirectCount = 0;
+    const redirectChain = [];
+
+    while (isRedirect(currentResponse.status) && redirectCount < maxRedirects) {
+      const location = currentResponse.headers.location;
+      if (!location) break;
+
+      // Resolve relative redirects
+      const nextUrl = new URL(location, currentUrl).toString();
+      redirectChain.push({ from: currentUrl, to: nextUrl, status: currentResponse.status });
+
+      // Validate redirect target
+      const redirectValidation = await validateRedirectTarget(
+        nextUrl,
+        scanTargetUrl,
+        requireSameDomain
+      );
+
+      if (!redirectValidation.safe) {
+        console.warn('[SafeHTTP] Redirect blocked:', {
+          from: currentUrl,
+          to: nextUrl,
+          reason: redirectValidation.reason
+        });
+        return {
+          success: false,
+          error: `Redirect blocked: ${redirectValidation.reason}`,
+          data: null,
+          blockedAt: nextUrl,
+          redirectChain
+        };
+      }
+
+      // Follow redirect
+      currentResponse = await axios({
+        method: method === 'POST' ? 'GET' : method,  // POST→GET on redirect
+        url: nextUrl,
+        timeout,
+        maxRedirects: 0,
+        maxContentLength: SAFE_HTTP_DEFAULTS.maxResponseSize,
+        headers: {
+          'User-Agent': SAFE_HTTP_DEFAULTS.userAgent,
+          ...headers
+        },
+        validateStatus: () => true
+      });
+
+      currentUrl = nextUrl;
+      redirectCount++;
+    }
+
+    // Final response
     return {
-      success: true,
-      status: response.status,
-      data: response.data,
-      headers: response.headers,
-      finalUrl: response.request?.res?.responseUrl || url
+      success: currentResponse.status < 400,
+      status: currentResponse.status,
+      data: currentResponse.data,
+      headers: currentResponse.headers,
+      finalUrl: currentUrl,
+      redirectCount,
+      redirectChain: redirectChain.length > 0 ? redirectChain : undefined
     };
+
   } catch (e) {
     return { success: false, error: e.message, data: null };
   }
@@ -163,7 +310,10 @@ module.exports = {
   safeGet,
   checkSSRFSafe,
   isBlockedIP,
+  isIPAddress,
   isSameRegistrableDomain,
   getRegistrableDomain,
+  validateRedirectTarget,
+  isRedirect,
   SAFE_HTTP_DEFAULTS
 };
