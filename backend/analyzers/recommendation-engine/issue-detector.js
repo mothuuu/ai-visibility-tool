@@ -1,12 +1,54 @@
 /**
  * ISSUE DETECTOR
  * File: backend/analyzers/recommendation-engine/issue-detector.js
- * 
+ *
  * Analyzes V5 scores and evidence to identify specific problems
  * that need recommendations.
- * 
+ *
  * This is Part 1 of the Recommendation Engine.
  */
+
+const { isMeasured, getScore } = require('../score-types');
+
+// ========================================
+// HELPER FUNCTIONS: Tri-State Score Handling
+// ========================================
+
+/**
+ * Check if a score is below a threshold (handles tri-state scores)
+ * @param {number|Object} scoreResult - Raw number or tri-state score object
+ * @param {number} threshold - Threshold to compare against
+ * @returns {boolean} - True if score is measured and below threshold
+ */
+function scoreBelow(scoreResult, threshold) {
+  if (!scoreResult) return false;
+  if (typeof scoreResult === 'number') return scoreResult < threshold;
+  if (!isMeasured(scoreResult)) return false;
+  return getScore(scoreResult) < threshold;
+}
+
+/**
+ * Check if a score is above a threshold (handles tri-state scores)
+ * @param {number|Object} scoreResult - Raw number or tri-state score object
+ * @param {number} threshold - Threshold to compare against
+ * @returns {boolean} - True if score is measured and above threshold
+ */
+function scoreAbove(scoreResult, threshold) {
+  if (!scoreResult) return false;
+  if (typeof scoreResult === 'number') return scoreResult > threshold;
+  if (!isMeasured(scoreResult)) return false;
+  return getScore(scoreResult) > threshold;
+}
+
+/**
+ * Get numeric value from a score (handles tri-state scores)
+ * @param {number|Object} scoreResult - Raw number or tri-state score object
+ * @returns {number|null} - Numeric score or null if not measured
+ */
+function getNumericScore(scoreResult) {
+  if (typeof scoreResult === 'number') return scoreResult;
+  return getScore(scoreResult);
+}
 
 // ========================================
 // CONFIGURATION: Issue Thresholds
@@ -157,20 +199,26 @@ function detectPageIssues(pageScores, pageEvidence) {
     console.log(`   [IssueDetector] Checking ${category} with ${Object.keys(subfactors).length} subfactors`);
 
     // Loop through each subfactor in the category
-    for (const [subfactor, score] of Object.entries(subfactors)) {
-      
+    for (const [subfactor, scoreResult] of Object.entries(subfactors)) {
+
       const threshold = ISSUE_THRESHOLDS[category][subfactor];
-      
+      const numericScore = getNumericScore(scoreResult);
+
+      // Skip if score is not measured (tri-state handling)
+      if (numericScore === null) {
+        continue;
+      }
+
       // If score is below threshold, we have an issue!
-      if (score < threshold) {
+      if (scoreBelow(scoreResult, threshold)) {
         issues.push({
           category: category,
           subfactor: subfactor,
-          currentScore: score,
+          currentScore: numericScore,
           threshold: threshold,
-          gap: threshold - score,
-          severity: calculateSeverity(score, threshold),
-          priority: calculatePriority(category, score, threshold),
+          gap: threshold - numericScore,
+          severity: calculateSeverity(numericScore, threshold),
+          priority: calculatePriority(category, numericScore, threshold),
           evidence: extractEvidenceForIssue(subfactor, pageEvidence),
           pageUrl: pageEvidence.url
         });
