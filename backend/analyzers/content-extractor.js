@@ -822,6 +822,18 @@ class ContentExtractor {
    * IMPORTANT: Call this BEFORE extractContent() which removes nav/header/footer
    */
   extractStructure($) {
+    // Build heading hierarchy (evidence contract v2.0)
+    const headingHierarchy = [];
+    $('h1, h2, h3, h4, h5, h6').each((i, el) => {
+      const tagName = el.tagName.toLowerCase();
+      headingHierarchy.push({
+        level: parseInt(tagName.substring(1)),
+        text: $(el).text().trim(),
+        id: $(el).attr('id') || null,
+        index: i
+      });
+    });
+
     return {
       // Semantic HTML5 elements
       hasMain: $('main').length > 0,
@@ -835,8 +847,12 @@ class ContentExtractor {
       // ARIA landmarks
       landmarks: $('[role="main"], [role="navigation"], [role="complementary"], [role="contentinfo"]').length,
 
-      // Heading hierarchy
-      headingCount: {
+      // Heading hierarchy (evidence contract v2.0)
+      headingHierarchy,
+      headingCount: headingHierarchy.length,
+
+      // Legacy heading counts for backwards compatibility
+      headingCountByLevel: {
         h1: $('h1').length,
         h2: $('h2').length,
         h3: $('h3').length,
