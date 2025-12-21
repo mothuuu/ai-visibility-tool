@@ -59,6 +59,16 @@ class V5EnhancedRubricEngine {
 
       this.siteData = await crawler.crawl();
 
+      // DEBUG: Check what crawler returned
+      console.log('[V5Enhanced] DEBUG - crawlerResults:', {
+        hasCrawlerResults: !!this.siteData,
+        sitemapDetected: this.siteData?.sitemap?.detected,
+        sitemapBlogUrls: this.siteData?.sitemap?.blogUrls?.length || 0,
+        sitemapFaqUrls: this.siteData?.sitemap?.faqUrls?.length || 0,
+        discoveredHasBlog: this.siteData?.siteMetrics?.discoveredSections?.hasBlogUrl,
+        discoveredHasFaq: this.siteData?.siteMetrics?.discoveredSections?.hasFaqUrl
+      });
+
       // Expose enhanced evidence with site-wide FAQ data for accurate Finding generation
       // This ensures the Finding text matches the site-wide scoring data
       if (this.siteData.pages && this.siteData.pages[0]) {

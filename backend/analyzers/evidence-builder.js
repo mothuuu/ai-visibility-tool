@@ -76,12 +76,18 @@ function buildScanEvidence({ pageExtract, crawlResult, scanContext }) {
     }
   };
 
-  console.log('[EvidenceBuilder] Built:', {
+  // DEBUG: Final evidence structure
+  console.log('[EvidenceBuilder] DEBUG - Final evidence:', {
     url: evidence.url,
     hasCrawlData: evidence._meta.hasCrawlData,
     hasBlogUrl: evidence.crawler.discoveredSections?.hasBlogUrl,
+    hasFaqUrl: evidence.crawler.discoveredSections?.hasFaqUrl,
     sitemapBlogUrls: evidence.siteMetrics.sitemap?.blogUrls?.length || 0,
-    sitemapFaqUrls: evidence.siteMetrics.sitemap?.faqUrls?.length || 0
+    sitemapFaqUrls: evidence.siteMetrics.sitemap?.faqUrls?.length || 0,
+    sitemapHasBlogUrls: evidence.siteMetrics.sitemap?.hasBlogUrls,
+    sitemapHasFaqUrls: evidence.siteMetrics.sitemap?.hasFaqUrls,
+    crawlResultSitemap: !!crawlResult?.sitemap,
+    crawlResultBlogUrls: crawlResult?.sitemap?.blogUrls?.length || 0
   });
 
   return evidence;

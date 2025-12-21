@@ -622,6 +622,16 @@ class SiteCrawler {
     // RULEBOOK v1.2: Classify sitemap URLs by content type
     const sitemapClassification = this.classifySitemapUrls(this.sitemapUrls);
 
+    // DEBUG: Sitemap classification result
+    console.log('[SiteCrawler] DEBUG - Sitemap result:', {
+      detected: this.sitemapDetected,
+      urlCount: this.sitemapUrls?.length || 0,
+      blogUrls: sitemapClassification?.blogUrls?.length || 0,
+      faqUrls: sitemapClassification?.faqUrls?.length || 0,
+      sampleBlogUrl: sitemapClassification?.blogUrls?.[0],
+      sampleFaqUrl: sitemapClassification?.faqUrls?.[0]
+    });
+
     const aggregated = {
       siteUrl: this.baseUrl,
       pageCount: this.pageEvidences.length,
