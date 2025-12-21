@@ -282,6 +282,7 @@ function createMockEvidence(overrides = {}) {
       imagesWithAlt: 2, imagesTotal: 3, hasLangAttribute: true, hasSkipLink: true, tabindex: 3,
       hasInlineStyles: 2, semanticButtons: 8, divClickHandlers: 1
     },
+    contractVersion: CONTRACT_VERSION,
     url: 'https://example.com/test', html: '<html><head><title>Test</title></head><body><h1>Test</h1></body></html>',
     timestamp: '2025-01-15T12:00:00Z'
   };

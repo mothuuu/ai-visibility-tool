@@ -37,4 +37,33 @@ function getScore(scoreResult) {
   return isMeasured(scoreResult) ? scoreResult.score : null;
 }
 
-module.exports = { ScoreState, measured, notMeasured, notApplicable, isMeasured, getScore };
+/**
+ * Aggregate multiple scores, excluding unmeasured
+ * @param {Array} scores - Array of score results
+ * @returns {Object} - Aggregated score result
+ */
+function aggregateScores(scores) {
+  const measuredScores = scores.filter(s => isMeasured(s));
+
+  if (measuredScores.length === 0) {
+    return {
+      score: null,
+      state: ScoreState.NOT_MEASURED,
+      reason: 'No scores could be measured',
+      measuredCount: 0,
+      totalCount: scores.length
+    };
+  }
+
+  const sum = measuredScores.reduce((acc, s) => acc + s.score, 0);
+  const avg = Math.round(sum / measuredScores.length);
+
+  return {
+    score: avg,
+    state: ScoreState.MEASURED,
+    measuredCount: measuredScores.length,
+    totalCount: scores.length
+  };
+}
+
+module.exports = { ScoreState, measured, notMeasured, notApplicable, isMeasured, getScore, aggregateScores };
