@@ -75,6 +75,14 @@ async function generateCompleteRecommendations(scanResults, tier = 'free', indus
     console.log(`   FAQ detected: ${detected_profile.sections?.has_faq || false}`);
     console.log(`   Blog detected: ${detected_profile.sections?.has_blog || false}`);
 
+    // Debug: Log the detection details
+    if (detected_profile._detection_details) {
+      const faqDetails = detected_profile._detection_details.faq;
+      const blogDetails = detected_profile._detection_details.blog;
+      console.log(`   FAQ details: hasFAQSchema=${faqDetails?.hasFAQSchema}, hasOnPageFAQs=${faqDetails?.hasOnPageFAQs}, count=${faqDetails?.count}`);
+      console.log(`   Blog details: hasArticleSchema=${blogDetails?.hasArticleSchema}, hasBlogNavLink=${blogDetails?.hasBlogNavLink}`);
+    }
+
     // STEP 1: Detect all issues
     console.log('🔍 Step 1: Detecting issues...');
     let allIssues;
