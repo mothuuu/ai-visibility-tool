@@ -18,20 +18,20 @@ const VOCABULARY = {
   // ============================================
   URL_PATTERNS: {
     home: /^\/?(index\.html?)?$/i,
-    about: /(\/|#)(about|about-us|who-we-are|our-story|company)(\.html?|\/|$)/i,
-    services: /(\/|#)(services|solutions|what-we-do|offerings)(\.html?|\/|$)/i,
+    about: /(\/|#)(about|about-us|who-we-are|our-story|company|our-company|our-team)(\.html?|\/|$)/i,
+    services: /(\/|#)(services|solutions|what-we-do|offerings|capabilities|expertise)(\.html?|\/|$)/i,
     // RULEBOOK v1.2: Extended blog vocabulary with all synonyms + anchor link support
-    blog: /(\/|#)(blog|news|articles|insights|resources|updates|journal|posts|learn|knowledge-base|help-center|guides|library|content|stories|perspectives)(\.html?|\/|$)/i,
-    faq: /(\/|#)(faq|faqs|frequently-asked|help|support|questions)(\.html?|\/|$)/i,
-    contact: /(\/|#)(contact|contact-us|get-in-touch|reach-us)(\.html?|\/|$)/i,
-    pricing: /(\/|#)(pricing|plans|packages|cost|rates)(\.html?|\/|$)/i,
+    blog: /(\/|#)(blog|news|articles|insights|resources|updates|journal|posts|learn|knowledge-base|help-center|guides|library|content|stories|perspectives|thought-leadership|whitepapers|case-studies)(\.html?|\/|$)/i,
+    faq: /(\/|#)(faq|faqs|frequently-asked|frequently-asked-questions|help|support|questions|answers|q-and-a|knowledge-base|support-center)(\.html?|\/|$)/i,
+    contact: /(\/|#)(contact|contact-us|get-in-touch|reach-us|locations|offices)(\.html?|\/|$)/i,
+    pricing: /(\/|#)(pricing|plans|packages|cost|rates|quote|get-a-quote)(\.html?|\/|$)/i,
     team: /(\/|#)(team|people|about-us\/team|our-team|staff|leadership)(\.html?|\/|$)/i,
-    careers: /(\/|#)(careers|jobs|work-with-us|join-us|hiring)(\.html?|\/|$)/i,
+    careers: /(\/|#)(careers|jobs|work-with-us|join-us|hiring|opportunities|openings)(\.html?|\/|$)/i,
     portfolio: /(\/|#)(portfolio|work|projects|case-studies|clients)(\.html?|\/|$)/i,
     testimonials: /(\/|#)(testimonials|reviews|clients|success-stories)(\.html?|\/|$)/i,
     legal: /(\/|#)(privacy|terms|legal|cookie-policy|gdpr|disclaimer)(\.html?|\/|$)/i,
     // RULEBOOK v1.2 Step C3: Additional patterns for comprehensive classification
-    docs: /(\/|#)(docs|documentation|api|developers|reference|developer|dev)(\/|\.html?|$)/i,
+    docs: /(\/|#)(docs|documentation|api|developers|reference|developer|dev|sdk)(\/|\.html?|$)/i,
     support: /(\/|#)(support|help-center|help|customer-service)(\/|\.html?|$)/i,
     privacy: /(\/|#)(privacy|privacy-policy|data-protection|gdpr)(\/|\.html?|$)/i,
     terms: /(\/|#)(terms|terms-of-service|tos|terms-and-conditions)(\/|\.html?|$)/i
@@ -42,15 +42,15 @@ const VOCABULARY = {
   // For classifying navigation link text
   // ============================================
   NAV_TEXT_PATTERNS: {
-    blog: /^(blog|news|articles|insights|resources|updates|journal|learn)$/i,
-    faq: /^(faq|faqs|help|support|questions|q&a)$/i,
-    about: /^(about|about us|our story|who we are|company)$/i,
-    contact: /^(contact|contact us|get in touch|reach us)$/i,
-    services: /^(services|solutions|what we do|offerings)$/i,
-    pricing: /^(pricing|plans|packages|cost|buy)$/i,
-    team: /^(team|our team|people|leadership)$/i,
-    careers: /^(careers|jobs|work with us|join us|hiring)$/i,
-    docs: /^(docs|documentation|api|developers)$/i,
+    blog: /^(blog|news|articles|insights|resources|updates|journal|learn|guides|library|thought leadership|whitepapers)$/i,
+    faq: /^(faq|faqs|help|support|questions|q&a|knowledge base|answers)$/i,
+    about: /^(about|about us|our story|who we are|company|team)$/i,
+    contact: /^(contact|contact us|get in touch|reach us|locations)$/i,
+    services: /^(services|solutions|what we do|offerings|capabilities)$/i,
+    pricing: /^(pricing|plans|packages|cost|buy|get a quote)$/i,
+    team: /^(team|our team|people|leadership|staff)$/i,
+    careers: /^(careers|jobs|work with us|join us|hiring|opportunities)$/i,
+    docs: /^(docs|documentation|api|developers|sdk)$/i,
     support: /^(support|help|help center|customer service)$/i
   },
 
