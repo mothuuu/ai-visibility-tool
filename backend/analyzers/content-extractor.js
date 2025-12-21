@@ -1052,6 +1052,26 @@ class ContentExtractor {
       }
     });
 
+    // Extract header links separately for evidence contract compliance
+    const headerLinks = [];
+    $('header a').each((i, el) => {
+      const href = $(el).attr('href') || '';
+      const text = $(el).text().trim();
+      if (href && text) {
+        headerLinks.push({ href, text, source: 'header' });
+      }
+    });
+
+    // Extract nav links as flat array for evidence contract compliance
+    const navLinks = [];
+    $('nav a, [role="navigation"] a').each((i, el) => {
+      const href = $(el).attr('href') || '';
+      const text = $(el).text().trim();
+      if (href && text && href !== '#') {
+        navLinks.push({ href, text, source: 'nav' });
+      }
+    });
+
     // Extract footer links separately for evidence contract compliance
     const footerLinks = [];
     $('footer a').each((i, el) => {
@@ -1147,7 +1167,11 @@ class ContentExtractor {
       hasServicesLink,
       hasPricingLink,
 
-      // Footer links (evidence contract v2.0)
+      // Evidence contract v2.0: Separated link sources
+      headerLinks,
+      headerLinkCount: headerLinks.length,
+      navLinks,
+      navLinkCount: navLinks.length,
       footerLinks,
       footerLinkCount: footerLinks.length
     };

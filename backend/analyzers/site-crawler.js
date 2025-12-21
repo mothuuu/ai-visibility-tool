@@ -622,6 +622,16 @@ class SiteCrawler {
     // RULEBOOK v1.2: Classify sitemap URLs by content type
     const sitemapClassification = this.classifySitemapUrls(this.sitemapUrls);
 
+    // DEBUG: Sitemap classification result
+    console.log('[SiteCrawler] DEBUG - Sitemap result:', {
+      detected: this.sitemapDetected,
+      urlCount: this.sitemapUrls?.length || 0,
+      blogUrls: sitemapClassification?.blogUrls?.length || 0,
+      faqUrls: sitemapClassification?.faqUrls?.length || 0,
+      sampleBlogUrl: sitemapClassification?.blogUrls?.[0],
+      sampleFaqUrl: sitemapClassification?.faqUrls?.[0]
+    });
+
     const aggregated = {
       siteUrl: this.baseUrl,
       pageCount: this.pageEvidences.length,
@@ -814,56 +824,62 @@ class SiteCrawler {
 
   /**
    * RULEBOOK v1.2: Classify sitemap URLs by content type
+   * Uses centralized VOCABULARY patterns for consistent detection
    * Enables detection of blog/FAQ/pricing pages from sitemap without crawling each page
    */
   classifySitemapUrls(urls) {
-    const patterns = {
-      blog: /\/(blog|news|articles|insights|resources|posts|learn)/i,
-      faq: /\/(faq|faqs|help|support|questions)/i,
-      pricing: /\/(pricing|plans|packages)/i,
-      contact: /\/(contact|get-in-touch)/i
-    };
-
+    // Use centralized vocabulary patterns (same as analyzeDiscoveredSections)
     const result = {
       blogUrls: [],
       faqUrls: [],
+      aboutUrls: [],
       pricingUrls: [],
       contactUrls: [],
       hasBlogUrls: false,
       hasFaqUrls: false,
+      hasAboutUrls: false,
       hasPricingUrls: false,
       hasContactUrls: false,
       totalClassified: 0
     };
 
     for (const url of urls) {
-      if (patterns.blog.test(url)) {
+      // Use VOCABULARY.URL_PATTERNS for consistent detection
+      if (VOCABULARY.URL_PATTERNS.blog.test(url)) {
         result.blogUrls.push(url);
       }
-      if (patterns.faq.test(url)) {
+      if (VOCABULARY.URL_PATTERNS.faq.test(url)) {
         result.faqUrls.push(url);
       }
-      if (patterns.pricing.test(url)) {
+      if (VOCABULARY.URL_PATTERNS.about.test(url)) {
+        result.aboutUrls.push(url);
+      }
+      if (VOCABULARY.URL_PATTERNS.pricing.test(url)) {
         result.pricingUrls.push(url);
       }
-      if (patterns.contact.test(url)) {
+      if (VOCABULARY.URL_PATTERNS.contact.test(url)) {
         result.contactUrls.push(url);
       }
     }
 
     result.hasBlogUrls = result.blogUrls.length > 0;
     result.hasFaqUrls = result.faqUrls.length > 0;
+    result.hasAboutUrls = result.aboutUrls.length > 0;
     result.hasPricingUrls = result.pricingUrls.length > 0;
     result.hasContactUrls = result.contactUrls.length > 0;
     result.totalClassified = result.blogUrls.length + result.faqUrls.length +
-                             result.pricingUrls.length + result.contactUrls.length;
+                             result.aboutUrls.length + result.pricingUrls.length +
+                             result.contactUrls.length;
 
     console.log('[Crawler] RULEBOOK v1.2: Sitemap URL classification:', {
       blogUrls: result.blogUrls.length,
       faqUrls: result.faqUrls.length,
+      aboutUrls: result.aboutUrls.length,
       pricingUrls: result.pricingUrls.length,
       contactUrls: result.contactUrls.length,
-      totalClassified: result.totalClassified
+      totalClassified: result.totalClassified,
+      sampleBlog: result.blogUrls[0],
+      sampleFaq: result.faqUrls[0]
     });
 
     return result;

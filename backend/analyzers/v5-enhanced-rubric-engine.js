@@ -59,6 +59,18 @@ class V5EnhancedRubricEngine {
 
       this.siteData = await crawler.crawl();
 
+      // DEBUG: Check what crawler returned (full sitemap data)
+      console.log('[V5Enhanced] DEBUG - crawlerResults:', {
+        hasCrawlerResults: !!this.siteData,
+        sitemapDetected: this.siteData?.sitemap?.detected || this.siteData?.sitemapDetected,
+        sitemapBlogUrls: this.siteData?.sitemap?.blogUrls?.length || 0,
+        sitemapFaqUrls: this.siteData?.sitemap?.faqUrls?.length || 0,
+        sampleBlogUrl: this.siteData?.sitemap?.blogUrls?.[0],
+        sampleFaqUrl: this.siteData?.sitemap?.faqUrls?.[0],
+        discoveredHasBlog: this.siteData?.siteMetrics?.discoveredSections?.hasBlogUrl,
+        discoveredHasFaq: this.siteData?.siteMetrics?.discoveredSections?.hasFaqUrl
+      });
+
       // Expose enhanced evidence with site-wide FAQ data for accurate Finding generation
       // This ensures the Finding text matches the site-wide scoring data
       if (this.siteData.pages && this.siteData.pages[0]) {
@@ -87,12 +99,29 @@ class V5EnhancedRubricEngine {
             technical: firstPageEvidence.technical
           },
           crawlResult: {
-            discoveredSections: this.siteData.siteMetrics?.discoveredSections || {},
+            // Merge sitemap signals into discovered sections
+            discoveredSections: {
+              ...(this.siteData.siteMetrics?.discoveredSections || {}),
+              hasBlogUrl: this.siteData.siteMetrics?.discoveredSections?.hasBlogUrl ||
+                          (this.siteData.sitemap?.blogUrls?.length > 0) || false,
+              hasFaqUrl: this.siteData.siteMetrics?.discoveredSections?.hasFaqUrl ||
+                         (this.siteData.sitemap?.faqUrls?.length > 0) || false
+            },
             totalDiscoveredUrls: this.siteData.pageCount || 0,
-            robotsTxt: {},
+            robotsTxt: this.siteData.robotsTxt || {},
+            // Spread entire sitemap object with all classifications
             sitemap: {
-              detected: this.siteData.sitemapDetected || false,
-              location: this.siteData.sitemapLocation || null
+              ...(this.siteData.sitemap || {}),
+              detected: this.siteData.sitemap?.detected || this.siteData.sitemapDetected || false,
+              location: this.siteData.sitemap?.location || this.siteData.sitemapLocation || null,
+              urls: this.siteData.sitemap?.urls || [],
+              blogUrls: this.siteData.sitemap?.blogUrls || [],
+              faqUrls: this.siteData.sitemap?.faqUrls || [],
+              aboutUrls: this.siteData.sitemap?.aboutUrls || [],
+              contactUrls: this.siteData.sitemap?.contactUrls || [],
+              pricingUrls: this.siteData.sitemap?.pricingUrls || [],
+              hasBlogUrls: (this.siteData.sitemap?.blogUrls?.length > 0) || false,
+              hasFaqUrls: (this.siteData.sitemap?.faqUrls?.length > 0) || false
             }
           },
           scanContext: {
