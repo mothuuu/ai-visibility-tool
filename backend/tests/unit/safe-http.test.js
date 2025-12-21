@@ -3,6 +3,7 @@
  * RULEBOOK v1.2 Step C8: Tests for SSRF protection
  * H1: PSL-based domain extraction tests
  * H2: Redirect validation tests
+ * H3: IPv6 SSRF coverage tests
  *
  * Run with: node --test backend/tests/unit/safe-http.test.js
  */
@@ -11,7 +12,10 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const {
   isBlockedIP,
+  isBlockedIPv6,
   isIPAddress,
+  isIPv4Address,
+  isIPv6Address,
   isSameRegistrableDomain,
   getRegistrableDomain,
   isRedirect,
@@ -69,18 +73,97 @@ describe('safe-http', () => {
       assert.strictEqual(isBlockedIP('151.101.1.140'), false); // Reddit
     });
 
+  });
+
+  // H3: IPv6 SSRF coverage tests
+  describe('isBlockedIPv6', () => {
+
     it('blocks IPv6 loopback (::1)', () => {
-      assert.strictEqual(isBlockedIP('::1'), true);
+      assert.strictEqual(isBlockedIPv6('::1'), true);
     });
 
-    it('blocks IPv6 private (fc00:)', () => {
-      assert.strictEqual(isBlockedIP('fc00::1'), true);
-      assert.strictEqual(isBlockedIP('FC00::1'), true); // case insensitive
+    it('blocks unspecified address (::)', () => {
+      assert.strictEqual(isBlockedIPv6('::'), true);
     });
 
-    it('blocks IPv6 link-local (fe80:)', () => {
-      assert.strictEqual(isBlockedIP('fe80::1'), true);
-      assert.strictEqual(isBlockedIP('FE80::1'), true); // case insensitive
+    it('blocks link-local (fe80::/10)', () => {
+      assert.strictEqual(isBlockedIPv6('fe80::1'), true);
+      assert.strictEqual(isBlockedIPv6('FE80::1'), true); // case insensitive
+      assert.strictEqual(isBlockedIPv6('fe80::abcd:1234'), true);
+    });
+
+    it('blocks unique local fc00::/8', () => {
+      assert.strictEqual(isBlockedIPv6('fc00::1'), true);
+      assert.strictEqual(isBlockedIPv6('FC00::1'), true);
+    });
+
+    it('blocks unique local fd00::/8', () => {
+      assert.strictEqual(isBlockedIPv6('fd00::1'), true);
+      assert.strictEqual(isBlockedIPv6('fd12:3456:789a::1'), true);
+    });
+
+    it('blocks IPv4-mapped loopback (::ffff:127.0.0.1)', () => {
+      assert.strictEqual(isBlockedIPv6('::ffff:127.0.0.1'), true);
+    });
+
+    it('blocks IPv4-mapped private addresses', () => {
+      assert.strictEqual(isBlockedIPv6('::ffff:10.0.0.1'), true);
+      assert.strictEqual(isBlockedIPv6('::ffff:192.168.1.1'), true);
+      assert.strictEqual(isBlockedIPv6('::ffff:169.254.169.254'), true);
+    });
+
+    it('allows public IPv6 addresses', () => {
+      assert.strictEqual(isBlockedIPv6('2607:f8b0:4004:800::200e'), false); // Google
+      assert.strictEqual(isBlockedIPv6('2001:4860:4860::8888'), false); // Google DNS
+      assert.strictEqual(isBlockedIPv6('2606:4700:4700::1111'), false); // Cloudflare DNS
+    });
+
+    it('allows IPv4-mapped public addresses', () => {
+      assert.strictEqual(isBlockedIPv6('::ffff:8.8.8.8'), false);
+      assert.strictEqual(isBlockedIPv6('::ffff:1.1.1.1'), false);
+    });
+
+  });
+
+  describe('isIPv4Address', () => {
+
+    it('identifies valid IPv4 addresses', () => {
+      assert.strictEqual(isIPv4Address('127.0.0.1'), true);
+      assert.strictEqual(isIPv4Address('192.168.1.1'), true);
+      assert.strictEqual(isIPv4Address('8.8.8.8'), true);
+    });
+
+    it('rejects IPv6 addresses', () => {
+      assert.strictEqual(isIPv4Address('::1'), false);
+      assert.strictEqual(isIPv4Address('fe80::1'), false);
+    });
+
+    it('rejects hostnames', () => {
+      assert.strictEqual(isIPv4Address('example.com'), false);
+    });
+
+  });
+
+  describe('isIPv6Address', () => {
+
+    it('identifies standard IPv6 addresses', () => {
+      assert.strictEqual(isIPv6Address('::1'), true);
+      assert.strictEqual(isIPv6Address('fe80::1'), true);
+      assert.strictEqual(isIPv6Address('2001:0db8:85a3:0000:0000:8a2e:0370:7334'), true);
+    });
+
+    it('identifies IPv4-mapped IPv6 addresses', () => {
+      assert.strictEqual(isIPv6Address('::ffff:127.0.0.1'), true);
+      assert.strictEqual(isIPv6Address('::ffff:8.8.8.8'), true);
+    });
+
+    it('rejects IPv4 addresses', () => {
+      assert.strictEqual(isIPv6Address('127.0.0.1'), false);
+      assert.strictEqual(isIPv6Address('8.8.8.8'), false);
+    });
+
+    it('rejects hostnames', () => {
+      assert.strictEqual(isIPv6Address('example.com'), false);
     });
 
   });
@@ -352,6 +435,35 @@ describe('safe-http', () => {
       );
       assert.strictEqual(result.safe, false);
       assert.ok(result.reason.includes('SSRF'));
+    });
+
+    // H3: IPv6 redirect validation
+    it('blocks redirect to IPv6 loopback (::1)', async () => {
+      const result = await validateRedirectTarget(
+        'http://[::1]/admin',
+        'https://example.com',
+        false
+      );
+      assert.strictEqual(result.safe, false);
+      assert.ok(result.reason.includes('SSRF') || result.reason.includes('IPv6'));
+    });
+
+    it('blocks redirect to IPv6 link-local', async () => {
+      const result = await validateRedirectTarget(
+        'http://[fe80::1]/admin',
+        'https://example.com',
+        false
+      );
+      assert.strictEqual(result.safe, false);
+    });
+
+    it('blocks redirect to IPv4-mapped loopback', async () => {
+      const result = await validateRedirectTarget(
+        'http://[::ffff:127.0.0.1]/admin',
+        'https://example.com',
+        false
+      );
+      assert.strictEqual(result.safe, false);
     });
 
     it('rejects invalid redirect URL', async () => {

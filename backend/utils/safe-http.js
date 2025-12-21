@@ -9,19 +9,17 @@ const psl = require('psl');
  *
  * H1: Uses Public Suffix List for accurate domain extraction
  * H2: Manual redirect following with validation at each hop
+ * H3: IPv6 SSRF coverage with dual-stack DNS resolution
  */
 
-// Private/reserved IP ranges to block
-const BLOCKED_IP_RANGES = [
+// Private/reserved IPv4 ranges to block
+const BLOCKED_IPV4_RANGES = [
   /^127\./,                          // Loopback
   /^10\./,                           // Private Class A
   /^172\.(1[6-9]|2[0-9]|3[0-1])\./,  // Private Class B
   /^192\.168\./,                     // Private Class C
   /^169\.254\./,                     // Link-local
-  /^0\./,                            // "This" network
-  /^::1$/,                           // IPv6 loopback
-  /^fc00:/i,                         // IPv6 private
-  /^fe80:/i                          // IPv6 link-local
+  /^0\./                             // "This" network
 ];
 
 const SAFE_HTTP_DEFAULTS = {
@@ -32,10 +30,77 @@ const SAFE_HTTP_DEFAULTS = {
 };
 
 /**
- * Check if IP is in blocked range
+ * Check if IPv4 address is in blocked range
  */
 function isBlockedIP(ip) {
-  return BLOCKED_IP_RANGES.some(pattern => pattern.test(ip));
+  return BLOCKED_IPV4_RANGES.some(pattern => pattern.test(ip));
+}
+
+/**
+ * Convert hex-encoded IPv4 (like 7f00:1) to dotted decimal (127.0.0.1)
+ */
+function hexIPv4ToDecimal(hexPart) {
+  // Format is XXXX:XXXX where each X is a hex digit
+  // e.g., 7f00:1 = 127.0.0.1
+  const parts = hexPart.split(':');
+  if (parts.length !== 2) return null;
+
+  try {
+    const high = parseInt(parts[0] || '0', 16);
+    const low = parseInt(parts[1] || '0', 16);
+
+    const b1 = (high >> 8) & 0xff;
+    const b2 = high & 0xff;
+    const b3 = (low >> 8) & 0xff;
+    const b4 = low & 0xff;
+
+    return `${b1}.${b2}.${b3}.${b4}`;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * H3: Check if IPv6 address is in blocked range
+ * Handles loopback, link-local, unique local, and IPv4-mapped addresses
+ */
+function isBlockedIPv6(ip) {
+  const normalized = ip.toLowerCase();
+
+  // Loopback (::1)
+  if (normalized === '::1') return true;
+
+  // Unspecified (::)
+  if (normalized === '::') return true;
+
+  // Link-local (fe80::/10)
+  if (normalized.startsWith('fe80:')) return true;
+
+  // Unique local (fc00::/7 - includes fc00::/8 and fd00::/8)
+  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true;
+
+  // IPv4-mapped IPv6 - dotted decimal format (::ffff:127.0.0.1)
+  const ipv4DottedMatch = normalized.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (ipv4DottedMatch) {
+    return isBlockedIP(ipv4DottedMatch[1]);
+  }
+
+  // IPv4-mapped IPv6 - hex format (::ffff:7f00:1)
+  const ipv4HexMatch = normalized.match(/^::ffff:([0-9a-f]+:[0-9a-f]+)$/);
+  if (ipv4HexMatch) {
+    const ipv4 = hexIPv4ToDecimal(ipv4HexMatch[1]);
+    if (ipv4) {
+      return isBlockedIP(ipv4);
+    }
+  }
+
+  // IPv4-compatible IPv6 (deprecated but check anyway: ::x.x.x.x)
+  const ipv4CompatMatch = normalized.match(/^::(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (ipv4CompatMatch) {
+    return isBlockedIP(ipv4CompatMatch[1]);
+  }
+
+  return false;
 }
 
 /**
@@ -90,42 +155,109 @@ function isSameRegistrableDomain(scanTargetUrl, requestUrl) {
 }
 
 /**
- * Check if a string is an IP address (v4 or v6)
+ * Check if a string is an IPv4 address
  */
-function isIPAddress(hostname) {
-  // IPv4 pattern
+function isIPv4Address(hostname) {
   const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/;
-  // IPv6 pattern (simplified)
-  const ipv6Pattern = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
-  return ipv4Pattern.test(hostname) || ipv6Pattern.test(hostname);
+  return ipv4Pattern.test(hostname);
 }
 
 /**
- * Verify URL doesn't resolve to blocked IP (SSRF protection)
+ * Check if a string is an IPv6 address
+ * Handles both raw IPv6 and bracketed notation from URLs
+ */
+function isIPv6Address(hostname) {
+  // Remove brackets if present (URLs use [::1] format)
+  let ip = hostname;
+  if (ip.startsWith('[') && ip.endsWith(']')) {
+    ip = ip.slice(1, -1);
+  }
+
+  // Matches standard IPv6, compressed (::), and IPv4-mapped (::ffff:x.x.x.x)
+  const ipv6Pattern = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
+  const ipv4MappedPattern = /^::ffff:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/i;
+  return ipv6Pattern.test(ip) || ipv4MappedPattern.test(ip);
+}
+
+/**
+ * Check if a string is an IP address (v4 or v6)
+ */
+function isIPAddress(hostname) {
+  return isIPv4Address(hostname) || isIPv6Address(hostname);
+}
+
+/**
+ * Strip brackets from IPv6 hostname (URLs use [::1] format)
+ */
+function stripIPv6Brackets(hostname) {
+  if (hostname.startsWith('[') && hostname.endsWith(']')) {
+    return hostname.slice(1, -1);
+  }
+  return hostname;
+}
+
+/**
+ * H3: Verify URL doesn't resolve to blocked IP (SSRF protection)
  * Handles both hostnames (via DNS) and direct IP addresses
+ * Checks both IPv4 and IPv6 records for comprehensive protection
  */
 async function checkSSRFSafe(hostname) {
   // If hostname is already an IP address, check it directly
-  if (isIPAddress(hostname)) {
+  if (isIPv4Address(hostname)) {
     if (isBlockedIP(hostname)) {
-      return { safe: false, reason: `Blocked IP range: ${hostname}` };
+      return { safe: false, reason: `Blocked IPv4: ${hostname}` };
     }
     return { safe: true };
   }
 
-  // For hostnames, resolve via DNS
-  try {
-    const addresses = await dns.resolve4(hostname);
-    for (const ip of addresses) {
-      if (isBlockedIP(ip)) {
-        return { safe: false, reason: `Blocked IP range: ${ip}` };
-      }
+  if (isIPv6Address(hostname)) {
+    // Strip brackets for checking
+    const ipv6 = stripIPv6Brackets(hostname);
+    if (isBlockedIPv6(ipv6)) {
+      return { safe: false, reason: `Blocked IPv6: ${ipv6}` };
     }
     return { safe: true };
-  } catch (e) {
-    // DNS resolution failed - allow through (will fail at request time)
-    return { safe: true, warning: `DNS resolution failed: ${e.message}` };
   }
+
+  // For hostnames, resolve via DNS (both IPv4 and IPv6)
+  const results = { safe: true, checkedIPv4: false, checkedIPv6: false };
+
+  // Check IPv4 (A records)
+  try {
+    const ipv4Addresses = await dns.resolve4(hostname);
+    results.checkedIPv4 = true;
+
+    for (const ip of ipv4Addresses) {
+      if (isBlockedIP(ip)) {
+        return { safe: false, reason: `Blocked IPv4: ${ip}` };
+      }
+    }
+  } catch (e) {
+    // No IPv4 records - that's OK
+    results.ipv4Error = e.code;
+  }
+
+  // Check IPv6 (AAAA records)
+  try {
+    const ipv6Addresses = await dns.resolve6(hostname);
+    results.checkedIPv6 = true;
+
+    for (const ip of ipv6Addresses) {
+      if (isBlockedIPv6(ip)) {
+        return { safe: false, reason: `Blocked IPv6: ${ip}` };
+      }
+    }
+  } catch (e) {
+    // No IPv6 records - that's OK
+    results.ipv6Error = e.code;
+  }
+
+  // If we couldn't resolve ANY addresses, allow through (will fail at connection)
+  if (!results.checkedIPv4 && !results.checkedIPv6) {
+    return { safe: true, warning: 'DNS resolution failed for both IPv4 and IPv6' };
+  }
+
+  return { safe: true };
 }
 
 /**
@@ -310,7 +442,10 @@ module.exports = {
   safeGet,
   checkSSRFSafe,
   isBlockedIP,
+  isBlockedIPv6,
   isIPAddress,
+  isIPv4Address,
+  isIPv6Address,
   isSameRegistrableDomain,
   getRegistrableDomain,
   validateRedirectTarget,
