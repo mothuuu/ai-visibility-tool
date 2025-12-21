@@ -2,6 +2,7 @@ const SiteCrawler = require('./site-crawler');
 const { ContentExtractor, extractWithFallback, resetRenderCounter } = require('./content-extractor');
 const { detectCertifications, calculateCertificationScore } = require('./recommendation-engine/certification-detector');
 const { buildScanEvidence } = require('./evidence-builder');
+const { validateEvidence } = require('./evidence-contract');
 
 /**
  * V5 Enhanced Rubric Scoring Engine
@@ -160,6 +161,14 @@ class V5EnhancedRubricEngine {
 
         console.log(`[V5-Enhanced] Aggregated ${allFAQs.length} FAQs from ${this.siteData.pages.length} pages`);
         console.log(`[V5-Enhanced] Sitemap detected: ${this.siteData.sitemapDetected ? 'YES' : 'NO'}`);
+
+        // Validate evidence against contract
+        const validation = validateEvidence(this.evidence);
+        if (!validation.valid) {
+          console.error('[V5-Enhanced] Evidence validation failed:', validation.errors);
+        } else if (validation.warnings.length > 0) {
+          console.warn('[V5-Enhanced] Evidence validation warnings:', validation.warnings);
+        }
       } else {
         this.evidence = null;
       }

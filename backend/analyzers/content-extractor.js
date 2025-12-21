@@ -1137,9 +1137,15 @@ class ContentExtractor {
     const hasServicesLink = keyPages.services;
     const hasPricingLink = keyPages.pricing;
 
+    // Build unified allNavLinks from separated sources (evidence contract v2.0)
+    const unifiedNavLinks = [...headerLinks, ...navLinks, ...footerLinks];
+
     console.log('[Detection] Navigation analysis:', {
       navElementCount: navElements.length,
-      totalLinks: allNavLinks.length,
+      headerLinks: headerLinks.length,
+      navLinks: navLinks.length,
+      footerLinks: footerLinks.length,
+      totalLinks: unifiedNavLinks.length,
       keyPageCount,
       keyPages
     });
@@ -1148,8 +1154,8 @@ class ContentExtractor {
       // New structure per rulebook
       detected: navElements.length > 0,
       navElements,
-      totalNavLinks: allNavLinks.length,
-      allNavLinks,
+      totalNavLinks: unifiedNavLinks.length,
+      allNavLinks: unifiedNavLinks,
       keyPages,
       keyPageCount,
       hasSemanticNav: $('nav').length > 0,

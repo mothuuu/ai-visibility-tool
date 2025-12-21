@@ -5,9 +5,9 @@
  * Ensures consistent evidence structure across the system.
  */
 
-const { CONTRACT_VERSION, validateEvidence } = require('./evidence-contract');
+const { CONTRACT_VERSION, validateEvidence, FUTURE_NAMESPACE_SHAPES } = require('./evidence-contract');
 
-function buildScanEvidence({ pageExtract, crawlResult, scanContext }) {
+function buildScanEvidence({ pageExtract, crawlResult, scanContext }, options = {}) {
   const url = scanContext?.url || pageExtract?.url || '';
 
   // Navigation with separated sources
@@ -104,10 +104,34 @@ function buildScanEvidence({ pageExtract, crawlResult, scanContext }) {
     technical,
     crawler,
     siteMetrics,
+
+    // Future namespaces (empty for now, ready for population)
+    aiReadiness: FUTURE_NAMESPACE_SHAPES.aiReadiness,
+    trust: FUTURE_NAMESPACE_SHAPES.trust,
+    voice: FUTURE_NAMESPACE_SHAPES.voice,
+    freshness: FUTURE_NAMESPACE_SHAPES.freshness,
+
     _meta: {
       hasCrawlData: crawler.totalDiscoveredUrls > 0
     }
   };
+
+  // VALIDATE - enforce evidence contract
+  const validationOptions = {
+    strict: options.strict || process.env.NODE_ENV === 'test',
+    throwOnError: options.throwOnError || false
+  };
+
+  const validation = validateEvidence(evidence, validationOptions);
+
+  if (!validation.valid) {
+    console.error('[EvidenceBuilder] Contract validation FAILED:', validation.errors);
+    if (validationOptions.throwOnError) {
+      throw new Error(`Evidence contract violation: ${validation.errors.join(', ')}`);
+    }
+  } else if (validation.warnings.length > 0) {
+    console.warn('[EvidenceBuilder] Contract warnings:', validation.warnings);
+  }
 
   // DEBUG: Final evidence structure
   console.log('[EvidenceBuilder] DEBUG - Final evidence:', {
@@ -119,8 +143,7 @@ function buildScanEvidence({ pageExtract, crawlResult, scanContext }) {
     sitemapFaqUrls: evidence.siteMetrics.sitemap?.faqUrls?.length || 0,
     sitemapHasBlogUrls: evidence.siteMetrics.sitemap?.hasBlogUrls,
     sitemapHasFaqUrls: evidence.siteMetrics.sitemap?.hasFaqUrls,
-    crawlResultSitemap: !!crawlResult?.sitemap,
-    crawlResultBlogUrls: crawlResult?.sitemap?.blogUrls?.length || 0
+    validationValid: validation.valid
   });
 
   return evidence;
