@@ -38,12 +38,24 @@ function normalizeEvidence(raw = {}) {
   const profileRaw = raw.detected_profile || raw.profile || {};
   const factsRaw = raw.extracted_facts || raw.facts || [];
 
+  // DEBUG: Log what data we're receiving
+  console.log('[normalizeEvidence] INPUT:', {
+    hasDetectedProfile: !!raw.detected_profile,
+    hasProfile: !!raw.profile,
+    profileRawSections: profileRaw.sections,
+    hasExtractedFacts: !!raw.extracted_facts,
+    hasFacts: !!raw.facts
+  });
+
   const profile = {
     site_type: SITE_TYPES.has(profileRaw.site_type) ? profileRaw.site_type : 'small_multi',
     routes_count: Number(profileRaw.routes_count || 1),
     anchors: Array.isArray(profileRaw.anchors) ? profileRaw.anchors : [],
     sections: typeof profileRaw.sections === 'object' && profileRaw.sections !== null ? profileRaw.sections : {}
   };
+
+  // DEBUG: Log the resulting profile sections
+  console.log('[normalizeEvidence] OUTPUT profile.sections:', profile.sections);
 
   // facts as [{name, value, selector?, confidence?}]
   const facts = Array.isArray(factsRaw) ? factsRaw.filter(f => f && f.name) : [];
