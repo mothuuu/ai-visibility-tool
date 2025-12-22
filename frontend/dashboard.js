@@ -2209,83 +2209,92 @@ function validateSaveButton() {
 // Validate profile form
 function validateProfileForm(showErrors = true) {
     let isValid = true;
-    const errors = {};
+    const errors = [];
+
+    // Clear all previous errors first
+    if (showErrors) {
+        clearProfileFormErrors();
+    }
 
     // Required fields
     const businessName = document.getElementById('businessName')?.value?.trim();
     if (!businessName) {
-        errors.businessName = 'Business name is required';
+        errors.push({ field: 'businessName', message: 'Business name is required' });
         isValid = false;
     }
 
     const websiteUrl = document.getElementById('websiteUrl')?.value?.trim();
     if (!websiteUrl) {
-        errors.websiteUrl = 'Website URL is required';
+        errors.push({ field: 'websiteUrl', message: 'Website URL is required' });
         isValid = false;
     } else if (!/^https?:\/\/.+/.test(websiteUrl)) {
-        errors.websiteUrl = 'Please enter a valid URL starting with http:// or https://';
+        errors.push({ field: 'websiteUrl', message: 'Please enter a valid URL starting with http:// or https://' });
         isValid = false;
     }
 
     const category = document.getElementById('businessCategory')?.value;
     if (!category) {
-        errors.category = 'Please select a category';
+        errors.push({ field: 'businessCategory', errorId: 'categoryError', message: 'Please select a category' });
         isValid = false;
     }
 
     const tagline = document.getElementById('tagline')?.value?.trim();
     if (!tagline) {
-        errors.tagline = 'Tagline is required';
+        errors.push({ field: 'tagline', message: 'Tagline is required' });
         isValid = false;
     }
 
     const shortDescription = document.getElementById('shortDescription')?.value?.trim();
     if (!shortDescription) {
-        errors.shortDescription = 'Short description is required';
+        errors.push({ field: 'shortDescription', message: 'Short description is required' });
         isValid = false;
     }
 
     const phone = document.getElementById('businessPhone')?.value?.trim();
     if (!phone) {
-        errors.phone = 'Business phone is required';
+        errors.push({ field: 'businessPhone', errorId: 'phoneError', message: 'Business phone is required' });
         isValid = false;
     }
 
     const email = document.getElementById('businessEmail')?.value?.trim();
     if (!email) {
-        errors.email = 'Business email is required';
+        errors.push({ field: 'businessEmail', errorId: 'emailError', message: 'Business email is required' });
         isValid = false;
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        errors.email = 'Please enter a valid email address';
+        errors.push({ field: 'businessEmail', errorId: 'emailError', message: 'Please enter a valid email address' });
         isValid = false;
     }
 
-    // Conditional: Physical address fields
+    // Physical address selection is required
     const hasPhysicalAddress = document.querySelector('input[name="has_physical_address"]:checked')?.value;
-    if (hasPhysicalAddress === 'true') {
+    if (!hasPhysicalAddress) {
+        errors.push({ field: 'hasAddressYes', errorId: 'addressTypeError', message: 'Please select whether you have a physical address' });
+        isValid = false;
+    } else if (hasPhysicalAddress === 'true') {
+        // Physical address fields required
         if (!document.getElementById('streetAddress')?.value?.trim()) {
-            errors.streetAddress = 'Street address is required';
+            errors.push({ field: 'streetAddress', message: 'Street address is required' });
             isValid = false;
         }
         if (!document.getElementById('city')?.value?.trim()) {
-            errors.city = 'City is required';
+            errors.push({ field: 'city', message: 'City is required' });
             isValid = false;
         }
         if (!document.getElementById('stateProvince')?.value?.trim()) {
-            errors.stateProvince = 'State/Province is required';
+            errors.push({ field: 'stateProvince', message: 'State/Province is required' });
             isValid = false;
         }
         if (!document.getElementById('postalCode')?.value?.trim()) {
-            errors.postalCode = 'Postal code is required';
+            errors.push({ field: 'postalCode', message: 'Postal code is required' });
             isValid = false;
         }
         if (!document.getElementById('country')?.value) {
-            errors.country = 'Country is required';
+            errors.push({ field: 'country', message: 'Country is required' });
             isValid = false;
         }
     } else if (hasPhysicalAddress === 'false') {
         if (!document.getElementById('headquartersCountry')?.value) {
-            errors.headquartersCountry = 'Headquarters country is required';
+            errors.push({ field: 'headquartersCountry', message: 'Headquarters country is required' });
             isValid = false;
         }
     }
@@ -2295,10 +2304,10 @@ function validateProfileForm(showErrors = true) {
     if (inboxPreference === 'customer') {
         const customerEmail = document.getElementById('customerVerificationEmail')?.value?.trim();
         if (!customerEmail) {
-            errors.customerEmail = 'Verification email is required when using your own email';
+            errors.push({ field: 'customerVerificationEmail', message: 'Verification email is required when using your own email' });
             isValid = false;
         } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
-            errors.customerEmail = 'Please enter a valid email address';
+            errors.push({ field: 'customerVerificationEmail', message: 'Please enter a valid email address' });
             isValid = false;
         }
     }
@@ -2307,7 +2316,7 @@ function validateProfileForm(showErrors = true) {
     const isSaasProduct = document.getElementById('isSaasProduct')?.checked;
     if (isSaasProduct) {
         if (!document.getElementById('pricingModel')?.value) {
-            errors.pricingModel = 'Pricing model is required for SaaS products';
+            errors.push({ field: 'pricingModel', message: 'Pricing model is required for SaaS products' });
             isValid = false;
         }
     }
@@ -2315,26 +2324,44 @@ function validateProfileForm(showErrors = true) {
     // Consent is required
     const consentAccepted = document.getElementById('consentAccepted')?.checked;
     if (!consentAccepted) {
-        errors.consent = 'You must accept the consent agreement';
+        errors.push({ field: 'consentAccepted', errorId: 'consentError', message: 'You must accept the authorization to continue' });
         isValid = false;
     }
 
     // Show errors if requested
-    if (showErrors) {
-        Object.keys(errors).forEach(key => {
-            const errorEl = document.getElementById(key + 'Error');
-            const inputEl = document.getElementById(key);
+    if (showErrors && errors.length > 0) {
+        errors.forEach(err => {
+            const errorId = err.errorId || (err.field + 'Error');
+            const errorEl = document.getElementById(errorId);
+            const inputEl = document.getElementById(err.field);
+
             if (errorEl) {
                 errorEl.classList.add('visible');
-                errorEl.textContent = errors[key];
+                errorEl.textContent = err.message;
             }
             if (inputEl) {
                 inputEl.classList.add('error');
             }
         });
+
+        // Scroll to first error
+        const firstErrorField = document.getElementById(errors[0].field);
+        if (firstErrorField) {
+            firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            firstErrorField.focus();
+        }
     }
 
     return isValid;
+}
+
+// Clear all form errors
+function clearProfileFormErrors() {
+    const errorEls = document.querySelectorAll('.profile-form-error');
+    errorEls.forEach(el => el.classList.remove('visible'));
+
+    const inputEls = document.querySelectorAll('.profile-form-input.error, .profile-form-select.error, .profile-form-textarea.error');
+    inputEls.forEach(el => el.classList.remove('error'));
 }
 
 // Update profile completeness
