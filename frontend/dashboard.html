@@ -1739,6 +1739,669 @@
             background: var(--gray-200);
             color: var(--gray-500);
         }
+
+        /* ============================================================================
+           BUSINESS PROFILE FORM STYLES
+           ============================================================================ */
+
+        /* Progress Steps */
+        .profile-progress-steps {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: var(--gray-50);
+            border-radius: 12px;
+        }
+
+        .progress-step {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--gray-400);
+            transition: all 0.3s;
+        }
+
+        .progress-step.active {
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--complete-teal) 100%);
+            color: white;
+        }
+
+        .progress-step.completed {
+            background: var(--good-green);
+            color: white;
+        }
+
+        .progress-step-number {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--gray-200);
+            font-weight: 700;
+        }
+
+        .progress-step.active .progress-step-number,
+        .progress-step.completed .progress-step-number {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .profile-progress-steps {
+                flex-wrap: wrap;
+            }
+            .progress-step-label {
+                display: none;
+            }
+        }
+
+        /* Form Sections */
+        .profile-form-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--gray-200);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+
+        .profile-section-header {
+            padding: 1.25rem 1.5rem;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .profile-section-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .profile-section-title i {
+            color: var(--brand-cyan);
+        }
+
+        .profile-section-subtitle {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            margin-top: 0.25rem;
+        }
+
+        .profile-section-body {
+            padding: 1.5rem;
+        }
+
+        /* Form Grid */
+        .profile-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .profile-form-grid.single-column {
+            grid-template-columns: 1fr;
+        }
+
+        @media (max-width: 768px) {
+            .profile-form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .form-field-full {
+            grid-column: 1 / -1;
+        }
+
+        /* Form Fields */
+        .profile-form-field {
+            margin-bottom: 1.25rem;
+        }
+
+        .profile-form-field:last-child {
+            margin-bottom: 0;
+        }
+
+        .profile-form-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--gray-700);
+            margin-bottom: 0.5rem;
+        }
+
+        .profile-form-label .required {
+            color: var(--critical-red);
+            margin-left: 0.25rem;
+        }
+
+        .profile-form-input,
+        .profile-form-select,
+        .profile-form-textarea {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            color: var(--gray-900);
+            background: white;
+            transition: all 0.2s;
+        }
+
+        .profile-form-input:focus,
+        .profile-form-select:focus,
+        .profile-form-textarea:focus {
+            outline: none;
+            border-color: var(--brand-cyan);
+            box-shadow: 0 0 0 3px rgba(0, 185, 218, 0.1);
+        }
+
+        .profile-form-input.error,
+        .profile-form-select.error,
+        .profile-form-textarea.error {
+            border-color: var(--critical-red);
+        }
+
+        .profile-form-input.error:focus,
+        .profile-form-select.error:focus,
+        .profile-form-textarea.error:focus {
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+        }
+
+        .profile-form-textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .profile-form-textarea.short {
+            min-height: 60px;
+        }
+
+        .profile-form-textarea.tall {
+            min-height: 150px;
+        }
+
+        .profile-form-hint {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            margin-top: 0.375rem;
+        }
+
+        .profile-form-error {
+            font-size: 0.75rem;
+            color: var(--critical-red);
+            margin-top: 0.375rem;
+            display: none;
+        }
+
+        .profile-form-error.visible {
+            display: block;
+        }
+
+        .profile-char-count {
+            font-size: 0.75rem;
+            color: var(--gray-400);
+            text-align: right;
+            margin-top: 0.25rem;
+        }
+
+        .profile-char-count.warning {
+            color: var(--high-yellow);
+        }
+
+        .profile-char-count.over {
+            color: var(--critical-red);
+        }
+
+        /* Radio Group */
+        .profile-radio-group {
+            background: var(--gray-50);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .profile-radio-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+
+        .profile-radio-option:hover {
+            background: white;
+        }
+
+        .profile-radio-option.selected {
+            background: white;
+            border-color: var(--brand-cyan);
+            box-shadow: 0 2px 8px rgba(0, 185, 218, 0.15);
+        }
+
+        .profile-radio-option input[type="radio"] {
+            margin-top: 0.25rem;
+            accent-color: var(--brand-cyan);
+        }
+
+        .profile-radio-content {
+            flex: 1;
+        }
+
+        .profile-radio-label {
+            font-weight: 600;
+            color: var(--gray-900);
+            margin-bottom: 0.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .profile-radio-description {
+            font-size: 0.8rem;
+            color: var(--gray-500);
+            line-height: 1.5;
+        }
+
+        .profile-radio-badge {
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--complete-teal) 100%);
+            color: white;
+            font-size: 0.625rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        /* Conditional Fields */
+        .profile-conditional-fields {
+            display: none;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--gray-200);
+        }
+
+        .profile-conditional-fields.visible {
+            display: block;
+        }
+
+        /* Info Box */
+        .profile-info-box {
+            background: linear-gradient(135deg, #e0f7fa 0%, #e8f5e9 100%);
+            border-left: 4px solid var(--brand-cyan);
+            padding: 1rem 1.25rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1rem 0;
+        }
+
+        .profile-info-box.warning {
+            background: linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%);
+            border-left-color: var(--high-yellow);
+        }
+
+        .profile-info-box-title {
+            font-weight: 600;
+            color: var(--gray-800);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .profile-info-box-content {
+            font-size: 0.875rem;
+            color: var(--gray-600);
+            line-height: 1.6;
+        }
+
+        .profile-info-box ul {
+            margin: 0.5rem 0 0 1.25rem;
+            padding: 0;
+        }
+
+        .profile-info-box li {
+            margin-bottom: 0.25rem;
+        }
+
+        /* Checkbox */
+        .profile-checkbox-wrapper {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            cursor: pointer;
+        }
+
+        .profile-checkbox-wrapper input[type="checkbox"] {
+            margin-top: 0.25rem;
+            width: 18px;
+            height: 18px;
+            accent-color: var(--brand-cyan);
+        }
+
+        .profile-checkbox-label {
+            font-size: 0.875rem;
+            color: var(--gray-700);
+            line-height: 1.5;
+        }
+
+        /* Feature Tags */
+        .profile-feature-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .profile-feature-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.375rem 0.75rem;
+            background: var(--gray-100);
+            border-radius: 20px;
+            font-size: 0.8rem;
+            color: var(--gray-700);
+            border: 1px solid var(--gray-200);
+        }
+
+        .profile-feature-tag .remove-tag {
+            cursor: pointer;
+            color: var(--gray-400);
+            font-size: 0.875rem;
+        }
+
+        .profile-feature-tag .remove-tag:hover {
+            color: var(--critical-red);
+        }
+
+        .profile-add-tag-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.375rem 0.75rem;
+            background: white;
+            border: 1px dashed var(--gray-300);
+            border-radius: 20px;
+            font-size: 0.8rem;
+            color: var(--gray-500);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .profile-add-tag-btn:hover {
+            border-color: var(--brand-cyan);
+            color: var(--brand-cyan);
+        }
+
+        /* Logo Upload */
+        .profile-logo-upload {
+            border: 2px dashed var(--gray-300);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--gray-50);
+        }
+
+        .profile-logo-upload:hover {
+            border-color: var(--brand-cyan);
+            background: white;
+        }
+
+        .profile-logo-upload.has-file {
+            border-style: solid;
+            border-color: var(--good-green);
+            background: #f0fdf4;
+        }
+
+        .profile-logo-upload-icon {
+            font-size: 2.5rem;
+            color: var(--gray-400);
+            margin-bottom: 0.75rem;
+        }
+
+        .profile-logo-upload.has-file .profile-logo-upload-icon {
+            color: var(--good-green);
+        }
+
+        .profile-logo-upload-text {
+            font-size: 0.875rem;
+            color: var(--gray-600);
+            margin-bottom: 0.25rem;
+        }
+
+        .profile-logo-upload-hint {
+            font-size: 0.75rem;
+            color: var(--gray-400);
+        }
+
+        .profile-logo-preview {
+            max-width: 120px;
+            max-height: 120px;
+            margin: 0 auto 0.75rem;
+            border-radius: 8px;
+        }
+
+        /* Consent Section */
+        .profile-consent-box {
+            background: var(--gray-50);
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            padding: 1.25rem;
+        }
+
+        .profile-consent-list {
+            margin: 0.75rem 0 0.75rem 1.25rem;
+            padding: 0;
+            font-size: 0.875rem;
+            color: var(--gray-600);
+        }
+
+        .profile-consent-list li {
+            margin-bottom: 0.5rem;
+            line-height: 1.5;
+        }
+
+        /* Profile Completeness */
+        .profile-completeness-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--gray-200);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .profile-completeness-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .profile-completeness-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+
+        .profile-completeness-percent {
+            font-size: 1.25rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-pink) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .profile-completeness-bar {
+            height: 12px;
+            background: var(--gray-200);
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 1.25rem;
+        }
+
+        .profile-completeness-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--brand-cyan) 0%, var(--complete-teal) 100%);
+            transition: width 0.5s ease;
+            border-radius: 6px;
+        }
+
+        .profile-completeness-items {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+
+        @media (max-width: 768px) {
+            .profile-completeness-items {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .profile-completeness-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--gray-600);
+        }
+
+        .profile-completeness-item.completed {
+            color: var(--good-green);
+        }
+
+        .profile-completeness-item i {
+            width: 16px;
+            text-align: center;
+        }
+
+        .profile-completeness-unlock {
+            font-size: 0.7rem;
+            color: var(--gray-400);
+            margin-left: auto;
+        }
+
+        /* Form Actions */
+        .profile-form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--gray-200);
+        }
+
+        .btn-profile-cancel {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: white;
+            color: var(--gray-600);
+            border: 1px solid var(--gray-300);
+        }
+
+        .btn-profile-cancel:hover {
+            background: var(--gray-50);
+            border-color: var(--gray-400);
+        }
+
+        .btn-profile-save {
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--complete-teal) 100%);
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-profile-save:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 185, 218, 0.4);
+        }
+
+        .btn-profile-save:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Managed Inbox Preview */
+        .managed-inbox-preview {
+            background: linear-gradient(135deg, #e0f7fa 0%, #e8f5e9 100%);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin-top: 0.75rem;
+        }
+
+        .managed-inbox-label {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            margin-bottom: 0.25rem;
+        }
+
+        .managed-inbox-email {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--brand-cyan);
+            font-family: monospace;
+        }
+
+        .managed-inbox-features {
+            margin-top: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.375rem;
+        }
+
+        .managed-inbox-feature {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--good-green);
+        }
+
+        /* Customer email warning */
+        .customer-email-warnings {
+            margin-top: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.375rem;
+        }
+
+        .customer-email-warning {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--high-yellow);
+        }
     </style>
     <!-- Google Analytics 4 -->
     <script src="analytics.js"></script>
@@ -2663,6 +3326,760 @@
                         </div>
                     </div>
                 </div>
+            </section>
+
+            <!-- Business Profile Form Section -->
+            <section class="section" id="business-profile">
+                <div class="section-header">
+                    <h1 class="section-title">Complete Your Business Profile</h1>
+                    <p class="section-subtitle">This information will be used for directory submissions</p>
+                </div>
+
+                <!-- Progress Steps -->
+                <div class="profile-progress-steps">
+                    <div class="progress-step completed" data-step="1">
+                        <span class="progress-step-number"><i class="fas fa-check"></i></span>
+                        <span class="progress-step-label">Core Info</span>
+                    </div>
+                    <div class="progress-step active" data-step="2">
+                        <span class="progress-step-number">2</span>
+                        <span class="progress-step-label">Location</span>
+                    </div>
+                    <div class="progress-step" data-step="3">
+                        <span class="progress-step-number">3</span>
+                        <span class="progress-step-label">Verification</span>
+                    </div>
+                    <div class="progress-step" data-step="4">
+                        <span class="progress-step-number">4</span>
+                        <span class="progress-step-label">Extras</span>
+                    </div>
+                </div>
+
+                <!-- Profile Completeness Card -->
+                <div class="profile-completeness-card">
+                    <div class="profile-completeness-header">
+                        <span class="profile-completeness-title">Profile Completeness</span>
+                        <span class="profile-completeness-percent" id="profileCompletenessPercent">0%</span>
+                    </div>
+                    <div class="profile-completeness-bar">
+                        <div class="profile-completeness-fill" id="profileCompletenessFill" style="width: 0%;"></div>
+                    </div>
+                    <div class="profile-completeness-items">
+                        <div class="profile-completeness-item" id="completeness-core">
+                            <i class="far fa-circle"></i>
+                            <span>Core Information</span>
+                            <span class="profile-completeness-unlock">643 directories</span>
+                        </div>
+                        <div class="profile-completeness-item" id="completeness-location">
+                            <i class="far fa-circle"></i>
+                            <span>Location & Contact</span>
+                            <span class="profile-completeness-unlock">+120 local</span>
+                        </div>
+                        <div class="profile-completeness-item" id="completeness-verification">
+                            <i class="far fa-circle"></i>
+                            <span>Verification Settings</span>
+                            <span class="profile-completeness-unlock">Auto submissions</span>
+                        </div>
+                        <div class="profile-completeness-item" id="completeness-logo">
+                            <i class="far fa-circle"></i>
+                            <span>Logo Upload</span>
+                            <span class="profile-completeness-unlock">+45 directories</span>
+                        </div>
+                        <div class="profile-completeness-item" id="completeness-social">
+                            <i class="far fa-circle"></i>
+                            <span>Social Links</span>
+                            <span class="profile-completeness-unlock">+30 directories</span>
+                        </div>
+                        <div class="profile-completeness-item" id="completeness-saas">
+                            <i class="far fa-circle"></i>
+                            <span>SaaS/AI Details</span>
+                            <span class="profile-completeness-unlock">+55 AI directories</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Container -->
+                <form id="businessProfileForm" onsubmit="handleProfileSubmit(event)">
+
+                    <!-- SECTION 1: Core Business Information -->
+                    <div class="profile-form-section">
+                        <div class="profile-section-header">
+                            <h3 class="profile-section-title">
+                                <i class="fas fa-building"></i>
+                                Core Business Information
+                            </h3>
+                            <p class="profile-section-subtitle">Essential details about your business</p>
+                        </div>
+                        <div class="profile-section-body">
+                            <div class="profile-form-grid">
+                                <!-- Business Name -->
+                                <div class="profile-form-field form-field-full">
+                                    <label class="profile-form-label">
+                                        Business Name <span class="required">*</span>
+                                    </label>
+                                    <input type="text"
+                                           class="profile-form-input"
+                                           id="businessName"
+                                           name="business_name"
+                                           placeholder="Acme Corporation"
+                                           maxlength="255"
+                                           required>
+                                    <div class="profile-form-hint">This is how your business will appear in directory listings</div>
+                                    <div class="profile-form-error" id="businessNameError">Business name is required</div>
+                                </div>
+
+                                <!-- Website URL -->
+                                <div class="profile-form-field form-field-full">
+                                    <label class="profile-form-label">
+                                        Website URL <span class="required">*</span>
+                                    </label>
+                                    <input type="url"
+                                           class="profile-form-input"
+                                           id="websiteUrl"
+                                           name="website_url"
+                                           placeholder="https://example.com"
+                                           required>
+                                    <div class="profile-form-error" id="websiteUrlError">Please enter a valid URL</div>
+                                </div>
+
+                                <!-- Business Category -->
+                                <div class="profile-form-field form-field-full">
+                                    <label class="profile-form-label">
+                                        Business Category <span class="required">*</span>
+                                    </label>
+                                    <select class="profile-form-select" id="businessCategory" name="category" required>
+                                        <option value="">Select a category...</option>
+                                        <option value="saas">SaaS / Software</option>
+                                        <option value="ai_ml">AI / Machine Learning</option>
+                                        <option value="developer_tools">Developer Tools</option>
+                                        <option value="marketing_agency">Marketing Agency</option>
+                                        <option value="consulting">Consulting Services</option>
+                                        <option value="professional_services">Professional Services</option>
+                                        <option value="technology_services">Technology Services</option>
+                                        <option value="ecommerce">E-commerce</option>
+                                        <option value="fintech">Finance / Fintech</option>
+                                        <option value="healthcare">Healthcare / Healthtech</option>
+                                        <option value="education">Education / Edtech</option>
+                                        <option value="real_estate">Real Estate</option>
+                                        <option value="media_entertainment">Media & Entertainment</option>
+                                        <option value="nonprofit">Nonprofit / NGO</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                    <div class="profile-form-error" id="categoryError">Please select a category</div>
+                                </div>
+
+                                <!-- Tagline -->
+                                <div class="profile-form-field form-field-full">
+                                    <label class="profile-form-label">
+                                        Tagline <span class="required">*</span>
+                                    </label>
+                                    <input type="text"
+                                           class="profile-form-input"
+                                           id="tagline"
+                                           name="tagline"
+                                           placeholder="AI-powered visibility for modern businesses"
+                                           maxlength="50"
+                                           required
+                                           oninput="updateCharCount('tagline', 50)">
+                                    <div class="profile-char-count" id="taglineCharCount">0/50 characters</div>
+                                    <div class="profile-form-error" id="taglineError">Tagline is required</div>
+                                </div>
+
+                                <!-- Short Description -->
+                                <div class="profile-form-field form-field-full">
+                                    <label class="profile-form-label">
+                                        Short Description <span class="required">*</span>
+                                    </label>
+                                    <textarea class="profile-form-textarea short"
+                                              id="shortDescription"
+                                              name="short_description"
+                                              placeholder="A brief description of your business for directory snippets..."
+                                              maxlength="160"
+                                              required
+                                              oninput="updateCharCount('shortDescription', 160)"></textarea>
+                                    <div class="profile-char-count" id="shortDescriptionCharCount">0/160 characters</div>
+                                    <div class="profile-form-hint">Used for directory snippets and meta descriptions</div>
+                                    <div class="profile-form-error" id="shortDescriptionError">Short description is required</div>
+                                </div>
+
+                                <!-- Long Description -->
+                                <div class="profile-form-field form-field-full">
+                                    <label class="profile-form-label">
+                                        Long Description
+                                    </label>
+                                    <textarea class="profile-form-textarea"
+                                              id="longDescription"
+                                              name="long_description"
+                                              placeholder="A more detailed description of your business..."
+                                              maxlength="500"
+                                              oninput="updateCharCount('longDescription', 500)"></textarea>
+                                    <div class="profile-char-count" id="longDescriptionCharCount">0/500 characters</div>
+                                    <div class="profile-form-hint">Used for detailed directory listings</div>
+                                </div>
+
+                                <!-- Extended Description -->
+                                <div class="profile-form-field form-field-full">
+                                    <label class="profile-form-label">
+                                        Extended Description
+                                    </label>
+                                    <textarea class="profile-form-textarea tall"
+                                              id="extendedDescription"
+                                              name="extended_description"
+                                              placeholder="An extended description for premium directory listings..."
+                                              maxlength="1500"
+                                              oninput="updateCharCount('extendedDescription', 1500)"></textarea>
+                                    <div class="profile-char-count" id="extendedDescriptionCharCount">0/1500 characters</div>
+                                    <div class="profile-form-hint">Optional: unlocks additional premium directories</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 2: Location & Contact -->
+                    <div class="profile-form-section">
+                        <div class="profile-section-header">
+                            <h3 class="profile-section-title">
+                                <i class="fas fa-map-marker-alt"></i>
+                                Location & Contact
+                            </h3>
+                            <p class="profile-section-subtitle">Where your business is located and how to reach you</p>
+                        </div>
+                        <div class="profile-section-body">
+                            <!-- Physical Address Question -->
+                            <div class="profile-form-field">
+                                <label class="profile-form-label">
+                                    Do you have a physical business address? <span class="required">*</span>
+                                </label>
+                                <div class="profile-radio-group">
+                                    <label class="profile-radio-option" id="hasAddressYes">
+                                        <input type="radio" name="has_physical_address" value="true" onchange="toggleAddressFields(true)">
+                                        <div class="profile-radio-content">
+                                            <div class="profile-radio-label">Yes, we have a physical location</div>
+                                            <div class="profile-radio-description">Unlocks local and regional directory listings</div>
+                                        </div>
+                                    </label>
+                                    <label class="profile-radio-option" id="hasAddressNo">
+                                        <input type="radio" name="has_physical_address" value="false" onchange="toggleAddressFields(false)">
+                                        <div class="profile-radio-content">
+                                            <div class="profile-radio-label">No, we're a remote/online-only business</div>
+                                            <div class="profile-radio-description">Focus on global and industry-specific directories</div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Physical Address Fields (conditional) -->
+                            <div class="profile-conditional-fields" id="physicalAddressFields">
+                                <div class="profile-form-grid">
+                                    <div class="profile-form-field form-field-full">
+                                        <label class="profile-form-label">
+                                            Street Address <span class="required">*</span>
+                                        </label>
+                                        <input type="text"
+                                               class="profile-form-input"
+                                               id="streetAddress"
+                                               name="street_address"
+                                               placeholder="123 Main Street">
+                                    </div>
+
+                                    <div class="profile-form-field form-field-full">
+                                        <label class="profile-form-label">Suite / Unit</label>
+                                        <input type="text"
+                                               class="profile-form-input"
+                                               id="suiteUnit"
+                                               name="suite_unit"
+                                               placeholder="Suite 400">
+                                    </div>
+
+                                    <div class="profile-form-field">
+                                        <label class="profile-form-label">
+                                            City <span class="required">*</span>
+                                        </label>
+                                        <input type="text"
+                                               class="profile-form-input"
+                                               id="city"
+                                               name="city"
+                                               placeholder="Toronto">
+                                    </div>
+
+                                    <div class="profile-form-field">
+                                        <label class="profile-form-label">
+                                            State / Province <span class="required">*</span>
+                                        </label>
+                                        <input type="text"
+                                               class="profile-form-input"
+                                               id="stateProvince"
+                                               name="state_province"
+                                               placeholder="Ontario">
+                                    </div>
+
+                                    <div class="profile-form-field">
+                                        <label class="profile-form-label">
+                                            Postal / Zip Code <span class="required">*</span>
+                                        </label>
+                                        <input type="text"
+                                               class="profile-form-input"
+                                               id="postalCode"
+                                               name="postal_code"
+                                               placeholder="M5V 1A1">
+                                    </div>
+
+                                    <div class="profile-form-field">
+                                        <label class="profile-form-label">
+                                            Country <span class="required">*</span>
+                                        </label>
+                                        <select class="profile-form-select" id="country" name="country">
+                                            <option value="">Select country...</option>
+                                            <option value="US">United States</option>
+                                            <option value="CA">Canada</option>
+                                            <option value="GB">United Kingdom</option>
+                                            <option value="AU">Australia</option>
+                                            <option value="DE">Germany</option>
+                                            <option value="FR">France</option>
+                                            <option value="NL">Netherlands</option>
+                                            <option value="SG">Singapore</option>
+                                            <option value="JP">Japan</option>
+                                            <option value="IN">India</option>
+                                            <option value="OTHER">Other</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Remote Business Fields (conditional) -->
+                            <div class="profile-conditional-fields" id="remoteBusinessFields">
+                                <div class="profile-form-field">
+                                    <label class="profile-form-label">
+                                        Headquarters Country <span class="required">*</span>
+                                    </label>
+                                    <select class="profile-form-select" id="headquartersCountry" name="headquarters_country">
+                                        <option value="">Select country...</option>
+                                        <option value="US">United States</option>
+                                        <option value="CA">Canada</option>
+                                        <option value="GB">United Kingdom</option>
+                                        <option value="AU">Australia</option>
+                                        <option value="DE">Germany</option>
+                                        <option value="FR">France</option>
+                                        <option value="NL">Netherlands</option>
+                                        <option value="SG">Singapore</option>
+                                        <option value="JP">Japan</option>
+                                        <option value="IN">India</option>
+                                        <option value="OTHER">Other</option>
+                                    </select>
+                                </div>
+                                <div class="profile-info-box">
+                                    <div class="profile-info-box-title">
+                                        <i class="fas fa-info-circle"></i>
+                                        Note
+                                    </div>
+                                    <div class="profile-info-box-content">
+                                        Local/regional directories will be skipped for remote businesses. We'll focus on global and industry-specific directories instead.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Contact Fields (always visible) -->
+                            <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--gray-200);">
+                                <div class="profile-form-grid">
+                                    <div class="profile-form-field">
+                                        <label class="profile-form-label">
+                                            Business Phone <span class="required">*</span>
+                                        </label>
+                                        <input type="tel"
+                                               class="profile-form-input"
+                                               id="businessPhone"
+                                               name="phone"
+                                               placeholder="+1 (416) 555-1234"
+                                               required>
+                                        <div class="profile-form-error" id="phoneError">Please enter a valid phone number</div>
+                                    </div>
+
+                                    <div class="profile-form-field">
+                                        <label class="profile-form-label">
+                                            Business Email <span class="required">*</span>
+                                        </label>
+                                        <input type="email"
+                                               class="profile-form-input"
+                                               id="businessEmail"
+                                               name="business_email"
+                                               placeholder="hello@example.com"
+                                               required>
+                                        <div class="profile-form-hint">This email may be displayed on directory listings</div>
+                                        <div class="profile-form-error" id="emailError">Please enter a valid email address</div>
+                                    </div>
+
+                                    <div class="profile-form-field form-field-full">
+                                        <label class="profile-form-label">Contact Person Name</label>
+                                        <input type="text"
+                                               class="profile-form-input"
+                                               id="contactPerson"
+                                               name="contact_person"
+                                               placeholder="Jane Smith">
+                                        <div class="profile-form-hint">Some B2B directories require a contact person</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 3: Directory Email & Verification Settings -->
+                    <div class="profile-form-section">
+                        <div class="profile-section-header">
+                            <h3 class="profile-section-title">
+                                <i class="fas fa-envelope-open-text"></i>
+                                Directory Email & Verification Settings
+                            </h3>
+                            <p class="profile-section-subtitle">How we handle directory verifications and account creation</p>
+                        </div>
+                        <div class="profile-section-body">
+                            <p style="color: var(--gray-600); font-size: 0.875rem; margin-bottom: 1rem;">
+                                When we submit to directories, some require email verification or account creation. Choose how you'd like us to handle this:
+                            </p>
+
+                            <!-- Inbox Preference -->
+                            <div class="profile-form-field">
+                                <div class="profile-radio-group">
+                                    <label class="profile-radio-option selected" id="inboxManaged">
+                                        <input type="radio" name="inbox_preference" value="managed" checked onchange="toggleInboxPreference('managed')">
+                                        <div class="profile-radio-content">
+                                            <div class="profile-radio-label">
+                                                Managed Inbox (Recommended)
+                                                <span class="profile-radio-badge">Best</span>
+                                            </div>
+                                            <div class="managed-inbox-preview" id="managedInboxPreview">
+                                                <div class="managed-inbox-label">We'll create:</div>
+                                                <div class="managed-inbox-email" id="managedEmailPreview">your-business@listings.visible2ai.com</div>
+                                                <div class="managed-inbox-features">
+                                                    <div class="managed-inbox-feature">
+                                                        <i class="fas fa-check"></i>
+                                                        All verification emails handled automatically
+                                                    </div>
+                                                    <div class="managed-inbox-feature">
+                                                        <i class="fas fa-check"></i>
+                                                        We create and manage directory accounts for you
+                                                    </div>
+                                                    <div class="managed-inbox-feature">
+                                                        <i class="fas fa-check"></i>
+                                                        Credentials stored securely (exportable anytime)
+                                                    </div>
+                                                    <div class="managed-inbox-feature">
+                                                        <i class="fas fa-check"></i>
+                                                        Maximum automation — minimal effort from you
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </label>
+                                    <label class="profile-radio-option" id="inboxCustomer">
+                                        <input type="radio" name="inbox_preference" value="customer" onchange="toggleInboxPreference('customer')">
+                                        <div class="profile-radio-content">
+                                            <div class="profile-radio-label">Use My Business Email</div>
+                                            <div class="profile-conditional-fields visible" id="customerEmailFields" style="display: none; margin-top: 0.75rem; padding-top: 0; border-top: none;">
+                                                <input type="email"
+                                                       class="profile-form-input"
+                                                       id="customerVerificationEmail"
+                                                       name="customer_verification_email"
+                                                       placeholder="verification@yourbusiness.com">
+                                                <div class="customer-email-warnings">
+                                                    <div class="customer-email-warning">
+                                                        <i class="fas fa-exclamation-triangle"></i>
+                                                        You'll receive verification emails from directories
+                                                    </div>
+                                                    <div class="customer-email-warning">
+                                                        <i class="fas fa-exclamation-triangle"></i>
+                                                        We'll notify you when action is needed
+                                                    </div>
+                                                    <div class="customer-email-warning">
+                                                        <i class="fas fa-exclamation-triangle"></i>
+                                                        Some directories may require you to complete verification
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Customer-Owned Directories Info -->
+                            <div class="profile-info-box">
+                                <div class="profile-info-box-title">
+                                    <i class="fas fa-info-circle"></i>
+                                    Important: Customer-Owned Directories
+                                </div>
+                                <div class="profile-info-box-content">
+                                    Some directories always require YOUR email for ownership verification:
+                                    <ul>
+                                        <li>Google Business Profile</li>
+                                        <li>Apple Business Connect</li>
+                                        <li>Yelp Business</li>
+                                        <li>Bing Places</li>
+                                        <li>Better Business Bureau</li>
+                                        <li>LinkedIn Company Page</li>
+                                    </ul>
+                                    For these, we'll guide you through the process with step-by-step instructions in your dashboard.
+                                </div>
+                            </div>
+
+                            <!-- Verification Phone -->
+                            <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--gray-200);">
+                                <h4 style="font-size: 0.875rem; font-weight: 600; color: var(--gray-700); margin-bottom: 1rem;">Verification Preferences</h4>
+                                <p style="color: var(--gray-500); font-size: 0.8rem; margin-bottom: 1rem;">
+                                    If a directory requires phone/SMS verification:
+                                </p>
+                                <div class="profile-form-field">
+                                    <label class="profile-form-label">Phone number to receive verification codes</label>
+                                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                        <input type="tel"
+                                               class="profile-form-input"
+                                               id="verificationPhone"
+                                               name="verification_phone"
+                                               placeholder="+1 (416) 555-1234"
+                                               style="flex: 1;">
+                                        <button type="button" class="btn-profile-cancel" onclick="copyBusinessPhone()" style="white-space: nowrap;">
+                                            Same as business
+                                        </button>
+                                    </div>
+                                    <div class="profile-form-hint">
+                                        <i class="fas fa-info-circle" style="margin-right: 0.25rem;"></i>
+                                        We'll notify you when a code is needed. You'll enter it in your dashboard. Codes typically expire within 5-10 minutes.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 4: Optional Enhancements -->
+                    <div class="profile-form-section">
+                        <div class="profile-section-header">
+                            <h3 class="profile-section-title">
+                                <i class="fas fa-star"></i>
+                                Optional Enhancements
+                            </h3>
+                            <p class="profile-section-subtitle">Complete these to unlock more directories and improve your listings</p>
+                        </div>
+                        <div class="profile-section-body">
+                            <!-- Branding -->
+                            <h4 style="font-size: 0.875rem; font-weight: 600; color: var(--gray-700); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fas fa-palette" style="color: var(--brand-pink);"></i>
+                                Branding
+                            </h4>
+
+                            <div class="profile-form-grid">
+                                <!-- Logo Upload -->
+                                <div class="profile-form-field">
+                                    <label class="profile-form-label">Business Logo</label>
+                                    <div class="profile-logo-upload" id="logoUploadArea" onclick="document.getElementById('logoInput').click()">
+                                        <div id="logoPreviewContainer" style="display: none;">
+                                            <img id="logoPreview" class="profile-logo-preview" src="" alt="Logo preview">
+                                        </div>
+                                        <div id="logoUploadPrompt">
+                                            <div class="profile-logo-upload-icon">
+                                                <i class="fas fa-cloud-upload-alt"></i>
+                                            </div>
+                                            <div class="profile-logo-upload-text">Drag & drop or click to upload</div>
+                                            <div class="profile-logo-upload-hint">PNG or JPG, minimum 200x200px, max 2MB</div>
+                                        </div>
+                                    </div>
+                                    <input type="file"
+                                           id="logoInput"
+                                           name="logo"
+                                           accept="image/png,image/jpeg"
+                                           style="display: none;"
+                                           onchange="handleLogoUpload(this)">
+                                    <div class="profile-form-hint">Unlocks 40+ additional directories that require logos</div>
+                                </div>
+
+                                <!-- Year Founded -->
+                                <div class="profile-form-field">
+                                    <label class="profile-form-label">Year Founded</label>
+                                    <select class="profile-form-select" id="yearFounded" name="year_founded">
+                                        <option value="">Select year...</option>
+                                        <!-- Years will be populated by JavaScript -->
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Social Presence -->
+                            <h4 style="font-size: 0.875rem; font-weight: 600; color: var(--gray-700); margin: 1.5rem 0 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fas fa-share-alt" style="color: var(--brand-purple);"></i>
+                                Social Presence
+                            </h4>
+
+                            <div class="profile-form-grid">
+                                <div class="profile-form-field">
+                                    <label class="profile-form-label">
+                                        <i class="fab fa-linkedin" style="color: #0077B5; margin-right: 0.25rem;"></i>
+                                        LinkedIn URL
+                                    </label>
+                                    <input type="url"
+                                           class="profile-form-input"
+                                           id="linkedinUrl"
+                                           name="linkedin_url"
+                                           placeholder="https://linkedin.com/company/your-company">
+                                </div>
+
+                                <div class="profile-form-field">
+                                    <label class="profile-form-label">
+                                        <i class="fab fa-twitter" style="color: #1DA1F2; margin-right: 0.25rem;"></i>
+                                        Twitter / X URL
+                                    </label>
+                                    <input type="url"
+                                           class="profile-form-input"
+                                           id="twitterUrl"
+                                           name="twitter_url"
+                                           placeholder="https://twitter.com/your-company">
+                                </div>
+
+                                <div class="profile-form-field form-field-full">
+                                    <label class="profile-form-label">
+                                        <i class="fab fa-facebook" style="color: #1877F2; margin-right: 0.25rem;"></i>
+                                        Facebook URL
+                                    </label>
+                                    <input type="url"
+                                           class="profile-form-input"
+                                           id="facebookUrl"
+                                           name="facebook_url"
+                                           placeholder="https://facebook.com/your-company">
+                                </div>
+                            </div>
+
+                            <!-- SaaS / AI Product -->
+                            <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--gray-200);">
+                                <label class="profile-checkbox-wrapper">
+                                    <input type="checkbox" id="isSaasProduct" name="is_saas_product" onchange="toggleSaasFields()">
+                                    <span class="profile-checkbox-label" style="font-weight: 600; color: var(--gray-900);">
+                                        <i class="fas fa-robot" style="color: var(--brand-cyan); margin-right: 0.25rem;"></i>
+                                        This is a SaaS product or AI tool
+                                    </span>
+                                </label>
+
+                                <div class="profile-conditional-fields" id="saasFields">
+                                    <div class="profile-info-box" style="margin-top: 1rem;">
+                                        <div class="profile-info-box-content">
+                                            <i class="fas fa-magic" style="color: var(--brand-cyan); margin-right: 0.25rem;"></i>
+                                            Completing SaaS/AI fields unlocks <strong>50+ AI-specific directories</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="profile-form-grid" style="margin-top: 1rem;">
+                                        <!-- Pricing Model -->
+                                        <div class="profile-form-field">
+                                            <label class="profile-form-label">
+                                                Pricing Model <span class="required">*</span>
+                                            </label>
+                                            <select class="profile-form-select" id="pricingModel" name="pricing_model">
+                                                <option value="">Select pricing model...</option>
+                                                <option value="free">Free</option>
+                                                <option value="freemium">Freemium</option>
+                                                <option value="paid">Paid</option>
+                                                <option value="subscription">Subscription</option>
+                                                <option value="enterprise">Enterprise / Contact Sales</option>
+                                                <option value="open_source">Open Source</option>
+                                            </select>
+                                        </div>
+
+                                        <!-- Integrations -->
+                                        <div class="profile-form-field">
+                                            <label class="profile-form-label">Integrations</label>
+                                            <input type="text"
+                                                   class="profile-form-input"
+                                                   id="integrations"
+                                                   name="integrations"
+                                                   placeholder="Slack, Zapier, HubSpot">
+                                            <div class="profile-form-hint">Comma-separated list of integrations</div>
+                                        </div>
+
+                                        <!-- Key Features -->
+                                        <div class="profile-form-field form-field-full">
+                                            <label class="profile-form-label">Key Features (up to 5)</label>
+                                            <div class="profile-feature-tags" id="keyFeaturesTags">
+                                                <!-- Tags will be added dynamically -->
+                                            </div>
+                                            <div style="display: flex; gap: 0.5rem;">
+                                                <input type="text"
+                                                       class="profile-form-input"
+                                                       id="newFeatureInput"
+                                                       placeholder="Type a feature and press Enter"
+                                                       onkeydown="handleFeatureKeydown(event)"
+                                                       style="flex: 1;">
+                                                <button type="button" class="profile-add-tag-btn" onclick="addFeatureTag()">
+                                                    <i class="fas fa-plus"></i> Add
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Use Case Tags -->
+                                        <div class="profile-form-field form-field-full">
+                                            <label class="profile-form-label">Use Case Tags (up to 5)</label>
+                                            <div class="profile-feature-tags" id="useCaseTags">
+                                                <!-- Tags will be added dynamically -->
+                                            </div>
+                                            <div style="display: flex; gap: 0.5rem;">
+                                                <input type="text"
+                                                       class="profile-form-input"
+                                                       id="newUseCaseInput"
+                                                       placeholder="e.g., SEO, AI Marketing, Content Optimization"
+                                                       onkeydown="handleUseCaseKeydown(event)"
+                                                       style="flex: 1;">
+                                                <button type="button" class="profile-add-tag-btn" onclick="addUseCaseTag()">
+                                                    <i class="fas fa-plus"></i> Add
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 5: Consent & Authorization -->
+                    <div class="profile-form-section">
+                        <div class="profile-section-header">
+                            <h3 class="profile-section-title">
+                                <i class="fas fa-shield-alt"></i>
+                                Consent & Authorization
+                            </h3>
+                        </div>
+                        <div class="profile-section-body">
+                            <div class="profile-consent-box">
+                                <label class="profile-checkbox-wrapper">
+                                    <input type="checkbox" id="consentAccepted" name="consent_accepted" required onchange="updateConsentState()">
+                                    <span class="profile-checkbox-label">
+                                        <strong>I authorize Visible2AI to:</strong>
+                                        <ul class="profile-consent-list">
+                                            <li>Distribute my business information to third-party directories on my behalf</li>
+                                            <li>Create and manage directory accounts using a managed inbox (if selected above)</li>
+                                            <li>Store account credentials securely (exportable on request)</li>
+                                        </ul>
+                                        <strong>I understand that:</strong>
+                                        <ul class="profile-consent-list">
+                                            <li>Directory approvals and timelines are controlled by third parties</li>
+                                            <li>Some verification methods may require my action (SMS, phone, postcard)</li>
+                                            <li>I can request credential handoff or deletion at any time</li>
+                                        </ul>
+                                    </span>
+                                </label>
+                            </div>
+
+                            <p style="font-size: 0.8rem; color: var(--gray-500); margin-top: 1rem;">
+                                By clicking "Save & Continue", you agree to our
+                                <a href="terms.html" target="_blank" style="color: var(--brand-cyan);">Terms of Service</a> and
+                                <a href="privacy.html" target="_blank" style="color: var(--brand-cyan);">Privacy Policy</a>.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="profile-form-actions">
+                        <button type="button" class="btn-profile-cancel" onclick="cancelProfileForm()">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn-profile-save" id="saveProfileBtn" disabled>
+                            <i class="fas fa-save"></i>
+                            Save & Continue
+                        </button>
+                    </div>
+                </form>
             </section>
 
             <!-- Billing & Subscription Section -->

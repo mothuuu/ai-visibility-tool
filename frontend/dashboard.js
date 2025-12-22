@@ -1539,10 +1539,10 @@ const citationNetworkState = {
     monthlyAllocation: 10, // Based on plan
 
     // Profile status
-    hasBusinessProfile: true,
+    hasBusinessProfile: false, // Will be set to true when profile is completed
 
     // Included allocation status
-    includedStatus: 'ready', // 'no_profile', 'ready', 'in_progress', 'complete'
+    includedStatus: 'no_profile', // 'no_profile', 'ready', 'in_progress', 'complete'
     includedProgress: {
         total: 10,
         submitted: 0,
@@ -1600,31 +1600,41 @@ function updateCitationNetworkUI() {
     if (readyEl) readyEl.style.display = 'none';
     if (inProgressEl) inProgressEl.style.display = 'none';
 
-    // Show appropriate state and update button
-    switch (state.includedStatus) {
-        case 'no_profile':
-            if (noProfileEl) noProfileEl.style.display = 'block';
-            if (includedCTABtn) {
-                includedCTABtn.innerHTML = '<i class="fas fa-user-edit"></i> Complete Business Profile';
-                includedCTABtn.className = 'btn-citation-primary';
-            }
-            break;
-        case 'ready':
-            if (readyEl) readyEl.style.display = 'block';
-            if (includedCTABtn) {
-                includedCTABtn.innerHTML = '<i class="fas fa-play-circle"></i> Start Submissions';
-                includedCTABtn.className = 'btn-citation-primary';
-            }
-            break;
-        case 'in_progress':
-        case 'complete':
-            if (inProgressEl) inProgressEl.style.display = 'block';
-            updateIncludedProgress();
-            if (includedCTABtn) {
-                includedCTABtn.innerHTML = '<i class="fas fa-eye"></i> View Details';
-                includedCTABtn.className = 'btn-citation-secondary';
-            }
-            break;
+    // Check if user has a business profile first
+    if (!state.hasBusinessProfile) {
+        // No profile - show prompt to complete profile
+        if (noProfileEl) noProfileEl.style.display = 'block';
+        if (includedCTABtn) {
+            includedCTABtn.innerHTML = '<i class="fas fa-user-edit"></i> Complete Business Profile';
+            includedCTABtn.className = 'btn-citation-primary';
+        }
+    } else {
+        // Has profile - show appropriate state based on status
+        switch (state.includedStatus) {
+            case 'no_profile':
+                if (noProfileEl) noProfileEl.style.display = 'block';
+                if (includedCTABtn) {
+                    includedCTABtn.innerHTML = '<i class="fas fa-user-edit"></i> Complete Business Profile';
+                    includedCTABtn.className = 'btn-citation-primary';
+                }
+                break;
+            case 'ready':
+                if (readyEl) readyEl.style.display = 'block';
+                if (includedCTABtn) {
+                    includedCTABtn.innerHTML = '<i class="fas fa-play-circle"></i> Start Submissions';
+                    includedCTABtn.className = 'btn-citation-primary';
+                }
+                break;
+            case 'in_progress':
+            case 'complete':
+                if (inProgressEl) inProgressEl.style.display = 'block';
+                updateIncludedProgress();
+                if (includedCTABtn) {
+                    includedCTABtn.innerHTML = '<i class="fas fa-eye"></i> View Details';
+                    includedCTABtn.className = 'btn-citation-secondary';
+                }
+                break;
+        }
     }
 
     // Update boost card
@@ -1732,10 +1742,17 @@ function updateBoostProgress() {
 function handleIncludedCTA() {
     const state = citationNetworkState;
 
+    // First check if we have a business profile
+    if (!state.hasBusinessProfile) {
+        // Navigate to business profile form
+        navigateToSection('business-profile');
+        return;
+    }
+
     switch (state.includedStatus) {
         case 'no_profile':
-            // Navigate to business profile page or show modal
-            showXeoAlert('Complete Business Profile', 'This feature will allow you to complete your business profile.\n\nThis functionality will be connected in Phase 2.');
+            // Navigate to business profile form
+            navigateToSection('business-profile');
             break;
         case 'ready':
             // Start submissions - for demo, simulate starting
@@ -1840,6 +1857,832 @@ window.closeXeoConfirm = function(confirmed) {
     }
 };
 
+// ============================================================================
+// BUSINESS PROFILE FORM FUNCTIONS
+// ============================================================================
+
+// Business profile state
+let businessProfileData = {
+    business_name: '',
+    website_url: '',
+    category: '',
+    tagline: '',
+    short_description: '',
+    long_description: '',
+    extended_description: '',
+    has_physical_address: null,
+    street_address: '',
+    suite_unit: '',
+    city: '',
+    state_province: '',
+    postal_code: '',
+    country: '',
+    headquarters_country: '',
+    phone: '',
+    business_email: '',
+    contact_person: '',
+    inbox_preference: 'managed',
+    customer_verification_email: '',
+    verification_phone: '',
+    logo_url: '',
+    year_founded: '',
+    linkedin_url: '',
+    twitter_url: '',
+    facebook_url: '',
+    is_saas_product: false,
+    pricing_model: '',
+    key_features: [],
+    integrations: '',
+    use_case_tags: [],
+    consent_accepted: false
+};
+
+// Initialize Business Profile Form
+function initBusinessProfileForm() {
+    // Populate year founded dropdown
+    populateYearFoundedDropdown();
+
+    // Set up form input listeners
+    setupProfileFormListeners();
+
+    // Update managed inbox preview when business name changes
+    const businessNameInput = document.getElementById('businessName');
+    if (businessNameInput) {
+        businessNameInput.addEventListener('input', updateManagedInboxPreview);
+    }
+
+    // Initial completeness update
+    updateProfileCompleteness();
+}
+
+// Populate year founded dropdown
+function populateYearFoundedDropdown() {
+    const yearSelect = document.getElementById('yearFounded');
+    if (!yearSelect) return;
+
+    const currentYear = new Date().getFullYear();
+    for (let year = currentYear; year >= 1900; year--) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        yearSelect.appendChild(option);
+    }
+}
+
+// Set up form input listeners
+function setupProfileFormListeners() {
+    const form = document.getElementById('businessProfileForm');
+    if (!form) return;
+
+    // Add input listeners to all form fields for real-time completeness tracking
+    const inputs = form.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        input.addEventListener('input', () => {
+            updateProfileCompleteness();
+            validateSaveButton();
+        });
+        input.addEventListener('change', () => {
+            updateProfileCompleteness();
+            validateSaveButton();
+        });
+    });
+}
+
+// Update character count
+function updateCharCount(fieldId, maxLength) {
+    const field = document.getElementById(fieldId);
+    const countEl = document.getElementById(fieldId + 'CharCount');
+
+    if (!field || !countEl) return;
+
+    const currentLength = field.value.length;
+    countEl.textContent = `${currentLength}/${maxLength} characters`;
+
+    // Update styling based on length
+    countEl.classList.remove('warning', 'over');
+    if (currentLength > maxLength) {
+        countEl.classList.add('over');
+    } else if (currentLength > maxLength * 0.9) {
+        countEl.classList.add('warning');
+    }
+}
+
+// Toggle address fields based on physical address selection
+function toggleAddressFields(hasPhysicalAddress) {
+    const physicalFields = document.getElementById('physicalAddressFields');
+    const remoteFields = document.getElementById('remoteBusinessFields');
+    const hasAddressYes = document.getElementById('hasAddressYes');
+    const hasAddressNo = document.getElementById('hasAddressNo');
+
+    if (hasPhysicalAddress) {
+        if (physicalFields) physicalFields.classList.add('visible');
+        if (remoteFields) remoteFields.classList.remove('visible');
+        if (hasAddressYes) hasAddressYes.classList.add('selected');
+        if (hasAddressNo) hasAddressNo.classList.remove('selected');
+    } else {
+        if (physicalFields) physicalFields.classList.remove('visible');
+        if (remoteFields) remoteFields.classList.add('visible');
+        if (hasAddressYes) hasAddressYes.classList.remove('selected');
+        if (hasAddressNo) hasAddressNo.classList.add('selected');
+    }
+
+    updateProfileCompleteness();
+    validateSaveButton();
+}
+
+// Toggle inbox preference
+function toggleInboxPreference(preference) {
+    const managedOption = document.getElementById('inboxManaged');
+    const customerOption = document.getElementById('inboxCustomer');
+    const customerEmailFields = document.getElementById('customerEmailFields');
+
+    if (preference === 'managed') {
+        if (managedOption) managedOption.classList.add('selected');
+        if (customerOption) customerOption.classList.remove('selected');
+        if (customerEmailFields) customerEmailFields.style.display = 'none';
+    } else {
+        if (managedOption) managedOption.classList.remove('selected');
+        if (customerOption) customerOption.classList.add('selected');
+        if (customerEmailFields) customerEmailFields.style.display = 'block';
+    }
+
+    updateProfileCompleteness();
+    validateSaveButton();
+}
+
+// Update managed inbox preview
+function updateManagedInboxPreview() {
+    const businessName = document.getElementById('businessName')?.value || '';
+    const previewEl = document.getElementById('managedEmailPreview');
+
+    if (previewEl) {
+        if (businessName.trim()) {
+            const slug = generateSlug(businessName);
+            previewEl.textContent = `${slug}@listings.visible2ai.com`;
+        } else {
+            previewEl.textContent = 'your-business@listings.visible2ai.com';
+        }
+    }
+}
+
+// Generate URL-safe slug from business name
+function generateSlug(name) {
+    return name
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .substring(0, 30);
+}
+
+// Copy business phone to verification phone
+function copyBusinessPhone() {
+    const businessPhone = document.getElementById('businessPhone')?.value || '';
+    const verificationPhone = document.getElementById('verificationPhone');
+
+    if (verificationPhone) {
+        verificationPhone.value = businessPhone;
+    }
+}
+
+// Toggle SaaS fields
+function toggleSaasFields() {
+    const checkbox = document.getElementById('isSaasProduct');
+    const saasFields = document.getElementById('saasFields');
+
+    if (checkbox && saasFields) {
+        if (checkbox.checked) {
+            saasFields.classList.add('visible');
+        } else {
+            saasFields.classList.remove('visible');
+        }
+    }
+
+    updateProfileCompleteness();
+    validateSaveButton();
+}
+
+// Handle logo upload
+function handleLogoUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+        showXeoAlert('Invalid File Type', 'Please upload a PNG or JPG image.');
+        input.value = '';
+        return;
+    }
+
+    // Validate file size (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+        showXeoAlert('File Too Large', 'Please upload an image smaller than 2MB.');
+        input.value = '';
+        return;
+    }
+
+    // Preview the image
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const previewContainer = document.getElementById('logoPreviewContainer');
+        const preview = document.getElementById('logoPreview');
+        const uploadPrompt = document.getElementById('logoUploadPrompt');
+        const uploadArea = document.getElementById('logoUploadArea');
+
+        if (preview && previewContainer && uploadPrompt && uploadArea) {
+            preview.src = e.target.result;
+            previewContainer.style.display = 'block';
+            uploadPrompt.style.display = 'none';
+            uploadArea.classList.add('has-file');
+        }
+
+        updateProfileCompleteness();
+    };
+    reader.readAsDataURL(file);
+}
+
+// Feature tags management
+let keyFeatures = [];
+let useCaseTags = [];
+
+function handleFeatureKeydown(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        addFeatureTag();
+    }
+}
+
+function addFeatureTag() {
+    const input = document.getElementById('newFeatureInput');
+    if (!input || !input.value.trim()) return;
+
+    if (keyFeatures.length >= 5) {
+        showXeoAlert('Maximum Reached', 'You can only add up to 5 key features.');
+        return;
+    }
+
+    const feature = input.value.trim();
+    if (!keyFeatures.includes(feature)) {
+        keyFeatures.push(feature);
+        renderFeatureTags();
+        input.value = '';
+        updateProfileCompleteness();
+    }
+}
+
+function removeFeatureTag(index) {
+    keyFeatures.splice(index, 1);
+    renderFeatureTags();
+    updateProfileCompleteness();
+}
+
+function renderFeatureTags() {
+    const container = document.getElementById('keyFeaturesTags');
+    if (!container) return;
+
+    container.innerHTML = keyFeatures.map((feature, index) => `
+        <span class="profile-feature-tag">
+            ${feature}
+            <span class="remove-tag" onclick="removeFeatureTag(${index})">&times;</span>
+        </span>
+    `).join('');
+}
+
+function handleUseCaseKeydown(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        addUseCaseTag();
+    }
+}
+
+function addUseCaseTag() {
+    const input = document.getElementById('newUseCaseInput');
+    if (!input || !input.value.trim()) return;
+
+    if (useCaseTags.length >= 5) {
+        showXeoAlert('Maximum Reached', 'You can only add up to 5 use case tags.');
+        return;
+    }
+
+    const tag = input.value.trim();
+    if (!useCaseTags.includes(tag)) {
+        useCaseTags.push(tag);
+        renderUseCaseTags();
+        input.value = '';
+        updateProfileCompleteness();
+    }
+}
+
+function removeUseCaseTag(index) {
+    useCaseTags.splice(index, 1);
+    renderUseCaseTags();
+    updateProfileCompleteness();
+}
+
+function renderUseCaseTags() {
+    const container = document.getElementById('useCaseTags');
+    if (!container) return;
+
+    container.innerHTML = useCaseTags.map((tag, index) => `
+        <span class="profile-feature-tag">
+            ${tag}
+            <span class="remove-tag" onclick="removeUseCaseTag(${index})">&times;</span>
+        </span>
+    `).join('');
+}
+
+// Update consent state
+function updateConsentState() {
+    validateSaveButton();
+}
+
+// Validate save button
+function validateSaveButton() {
+    const saveBtn = document.getElementById('saveProfileBtn');
+    if (!saveBtn) return;
+
+    const isValid = validateProfileForm(false);
+    saveBtn.disabled = !isValid;
+}
+
+// Validate profile form
+function validateProfileForm(showErrors = true) {
+    let isValid = true;
+    const errors = {};
+
+    // Required fields
+    const businessName = document.getElementById('businessName')?.value?.trim();
+    if (!businessName) {
+        errors.businessName = 'Business name is required';
+        isValid = false;
+    }
+
+    const websiteUrl = document.getElementById('websiteUrl')?.value?.trim();
+    if (!websiteUrl) {
+        errors.websiteUrl = 'Website URL is required';
+        isValid = false;
+    } else if (!/^https?:\/\/.+/.test(websiteUrl)) {
+        errors.websiteUrl = 'Please enter a valid URL starting with http:// or https://';
+        isValid = false;
+    }
+
+    const category = document.getElementById('businessCategory')?.value;
+    if (!category) {
+        errors.category = 'Please select a category';
+        isValid = false;
+    }
+
+    const tagline = document.getElementById('tagline')?.value?.trim();
+    if (!tagline) {
+        errors.tagline = 'Tagline is required';
+        isValid = false;
+    }
+
+    const shortDescription = document.getElementById('shortDescription')?.value?.trim();
+    if (!shortDescription) {
+        errors.shortDescription = 'Short description is required';
+        isValid = false;
+    }
+
+    const phone = document.getElementById('businessPhone')?.value?.trim();
+    if (!phone) {
+        errors.phone = 'Business phone is required';
+        isValid = false;
+    }
+
+    const email = document.getElementById('businessEmail')?.value?.trim();
+    if (!email) {
+        errors.email = 'Business email is required';
+        isValid = false;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        errors.email = 'Please enter a valid email address';
+        isValid = false;
+    }
+
+    // Conditional: Physical address fields
+    const hasPhysicalAddress = document.querySelector('input[name="has_physical_address"]:checked')?.value;
+    if (hasPhysicalAddress === 'true') {
+        if (!document.getElementById('streetAddress')?.value?.trim()) {
+            errors.streetAddress = 'Street address is required';
+            isValid = false;
+        }
+        if (!document.getElementById('city')?.value?.trim()) {
+            errors.city = 'City is required';
+            isValid = false;
+        }
+        if (!document.getElementById('stateProvince')?.value?.trim()) {
+            errors.stateProvince = 'State/Province is required';
+            isValid = false;
+        }
+        if (!document.getElementById('postalCode')?.value?.trim()) {
+            errors.postalCode = 'Postal code is required';
+            isValid = false;
+        }
+        if (!document.getElementById('country')?.value) {
+            errors.country = 'Country is required';
+            isValid = false;
+        }
+    } else if (hasPhysicalAddress === 'false') {
+        if (!document.getElementById('headquartersCountry')?.value) {
+            errors.headquartersCountry = 'Headquarters country is required';
+            isValid = false;
+        }
+    }
+
+    // Conditional: Customer verification email
+    const inboxPreference = document.querySelector('input[name="inbox_preference"]:checked')?.value;
+    if (inboxPreference === 'customer') {
+        const customerEmail = document.getElementById('customerVerificationEmail')?.value?.trim();
+        if (!customerEmail) {
+            errors.customerEmail = 'Verification email is required when using your own email';
+            isValid = false;
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+            errors.customerEmail = 'Please enter a valid email address';
+            isValid = false;
+        }
+    }
+
+    // Conditional: SaaS pricing model
+    const isSaasProduct = document.getElementById('isSaasProduct')?.checked;
+    if (isSaasProduct) {
+        if (!document.getElementById('pricingModel')?.value) {
+            errors.pricingModel = 'Pricing model is required for SaaS products';
+            isValid = false;
+        }
+    }
+
+    // Consent is required
+    const consentAccepted = document.getElementById('consentAccepted')?.checked;
+    if (!consentAccepted) {
+        errors.consent = 'You must accept the consent agreement';
+        isValid = false;
+    }
+
+    // Show errors if requested
+    if (showErrors) {
+        Object.keys(errors).forEach(key => {
+            const errorEl = document.getElementById(key + 'Error');
+            const inputEl = document.getElementById(key);
+            if (errorEl) {
+                errorEl.classList.add('visible');
+                errorEl.textContent = errors[key];
+            }
+            if (inputEl) {
+                inputEl.classList.add('error');
+            }
+        });
+    }
+
+    return isValid;
+}
+
+// Update profile completeness
+function updateProfileCompleteness() {
+    let completedItems = 0;
+    const totalItems = 6;
+
+    // Check core information
+    const coreComplete = checkCoreInfoComplete();
+    updateCompletenessItem('completeness-core', coreComplete);
+    if (coreComplete) completedItems++;
+
+    // Check location & contact
+    const locationComplete = checkLocationComplete();
+    updateCompletenessItem('completeness-location', locationComplete);
+    if (locationComplete) completedItems++;
+
+    // Check verification settings
+    const verificationComplete = checkVerificationComplete();
+    updateCompletenessItem('completeness-verification', verificationComplete);
+    if (verificationComplete) completedItems++;
+
+    // Check logo
+    const logoComplete = document.getElementById('logoUploadArea')?.classList.contains('has-file') || false;
+    updateCompletenessItem('completeness-logo', logoComplete);
+    if (logoComplete) completedItems++;
+
+    // Check social links
+    const socialComplete = checkSocialComplete();
+    updateCompletenessItem('completeness-social', socialComplete);
+    if (socialComplete) completedItems++;
+
+    // Check SaaS details
+    const saasComplete = checkSaasComplete();
+    updateCompletenessItem('completeness-saas', saasComplete);
+    if (saasComplete) completedItems++;
+
+    // Update progress bar
+    const percentage = Math.round((completedItems / totalItems) * 100);
+    const percentEl = document.getElementById('profileCompletenessPercent');
+    const fillEl = document.getElementById('profileCompletenessFill');
+
+    if (percentEl) percentEl.textContent = percentage + '%';
+    if (fillEl) fillEl.style.width = percentage + '%';
+
+    // Update progress steps
+    updateProgressSteps(completedItems);
+}
+
+function updateCompletenessItem(id, isComplete) {
+    const item = document.getElementById(id);
+    if (!item) return;
+
+    const icon = item.querySelector('i');
+    if (isComplete) {
+        item.classList.add('completed');
+        if (icon) {
+            icon.classList.remove('far', 'fa-circle');
+            icon.classList.add('fas', 'fa-check-circle');
+        }
+    } else {
+        item.classList.remove('completed');
+        if (icon) {
+            icon.classList.remove('fas', 'fa-check-circle');
+            icon.classList.add('far', 'fa-circle');
+        }
+    }
+}
+
+function checkCoreInfoComplete() {
+    return !!(
+        document.getElementById('businessName')?.value?.trim() &&
+        document.getElementById('websiteUrl')?.value?.trim() &&
+        document.getElementById('businessCategory')?.value &&
+        document.getElementById('tagline')?.value?.trim() &&
+        document.getElementById('shortDescription')?.value?.trim()
+    );
+}
+
+function checkLocationComplete() {
+    const hasPhysicalAddress = document.querySelector('input[name="has_physical_address"]:checked')?.value;
+    const phone = document.getElementById('businessPhone')?.value?.trim();
+    const email = document.getElementById('businessEmail')?.value?.trim();
+
+    if (!phone || !email) return false;
+
+    if (hasPhysicalAddress === 'true') {
+        return !!(
+            document.getElementById('streetAddress')?.value?.trim() &&
+            document.getElementById('city')?.value?.trim() &&
+            document.getElementById('stateProvince')?.value?.trim() &&
+            document.getElementById('postalCode')?.value?.trim() &&
+            document.getElementById('country')?.value
+        );
+    } else if (hasPhysicalAddress === 'false') {
+        return !!document.getElementById('headquartersCountry')?.value;
+    }
+
+    return false;
+}
+
+function checkVerificationComplete() {
+    const inboxPreference = document.querySelector('input[name="inbox_preference"]:checked')?.value;
+
+    if (inboxPreference === 'managed') {
+        return true;
+    } else if (inboxPreference === 'customer') {
+        const email = document.getElementById('customerVerificationEmail')?.value?.trim();
+        return !!(email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+    }
+
+    return false;
+}
+
+function checkSocialComplete() {
+    return !!(
+        document.getElementById('linkedinUrl')?.value?.trim() ||
+        document.getElementById('twitterUrl')?.value?.trim() ||
+        document.getElementById('facebookUrl')?.value?.trim()
+    );
+}
+
+function checkSaasComplete() {
+    const isSaasProduct = document.getElementById('isSaasProduct')?.checked;
+
+    if (!isSaasProduct) return false;
+
+    return !!(
+        document.getElementById('pricingModel')?.value &&
+        (keyFeatures.length > 0 || useCaseTags.length > 0)
+    );
+}
+
+function updateProgressSteps(completedItems) {
+    const steps = document.querySelectorAll('.progress-step');
+
+    steps.forEach((step, index) => {
+        step.classList.remove('active', 'completed');
+
+        if (index < Math.min(completedItems, 3)) {
+            step.classList.add('completed');
+            const numberEl = step.querySelector('.progress-step-number');
+            if (numberEl) numberEl.innerHTML = '<i class="fas fa-check"></i>';
+        } else if (index === Math.min(completedItems, 3)) {
+            step.classList.add('active');
+            const numberEl = step.querySelector('.progress-step-number');
+            if (numberEl) numberEl.textContent = index + 1;
+        } else {
+            const numberEl = step.querySelector('.progress-step-number');
+            if (numberEl) numberEl.textContent = index + 1;
+        }
+    });
+}
+
+// Handle profile form submission
+function handleProfileSubmit(event) {
+    event.preventDefault();
+
+    if (!validateProfileForm(true)) {
+        showXeoAlert('Validation Error', 'Please fill in all required fields correctly.');
+        return;
+    }
+
+    // Collect form data
+    const formData = collectProfileFormData();
+
+    // Generate managed inbox email if selected
+    if (formData.inbox_preference === 'managed') {
+        formData.managed_inbox_email = generateSlug(formData.business_name) + '@listings.visible2ai.com';
+    }
+
+    // For MVP, save to local storage and update state
+    saveBusinessProfile(formData);
+}
+
+function collectProfileFormData() {
+    return {
+        business_name: document.getElementById('businessName')?.value?.trim() || '',
+        website_url: document.getElementById('websiteUrl')?.value?.trim() || '',
+        category: document.getElementById('businessCategory')?.value || '',
+        tagline: document.getElementById('tagline')?.value?.trim() || '',
+        short_description: document.getElementById('shortDescription')?.value?.trim() || '',
+        long_description: document.getElementById('longDescription')?.value?.trim() || '',
+        extended_description: document.getElementById('extendedDescription')?.value?.trim() || '',
+        has_physical_address: document.querySelector('input[name="has_physical_address"]:checked')?.value === 'true',
+        street_address: document.getElementById('streetAddress')?.value?.trim() || '',
+        suite_unit: document.getElementById('suiteUnit')?.value?.trim() || '',
+        city: document.getElementById('city')?.value?.trim() || '',
+        state_province: document.getElementById('stateProvince')?.value?.trim() || '',
+        postal_code: document.getElementById('postalCode')?.value?.trim() || '',
+        country: document.getElementById('country')?.value || '',
+        headquarters_country: document.getElementById('headquartersCountry')?.value || '',
+        phone: document.getElementById('businessPhone')?.value?.trim() || '',
+        business_email: document.getElementById('businessEmail')?.value?.trim() || '',
+        contact_person: document.getElementById('contactPerson')?.value?.trim() || '',
+        inbox_preference: document.querySelector('input[name="inbox_preference"]:checked')?.value || 'managed',
+        customer_verification_email: document.getElementById('customerVerificationEmail')?.value?.trim() || '',
+        verification_phone: document.getElementById('verificationPhone')?.value?.trim() || '',
+        year_founded: document.getElementById('yearFounded')?.value || '',
+        linkedin_url: document.getElementById('linkedinUrl')?.value?.trim() || '',
+        twitter_url: document.getElementById('twitterUrl')?.value?.trim() || '',
+        facebook_url: document.getElementById('facebookUrl')?.value?.trim() || '',
+        is_saas_product: document.getElementById('isSaasProduct')?.checked || false,
+        pricing_model: document.getElementById('pricingModel')?.value || '',
+        key_features: keyFeatures,
+        integrations: document.getElementById('integrations')?.value?.trim() || '',
+        use_case_tags: useCaseTags,
+        consent_accepted: document.getElementById('consentAccepted')?.checked || false,
+        consent_accepted_at: new Date().toISOString(),
+        profile_completed_at: new Date().toISOString()
+    };
+}
+
+function saveBusinessProfile(formData) {
+    try {
+        // Save to localStorage for MVP
+        localStorage.setItem('businessProfile', JSON.stringify(formData));
+
+        // Update citation network state
+        citationNetworkState.hasBusinessProfile = true;
+        citationNetworkState.includedStatus = 'ready';
+
+        // Show success message
+        showXeoAlert('Profile Saved!', 'Your business profile has been saved successfully.\n\nYou can now start directory submissions.');
+
+        // Navigate back to citation network
+        navigateToSection('citation-network');
+
+        // Update Citation Network UI
+        updateCitationNetworkUI();
+
+    } catch (error) {
+        console.error('Failed to save profile:', error);
+        showXeoAlert('Error', 'Failed to save profile. Please try again.');
+    }
+}
+
+// Cancel profile form
+function cancelProfileForm() {
+    showXeoConfirm('Cancel Profile Setup?',
+        'Are you sure you want to cancel? Any unsaved changes will be lost.',
+        function(confirmed) {
+            if (confirmed) {
+                navigateToSection('citation-network');
+            }
+        }
+    );
+}
+
+// Load existing profile if available
+function loadExistingProfile() {
+    try {
+        const savedProfile = localStorage.getItem('businessProfile');
+        if (savedProfile) {
+            const profile = JSON.parse(savedProfile);
+            populateProfileForm(profile);
+            citationNetworkState.hasBusinessProfile = true;
+        }
+    } catch (error) {
+        console.error('Failed to load profile:', error);
+    }
+}
+
+function populateProfileForm(profile) {
+    // Populate form fields with saved data
+    if (profile.business_name) document.getElementById('businessName').value = profile.business_name;
+    if (profile.website_url) document.getElementById('websiteUrl').value = profile.website_url;
+    if (profile.category) document.getElementById('businessCategory').value = profile.category;
+    if (profile.tagline) document.getElementById('tagline').value = profile.tagline;
+    if (profile.short_description) document.getElementById('shortDescription').value = profile.short_description;
+    if (profile.long_description) document.getElementById('longDescription').value = profile.long_description;
+    if (profile.extended_description) document.getElementById('extendedDescription').value = profile.extended_description;
+    if (profile.phone) document.getElementById('businessPhone').value = profile.phone;
+    if (profile.business_email) document.getElementById('businessEmail').value = profile.business_email;
+    if (profile.contact_person) document.getElementById('contactPerson').value = profile.contact_person;
+    if (profile.verification_phone) document.getElementById('verificationPhone').value = profile.verification_phone;
+    if (profile.year_founded) document.getElementById('yearFounded').value = profile.year_founded;
+    if (profile.linkedin_url) document.getElementById('linkedinUrl').value = profile.linkedin_url;
+    if (profile.twitter_url) document.getElementById('twitterUrl').value = profile.twitter_url;
+    if (profile.facebook_url) document.getElementById('facebookUrl').value = profile.facebook_url;
+    if (profile.integrations) document.getElementById('integrations').value = profile.integrations;
+
+    // Handle address fields
+    if (profile.has_physical_address !== null) {
+        const radioValue = profile.has_physical_address ? 'true' : 'false';
+        const radio = document.querySelector(`input[name="has_physical_address"][value="${radioValue}"]`);
+        if (radio) {
+            radio.checked = true;
+            toggleAddressFields(profile.has_physical_address);
+        }
+
+        if (profile.has_physical_address) {
+            if (profile.street_address) document.getElementById('streetAddress').value = profile.street_address;
+            if (profile.suite_unit) document.getElementById('suiteUnit').value = profile.suite_unit;
+            if (profile.city) document.getElementById('city').value = profile.city;
+            if (profile.state_province) document.getElementById('stateProvince').value = profile.state_province;
+            if (profile.postal_code) document.getElementById('postalCode').value = profile.postal_code;
+            if (profile.country) document.getElementById('country').value = profile.country;
+        } else {
+            if (profile.headquarters_country) document.getElementById('headquartersCountry').value = profile.headquarters_country;
+        }
+    }
+
+    // Handle inbox preference
+    if (profile.inbox_preference) {
+        const radio = document.querySelector(`input[name="inbox_preference"][value="${profile.inbox_preference}"]`);
+        if (radio) {
+            radio.checked = true;
+            toggleInboxPreference(profile.inbox_preference);
+        }
+        if (profile.customer_verification_email) {
+            document.getElementById('customerVerificationEmail').value = profile.customer_verification_email;
+        }
+    }
+
+    // Handle SaaS fields
+    if (profile.is_saas_product) {
+        document.getElementById('isSaasProduct').checked = true;
+        toggleSaasFields();
+        if (profile.pricing_model) document.getElementById('pricingModel').value = profile.pricing_model;
+
+        keyFeatures = profile.key_features || [];
+        useCaseTags = profile.use_case_tags || [];
+        renderFeatureTags();
+        renderUseCaseTags();
+    }
+
+    // Handle consent
+    if (profile.consent_accepted) {
+        document.getElementById('consentAccepted').checked = true;
+    }
+
+    // Update character counts
+    updateCharCount('tagline', 50);
+    updateCharCount('shortDescription', 160);
+    updateCharCount('longDescription', 500);
+    updateCharCount('extendedDescription', 1500);
+
+    // Update managed inbox preview
+    updateManagedInboxPreview();
+
+    // Update completeness
+    updateProfileCompleteness();
+    validateSaveButton();
+}
+
 // Initialize on page load
 window.addEventListener('DOMContentLoaded', initDashboard);
 window.addEventListener('DOMContentLoaded', initCitationNetwork);
+window.addEventListener('DOMContentLoaded', initBusinessProfileForm);
+window.addEventListener('DOMContentLoaded', loadExistingProfile);
