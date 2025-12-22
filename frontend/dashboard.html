@@ -1458,6 +1458,287 @@
             border-color: var(--brand-cyan) !important;
             background: linear-gradient(135deg, #e6f7fb 0%, #f0e6ff 100%) !important;
         }
+
+        /* Coming Soon Nav Items */
+        .nav-item.coming-soon {
+            opacity: 0.5;
+            cursor: not-allowed;
+            position: relative;
+        }
+
+        .nav-item.coming-soon:hover {
+            background: transparent;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .nav-item.coming-soon .coming-soon-badge {
+            margin-left: auto;
+            background: rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.5rem;
+            padding: 0.125rem 0.375rem;
+            border-radius: 8px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        /* Tooltip for Coming Soon items */
+        .nav-item.coming-soon::after {
+            content: 'Coming Soon';
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--gray-900);
+            color: white;
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            margin-left: 0.5rem;
+            z-index: 100;
+        }
+
+        .nav-item.coming-soon:hover::after {
+            opacity: 1;
+        }
+
+        /* Citation Network Page Styles */
+        .citation-network-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        @media (max-width: 1024px) {
+            .citation-network-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .citation-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            border: 1px solid var(--gray-200);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .citation-card-header {
+            margin-bottom: 1.25rem;
+        }
+
+        .citation-card-title {
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: 0.25rem;
+        }
+
+        .citation-card-subtitle {
+            font-size: 0.875rem;
+            color: var(--gray-500);
+        }
+
+        .citation-card-subtitle-small {
+            font-size: 0.75rem;
+            color: var(--gray-400);
+            margin-top: 0.125rem;
+        }
+
+        .citation-card-divider {
+            height: 1px;
+            background: var(--gray-200);
+            margin: 1rem 0;
+        }
+
+        .citation-card-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .citation-ready-message {
+            padding: 0.75rem 1rem;
+            background: linear-gradient(135deg, #e6f9fb 0%, #f0fbfa 100%);
+            border-radius: 8px;
+            color: var(--complete-teal);
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+        }
+
+        .citation-progress-section {
+            margin-bottom: 1rem;
+        }
+
+        .citation-progress-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--gray-500);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .citation-progress-bar {
+            height: 10px;
+            background: var(--gray-200);
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+
+        .citation-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--brand-cyan) 0%, var(--complete-teal) 100%);
+            transition: width 0.3s ease;
+            border-radius: 5px;
+        }
+
+        .citation-progress-count {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+
+        .citation-status-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .citation-status-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--gray-600);
+        }
+
+        .citation-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .citation-status-dot.submitted {
+            background: #3B82F6;
+        }
+
+        .citation-status-dot.live {
+            background: #10B981;
+        }
+
+        .citation-status-dot.pending {
+            background: #6B7280;
+        }
+
+        .citation-status-dot.action-needed {
+            background: #F59E0B;
+        }
+
+        .citation-info-list {
+            margin-bottom: 1rem;
+        }
+
+        .citation-info-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--gray-600);
+            padding: 0.375rem 0;
+        }
+
+        .citation-info-item i {
+            color: var(--gray-400);
+            width: 16px;
+            text-align: center;
+        }
+
+        .citation-boosts-remaining {
+            padding: 0.75rem 1rem;
+            background: var(--gray-50);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            color: var(--gray-700);
+            font-weight: 500;
+            margin-bottom: 1rem;
+        }
+
+        .citation-card-footer {
+            margin-top: auto;
+            padding-top: 1rem;
+        }
+
+        .btn-citation-primary {
+            width: 100%;
+            padding: 0.875rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--complete-teal) 100%);
+            color: white;
+        }
+
+        .btn-citation-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 185, 218, 0.4);
+        }
+
+        .btn-citation-secondary {
+            width: 100%;
+            padding: 0.875rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: white;
+            color: var(--brand-cyan);
+            border: 2px solid var(--brand-cyan);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-citation-secondary:hover {
+            background: var(--brand-cyan);
+            color: white;
+        }
+
+        .btn-citation-disabled {
+            width: 100%;
+            padding: 0.875rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: not-allowed;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            background: var(--gray-200);
+            color: var(--gray-500);
+        }
     </style>
     <!-- Google Analytics 4 -->
     <script src="analytics.js"></script>
@@ -1587,6 +1868,24 @@
                         <i class="fas fa-robot"></i>
                         <span>AI Discoverability</span>
                         <i class="fas fa-lock" style="margin-left: auto; font-size: 0.75rem;"></i>
+                    </div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Growth</div>
+                    <div class="nav-item" data-section="citation-network">
+                        <i class="fas fa-project-diagram"></i>
+                        <span>AI Citation Network</span>
+                    </div>
+                    <div class="nav-item coming-soon">
+                        <i class="fas fa-comments"></i>
+                        <span>Live Assistant</span>
+                        <span class="coming-soon-badge">Soon</span>
+                    </div>
+                    <div class="nav-item coming-soon">
+                        <i class="fas fa-quote-right"></i>
+                        <span>Citation Tracking</span>
+                        <span class="coming-soon-badge">Soon</span>
                     </div>
                 </div>
 
@@ -2206,6 +2505,161 @@
                         </div>
                         <div id="aiEngineDiscoverability">
                             <!-- AI engines will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- AI Citation Network Section -->
+            <section class="section" id="citation-network">
+                <div class="section-header">
+                    <h1 class="section-title">AI Citation Network</h1>
+                    <p class="section-subtitle">Build your presence across AI-crawled directories</p>
+                </div>
+
+                <div class="citation-network-grid">
+                    <!-- Left Card: Included with Your Plan -->
+                    <div class="citation-card" id="includedPlanCard">
+                        <div class="citation-card-header">
+                            <div class="citation-card-title">Included with Your Plan</div>
+                            <div class="citation-card-subtitle" id="citationAllocation">10 directories/month</div>
+                            <div class="citation-card-subtitle-small" id="citationPlanType">DIY Plan</div>
+                        </div>
+
+                        <div class="citation-card-divider"></div>
+
+                        <div class="citation-card-body">
+                            <!-- No Profile State (default for demo) -->
+                            <div id="citationNoProfile" style="display: none;">
+                                <div class="empty-state" style="padding: 1rem 0;">
+                                    <div class="empty-icon" style="font-size: 2rem;">📋</div>
+                                    <div class="empty-text" style="font-size: 0.875rem;">Complete your business profile to get started with directory submissions.</div>
+                                </div>
+                            </div>
+
+                            <!-- Profile Complete, Not Started State -->
+                            <div id="citationReadyToStart" style="display: block;">
+                                <div class="citation-ready-message">
+                                    <i class="fas fa-check-circle" style="margin-right: 0.5rem;"></i>
+                                    Ready to start! We'll submit to ~3-5 directories per day.
+                                </div>
+                            </div>
+
+                            <!-- In Progress State -->
+                            <div id="citationInProgress" style="display: none;">
+                                <div class="citation-progress-section">
+                                    <div class="citation-progress-label">Progress</div>
+                                    <div class="citation-progress-bar">
+                                        <div class="citation-progress-fill" id="includedProgressFill" style="width: 80%;"></div>
+                                    </div>
+                                    <div class="citation-progress-count">
+                                        <span id="includedProgressCurrent">8</span>/<span id="includedProgressTotal">10</span>
+                                    </div>
+                                </div>
+
+                                <div class="citation-status-grid">
+                                    <div class="citation-status-item">
+                                        <span class="citation-status-dot submitted"></span>
+                                        <span>Submitted</span>
+                                        <span style="margin-left: auto; font-weight: 600;" id="includedSubmitted">8</span>
+                                    </div>
+                                    <div class="citation-status-item">
+                                        <span class="citation-status-dot live"></span>
+                                        <span>Live</span>
+                                        <span style="margin-left: auto; font-weight: 600;" id="includedLive">6</span>
+                                    </div>
+                                    <div class="citation-status-item">
+                                        <span class="citation-status-dot pending"></span>
+                                        <span>Pending</span>
+                                        <span style="margin-left: auto; font-weight: 600;" id="includedPending">2</span>
+                                    </div>
+                                    <div class="citation-status-item">
+                                        <span class="citation-status-dot action-needed"></span>
+                                        <span>Action Needed</span>
+                                        <span style="margin-left: auto; font-weight: 600;" id="includedActionNeeded">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="citation-card-footer">
+                            <!-- Button changes based on state -->
+                            <button class="btn-citation-primary" id="includedCTABtn" onclick="handleIncludedCTA()">
+                                <i class="fas fa-play-circle"></i>
+                                Start Submissions
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right Card: Boost Your Visibility -->
+                    <div class="citation-card" id="boostCard">
+                        <div class="citation-card-header">
+                            <div class="citation-card-title">Boost Your Visibility</div>
+                            <div class="citation-card-subtitle">Add 100 directories for $99</div>
+                            <div class="citation-card-subtitle-small">One-time purchase</div>
+                        </div>
+
+                        <div class="citation-card-divider"></div>
+
+                        <div class="citation-card-body">
+                            <div class="citation-info-list">
+                                <div class="citation-info-item">
+                                    <i class="fas fa-calendar-check"></i>
+                                    <span>Max 2 boosts per year</span>
+                                </div>
+                                <div class="citation-info-item">
+                                    <i class="fas fa-clock"></i>
+                                    <span>Valid for 1 year from purchase</span>
+                                </div>
+                            </div>
+
+                            <div class="citation-boosts-remaining" id="boostsRemaining">
+                                <i class="fas fa-bolt" style="color: var(--brand-cyan); margin-right: 0.5rem;"></i>
+                                You have <strong>2</strong> boosts remaining
+                            </div>
+
+                            <!-- Boost Progress (hidden until boost purchased) -->
+                            <div id="boostProgress" style="display: none;">
+                                <div class="citation-progress-section">
+                                    <div class="citation-progress-label">Boost Progress</div>
+                                    <div class="citation-progress-bar">
+                                        <div class="citation-progress-fill" id="boostProgressFill" style="width: 0%;"></div>
+                                    </div>
+                                    <div class="citation-progress-count">
+                                        <span id="boostProgressCurrent">0</span>/<span id="boostProgressTotal">100</span>
+                                    </div>
+                                </div>
+
+                                <div class="citation-status-grid">
+                                    <div class="citation-status-item">
+                                        <span class="citation-status-dot submitted"></span>
+                                        <span>Submitted</span>
+                                        <span style="margin-left: auto; font-weight: 600;" id="boostSubmitted">0</span>
+                                    </div>
+                                    <div class="citation-status-item">
+                                        <span class="citation-status-dot live"></span>
+                                        <span>Live</span>
+                                        <span style="margin-left: auto; font-weight: 600;" id="boostLive">0</span>
+                                    </div>
+                                    <div class="citation-status-item">
+                                        <span class="citation-status-dot pending"></span>
+                                        <span>Pending</span>
+                                        <span style="margin-left: auto; font-weight: 600;" id="boostPending">0</span>
+                                    </div>
+                                    <div class="citation-status-item">
+                                        <span class="citation-status-dot action-needed"></span>
+                                        <span>Action Needed</span>
+                                        <span style="margin-left: auto; font-weight: 600;" id="boostActionNeeded">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="citation-card-footer">
+                            <button class="btn-citation-primary" id="boostCTABtn" onclick="handleBoostPurchase()">
+                                <i class="fas fa-shopping-cart"></i>
+                                Purchase Boost — $99
+                            </button>
                         </div>
                     </div>
                 </div>
