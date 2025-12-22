@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Citation Network - Get Listed on 100+ Directories | Visible2AI</title>
+    <meta name="description" content="Boost your AI visibility with listings on 100+ authoritative directories. Get discovered by AI assistants like ChatGPT, Claude, and Gemini.">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .citation-hero {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: white;
+            padding: 80px 20px;
+            text-align: center;
+        }
+        .citation-hero h1 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .citation-hero p {
+            font-size: 1.2rem;
+            max-width: 600px;
+            margin: 0 auto 30px;
+            color: #b8c5d6;
+        }
+        .pricing-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 450px;
+            margin: -60px auto 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            position: relative;
+            z-index: 10;
+        }
+        .pricing-card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: #1a1a2e;
+        }
+        .price {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+        .price span {
+            font-size: 1rem;
+            font-weight: 400;
+            color: #666;
+        }
+        .features-list {
+            list-style: none;
+            padding: 0;
+            margin: 30px 0;
+            text-align: left;
+        }
+        .features-list li {
+            padding: 12px 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .features-list li:last-child {
+            border-bottom: none;
+        }
+        .features-list .check {
+            color: #00B9DA;
+            font-size: 1.2rem;
+        }
+        .checkout-btn {
+            width: 100%;
+            padding: 18px 40px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .checkout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 185, 218, 0.3);
+        }
+        .checkout-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .email-input-group {
+            margin-bottom: 20px;
+            display: none;
+        }
+        .email-input-group input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        .email-input-group input:focus {
+            outline: none;
+            border-color: #00B9DA;
+        }
+        .error-message {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .guarantee {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .how-it-works {
+            padding: 80px 20px;
+            background: #f8f9fa;
+        }
+        .how-it-works h2 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 50px;
+        }
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .step-card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+        }
+        .step-number {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0 auto 20px;
+        }
+        .step-card h3 {
+            margin-bottom: 10px;
+        }
+        .step-card p {
+            color: #666;
+        }
+        .faq-section {
+            padding: 80px 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .faq-section h2 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 40px;
+        }
+        .faq-item {
+            border-bottom: 1px solid #eee;
+            padding: 20px 0;
+        }
+        .faq-item h3 {
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+        }
+        .faq-item p {
+            color: #666;
+            line-height: 1.6;
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ffffff40;
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 0.8s linear infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .profile-required-notice {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .profile-required-notice a {
+            color: #92400e;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation (simplified) -->
+    <nav style="background: #1a1a2e; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center;">
+        <a href="index.html" style="color: white; text-decoration: none; font-size: 1.3rem; font-weight: 700;">
+            Visible<span style="color: #00B9DA;">2</span>AI
+        </a>
+        <div style="display: flex; gap: 20px;">
+            <a href="dashboard.html" style="color: #b8c5d6; text-decoration: none;">Dashboard</a>
+            <a href="auth.html" id="loginLink" style="color: #b8c5d6; text-decoration: none;">Login</a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="citation-hero">
+        <h1>Get Discovered by AI</h1>
+        <p>We'll submit your business to 100+ authoritative directories, building the citation network that AI assistants use to recommend brands.</p>
+    </section>
+
+    <!-- Pricing Card -->
+    <section style="padding: 0 20px 60px;">
+        <div class="pricing-card">
+            <h2 id="productName">AI Citation Network Starter</h2>
+            <div class="price">$<span id="productPrice">249</span> <span>one-time</span></div>
+
+            <ul class="features-list">
+                <li><span class="check">✓</span> 100 directory submissions</li>
+                <li><span class="check">✓</span> Manually verified listings</li>
+                <li><span class="check">✓</span> NAP consistency optimization</li>
+                <li><span class="check">✓</span> Category & keyword optimization</li>
+                <li><span class="check">✓</span> Progress tracking dashboard</li>
+                <li><span class="check">✓</span> 30-day delivery guarantee</li>
+            </ul>
+
+            <div class="error-message" id="errorMessage"></div>
+
+            <div class="profile-required-notice" id="profileNotice">
+                <strong>Business Profile Required</strong><br>
+                Please <a href="dashboard.html?tab=citation-network&action=profile">complete your business profile</a> before purchasing.
+            </div>
+
+            <div class="email-input-group" id="emailGroup">
+                <input type="email" id="emailInput" placeholder="Enter your email address">
+            </div>
+
+            <button class="checkout-btn" id="checkoutBtn" onclick="handleCheckout()">
+                Get Started — $<span id="btnPrice">249</span>
+            </button>
+
+            <p class="guarantee">
+                <strong>100% Satisfaction Guarantee</strong><br>
+                Not happy with the results? We'll make it right.
+            </p>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works">
+        <h2>How It Works</h2>
+        <div class="steps-grid">
+            <div class="step-card">
+                <div class="step-number">1</div>
+                <h3>Purchase & Setup</h3>
+                <p>Complete your order and fill out your business profile with all the details directories need.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-number">2</div>
+                <h3>We Submit</h3>
+                <p>Our team manually submits your business to 100+ authoritative directories with optimized listings.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-number">3</div>
+                <h3>Track Progress</h3>
+                <p>Monitor your submissions in real-time and see your listings go live across the web.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="faq-section">
+        <h2>Frequently Asked Questions</h2>
+
+        <div class="faq-item">
+            <h3>Why do AI assistants need citation networks?</h3>
+            <p>AI assistants like ChatGPT, Claude, and Gemini rely on web data to make recommendations. When your business appears on authoritative directories, AI models are more likely to recognize and recommend your brand.</p>
+        </div>
+
+        <div class="faq-item">
+            <h3>What directories will I be submitted to?</h3>
+            <p>We submit to a curated list of 100+ directories including industry-specific sites, local business directories, and general business listings that AI models frequently reference.</p>
+        </div>
+
+        <div class="faq-item">
+            <h3>How long does it take?</h3>
+            <p>We complete all 100 submissions within 30 days. Many directories approve listings within 1-2 weeks, while others may take longer.</p>
+        </div>
+
+        <div class="faq-item">
+            <h3>Can I buy more directory packs later?</h3>
+            <p>Yes! After your initial purchase, you can add more directory packs for $99 each (100 additional directories per pack).</p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer style="background: #1a1a2e; color: #b8c5d6; padding: 40px 20px; text-align: center;">
+        <p>&copy; 2025 Visible2AI. All rights reserved.</p>
+        <div style="margin-top: 15px;">
+            <a href="privacy.html" style="color: #b8c5d6; margin: 0 10px;">Privacy Policy</a>
+            <a href="terms.html" style="color: #b8c5d6; margin: 0 10px;">Terms of Service</a>
+        </div>
+    </footer>
+
+    <script>
+        const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:3001'
+            : 'https://ai-visibility-tool.onrender.com';
+
+        let isAuthenticated = false;
+        let checkoutInfo = null;
+
+        // Check authentication and load checkout info on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            await checkAuth();
+            await loadCheckoutInfo();
+            checkCancelledParam();
+        });
+
+        async function checkAuth() {
+            const authToken = localStorage.getItem('authToken');
+            if (!authToken) {
+                isAuthenticated = false;
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/auth/verify`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                isAuthenticated = response.ok;
+
+                if (isAuthenticated) {
+                    document.getElementById('loginLink').textContent = 'Dashboard';
+                    document.getElementById('loginLink').href = 'dashboard.html';
+                }
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                isAuthenticated = false;
+            }
+        }
+
+        async function loadCheckoutInfo() {
+            try {
+                const authToken = localStorage.getItem('authToken');
+                const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
+
+                const response = await fetch(`${API_BASE_URL}/api/citation-network/checkout-info`, {
+                    headers
+                });
+
+                if (response.ok) {
+                    checkoutInfo = await response.json();
+                    updateUI();
+                }
+            } catch (error) {
+                console.error('Failed to load checkout info:', error);
+            }
+        }
+
+        function updateUI() {
+            if (!checkoutInfo) return;
+
+            const { product, price, canPurchase, reason, hasProfile } = checkoutInfo;
+
+            // Update product name and price
+            document.getElementById('productPrice').textContent = price;
+            document.getElementById('btnPrice').textContent = price;
+
+            if (product === 'starter') {
+                document.getElementById('productName').textContent = 'AI Citation Network Starter';
+            } else {
+                document.getElementById('productName').textContent = 'Directory Pack (100)';
+            }
+
+            // Show email input for non-authenticated users buying starter
+            if (!isAuthenticated && product === 'starter') {
+                document.getElementById('emailGroup').style.display = 'block';
+            } else {
+                document.getElementById('emailGroup').style.display = 'none';
+            }
+
+            // Handle purchase restrictions
+            if (!canPurchase) {
+                if (reason && reason.includes('profile')) {
+                    document.getElementById('profileNotice').style.display = 'block';
+                    document.getElementById('checkoutBtn').disabled = true;
+                } else if (reason) {
+                    showError(reason);
+                    document.getElementById('checkoutBtn').disabled = true;
+                }
+            }
+        }
+
+        function checkCancelledParam() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('cancelled') === 'true') {
+                showError('Checkout was cancelled. You can try again when ready.');
+            }
+        }
+
+        async function handleCheckout() {
+            const btn = document.getElementById('checkoutBtn');
+            const originalText = btn.innerHTML;
+
+            try {
+                hideError();
+
+                // Get email if not authenticated
+                let email = null;
+                if (!isAuthenticated && checkoutInfo?.product === 'starter') {
+                    email = document.getElementById('emailInput').value.trim();
+                    if (!email) {
+                        showError('Please enter your email address');
+                        return;
+                    }
+                    if (!isValidEmail(email)) {
+                        showError('Please enter a valid email address');
+                        return;
+                    }
+                }
+
+                // Disable button and show loading
+                btn.disabled = true;
+                btn.innerHTML = '<span class="loading-spinner"></span>Creating checkout...';
+
+                // Get auth token if available
+                const authToken = localStorage.getItem('authToken');
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+
+                // Create checkout session
+                const response = await fetch(`${API_BASE_URL}/api/citation-network/checkout`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ email })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    if (data.redirect) {
+                        window.location.href = data.redirect;
+                        return;
+                    }
+                    throw new Error(data.error || 'Failed to create checkout');
+                }
+
+                // Redirect to Stripe
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    throw new Error('No checkout URL received');
+                }
+
+            } catch (error) {
+                console.error('Checkout error:', error);
+                showError(error.message || 'Failed to start checkout. Please try again.');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        function isValidEmail(email) {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        }
+    </script>
+</body>
+</html>

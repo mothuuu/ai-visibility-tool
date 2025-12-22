@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Successful - AI Citation Network | Visible2AI</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .success-container {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .success-card {
+            background: white;
+            border-radius: 20px;
+            padding: 50px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 25px;
+            font-size: 2.5rem;
+            color: white;
+        }
+        .success-card h1 {
+            font-size: 2rem;
+            color: #1a1a2e;
+            margin-bottom: 15px;
+        }
+        .order-amount {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin: 20px 0 10px;
+        }
+        .order-description {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .next-steps {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            text-align: left;
+            margin-bottom: 30px;
+        }
+        .next-steps h3 {
+            margin-bottom: 15px;
+            color: #1a1a2e;
+        }
+        .next-steps ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .next-steps li {
+            padding: 10px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            color: #444;
+        }
+        .next-steps .check {
+            color: #10b981;
+            font-size: 1.2rem;
+        }
+        .action-btn {
+            display: inline-block;
+            padding: 16px 40px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 185, 218, 0.3);
+        }
+        .loading-state {
+            text-align: center;
+        }
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #e0e0e0;
+            border-radius: 50%;
+            border-top-color: #00B9DA;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .loading-state p {
+            color: #666;
+        }
+        .profile-setup {
+            background: #fef3c7;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+        .profile-setup h3 {
+            color: #92400e;
+            margin-bottom: 10px;
+        }
+        .profile-setup p {
+            color: #92400e;
+            margin-bottom: 20px;
+        }
+        .profile-btn {
+            background: #f59e0b;
+            color: white;
+            padding: 14px 30px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .profile-btn:hover {
+            background: #d97706;
+        }
+    </style>
+</head>
+<body>
+    <div class="success-container">
+        <div class="success-card">
+            <!-- Loading State -->
+            <div id="loadingState" class="loading-state">
+                <div class="loading-spinner"></div>
+                <p>Processing your order...</p>
+            </div>
+
+            <!-- Success Content (hidden initially) -->
+            <div id="successContent" style="display: none;">
+                <div class="success-icon">✓</div>
+                <h1>Payment Successful!</h1>
+
+                <div class="order-amount" id="orderAmount">$249</div>
+                <p class="order-description" id="orderDescription">100 directory submissions added</p>
+
+                <!-- Profile Required Notice (shown for starter purchases without profile) -->
+                <div class="profile-setup" id="profileSetup" style="display: none;">
+                    <h3>Next Step: Complete Your Profile</h3>
+                    <p>We need your business details to start submitting to directories.</p>
+                    <a href="dashboard.html?tab=citation-network&action=profile" class="profile-btn">
+                        Complete Business Profile
+                    </a>
+                </div>
+
+                <!-- What Happens Next (shown when profile exists) -->
+                <div class="next-steps" id="nextSteps">
+                    <h3>What Happens Next?</h3>
+                    <ul>
+                        <li><span class="check">✓</span> Submissions begin within 24 hours</li>
+                        <li><span class="check">✓</span> Track progress in your dashboard</li>
+                        <li><span class="check">✓</span> We'll notify you when actions are needed</li>
+                    </ul>
+                </div>
+
+                <a href="dashboard.html?tab=citation-network" class="action-btn" id="dashboardBtn">
+                    Go to Dashboard
+                </a>
+            </div>
+
+            <!-- Error State (hidden initially) -->
+            <div id="errorState" style="display: none;">
+                <div class="success-icon" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">!</div>
+                <h1>Something Went Wrong</h1>
+                <p style="color: #666; margin-bottom: 30px;">We couldn't verify your payment. Please contact support if you were charged.</p>
+                <a href="dashboard.html" class="action-btn">Go to Dashboard</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:3001'
+            : 'https://ai-visibility-tool.onrender.com';
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const orderId = urlParams.get('order');
+            const sessionId = urlParams.get('session_id');
+
+            if (!orderId) {
+                showError();
+                return;
+            }
+
+            await checkOrderStatus(orderId);
+        });
+
+        async function checkOrderStatus(orderId) {
+            const authToken = localStorage.getItem('authToken');
+            let attempts = 0;
+            const maxAttempts = 15;
+
+            while (attempts < maxAttempts) {
+                try {
+                    const headers = {};
+                    if (authToken) {
+                        headers['Authorization'] = `Bearer ${authToken}`;
+                    }
+
+                    const response = await fetch(`${API_BASE_URL}/api/citation-network/orders/${orderId}`, {
+                        headers
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        const order = data.order;
+
+                        if (order && order.status !== 'pending') {
+                            showSuccess(order);
+                            return;
+                        }
+                    } else if (response.status === 401) {
+                        // User not authenticated - might be a guest checkout
+                        // Wait a bit and try again, or redirect to login
+                        if (attempts > 5) {
+                            showSuccessWithoutProfile();
+                            return;
+                        }
+                    }
+
+                    // Wait 2 seconds before trying again
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    attempts++;
+
+                } catch (error) {
+                    console.error('Error checking order:', error);
+                    attempts++;
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            }
+
+            // If we've tried enough times, show success anyway (webhook might still be processing)
+            showSuccessWithoutProfile();
+        }
+
+        function showSuccess(order) {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('successContent').style.display = 'block';
+
+            // Update amount
+            const amount = order.amount_cents ? (order.amount_cents / 100) : 249;
+            document.getElementById('orderAmount').textContent = `$${amount}`;
+
+            // Update description
+            const directories = order.directories_allocated || 100;
+            document.getElementById('orderDescription').textContent = `${directories} directory submissions added`;
+
+            // Check if profile setup is needed
+            const isStarter = order.order_type === 'starter';
+            const hasProfile = order.business_profile_id;
+
+            if (isStarter && !hasProfile) {
+                document.getElementById('profileSetup').style.display = 'block';
+                document.getElementById('nextSteps').style.display = 'none';
+            }
+        }
+
+        function showSuccessWithoutProfile() {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('successContent').style.display = 'block';
+
+            // Assume starter purchase
+            document.getElementById('orderAmount').textContent = '$249';
+            document.getElementById('orderDescription').textContent = '100 directory submissions added';
+
+            // Show profile setup
+            document.getElementById('profileSetup').style.display = 'block';
+            document.getElementById('nextSteps').style.display = 'none';
+
+            // Change button to go to onboarding
+            const btn = document.getElementById('dashboardBtn');
+            btn.href = 'dashboard.html?tab=citation-network&action=profile';
+            btn.textContent = 'Complete Business Profile';
+        }
+
+        function showError() {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('errorState').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
