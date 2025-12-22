@@ -2106,7 +2106,7 @@ async function handleBoostPurchase() {
 // Fetch checkout info from API
 async function fetchCitationNetworkCheckoutInfo() {
     const authToken = localStorage.getItem('authToken');
-    const response = await fetch(`${API_BASE_URL}/api/citation-network/checkout-info`, {
+    const response = await fetch(`${API_BASE_URL}/citation-network/checkout-info`, {
         headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
     });
 
@@ -2127,7 +2127,7 @@ async function startCitationNetworkCheckout() {
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}/api/citation-network/checkout`, {
+        const response = await fetch(`${API_BASE_URL}/citation-network/checkout`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${authToken}`,
@@ -2169,13 +2169,13 @@ async function loadCitationNetworkData() {
     try {
         // Fetch stats, profile, and orders in parallel
         const [statsRes, profileRes, allocationRes] = await Promise.all([
-            fetch(`${API_BASE_URL}/api/citation-network/stats`, {
+            fetch(`${API_BASE_URL}/citation-network/stats`, {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             }),
-            fetch(`${API_BASE_URL}/api/citation-network/profile`, {
+            fetch(`${API_BASE_URL}/citation-network/profile`, {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             }),
-            fetch(`${API_BASE_URL}/api/citation-network/allocation`, {
+            fetch(`${API_BASE_URL}/citation-network/allocation`, {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             })
         ]);
