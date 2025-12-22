@@ -16,6 +16,7 @@ const supportChatRoutes = require('./routes/support-chat');
 const waitlistRoutes = require('./routes/waitlist');
 const adminRoutes = require('./routes/admin');
 const stripeWebhookRoutes = require('./routes/stripe-webhook');
+const citationNetworkRoutes = require('./routes/citationNetwork');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -86,6 +87,7 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/support-chat', supportChatRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/admin', adminRoutes); // Admin routes
+app.use('/api/citation-network', citationNetworkRoutes); // AI Citation Network
 app.use('/api/test', require('./routes/test-routes'));
 
 // Health check

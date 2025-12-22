@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
+const { handleCitationNetworkWebhook } = require('../services/citationNetworkWebhookHandler');
 
 // POST /api/webhooks/stripe - Handle Stripe webhook events
 router.post('/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -48,7 +49,23 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
 
     const eventId = eventLogResult.rows[0].id;
 
-    // Handle the event
+    // Try citation network handler first (for one-time payments)
+    try {
+      const handledByCitationNetwork = await handleCitationNetworkWebhook(event);
+      if (handledByCitationNetwork) {
+        console.log(`📦 Event ${event.type} handled by Citation Network`);
+        await db.query(`
+          UPDATE stripe_events
+          SET processed = TRUE, processed_at = NOW()
+          WHERE id = $1
+        `, [eventId]);
+        return res.json({ received: true });
+      }
+    } catch (cnError) {
+      console.error('❌ Citation Network webhook error:', cnError.message);
+    }
+
+    // Handle the event (subscription events)
     switch (event.type) {
       case 'customer.subscription.deleted':
         await handleSubscriptionDeleted(event.data.object, eventId);
