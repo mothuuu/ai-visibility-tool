@@ -45,6 +45,18 @@ class CitationNetworkStripeService {
     // 1. Create or get Stripe customer
     let customerId = user?.stripe_customer_id;
 
+    // Verify existing customer is valid in Stripe
+    if (customerId) {
+      try {
+        await stripe.customers.retrieve(customerId);
+      } catch (err) {
+        // Customer doesn't exist in Stripe (maybe from different environment)
+        console.log(`Stripe customer ${customerId} not found, will create new one`);
+        customerId = null;
+      }
+    }
+
+    // Create new customer if needed
     if (!customerId && email) {
       const customer = await stripe.customers.create({
         email: email,
@@ -160,7 +172,18 @@ class CitationNetworkStripeService {
     // 4. Create checkout session
     let customerId = user.stripe_customer_id;
 
-    // Create Stripe customer if doesn't exist
+    // Verify Stripe customer exists, or create new one
+    if (customerId) {
+      try {
+        await stripe.customers.retrieve(customerId);
+      } catch (err) {
+        // Customer doesn't exist in Stripe (maybe from different environment)
+        console.log(`Stripe customer ${customerId} not found, creating new one`);
+        customerId = null;
+      }
+    }
+
+    // Create Stripe customer if doesn't exist or was invalid
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,
