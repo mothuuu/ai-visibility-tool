@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms of Service - Visible2AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --brand-cyan: #00c8ff;
+            --brand-pink: #ff00ff;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: var(--gray-50);
+            color: var(--gray-700);
+            line-height: 1.6;
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            border-bottom: 1px solid var(--gray-200);
+            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--gray-900);
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-pink) 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 1rem;
+        }
+
+        .logo-text {
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--gray-600);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: var(--brand-cyan);
+        }
+
+        /* Main Content */
+        .legal-page {
+            min-height: calc(100vh - 60px);
+            padding: 3rem 1.5rem;
+        }
+
+        .legal-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 3rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--gray-200);
+        }
+
+        .legal-container h1 {
+            font-size: 2rem;
+            color: var(--gray-900);
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-pink) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .last-updated {
+            color: var(--gray-500);
+            font-size: 0.875rem;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .legal-container section {
+            margin-bottom: 2rem;
+        }
+
+        .legal-container h2 {
+            font-size: 1.25rem;
+            color: var(--gray-800);
+            margin-bottom: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        .legal-container h3 {
+            font-size: 1rem;
+            color: var(--gray-700);
+            margin-bottom: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .legal-container p {
+            color: var(--gray-600);
+            line-height: 1.7;
+            margin-bottom: 1rem;
+        }
+
+        .legal-container ul {
+            color: var(--gray-600);
+            line-height: 1.7;
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .legal-container li {
+            margin-bottom: 0.5rem;
+        }
+
+        .legal-container strong {
+            color: var(--gray-700);
+        }
+
+        .legal-container a {
+            color: var(--brand-cyan);
+            text-decoration: none;
+        }
+
+        .legal-container a:hover {
+            text-decoration: underline;
+        }
+
+        /* Footer */
+        .footer {
+            background: var(--gray-800);
+            color: var(--gray-400);
+            padding: 2rem;
+            text-align: center;
+            font-size: 0.875rem;
+        }
+
+        .footer a {
+            color: var(--brand-cyan);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .legal-container {
+                padding: 1.5rem;
+            }
+
+            .legal-container h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <a href="index.html" class="logo">
+                <div class="logo-icon">V</div>
+                <span class="logo-text">Visible2AI</span>
+            </a>
+            <a href="javascript:history.back()" class="back-link">
+                <i class="fas fa-arrow-left"></i>
+                Back
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="legal-page">
+        <div class="legal-container">
+            <h1>Terms of Service</h1>
+            <p class="last-updated">Last Updated: December 22, 2024</p>
+
+            <section>
+                <h2>1. Acceptance of Terms</h2>
+                <p>
+                    By accessing or using Visible2AI ("Service"), you agree to be bound by these
+                    Terms of Service ("Terms"). If you do not agree to these Terms, do not use the Service.
+                </p>
+            </section>
+
+            <section>
+                <h2>2. Description of Service</h2>
+                <p>
+                    Visible2AI provides AI visibility optimization tools, including website scanning,
+                    recommendations, and directory submission services ("AI Citation Network").
+                    The Service helps businesses improve their visibility in AI-powered search
+                    and recommendation systems.
+                </p>
+            </section>
+
+            <section>
+                <h2>3. Account Registration</h2>
+                <p>
+                    To use certain features of the Service, you must create an account. You agree to:
+                </p>
+                <ul>
+                    <li>Provide accurate and complete registration information</li>
+                    <li>Maintain the security of your account credentials</li>
+                    <li>Promptly update your information if it changes</li>
+                    <li>Accept responsibility for all activities under your account</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2>4. AI Citation Network Service</h2>
+                <p>
+                    When using the AI Citation Network feature, you authorize Visible2AI to:
+                </p>
+                <ul>
+                    <li>Distribute your business information to third-party directories on your behalf</li>
+                    <li>Create and manage directory accounts using managed email addresses</li>
+                    <li>Store account credentials securely in our credential vault</li>
+                    <li>Handle email-based verifications automatically where possible</li>
+                </ul>
+                <p>
+                    <strong>You understand that:</strong>
+                </p>
+                <ul>
+                    <li>Directory approvals and publishing timelines are controlled by third parties</li>
+                    <li>Some verification methods (SMS, phone, postcard) require your action</li>
+                    <li>Visible2AI does not guarantee acceptance by any specific directory</li>
+                    <li>You may request credential handoff or deletion at any time</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2>5. Subscription Plans and Payments</h2>
+                <p>
+                    Paid features are available through subscription plans. By subscribing, you agree to:
+                </p>
+                <ul>
+                    <li>Pay all applicable fees for your chosen plan</li>
+                    <li>Automatic renewal unless you cancel before the renewal date</li>
+                    <li>Price changes with 30 days notice</li>
+                </ul>
+                <p>
+                    Refund policy: We offer a 14-day refund for new subscriptions if you're not satisfied.
+                </p>
+            </section>
+
+            <section>
+                <h2>6. Acceptable Use</h2>
+                <p>You agree not to:</p>
+                <ul>
+                    <li>Use the Service for any unlawful purpose</li>
+                    <li>Submit false or misleading business information</li>
+                    <li>Attempt to circumvent security measures</li>
+                    <li>Interfere with the proper functioning of the Service</li>
+                    <li>Use automated systems to access the Service without permission</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2>7. Intellectual Property</h2>
+                <p>
+                    The Service and its original content, features, and functionality are owned by
+                    Visible2AI and are protected by international copyright, trademark, and other
+                    intellectual property laws.
+                </p>
+            </section>
+
+            <section>
+                <h2>8. Limitation of Liability</h2>
+                <p>
+                    Visible2AI shall not be liable for any indirect, incidental, special, consequential,
+                    or punitive damages resulting from your use of the Service. Our total liability
+                    shall not exceed the amount paid by you in the 12 months preceding the claim.
+                </p>
+            </section>
+
+            <section>
+                <h2>9. Disclaimer of Warranties</h2>
+                <p>
+                    The Service is provided "as is" without warranties of any kind. We do not guarantee
+                    that the Service will be uninterrupted, secure, or error-free. Results from AI
+                    visibility optimization may vary.
+                </p>
+            </section>
+
+            <section>
+                <h2>10. Termination</h2>
+                <p>
+                    We may terminate or suspend your account at any time for violations of these Terms.
+                    Upon termination, your right to use the Service will cease immediately. You may
+                    request export of your data within 30 days of termination.
+                </p>
+            </section>
+
+            <section>
+                <h2>11. Changes to Terms</h2>
+                <p>
+                    We reserve the right to modify these Terms at any time. We will notify you of
+                    material changes via email or through the Service. Continued use after changes
+                    constitutes acceptance of the new Terms.
+                </p>
+            </section>
+
+            <section>
+                <h2>12. Governing Law</h2>
+                <p>
+                    These Terms shall be governed by the laws of Ontario, Canada, without regard to
+                    conflict of law principles.
+                </p>
+            </section>
+
+            <section>
+                <h2>13. Contact Us</h2>
+                <p>
+                    If you have questions about these Terms, please contact us at:
+                </p>
+                <p>
+                    <strong>Email:</strong> <a href="mailto:legal@visible2ai.com">legal@visible2ai.com</a><br>
+                    <strong>Address:</strong> Toronto, Ontario, Canada
+                </p>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; 2024 Visible2AI. All rights reserved. |
+            <a href="terms.html">Terms of Service</a> |
+            <a href="privacy.html">Privacy Policy</a>
+        </p>
+    </footer>
+</body>
+</html>
