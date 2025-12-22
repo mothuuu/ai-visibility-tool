@@ -1528,5 +1528,318 @@ async function selectDiyPlan() {
     }
 }
 
+// ============================================================================
+// AI CITATION NETWORK FUNCTIONS
+// ============================================================================
+
+// Mock state for Citation Network (Phase 1 - UI only)
+const citationNetworkState = {
+    // User's plan
+    plan: 'diy', // 'diy', 'pro', 'agency', 'enterprise'
+    monthlyAllocation: 10, // Based on plan
+
+    // Profile status
+    hasBusinessProfile: true,
+
+    // Included allocation status
+    includedStatus: 'ready', // 'no_profile', 'ready', 'in_progress', 'complete'
+    includedProgress: {
+        total: 10,
+        submitted: 0,
+        live: 0,
+        pending: 0,
+        actionNeeded: 0
+    },
+
+    // Boost status
+    boostsUsedThisYear: 0,
+    boostsRemaining: 2,
+    hasActiveBoost: false,
+    boostProgress: {
+        total: 100,
+        submitted: 0,
+        live: 0,
+        pending: 0,
+        actionNeeded: 0
+    }
+};
+
+// Plan allocation mapping
+const planAllocations = {
+    'diy': { allocation: 10, label: '10 directories/month', planName: 'DIY Plan' },
+    'pro': { allocation: 25, label: '25 directories/month', planName: 'Pro Plan' },
+    'agency': { allocation: 25, label: '25 directories/domain', planName: 'Agency Plan' },
+    'enterprise': { allocation: 75, label: '75 directories shared', planName: 'Enterprise Plan' }
+};
+
+// Initialize Citation Network UI
+function initCitationNetwork() {
+    updateCitationNetworkUI();
+}
+
+// Update Citation Network UI based on state
+function updateCitationNetworkUI() {
+    const state = citationNetworkState;
+
+    // Update plan allocation display
+    const planConfig = planAllocations[state.plan] || planAllocations['diy'];
+    const allocationEl = document.getElementById('citationAllocation');
+    const planTypeEl = document.getElementById('citationPlanType');
+
+    if (allocationEl) allocationEl.textContent = planConfig.label;
+    if (planTypeEl) planTypeEl.textContent = planConfig.planName;
+
+    // Update included card based on status
+    const noProfileEl = document.getElementById('citationNoProfile');
+    const readyEl = document.getElementById('citationReadyToStart');
+    const inProgressEl = document.getElementById('citationInProgress');
+    const includedCTABtn = document.getElementById('includedCTABtn');
+
+    // Hide all states first
+    if (noProfileEl) noProfileEl.style.display = 'none';
+    if (readyEl) readyEl.style.display = 'none';
+    if (inProgressEl) inProgressEl.style.display = 'none';
+
+    // Show appropriate state and update button
+    switch (state.includedStatus) {
+        case 'no_profile':
+            if (noProfileEl) noProfileEl.style.display = 'block';
+            if (includedCTABtn) {
+                includedCTABtn.innerHTML = '<i class="fas fa-user-edit"></i> Complete Business Profile';
+                includedCTABtn.className = 'btn-citation-primary';
+            }
+            break;
+        case 'ready':
+            if (readyEl) readyEl.style.display = 'block';
+            if (includedCTABtn) {
+                includedCTABtn.innerHTML = '<i class="fas fa-play-circle"></i> Start Submissions';
+                includedCTABtn.className = 'btn-citation-primary';
+            }
+            break;
+        case 'in_progress':
+        case 'complete':
+            if (inProgressEl) inProgressEl.style.display = 'block';
+            updateIncludedProgress();
+            if (includedCTABtn) {
+                includedCTABtn.innerHTML = '<i class="fas fa-eye"></i> View Details';
+                includedCTABtn.className = 'btn-citation-secondary';
+            }
+            break;
+    }
+
+    // Update boost card
+    updateBoostCardUI();
+}
+
+// Update included progress section
+function updateIncludedProgress() {
+    const progress = citationNetworkState.includedProgress;
+    const total = progress.total || 10;
+    const submitted = progress.submitted || 0;
+    const percentage = total > 0 ? (submitted / total) * 100 : 0;
+
+    const progressFill = document.getElementById('includedProgressFill');
+    const progressCurrent = document.getElementById('includedProgressCurrent');
+    const progressTotal = document.getElementById('includedProgressTotal');
+
+    if (progressFill) progressFill.style.width = percentage + '%';
+    if (progressCurrent) progressCurrent.textContent = submitted;
+    if (progressTotal) progressTotal.textContent = total;
+
+    // Update status counts
+    const submittedEl = document.getElementById('includedSubmitted');
+    const liveEl = document.getElementById('includedLive');
+    const pendingEl = document.getElementById('includedPending');
+    const actionNeededEl = document.getElementById('includedActionNeeded');
+
+    if (submittedEl) submittedEl.textContent = progress.submitted || 0;
+    if (liveEl) liveEl.textContent = progress.live || 0;
+    if (pendingEl) pendingEl.textContent = progress.pending || 0;
+    if (actionNeededEl) actionNeededEl.textContent = progress.actionNeeded || 0;
+}
+
+// Update boost card UI
+function updateBoostCardUI() {
+    const state = citationNetworkState;
+    const boostsRemainingEl = document.getElementById('boostsRemaining');
+    const boostProgressEl = document.getElementById('boostProgress');
+    const boostCTABtn = document.getElementById('boostCTABtn');
+
+    // Update boosts remaining text
+    if (boostsRemainingEl) {
+        boostsRemainingEl.innerHTML = `<i class="fas fa-bolt" style="color: var(--brand-cyan); margin-right: 0.5rem;"></i>
+            You have <strong>${state.boostsRemaining}</strong> boost${state.boostsRemaining !== 1 ? 's' : ''} remaining`;
+    }
+
+    // Show/hide boost progress
+    if (boostProgressEl) {
+        boostProgressEl.style.display = state.hasActiveBoost ? 'block' : 'none';
+    }
+
+    // Update boost progress if active
+    if (state.hasActiveBoost) {
+        updateBoostProgress();
+    }
+
+    // Update CTA button
+    if (boostCTABtn) {
+        if (state.boostsRemaining <= 0) {
+            boostCTABtn.innerHTML = '<i class="fas fa-ban"></i> Maximum Reached';
+            boostCTABtn.className = 'btn-citation-disabled';
+            boostCTABtn.disabled = true;
+            boostCTABtn.title = 'Next boost available next year';
+        } else if (state.hasActiveBoost) {
+            boostCTABtn.innerHTML = '<i class="fas fa-chart-line"></i> View Progress';
+            boostCTABtn.className = 'btn-citation-secondary';
+            boostCTABtn.disabled = false;
+        } else {
+            const btnText = state.boostsUsedThisYear > 0 ? 'Purchase Another — $99' : 'Purchase Boost — $99';
+            boostCTABtn.innerHTML = `<i class="fas fa-shopping-cart"></i> ${btnText}`;
+            boostCTABtn.className = 'btn-citation-primary';
+            boostCTABtn.disabled = false;
+        }
+    }
+}
+
+// Update boost progress section
+function updateBoostProgress() {
+    const progress = citationNetworkState.boostProgress;
+    const total = progress.total || 100;
+    const submitted = progress.submitted || 0;
+    const percentage = total > 0 ? (submitted / total) * 100 : 0;
+
+    const progressFill = document.getElementById('boostProgressFill');
+    const progressCurrent = document.getElementById('boostProgressCurrent');
+    const progressTotal = document.getElementById('boostProgressTotal');
+
+    if (progressFill) progressFill.style.width = percentage + '%';
+    if (progressCurrent) progressCurrent.textContent = submitted;
+    if (progressTotal) progressTotal.textContent = total;
+
+    // Update status counts
+    const submittedEl = document.getElementById('boostSubmitted');
+    const liveEl = document.getElementById('boostLive');
+    const pendingEl = document.getElementById('boostPending');
+    const actionNeededEl = document.getElementById('boostActionNeeded');
+
+    if (submittedEl) submittedEl.textContent = progress.submitted || 0;
+    if (liveEl) liveEl.textContent = progress.live || 0;
+    if (pendingEl) pendingEl.textContent = progress.pending || 0;
+    if (actionNeededEl) actionNeededEl.textContent = progress.actionNeeded || 0;
+}
+
+// Handle included plan CTA button click
+function handleIncludedCTA() {
+    const state = citationNetworkState;
+
+    switch (state.includedStatus) {
+        case 'no_profile':
+            // Navigate to business profile page or show modal
+            showXeoAlert('Complete Business Profile', 'This feature will allow you to complete your business profile.\n\nThis functionality will be connected in Phase 2.');
+            break;
+        case 'ready':
+            // Start submissions - for demo, simulate starting
+            showXeoAlert('Starting Submissions', 'Your directory submissions are starting!\n\nWe\'ll submit to ~3-5 directories per day.\n\n(This is a demo - actual functionality will be connected in Phase 2)');
+
+            // Simulate starting the process
+            citationNetworkState.includedStatus = 'in_progress';
+            citationNetworkState.includedProgress = {
+                total: 10,
+                submitted: 2,
+                live: 1,
+                pending: 1,
+                actionNeeded: 0
+            };
+            updateCitationNetworkUI();
+            break;
+        case 'in_progress':
+        case 'complete':
+            // Show details modal or navigate to details page
+            showXeoAlert('Submission Details',
+                `Current Progress:\n\n` +
+                `• Submitted: ${state.includedProgress.submitted}\n` +
+                `• Live: ${state.includedProgress.live}\n` +
+                `• Pending: ${state.includedProgress.pending}\n` +
+                `• Action Needed: ${state.includedProgress.actionNeeded}\n\n` +
+                `(Detailed view will be available in Phase 2)`);
+            break;
+    }
+}
+
+// Handle boost purchase button click
+function handleBoostPurchase() {
+    const state = citationNetworkState;
+
+    if (state.boostsRemaining <= 0) {
+        showXeoAlert('Maximum Boosts Reached', 'You have used both of your annual boosts.\n\nYour next boost will be available at the start of the next year.');
+        return;
+    }
+
+    if (state.hasActiveBoost) {
+        // Show progress
+        showXeoAlert('Boost Progress',
+            `Current Boost Progress:\n\n` +
+            `• Submitted: ${state.boostProgress.submitted}/100\n` +
+            `• Live: ${state.boostProgress.live}\n` +
+            `• Pending: ${state.boostProgress.pending}\n` +
+            `• Action Needed: ${state.boostProgress.actionNeeded}\n\n` +
+            `(Detailed view will be available in Phase 2)`);
+    } else {
+        // Simulate purchase - in production, this would redirect to Stripe
+        showXeoConfirm('Purchase Boost',
+            'Add 100 additional directory submissions for $99?\n\n• One-time purchase\n• Valid for 1 year\n• Max 2 boosts per year',
+            function(confirmed) {
+                if (confirmed) {
+                    // Simulate successful purchase
+                    citationNetworkState.hasActiveBoost = true;
+                    citationNetworkState.boostsUsedThisYear += 1;
+                    citationNetworkState.boostsRemaining -= 1;
+                    citationNetworkState.boostProgress = {
+                        total: 100,
+                        submitted: 5,
+                        live: 2,
+                        pending: 3,
+                        actionNeeded: 0
+                    };
+                    updateCitationNetworkUI();
+                    showXeoAlert('Boost Purchased!', 'Your boost has been activated!\n\nWe\'ll start submitting to directories right away.\n\n(This is a demo - actual Stripe integration will be connected in Phase 2)');
+                }
+            }
+        );
+    }
+}
+
+// Helper to show confirm dialog with callback
+function showXeoConfirm(title, message, callback) {
+    const modal = document.getElementById('xeoConfirmModal');
+    const titleEl = document.getElementById('xeoConfirmTitle');
+    const messageEl = document.getElementById('xeoConfirmMessage');
+
+    if (modal && titleEl && messageEl) {
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        modal.style.display = 'flex';
+
+        // Store callback for later
+        window.xeoConfirmCallback = callback;
+    }
+}
+
+// Update closeXeoConfirm to use callback
+const originalCloseXeoConfirm = window.closeXeoConfirm;
+window.closeXeoConfirm = function(confirmed) {
+    const modal = document.getElementById('xeoConfirmModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+
+    // Call the stored callback if it exists
+    if (typeof window.xeoConfirmCallback === 'function') {
+        window.xeoConfirmCallback(confirmed);
+        window.xeoConfirmCallback = null;
+    }
+};
+
 // Initialize on page load
 window.addEventListener('DOMContentLoaded', initDashboard);
+window.addEventListener('DOMContentLoaded', initCitationNetwork);
