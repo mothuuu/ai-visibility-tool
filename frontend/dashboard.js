@@ -1794,15 +1794,49 @@ const planAllocations = {
 };
 
 // Initialize Citation Network UI
-function initCitationNetwork() {
-    // Initialize submissions data
+async function initCitationNetwork() {
+    // Initialize submissions data (mock data for now)
     initSubmissionsData();
+
+    // Load real data from API (will update state)
+    await loadCitationNetworkData();
 
     // Update main Citation Network UI
     updateCitationNetworkUI();
 
     // Render the submissions tabs
     renderCitationNetworkTabs();
+
+    // Check for success/cancelled params
+    checkCitationNetworkParams();
+}
+
+// Check URL params for checkout success/cancelled
+function checkCitationNetworkParams() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tab = urlParams.get('tab');
+    const success = urlParams.get('success');
+    const cancelled = urlParams.get('cancelled');
+    const orderId = urlParams.get('order');
+
+    if (tab === 'citation-network') {
+        // Navigate to citation network section
+        navigateToSection('citation-network');
+
+        if (success === 'true') {
+            showXeoAlert('Purchase Successful!', 'Your directory pack has been activated. We\'ll start submitting to directories within 24 hours.');
+            // Clean up URL
+            window.history.replaceState({}, '', window.location.pathname);
+            // Reload data
+            loadCitationNetworkData();
+        }
+
+        if (cancelled === 'true') {
+            showXeoAlert('Checkout Cancelled', 'Your checkout was cancelled. You can try again whenever you\'re ready.');
+            // Clean up URL
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+    }
 }
 
 // Update Citation Network UI based on state
@@ -2011,8 +2045,8 @@ function handleIncludedCTA() {
     }
 }
 
-// Handle boost purchase button click
-function handleBoostPurchase() {
+// Handle boost purchase button click - Connects to real Stripe checkout
+async function handleBoostPurchase() {
     const state = citationNetworkState;
 
     if (state.boostsRemaining <= 0) {
@@ -2027,30 +2061,181 @@ function handleBoostPurchase() {
             `• Submitted: ${state.boostProgress.submitted}/100\n` +
             `• Live: ${state.boostProgress.live}\n` +
             `• Pending: ${state.boostProgress.pending}\n` +
-            `• Action Needed: ${state.boostProgress.actionNeeded}\n\n` +
-            `(Detailed view will be available in Phase 2)`);
+            `• Action Needed: ${state.boostProgress.actionNeeded}`);
     } else {
-        // Simulate purchase - in production, this would redirect to Stripe
-        showXeoConfirm('Purchase Boost',
-            'Add 100 additional directory submissions for $99?\n\n• One-time purchase\n• Valid for 1 year\n• Max 2 boosts per year',
-            function(confirmed) {
-                if (confirmed) {
-                    // Simulate successful purchase
-                    citationNetworkState.hasActiveBoost = true;
-                    citationNetworkState.boostsUsedThisYear += 1;
-                    citationNetworkState.boostsRemaining -= 1;
-                    citationNetworkState.boostProgress = {
-                        total: 100,
-                        submitted: 5,
-                        live: 2,
-                        pending: 3,
-                        actionNeeded: 0
-                    };
-                    updateCitationNetworkUI();
-                    showXeoAlert('Boost Purchased!', 'Your boost has been activated!\n\nWe\'ll start submitting to directories right away.\n\n(This is a demo - actual Stripe integration will be connected in Phase 2)');
+        // Real Stripe checkout integration
+        try {
+            // First check if we can purchase
+            const checkoutInfo = await fetchCitationNetworkCheckoutInfo();
+
+            if (!checkoutInfo.canPurchase) {
+                if (checkoutInfo.reason && checkoutInfo.reason.includes('profile')) {
+                    showXeoConfirm('Business Profile Required',
+                        'Please complete your business profile before purchasing a directory pack.\n\nWould you like to set it up now?',
+                        function(confirmed) {
+                            if (confirmed) {
+                                navigateToSection('citation-network-profile');
+                            }
+                        }
+                    );
+                } else {
+                    showXeoAlert('Cannot Purchase', checkoutInfo.reason || 'Unable to complete purchase at this time.');
                 }
+                return;
             }
-        );
+
+            // Show purchase confirmation
+            const productName = checkoutInfo.product === 'starter' ? 'AI Citation Network Starter' : 'Directory Pack';
+            const price = checkoutInfo.price;
+
+            showXeoConfirm(`Purchase ${productName}`,
+                `Add 100 directory submissions for $${price}?\n\n• One-time purchase\n• 30-day delivery\n• Full tracking dashboard`,
+                async function(confirmed) {
+                    if (confirmed) {
+                        await startCitationNetworkCheckout();
+                    }
+                }
+            );
+        } catch (error) {
+            console.error('Error checking checkout info:', error);
+            showXeoAlert('Error', 'Unable to load checkout information. Please try again.');
+        }
+    }
+}
+
+// Fetch checkout info from API
+async function fetchCitationNetworkCheckoutInfo() {
+    const authToken = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE_URL}/api/citation-network/checkout-info`, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+    });
+
+    if (!response.ok) {
+        throw new Error('Failed to fetch checkout info');
+    }
+
+    return await response.json();
+}
+
+// Start the Stripe checkout process
+async function startCitationNetworkCheckout() {
+    const authToken = localStorage.getItem('authToken');
+
+    if (!authToken) {
+        showXeoAlert('Login Required', 'Please log in to purchase a directory pack.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/citation-network/checkout`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({})
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            if (data.redirect) {
+                navigateToSection('citation-network-profile');
+                return;
+            }
+            throw new Error(data.error || 'Checkout failed');
+        }
+
+        // Redirect to Stripe checkout
+        if (data.url) {
+            window.location.href = data.url;
+        } else {
+            throw new Error('No checkout URL received');
+        }
+    } catch (error) {
+        console.error('Checkout error:', error);
+        showXeoAlert('Checkout Failed', error.message || 'Unable to start checkout. Please try again.');
+    }
+}
+
+// Load real citation network data from API
+async function loadCitationNetworkData() {
+    const authToken = localStorage.getItem('authToken');
+
+    if (!authToken) {
+        return; // Not logged in, keep mock state
+    }
+
+    try {
+        // Fetch stats, profile, and orders in parallel
+        const [statsRes, profileRes, allocationRes] = await Promise.all([
+            fetch(`${API_BASE_URL}/api/citation-network/stats`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            }),
+            fetch(`${API_BASE_URL}/api/citation-network/profile`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            }),
+            fetch(`${API_BASE_URL}/api/citation-network/allocation`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            })
+        ]);
+
+        // Update state with real data
+        if (statsRes.ok) {
+            const stats = await statsRes.json();
+            citationNetworkState.boostsUsedThisYear = stats.orders || 0;
+            citationNetworkState.boostsRemaining = Math.max(0, 2 - stats.orders);
+            citationNetworkState.hasActiveBoost = stats.directories?.allocated > 0;
+
+            if (stats.directories) {
+                citationNetworkState.boostProgress = {
+                    total: stats.directories.allocated || 0,
+                    submitted: stats.directories.submitted || 0,
+                    live: stats.directories.live || 0,
+                    pending: (stats.directories.submitted || 0) - (stats.directories.live || 0),
+                    actionNeeded: 0
+                };
+            }
+        }
+
+        if (profileRes.ok) {
+            const profileData = await profileRes.json();
+            citationNetworkState.hasBusinessProfile = profileData.hasProfile;
+
+            if (profileData.hasProfile) {
+                citationNetworkState.includedStatus = 'ready';
+            }
+        }
+
+        if (allocationRes.ok) {
+            const allocation = await allocationRes.json();
+
+            if (allocation.type === 'subscription') {
+                citationNetworkState.monthlyAllocation = allocation.allocation.base || 10;
+                citationNetworkState.includedProgress = {
+                    total: allocation.allocation.total || 10,
+                    submitted: allocation.allocation.used || 0,
+                    live: 0,
+                    pending: 0,
+                    actionNeeded: 0
+                };
+            } else if (allocation.type === 'order_based') {
+                citationNetworkState.includedProgress = {
+                    total: allocation.allocation.total || 0,
+                    submitted: allocation.allocation.submitted || 0,
+                    live: allocation.allocation.live || 0,
+                    pending: 0,
+                    actionNeeded: 0
+                };
+            }
+        }
+
+        // Update UI with real data
+        updateCitationNetworkUI();
+
+    } catch (error) {
+        console.error('Error loading citation network data:', error);
+        // Keep using mock data on error
     }
 }
 
