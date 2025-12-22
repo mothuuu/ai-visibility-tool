@@ -2,6 +2,102 @@ const API_BASE_URL = window.location.hostname === 'localhost' || window.location
     ? 'http://localhost:3001/api'
     : 'https://ai-visibility-tool.onrender.com/api';
 
+// ============================================================================
+// SUBMISSION STATUS CONSTANTS & VERIFICATION POLICY
+// ============================================================================
+
+const SUBMISSION_STATUS = {
+    QUEUED: 'queued',
+    IN_PROGRESS: 'in_progress',
+    SUBMITTED: 'submitted',
+    NEEDS_ACTION: 'needs_action',
+    BLOCKED: 'blocked',
+    IN_REVIEW: 'in_review',
+    VERIFIED: 'verified',
+    LIVE: 'live',
+    REJECTED: 'rejected',
+    FAILED: 'failed'
+};
+
+const ACTION_REQUIRED_TYPE = {
+    NONE: 'none',
+    EMAIL: 'email',
+    SMS: 'sms',
+    PHONE: 'phone',
+    POSTCARD: 'postcard',
+    VIDEO: 'video',
+    CAPTCHA: 'captcha',
+    MANUAL_REVIEW: 'manual_review'
+};
+
+// Dashboard display mapping for statuses
+const STATUS_DISPLAY = {
+    [SUBMISSION_STATUS.QUEUED]: { label: 'Pending', color: 'gray', icon: 'fa-clock', bgClass: 'status-pending' },
+    [SUBMISSION_STATUS.IN_PROGRESS]: { label: 'Processing', color: 'blue', icon: 'fa-spinner fa-spin', bgClass: 'status-processing' },
+    [SUBMISSION_STATUS.SUBMITTED]: { label: 'Submitted', color: 'blue', icon: 'fa-paper-plane', bgClass: 'status-submitted' },
+    [SUBMISSION_STATUS.NEEDS_ACTION]: { label: 'Action Needed', color: 'orange', icon: 'fa-exclamation-circle', bgClass: 'status-action' },
+    [SUBMISSION_STATUS.BLOCKED]: { label: 'Blocked', color: 'red', icon: 'fa-ban', bgClass: 'status-blocked' },
+    [SUBMISSION_STATUS.IN_REVIEW]: { label: 'In Review', color: 'blue', icon: 'fa-eye', bgClass: 'status-review' },
+    [SUBMISSION_STATUS.VERIFIED]: { label: 'Verifying', color: 'teal', icon: 'fa-check-circle', bgClass: 'status-verifying' },
+    [SUBMISSION_STATUS.LIVE]: { label: 'Live', color: 'green', icon: 'fa-check', bgClass: 'status-live' },
+    [SUBMISSION_STATUS.REJECTED]: { label: 'Rejected', color: 'red', icon: 'fa-times', bgClass: 'status-rejected' },
+    [SUBMISSION_STATUS.FAILED]: { label: 'Failed', color: 'red', icon: 'fa-exclamation-triangle', bgClass: 'status-failed' }
+};
+
+// Action type display mapping
+const ACTION_TYPE_DISPLAY = {
+    [ACTION_REQUIRED_TYPE.NONE]: { label: 'None', icon: 'fa-check', description: '' },
+    [ACTION_REQUIRED_TYPE.EMAIL]: { label: 'Email Verification', icon: 'fa-envelope', description: 'Click verification link in your email' },
+    [ACTION_REQUIRED_TYPE.SMS]: { label: 'SMS Code', icon: 'fa-mobile-alt', description: 'Enter the code sent to your phone' },
+    [ACTION_REQUIRED_TYPE.PHONE]: { label: 'Phone Call', icon: 'fa-phone', description: 'Answer call and enter PIN shown below' },
+    [ACTION_REQUIRED_TYPE.POSTCARD]: { label: 'Postcard Verification', icon: 'fa-envelope-open-text', description: 'Enter code from postcard mailed to your address' },
+    [ACTION_REQUIRED_TYPE.VIDEO]: { label: 'Video Verification', icon: 'fa-video', description: 'Complete a short video verification' },
+    [ACTION_REQUIRED_TYPE.CAPTCHA]: { label: 'CAPTCHA', icon: 'fa-robot', description: 'Complete the CAPTCHA challenge' },
+    [ACTION_REQUIRED_TYPE.MANUAL_REVIEW]: { label: 'Manual Review', icon: 'fa-user-check', description: 'Awaiting manual review by directory' }
+};
+
+// Valid status transitions
+const VALID_TRANSITIONS = {
+    [SUBMISSION_STATUS.QUEUED]: [SUBMISSION_STATUS.IN_PROGRESS, SUBMISSION_STATUS.FAILED],
+    [SUBMISSION_STATUS.IN_PROGRESS]: [SUBMISSION_STATUS.SUBMITTED, SUBMISSION_STATUS.FAILED],
+    [SUBMISSION_STATUS.SUBMITTED]: [
+        SUBMISSION_STATUS.NEEDS_ACTION,
+        SUBMISSION_STATUS.IN_REVIEW,
+        SUBMISSION_STATUS.VERIFIED,
+        SUBMISSION_STATUS.REJECTED,
+        SUBMISSION_STATUS.FAILED
+    ],
+    [SUBMISSION_STATUS.NEEDS_ACTION]: [
+        SUBMISSION_STATUS.VERIFIED,
+        SUBMISSION_STATUS.BLOCKED,
+        SUBMISSION_STATUS.FAILED
+    ],
+    [SUBMISSION_STATUS.BLOCKED]: [SUBMISSION_STATUS.NEEDS_ACTION], // Can resume
+    [SUBMISSION_STATUS.IN_REVIEW]: [
+        SUBMISSION_STATUS.VERIFIED,
+        SUBMISSION_STATUS.REJECTED,
+        SUBMISSION_STATUS.FAILED
+    ],
+    [SUBMISSION_STATUS.VERIFIED]: [SUBMISSION_STATUS.LIVE, SUBMISSION_STATUS.FAILED],
+    [SUBMISSION_STATUS.LIVE]: [], // Terminal state
+    [SUBMISSION_STATUS.REJECTED]: [], // Terminal state
+    [SUBMISSION_STATUS.FAILED]: [SUBMISSION_STATUS.QUEUED] // Can retry
+};
+
+// Helper function to validate transition
+function isValidTransition(fromStatus, toStatus) {
+    return VALID_TRANSITIONS[fromStatus]?.includes(toStatus) ?? false;
+}
+
+// Timeout policy constants (in days)
+const TIMEOUT_POLICY = {
+    REMINDER_1_DAYS: 2,
+    REMINDER_2_DAYS: 5,
+    BLOCK_DAYS: 10
+};
+
+// ============================================================================
+
 /**
  * Convert backend score (0-100) to display score (0-1000)
  */
@@ -1548,7 +1644,8 @@ const citationNetworkState = {
         submitted: 0,
         live: 0,
         pending: 0,
-        actionNeeded: 0
+        actionNeeded: 0,
+        blocked: 0
     },
 
     // Boost status
@@ -1560,9 +1657,133 @@ const citationNetworkState = {
         submitted: 0,
         live: 0,
         pending: 0,
-        actionNeeded: 0
+        actionNeeded: 0,
+        blocked: 0
+    },
+
+    // Directory submissions tracking
+    submissions: [],
+
+    // Blocked submissions backlog
+    blockedSubmissions: [],
+
+    // Credentials stored in vault
+    credentials: [],
+
+    // Phone policy settings (from business profile)
+    phonePolicy: {
+        allowPhoneOnListings: true,
+        allowPhoneVerification: true,
+        verificationPhone: ''
     }
 };
+
+// Mock submissions data for demo
+const mockSubmissions = [
+    {
+        id: 'sub_001',
+        directoryId: 'dir_001',
+        directoryName: 'G2',
+        directoryLogo: 'https://logo.clearbit.com/g2.com',
+        status: SUBMISSION_STATUS.LIVE,
+        actionType: ACTION_REQUIRED_TYPE.NONE,
+        submittedAt: '2024-12-15T10:00:00Z',
+        liveAt: '2024-12-18T14:30:00Z',
+        listingUrl: 'https://g2.com/products/example'
+    },
+    {
+        id: 'sub_002',
+        directoryId: 'dir_002',
+        directoryName: 'Capterra',
+        directoryLogo: 'https://logo.clearbit.com/capterra.com',
+        status: SUBMISSION_STATUS.VERIFIED,
+        actionType: ACTION_REQUIRED_TYPE.NONE,
+        submittedAt: '2024-12-16T09:00:00Z',
+        verifiedAt: '2024-12-20T11:00:00Z'
+    },
+    {
+        id: 'sub_003',
+        directoryId: 'dir_003',
+        directoryName: 'Product Hunt',
+        directoryLogo: 'https://logo.clearbit.com/producthunt.com',
+        status: SUBMISSION_STATUS.NEEDS_ACTION,
+        actionType: ACTION_REQUIRED_TYPE.EMAIL,
+        actionInstructions: 'Click the verification link sent to your email',
+        actionRequiredAt: '2024-12-19T15:00:00Z',
+        submittedAt: '2024-12-17T12:00:00Z',
+        daysRemaining: 7
+    },
+    {
+        id: 'sub_004',
+        directoryId: 'dir_004',
+        directoryName: 'Yelp',
+        directoryLogo: 'https://logo.clearbit.com/yelp.com',
+        status: SUBMISSION_STATUS.NEEDS_ACTION,
+        actionType: ACTION_REQUIRED_TYPE.PHONE,
+        actionInstructions: 'Answer the verification call and enter PIN: 4829',
+        actionRequiredAt: '2024-12-18T10:00:00Z',
+        submittedAt: '2024-12-16T14:00:00Z',
+        daysRemaining: 4
+    },
+    {
+        id: 'sub_005',
+        directoryId: 'dir_005',
+        directoryName: 'TrustRadius',
+        directoryLogo: 'https://logo.clearbit.com/trustradius.com',
+        status: SUBMISSION_STATUS.IN_PROGRESS,
+        actionType: ACTION_REQUIRED_TYPE.NONE,
+        submittedAt: null
+    },
+    {
+        id: 'sub_006',
+        directoryId: 'dir_006',
+        directoryName: 'SoftwareAdvice',
+        directoryLogo: 'https://logo.clearbit.com/softwareadvice.com',
+        status: SUBMISSION_STATUS.QUEUED,
+        actionType: ACTION_REQUIRED_TYPE.NONE
+    }
+];
+
+// Mock blocked submissions
+const mockBlockedSubmissions = [
+    {
+        id: 'sub_blocked_001',
+        directoryId: 'dir_010',
+        directoryName: 'Clutch',
+        directoryLogo: 'https://logo.clearbit.com/clutch.co',
+        status: SUBMISSION_STATUS.BLOCKED,
+        actionType: ACTION_REQUIRED_TYPE.POSTCARD,
+        blockedAt: '2024-12-10T12:00:00Z',
+        blockedReason: 'Verification timeout - postcard code not entered within 10 days',
+        replacedById: 'sub_007',
+        replacedByName: 'Trustpilot'
+    }
+];
+
+// Mock credentials
+const mockCredentials = [
+    {
+        id: 'cred_001',
+        directoryName: 'G2',
+        accountUrl: 'https://my.g2.com/login',
+        createdAt: '2024-12-15T10:00:00Z',
+        handedOffAt: null
+    },
+    {
+        id: 'cred_002',
+        directoryName: 'Capterra',
+        accountUrl: 'https://vendors.capterra.com',
+        createdAt: '2024-12-16T09:00:00Z',
+        handedOffAt: null
+    },
+    {
+        id: 'cred_003',
+        directoryName: 'Product Hunt',
+        accountUrl: 'https://producthunt.com/login',
+        createdAt: '2024-12-17T12:00:00Z',
+        handedOffAt: null
+    }
+];
 
 // Plan allocation mapping
 const planAllocations = {
@@ -1574,7 +1795,14 @@ const planAllocations = {
 
 // Initialize Citation Network UI
 function initCitationNetwork() {
+    // Initialize submissions data
+    initSubmissionsData();
+
+    // Update main Citation Network UI
     updateCitationNetworkUI();
+
+    // Render the submissions tabs
+    renderCitationNetworkTabs();
 }
 
 // Update Citation Network UI based on state
@@ -1856,6 +2084,543 @@ window.closeXeoConfirm = function(confirmed) {
         window.xeoConfirmCallback = null;
     }
 };
+
+// ============================================================================
+// VERIFICATION POLICY & STATUS MANAGEMENT FUNCTIONS
+// ============================================================================
+
+// Phone policy update handler
+function updatePhonePolicy() {
+    const allowPhoneOnListings = document.getElementById('allowPhoneOnListings')?.checked ?? true;
+    const allowPhoneVerification = document.getElementById('allowPhoneVerification')?.checked ?? true;
+
+    // Update state
+    citationNetworkState.phonePolicy.allowPhoneOnListings = allowPhoneOnListings;
+    citationNetworkState.phonePolicy.allowPhoneVerification = allowPhoneVerification;
+
+    // Show/hide warnings
+    const listingsWarning = document.getElementById('phoneListingsWarning');
+    const verificationWarning = document.getElementById('phoneVerificationWarning');
+    const verificationPhoneSection = document.getElementById('verificationPhoneSection');
+
+    if (listingsWarning) {
+        listingsWarning.style.display = allowPhoneOnListings ? 'none' : 'flex';
+    }
+    if (verificationWarning) {
+        verificationWarning.style.display = allowPhoneVerification ? 'none' : 'flex';
+    }
+    if (verificationPhoneSection) {
+        verificationPhoneSection.style.display = allowPhoneVerification ? 'block' : 'none';
+    }
+
+    // Update form validation
+    validateSaveButton();
+}
+
+// Copy business phone to verification phone
+function copyBusinessPhone() {
+    const businessPhone = document.getElementById('businessPhone')?.value;
+    const verificationPhone = document.getElementById('verificationPhone');
+    if (businessPhone && verificationPhone) {
+        verificationPhone.value = businessPhone;
+    }
+}
+
+// Get status display info
+function getStatusDisplay(status) {
+    return STATUS_DISPLAY[status] || STATUS_DISPLAY[SUBMISSION_STATUS.QUEUED];
+}
+
+// Get action type display info
+function getActionTypeDisplay(actionType) {
+    return ACTION_TYPE_DISPLAY[actionType] || ACTION_TYPE_DISPLAY[ACTION_REQUIRED_TYPE.NONE];
+}
+
+// Render status badge HTML
+function renderStatusBadge(status) {
+    const display = getStatusDisplay(status);
+    return `<span class="submission-status-badge ${display.bgClass}">
+        <i class="fas ${display.icon}"></i>
+        ${display.label}
+    </span>`;
+}
+
+// Calculate days remaining for action
+function calculateDaysRemaining(actionRequiredAt) {
+    if (!actionRequiredAt) return null;
+    const actionDate = new Date(actionRequiredAt);
+    const now = new Date();
+    const blockDate = new Date(actionDate);
+    blockDate.setDate(blockDate.getDate() + TIMEOUT_POLICY.BLOCK_DAYS);
+    const diff = blockDate - now;
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
+// Initialize submissions data
+function initSubmissionsData() {
+    // Load mock data for demo
+    citationNetworkState.submissions = [...mockSubmissions];
+    citationNetworkState.blockedSubmissions = [...mockBlockedSubmissions];
+    citationNetworkState.credentials = [...mockCredentials];
+
+    // Calculate progress from submissions
+    updateProgressFromSubmissions();
+}
+
+// Update progress counters from submissions
+function updateProgressFromSubmissions() {
+    const submissions = citationNetworkState.submissions;
+    const counts = {
+        total: submissions.length,
+        submitted: 0,
+        live: 0,
+        pending: 0,
+        actionNeeded: 0,
+        blocked: 0
+    };
+
+    submissions.forEach(sub => {
+        switch (sub.status) {
+            case SUBMISSION_STATUS.LIVE:
+                counts.live++;
+                counts.submitted++;
+                break;
+            case SUBMISSION_STATUS.VERIFIED:
+            case SUBMISSION_STATUS.IN_REVIEW:
+                counts.submitted++;
+                break;
+            case SUBMISSION_STATUS.SUBMITTED:
+                counts.submitted++;
+                counts.pending++;
+                break;
+            case SUBMISSION_STATUS.NEEDS_ACTION:
+                counts.actionNeeded++;
+                break;
+            case SUBMISSION_STATUS.BLOCKED:
+                counts.blocked++;
+                break;
+            case SUBMISSION_STATUS.QUEUED:
+            case SUBMISSION_STATUS.IN_PROGRESS:
+                counts.pending++;
+                break;
+        }
+    });
+
+    citationNetworkState.includedProgress = counts;
+}
+
+// Render submissions list
+function renderSubmissionsList(containerId, submissions) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (submissions.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: var(--gray-500);">
+                <i class="fas fa-inbox" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+                <p>No submissions yet</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = submissions.map(sub => {
+        const statusDisplay = getStatusDisplay(sub.status);
+        const needsAction = sub.status === SUBMISSION_STATUS.NEEDS_ACTION;
+        const actionDisplay = getActionTypeDisplay(sub.actionType);
+        const daysRemaining = calculateDaysRemaining(sub.actionRequiredAt);
+
+        return `
+            <div class="submission-item ${needsAction ? 'needs-action' : ''}" data-id="${sub.id}">
+                <img src="${sub.directoryLogo}" alt="${sub.directoryName}" class="submission-logo"
+                     onerror="this.src='https://via.placeholder.com/40?text=${sub.directoryName[0]}'">
+                <div class="submission-info">
+                    <div class="submission-name">${sub.directoryName}</div>
+                    <div class="submission-meta">
+                        ${sub.submittedAt ? `Submitted ${formatRelativeTime(sub.submittedAt)}` : 'Queued'}
+                        ${sub.listingUrl ? ` • <a href="${sub.listingUrl}" target="_blank" style="color: var(--brand-cyan);">View listing</a>` : ''}
+                    </div>
+                </div>
+                <div class="submission-action">
+                    ${needsAction ? `
+                        <button class="action-required-badge" onclick="showActionModal('${sub.id}')">
+                            <i class="fas ${actionDisplay.icon}"></i>
+                            ${actionDisplay.label}
+                        </button>
+                        ${daysRemaining !== null ? `
+                            <span class="days-remaining ${daysRemaining <= 3 ? 'urgent' : ''}">
+                                ${daysRemaining} days remaining
+                            </span>
+                        ` : ''}
+                    ` : renderStatusBadge(sub.status)}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Format relative time
+function formatRelativeTime(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = now - date;
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+    if (days === 0) return 'today';
+    if (days === 1) return 'yesterday';
+    if (days < 7) return `${days} days ago`;
+    if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+    return date.toLocaleDateString();
+}
+
+// Show action modal
+function showActionModal(submissionId) {
+    const submission = citationNetworkState.submissions.find(s => s.id === submissionId);
+    if (!submission) return;
+
+    const actionDisplay = getActionTypeDisplay(submission.actionType);
+    const daysRemaining = calculateDaysRemaining(submission.actionRequiredAt);
+
+    const modalHtml = `
+        <div class="action-modal-overlay" id="actionModalOverlay" onclick="closeActionModal(event)">
+            <div class="action-modal" onclick="event.stopPropagation()">
+                <div class="action-modal-header">
+                    <h3 class="action-modal-title">Action Required: ${submission.directoryName}</h3>
+                    <button class="action-modal-close" onclick="closeActionModal()">&times;</button>
+                </div>
+                <div class="action-modal-body">
+                    <div class="action-type-display">
+                        <div class="action-type-icon">
+                            <i class="fas ${actionDisplay.icon}"></i>
+                        </div>
+                        <div class="action-type-info">
+                            <h4>${actionDisplay.label}</h4>
+                            <p>${actionDisplay.description}</p>
+                        </div>
+                    </div>
+
+                    ${submission.actionInstructions ? `
+                        <div style="background: var(--gray-50); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                            <p style="margin: 0; font-size: 0.875rem; color: var(--gray-700);">
+                                <strong>Instructions:</strong> ${submission.actionInstructions}
+                            </p>
+                        </div>
+                    ` : ''}
+
+                    ${daysRemaining !== null ? `
+                        <div style="background: ${daysRemaining <= 3 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(249, 115, 22, 0.1)'}; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                            <p style="margin: 0; font-size: 0.8rem; color: ${daysRemaining <= 3 ? '#ef4444' : '#f97316'};">
+                                <i class="fas fa-clock" style="margin-right: 0.5rem;"></i>
+                                <strong>${daysRemaining} days remaining</strong> before this submission is blocked
+                            </p>
+                        </div>
+                    ` : ''}
+
+                    ${(submission.actionType === ACTION_REQUIRED_TYPE.SMS || submission.actionType === ACTION_REQUIRED_TYPE.PHONE) ? `
+                        <div class="action-code-input">
+                            <label>Enter verification code</label>
+                            <input type="text" id="verificationCodeInput" placeholder="Enter code" maxlength="10">
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="action-modal-footer">
+                    <button class="btn-profile-cancel" onclick="closeActionModal()">Close</button>
+                    ${(submission.actionType === ACTION_REQUIRED_TYPE.SMS || submission.actionType === ACTION_REQUIRED_TYPE.PHONE) ? `
+                        <button class="btn-profile-save" onclick="submitVerificationCode('${submissionId}')" style="padding: 0.625rem 1.25rem;">
+                            <i class="fas fa-check"></i> Verify
+                        </button>
+                    ` : `
+                        <button class="btn-profile-save" onclick="markActionComplete('${submissionId}')" style="padding: 0.625rem 1.25rem;">
+                            <i class="fas fa-check"></i> Mark Complete
+                        </button>
+                    `}
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+// Close action modal
+function closeActionModal(event) {
+    if (event && event.target.id !== 'actionModalOverlay') return;
+    const modal = document.getElementById('actionModalOverlay');
+    if (modal) modal.remove();
+}
+
+// Submit verification code
+function submitVerificationCode(submissionId) {
+    const codeInput = document.getElementById('verificationCodeInput');
+    const code = codeInput?.value?.trim();
+
+    if (!code) {
+        showXeoAlert('Error', 'Please enter the verification code.');
+        return;
+    }
+
+    // Simulate verification (in real app, this would call API)
+    showXeoAlert('Verifying...', 'Checking your verification code...');
+
+    setTimeout(() => {
+        markActionComplete(submissionId);
+    }, 1500);
+}
+
+// Mark action as complete
+function markActionComplete(submissionId) {
+    const submission = citationNetworkState.submissions.find(s => s.id === submissionId);
+    if (!submission) return;
+
+    // Update status
+    submission.status = SUBMISSION_STATUS.VERIFIED;
+    submission.actionType = ACTION_REQUIRED_TYPE.NONE;
+    submission.verifiedAt = new Date().toISOString();
+
+    // Close modal
+    closeActionModal();
+
+    // Show success
+    showXeoAlert('Verification Complete!', `${submission.directoryName} is now verified and will go live soon.`);
+
+    // Re-render
+    updateProgressFromSubmissions();
+    renderCitationNetworkTabs();
+}
+
+// Render credentials list
+function renderCredentialsList() {
+    const container = document.getElementById('credentialsList');
+    if (!container) return;
+
+    const credentials = citationNetworkState.credentials;
+
+    if (credentials.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: var(--gray-500);">
+                <i class="fas fa-key" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+                <p>No credentials stored yet</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = credentials.map(cred => `
+        <div class="credential-card" data-id="${cred.id}">
+            <div class="credential-header">
+                <h4>${cred.directoryName}</h4>
+                ${cred.handedOffAt ? '<span class="submission-status-badge status-live">Handed Off</span>' : ''}
+            </div>
+            <div class="credential-fields">
+                <div class="credential-field">
+                    <label>Account URL</label>
+                    <a href="${cred.accountUrl}" target="_blank" style="color: var(--brand-cyan); font-size: 0.8rem;">${cred.accountUrl}</a>
+                </div>
+                <div class="credential-field">
+                    <label>Username</label>
+                    <span class="masked" id="username-${cred.id}">••••••••</span>
+                </div>
+                <div class="credential-field">
+                    <label>Password</label>
+                    <span class="masked" id="password-${cred.id}">••••••••</span>
+                </div>
+            </div>
+            <div class="credential-actions">
+                <button class="btn-reveal" onclick="revealCredentials('${cred.id}')">
+                    <i class="fas fa-eye"></i> Reveal
+                </button>
+                ${!cred.handedOffAt ? `
+                    <button class="btn-handoff" onclick="requestHandoff('${cred.id}')">
+                        <i class="fas fa-hand-holding"></i> Request Handoff
+                    </button>
+                ` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+// Reveal credentials (simulated)
+function revealCredentials(credentialId) {
+    // In real app, this would call API with audit logging
+    const usernameEl = document.getElementById(`username-${credentialId}`);
+    const passwordEl = document.getElementById(`password-${credentialId}`);
+
+    if (usernameEl && passwordEl) {
+        // Simulate revealing (in real app, would fetch from encrypted vault)
+        usernameEl.innerHTML = `<code>user@example.com</code>`;
+        passwordEl.innerHTML = `<code>••••••••</code> <button onclick="copyPassword('${credentialId}')" style="background: none; border: none; color: var(--brand-cyan); cursor: pointer; font-size: 0.75rem;"><i class="fas fa-copy"></i></button>`;
+    }
+}
+
+// Copy password to clipboard
+function copyPassword(credentialId) {
+    // In real app, this would copy actual password
+    navigator.clipboard.writeText('password123').then(() => {
+        showXeoAlert('Copied', 'Password copied to clipboard');
+    });
+}
+
+// Request credential handoff
+function requestHandoff(credentialId) {
+    showXeoConfirm(
+        'Request Credential Handoff',
+        'After handoff, you\'ll have full ownership of this directory account. We\'ll no longer manage it for you. Continue?',
+        function(confirmed) {
+            if (confirmed) {
+                const cred = citationNetworkState.credentials.find(c => c.id === credentialId);
+                if (cred) {
+                    cred.handedOffAt = new Date().toISOString();
+                    showXeoAlert('Handoff Complete', `You now have full ownership of the ${cred.directoryName} account.`);
+                    renderCredentialsList();
+                }
+            }
+        }
+    );
+}
+
+// Export all credentials
+function exportCredentials() {
+    showXeoConfirm(
+        'Export All Credentials',
+        'This will download all your directory credentials as a file. Make sure you\'re in a secure location. Continue?',
+        function(confirmed) {
+            if (confirmed) {
+                // In real app, this would call API with audit logging
+                const credentials = citationNetworkState.credentials.map(c => ({
+                    directory: c.directoryName,
+                    accountUrl: c.accountUrl,
+                    username: 'user@example.com',
+                    password: '********',
+                    createdAt: c.createdAt
+                }));
+
+                const blob = new Blob([JSON.stringify(credentials, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'visible2ai-credentials.json';
+                a.click();
+                URL.revokeObjectURL(url);
+
+                showXeoAlert('Export Complete', 'Your credentials have been downloaded.');
+            }
+        }
+    );
+}
+
+// Render blocked submissions
+function renderBlockedList() {
+    const container = document.getElementById('blockedList');
+    if (!container) return;
+
+    const blocked = citationNetworkState.blockedSubmissions;
+
+    if (blocked.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: var(--gray-500);">
+                <i class="fas fa-check-circle" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5; color: var(--complete-teal);"></i>
+                <p>No blocked submissions</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = blocked.map(sub => `
+        <div class="blocked-item" data-id="${sub.id}">
+            <img src="${sub.directoryLogo}" alt="${sub.directoryName}" class="submission-logo"
+                 onerror="this.src='https://via.placeholder.com/40?text=${sub.directoryName[0]}'">
+            <div class="blocked-info">
+                <div class="submission-name">${sub.directoryName}</div>
+                <div class="blocked-reason">${sub.blockedReason}</div>
+                ${sub.replacedByName ? `
+                    <div class="blocked-replacement">
+                        <i class="fas fa-exchange-alt"></i>
+                        Replaced with: ${sub.replacedByName}
+                    </div>
+                ` : ''}
+            </div>
+            <button class="btn-resume" onclick="resumeBlockedSubmission('${sub.id}')">
+                <i class="fas fa-play"></i> Resume
+            </button>
+        </div>
+    `).join('');
+}
+
+// Resume a blocked submission
+function resumeBlockedSubmission(submissionId) {
+    showXeoConfirm(
+        'Resume Submission',
+        'This will restart the verification process. You\'ll have 10 days to complete verification. Continue?',
+        function(confirmed) {
+            if (confirmed) {
+                const blocked = citationNetworkState.blockedSubmissions.find(s => s.id === submissionId);
+                if (blocked) {
+                    // Move from blocked back to needs_action
+                    blocked.status = SUBMISSION_STATUS.NEEDS_ACTION;
+                    blocked.actionRequiredAt = new Date().toISOString();
+
+                    // Remove from blocked list
+                    citationNetworkState.blockedSubmissions = citationNetworkState.blockedSubmissions.filter(s => s.id !== submissionId);
+
+                    // Add to main submissions
+                    citationNetworkState.submissions.push(blocked);
+
+                    showXeoAlert('Submission Resumed', `${blocked.directoryName} is now active again. Complete verification within 10 days.`);
+
+                    // Re-render
+                    updateProgressFromSubmissions();
+                    renderCitationNetworkTabs();
+                }
+            }
+        }
+    );
+}
+
+// Render Citation Network tabs and content
+function renderCitationNetworkTabs() {
+    // Get counts for badges
+    const actionCount = citationNetworkState.submissions.filter(s => s.status === SUBMISSION_STATUS.NEEDS_ACTION).length;
+    const blockedCount = citationNetworkState.blockedSubmissions.length;
+
+    // Update tab badges
+    const actionBadge = document.getElementById('actionTabBadge');
+    const blockedBadge = document.getElementById('blockedTabBadge');
+
+    if (actionBadge) {
+        actionBadge.textContent = actionCount;
+        actionBadge.style.display = actionCount > 0 ? 'inline' : 'none';
+    }
+    if (blockedBadge) {
+        blockedBadge.textContent = blockedCount;
+        blockedBadge.style.display = blockedCount > 0 ? 'inline' : 'none';
+    }
+
+    // Render submissions list
+    renderSubmissionsList('allSubmissionsList', citationNetworkState.submissions);
+
+    // Render action needed list (filtered)
+    const actionNeeded = citationNetworkState.submissions.filter(s => s.status === SUBMISSION_STATUS.NEEDS_ACTION);
+    renderSubmissionsList('actionSubmissionsList', actionNeeded);
+
+    // Render credentials
+    renderCredentialsList();
+
+    // Render blocked
+    renderBlockedList();
+}
+
+// Switch Citation Network tab
+function switchCitationTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.citation-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+
+    // Update tab content
+    document.querySelectorAll('.citation-tab-content').forEach(content => {
+        content.classList.toggle('active', content.id === `${tabName}TabContent`);
+    });
+}
 
 // ============================================================================
 // BUSINESS PROFILE FORM FUNCTIONS
@@ -2560,6 +3325,8 @@ function collectProfileFormData() {
         inbox_preference: document.querySelector('input[name="inbox_preference"]:checked')?.value || 'managed',
         customer_verification_email: document.getElementById('customerVerificationEmail')?.value?.trim() || '',
         verification_phone: document.getElementById('verificationPhone')?.value?.trim() || '',
+        allow_phone_on_listings: document.getElementById('allowPhoneOnListings')?.checked ?? true,
+        allow_phone_verification: document.getElementById('allowPhoneVerification')?.checked ?? true,
         year_founded: document.getElementById('yearFounded')?.value || '',
         linkedin_url: document.getElementById('linkedinUrl')?.value?.trim() || '',
         twitter_url: document.getElementById('twitterUrl')?.value?.trim() || '',
@@ -2583,6 +3350,13 @@ function saveBusinessProfile(formData) {
         // Update citation network state
         citationNetworkState.hasBusinessProfile = true;
         citationNetworkState.includedStatus = 'ready';
+
+        // Update phone policy state
+        citationNetworkState.phonePolicy = {
+            allowPhoneOnListings: formData.allow_phone_on_listings,
+            allowPhoneVerification: formData.allow_phone_verification,
+            verificationPhone: formData.verification_phone
+        };
 
         // Show success message
         showXeoAlert('Profile Saved!', 'Your business profile has been saved successfully.\n\nYou can now start directory submissions.');

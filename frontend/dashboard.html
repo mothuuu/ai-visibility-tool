@@ -2402,6 +2402,551 @@
             font-size: 0.8rem;
             color: var(--high-yellow);
         }
+
+        /* Phone Policy Styles */
+        .phone-policy-setting {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 0.75rem;
+            background: var(--gray-50);
+            border-radius: 8px;
+        }
+
+        .phone-policy-info {
+            flex: 1;
+        }
+
+        .phone-policy-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--gray-800);
+            margin-bottom: 0.25rem;
+            display: block;
+        }
+
+        .phone-policy-hint {
+            font-size: 0.8rem;
+            color: var(--gray-500);
+            margin: 0;
+        }
+
+        .phone-toggle {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 26px;
+            flex-shrink: 0;
+            margin-left: 1rem;
+        }
+
+        .phone-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .phone-toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--gray-300);
+            transition: 0.3s;
+            border-radius: 26px;
+        }
+
+        .phone-toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .phone-toggle input:checked + .phone-toggle-slider {
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--complete-teal) 100%);
+        }
+
+        .phone-toggle input:checked + .phone-toggle-slider:before {
+            transform: translateX(22px);
+        }
+
+        .phone-policy-warning {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background: rgba(255, 152, 0, 0.1);
+            border: 1px solid rgba(255, 152, 0, 0.3);
+            border-radius: 8px;
+            font-size: 0.8rem;
+            color: var(--high-yellow);
+        }
+
+        .phone-policy-warning i {
+            flex-shrink: 0;
+        }
+
+        /* Submission Status Styles */
+        .submission-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.25rem 0.625rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-pending { background: var(--gray-100); color: var(--gray-600); }
+        .status-processing { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+        .status-submitted { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+        .status-action { background: rgba(249, 115, 22, 0.1); color: #f97316; }
+        .status-blocked { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+        .status-review { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+        .status-verifying { background: rgba(20, 184, 166, 0.1); color: #14b8a6; }
+        .status-live { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+        .status-rejected { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+        .status-failed { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+
+        /* Submissions List */
+        .submissions-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .submission-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            transition: box-shadow 0.2s, border-color 0.2s;
+        }
+
+        .submission-item:hover {
+            border-color: var(--brand-cyan);
+            box-shadow: 0 2px 8px rgba(0, 200, 255, 0.1);
+        }
+
+        .submission-item.needs-action {
+            border-left: 3px solid #f97316;
+        }
+
+        .submission-logo {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            object-fit: contain;
+            background: var(--gray-50);
+            padding: 4px;
+        }
+
+        .submission-info {
+            flex: 1;
+        }
+
+        .submission-name {
+            font-weight: 600;
+            color: var(--gray-800);
+            font-size: 0.875rem;
+        }
+
+        .submission-meta {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            margin-top: 0.125rem;
+        }
+
+        .submission-action {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.375rem;
+        }
+
+        .action-required-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.375rem 0.75rem;
+            background: rgba(249, 115, 22, 0.1);
+            color: #f97316;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .action-required-badge:hover {
+            background: rgba(249, 115, 22, 0.2);
+        }
+
+        .days-remaining {
+            font-size: 0.7rem;
+            color: var(--gray-500);
+        }
+
+        .days-remaining.urgent {
+            color: #ef4444;
+        }
+
+        /* Action Modal */
+        .action-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .action-modal {
+            background: white;
+            border-radius: 12px;
+            max-width: 480px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+        }
+
+        .action-modal-header {
+            padding: 1.25rem;
+            border-bottom: 1px solid var(--gray-200);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .action-modal-title {
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+
+        .action-modal-close {
+            background: none;
+            border: none;
+            font-size: 1.25rem;
+            color: var(--gray-500);
+            cursor: pointer;
+        }
+
+        .action-modal-body {
+            padding: 1.25rem;
+        }
+
+        .action-type-display {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: var(--gray-50);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .action-type-icon {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-pink) 100%);
+            color: white;
+            border-radius: 12px;
+            font-size: 1.25rem;
+        }
+
+        .action-type-info h4 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--gray-800);
+            margin: 0 0 0.25rem 0;
+        }
+
+        .action-type-info p {
+            font-size: 0.8rem;
+            color: var(--gray-500);
+            margin: 0;
+        }
+
+        .action-code-input {
+            margin-top: 1rem;
+        }
+
+        .action-code-input label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--gray-700);
+            margin-bottom: 0.5rem;
+        }
+
+        .action-code-input input {
+            width: 100%;
+            padding: 0.875rem;
+            font-size: 1.25rem;
+            letter-spacing: 0.25rem;
+            text-align: center;
+            border: 2px solid var(--gray-200);
+            border-radius: 8px;
+            font-family: monospace;
+        }
+
+        .action-code-input input:focus {
+            outline: none;
+            border-color: var(--brand-cyan);
+        }
+
+        .action-modal-footer {
+            padding: 1.25rem;
+            border-top: 1px solid var(--gray-200);
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+        }
+
+        /* Credentials View */
+        .credentials-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .credential-card {
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .credential-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .credential-header h4 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--gray-800);
+            margin: 0;
+        }
+
+        .credential-fields {
+            display: grid;
+            gap: 0.5rem;
+        }
+
+        .credential-field {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .credential-field label {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            width: 80px;
+            flex-shrink: 0;
+        }
+
+        .credential-field .value {
+            font-size: 0.875rem;
+            color: var(--gray-800);
+        }
+
+        .credential-field .masked {
+            font-size: 0.875rem;
+            color: var(--gray-400);
+            letter-spacing: 0.125rem;
+        }
+
+        .credential-field code {
+            font-family: monospace;
+            background: var(--gray-100);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .credential-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--gray-100);
+        }
+
+        .credential-actions button {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-reveal {
+            background: var(--gray-100);
+            border: none;
+            color: var(--gray-700);
+        }
+
+        .btn-reveal:hover {
+            background: var(--gray-200);
+        }
+
+        .btn-handoff {
+            background: none;
+            border: 1px solid var(--gray-300);
+            color: var(--gray-600);
+        }
+
+        .btn-handoff:hover {
+            border-color: var(--brand-cyan);
+            color: var(--brand-cyan);
+        }
+
+        /* Blocked Backlog */
+        .blocked-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-left: 3px solid #ef4444;
+            border-radius: 8px;
+        }
+
+        .blocked-info {
+            flex: 1;
+        }
+
+        .blocked-reason {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            margin-top: 0.25rem;
+        }
+
+        .blocked-replacement {
+            font-size: 0.75rem;
+            color: var(--complete-teal);
+            margin-top: 0.25rem;
+        }
+
+        .blocked-replacement i {
+            margin-right: 0.25rem;
+        }
+
+        .btn-resume {
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--complete-teal) 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-resume:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 200, 255, 0.3);
+        }
+
+        /* Tab Navigation for Citation Network sub-sections */
+        .citation-tabs {
+            display: flex;
+            gap: 0.25rem;
+            background: var(--gray-100);
+            padding: 0.25rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+
+        .citation-tab {
+            flex: 1;
+            padding: 0.625rem 1rem;
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--gray-600);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .citation-tab:hover {
+            color: var(--gray-800);
+        }
+
+        .citation-tab.active {
+            background: white;
+            color: var(--gray-900);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .citation-tab .badge {
+            font-size: 0.7rem;
+            padding: 0.125rem 0.375rem;
+            border-radius: 10px;
+            background: rgba(249, 115, 22, 0.1);
+            color: #f97316;
+        }
+
+        .citation-tab-content {
+            display: none;
+        }
+
+        .citation-tab-content.active {
+            display: block;
+        }
+
+        /* Security Notice */
+        .security-notice {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1rem;
+            background: var(--gray-50);
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-size: 0.8rem;
+            color: var(--gray-600);
+        }
+
+        .security-notice i {
+            color: var(--complete-teal);
+            font-size: 1rem;
+        }
     </style>
     <!-- Google Analytics 4 -->
     <script src="analytics.js"></script>
@@ -3326,6 +3871,100 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Submissions Tracking Tabs -->
+                <div class="card" style="margin-top: 1.5rem;">
+                    <div class="card-header" style="border-bottom: none; padding-bottom: 0;">
+                        <h2 class="card-title">Submission Tracking</h2>
+                    </div>
+
+                    <!-- Tab Navigation -->
+                    <div class="citation-tabs">
+                        <button class="citation-tab active" data-tab="all" onclick="switchCitationTab('all')">
+                            <i class="fas fa-list"></i>
+                            All Submissions
+                        </button>
+                        <button class="citation-tab" data-tab="action" onclick="switchCitationTab('action')">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Action Needed
+                            <span class="badge" id="actionTabBadge" style="display: none;">0</span>
+                        </button>
+                        <button class="citation-tab" data-tab="credentials" onclick="switchCitationTab('credentials')">
+                            <i class="fas fa-key"></i>
+                            Credentials
+                        </button>
+                        <button class="citation-tab" data-tab="blocked" onclick="switchCitationTab('blocked')">
+                            <i class="fas fa-ban"></i>
+                            Blocked
+                            <span class="badge" id="blockedTabBadge" style="display: none;">0</span>
+                        </button>
+                    </div>
+
+                    <!-- Tab Content: All Submissions -->
+                    <div class="citation-tab-content active" id="allTabContent">
+                        <div class="submissions-list" id="allSubmissionsList">
+                            <!-- Populated by JavaScript -->
+                            <div style="text-align: center; padding: 2rem; color: var(--gray-500);">
+                                <i class="fas fa-inbox" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+                                <p>Start submissions to see your directory listings here</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab Content: Action Needed -->
+                    <div class="citation-tab-content" id="actionTabContent">
+                        <div style="background: rgba(249, 115, 22, 0.05); border: 1px solid rgba(249, 115, 22, 0.2); border-radius: 8px; padding: 0.875rem 1rem; margin-bottom: 1rem;">
+                            <p style="margin: 0; font-size: 0.8rem; color: #f97316;">
+                                <i class="fas fa-clock" style="margin-right: 0.5rem;"></i>
+                                <strong>Timeout Policy:</strong> Actions must be completed within 10 days. We'll send reminders on day 2 and day 5.
+                            </p>
+                        </div>
+                        <div class="submissions-list" id="actionSubmissionsList">
+                            <!-- Populated by JavaScript -->
+                            <div style="text-align: center; padding: 2rem; color: var(--gray-500);">
+                                <i class="fas fa-check-circle" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5; color: var(--complete-teal);"></i>
+                                <p>No actions required</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab Content: Credentials -->
+                    <div class="citation-tab-content" id="credentialsTabContent">
+                        <div class="security-notice">
+                            <i class="fas fa-lock"></i>
+                            <span>Credentials are encrypted at rest using AES-256-GCM. All access is logged for security. You can request handoff to take full ownership of any account.</span>
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+                            <button class="btn-profile-cancel" onclick="exportCredentials()" style="padding: 0.5rem 1rem;">
+                                <i class="fas fa-download"></i> Export All
+                            </button>
+                        </div>
+                        <div class="credentials-list" id="credentialsList">
+                            <!-- Populated by JavaScript -->
+                            <div style="text-align: center; padding: 2rem; color: var(--gray-500);">
+                                <i class="fas fa-key" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+                                <p>No credentials stored yet</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab Content: Blocked -->
+                    <div class="citation-tab-content" id="blockedTabContent">
+                        <div style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 8px; padding: 0.875rem 1rem; margin-bottom: 1rem;">
+                            <p style="margin: 0; font-size: 0.8rem; color: var(--gray-600);">
+                                <i class="fas fa-info-circle" style="margin-right: 0.5rem;"></i>
+                                Submissions are blocked after 10 days of inactivity. Blocked submissions are replaced with equivalent directories. You can resume them anytime.
+                            </p>
+                        </div>
+                        <div class="submissions-list" id="blockedList">
+                            <!-- Populated by JavaScript -->
+                            <div style="text-align: center; padding: 2rem; color: var(--gray-500);">
+                                <i class="fas fa-check-circle" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5; color: var(--complete-teal);"></i>
+                                <p>No blocked submissions</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <!-- Business Profile Form Section -->
@@ -3821,13 +4460,62 @@
                                 </div>
                             </div>
 
-                            <!-- Verification Phone -->
+                            <!-- Phone Use Policy -->
                             <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--gray-200);">
-                                <h4 style="font-size: 0.875rem; font-weight: 600; color: var(--gray-700); margin-bottom: 1rem;">Verification Preferences</h4>
+                                <h4 style="font-size: 0.875rem; font-weight: 600; color: var(--gray-700); margin-bottom: 0.5rem;">
+                                    <i class="fas fa-phone-alt" style="color: var(--brand-cyan); margin-right: 0.5rem;"></i>
+                                    Phone Use Policy
+                                </h4>
                                 <p style="color: var(--gray-500); font-size: 0.8rem; margin-bottom: 1rem;">
-                                    If a directory requires phone/SMS verification:
+                                    Control how your phone number is used with directory listings
                                 </p>
-                                <div class="profile-form-field">
+
+                                <!-- Allow phone on listings toggle -->
+                                <div class="phone-policy-setting">
+                                    <div class="phone-policy-info">
+                                        <label class="phone-policy-label">Allow phone on directory listings</label>
+                                        <p class="phone-policy-hint">Some directories will display your phone number publicly</p>
+                                    </div>
+                                    <label class="phone-toggle">
+                                        <input type="checkbox"
+                                               id="allowPhoneOnListings"
+                                               name="allow_phone_on_listings"
+                                               checked
+                                               onchange="updatePhonePolicy()">
+                                        <span class="phone-toggle-slider"></span>
+                                    </label>
+                                </div>
+
+                                <!-- Warning when phone on listings disabled -->
+                                <div class="phone-policy-warning" id="phoneListingsWarning" style="display: none;">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <span>Directories requiring public phone display will be skipped and replaced with equivalent directories.</span>
+                                </div>
+
+                                <!-- Allow phone verification toggle -->
+                                <div class="phone-policy-setting" style="margin-top: 1rem;">
+                                    <div class="phone-policy-info">
+                                        <label class="phone-policy-label">Allow phone/SMS verification</label>
+                                        <p class="phone-policy-hint">Some directories verify ownership via phone call or SMS code</p>
+                                    </div>
+                                    <label class="phone-toggle">
+                                        <input type="checkbox"
+                                               id="allowPhoneVerification"
+                                               name="allow_phone_verification"
+                                               checked
+                                               onchange="updatePhonePolicy()">
+                                        <span class="phone-toggle-slider"></span>
+                                    </label>
+                                </div>
+
+                                <!-- Warning when phone verification disabled -->
+                                <div class="phone-policy-warning" id="phoneVerificationWarning" style="display: none;">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <span>Directories requiring phone verification will be skipped and replaced with equivalent directories.</span>
+                                </div>
+
+                                <!-- Verification Phone (conditional) -->
+                                <div id="verificationPhoneSection" class="profile-form-field" style="margin-top: 1rem;">
                                     <label class="profile-form-label">Phone number to receive verification codes</label>
                                     <div style="display: flex; gap: 0.5rem; align-items: center;">
                                         <input type="tel"
@@ -3843,6 +4531,17 @@
                                     <div class="profile-form-hint">
                                         <i class="fas fa-info-circle" style="margin-right: 0.25rem;"></i>
                                         We'll notify you when a code is needed. You'll enter it in your dashboard. Codes typically expire within 5-10 minutes.
+                                    </div>
+                                </div>
+
+                                <!-- Phone policy info box -->
+                                <div class="profile-info-box" style="margin-top: 1rem;">
+                                    <div class="profile-info-box-title">
+                                        <i class="fas fa-info-circle"></i>
+                                        Note about Phone Verification
+                                    </div>
+                                    <div class="profile-info-box-content">
+                                        Visible2AI does not provide managed phone numbers. You will enter verification codes directly in your dashboard when required. You'll receive a notification when action is needed.
                                     </div>
                                 </div>
                             </div>
