@@ -20,5 +20,7 @@ const pool = new Pool({
 
 module.exports = {
   query: (text, params) => pool.query(text, params),
-  pool
+  pool,
+  // Get a client for transaction support
+  getClient: () => pool.connect()
 };

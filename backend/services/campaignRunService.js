@@ -7,6 +7,8 @@
  * 3. Select directories based on entitlement + priority + filters
  * 4. Create directory_submissions records
  * 5. Consume entitlement
+ *
+ * UPDATED: Uses transactions for atomicity and row locks for race condition prevention
  */
 
 const db = require('../db/database');
@@ -16,73 +18,108 @@ class CampaignRunService {
 
   /**
    * Start submissions - main entry point
+   * FIXED: Uses transaction for atomicity
    */
   async startSubmissions(userId, filters = {}) {
-    // 1. Validate prerequisites
-    const validation = await this.validatePrerequisites(userId);
-    if (!validation.valid) {
-      throw new Error(validation.error);
+    const client = await db.getClient();
+
+    try {
+      await client.query('BEGIN');
+
+      // 1. Validate prerequisites
+      const validation = await this.validatePrerequisites(userId);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+
+      // 2. Check for existing active campaign (with row lock)
+      const activeCampaign = await this.getActiveCampaignWithLock(client, userId);
+      if (activeCampaign) {
+        throw new Error('ACTIVE_CAMPAIGN_EXISTS');
+      }
+
+      // 3. Get entitlement
+      const entitlement = await entitlementService.calculateEntitlement(userId);
+      if (entitlement.remaining <= 0) {
+        throw new Error('NO_ENTITLEMENT');
+      }
+
+      // 4. Get business profile
+      const profile = await this.getBusinessProfile(userId);
+
+      // 5. Create campaign run (within transaction)
+      const campaignRun = await this.createCampaignRunTx(client, userId, profile, entitlement, filters);
+
+      // 6. Select directories
+      const directories = await this.selectDirectoriesTx(client, campaignRun, filters, entitlement.remaining);
+
+      if (directories.length === 0) {
+        // Update campaign status to failed if no directories found
+        await client.query(`
+          UPDATE campaign_runs
+          SET status = 'failed',
+              error_message = $2,
+              error_details = $3,
+              updated_at = NOW()
+          WHERE id = $1
+        `, [campaignRun.id, 'No eligible directories found matching your criteria', JSON.stringify({ filters })]);
+        throw new Error('NO_DIRECTORIES_AVAILABLE');
+      }
+
+      // 7. Create submission records (within transaction)
+      const submissions = await this.createSubmissionsTx(client, campaignRun, directories);
+
+      // 8. Consume entitlement (within transaction)
+      await this.consumeEntitlementTx(client, userId, submissions.length, entitlement);
+
+      // 9. Update campaign run status
+      await client.query(`
+        UPDATE campaign_runs
+        SET status = 'queued',
+            directories_selected = $2,
+            directories_queued = $2,
+            started_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $1
+      `, [campaignRun.id, submissions.length]);
+
+      await client.query('COMMIT');
+
+      return {
+        campaignRunId: campaignRun.id,
+        directoriesQueued: submissions.length,
+        entitlementRemaining: entitlement.remaining - submissions.length,
+        submissions: submissions.map(s => ({
+          id: s.id,
+          directoryName: s.directory_snapshot?.name || s.directory_name,
+          status: s.status,
+          queuePosition: s.queue_position
+        }))
+      };
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
+  }
 
-    // 2. Check for existing active campaign
-    const activeCampaign = await this.getActiveCampaign(userId);
-    if (activeCampaign) {
-      throw new Error('ACTIVE_CAMPAIGN_EXISTS');
-    }
+  /**
+   * Get active campaign with row lock to prevent race condition
+   */
+  async getActiveCampaignWithLock(client, userId) {
+    const result = await client.query(`
+      SELECT id, status, created_at
+      FROM campaign_runs
+      WHERE user_id = $1
+        AND status IN ('created', 'selecting', 'queued', 'in_progress', 'paused')
+      ORDER BY created_at DESC
+      LIMIT 1
+      FOR UPDATE SKIP LOCKED
+    `, [userId]);
 
-    // 3. Get entitlement
-    const entitlement = await entitlementService.calculateEntitlement(userId);
-    if (entitlement.remaining <= 0) {
-      throw new Error('NO_ENTITLEMENT');
-    }
-
-    // 4. Get business profile
-    const profile = await this.getBusinessProfile(userId);
-
-    // 5. Create campaign run (immutable snapshot)
-    const campaignRun = await this.createCampaignRun(userId, profile, entitlement, filters);
-
-    // 6. Select directories
-    const directories = await this.selectDirectories(campaignRun, filters, entitlement.remaining);
-
-    if (directories.length === 0) {
-      // Update campaign status to failed if no directories found
-      await this.updateCampaignStatus(campaignRun.id, 'failed', {
-        error_message: 'No eligible directories found matching your criteria',
-        error_details: JSON.stringify({ filters })
-      });
-      throw new Error('NO_DIRECTORIES_AVAILABLE');
-    }
-
-    // 7. Create submission records
-    const submissions = await this.createSubmissions(campaignRun, directories);
-
-    // 8. Consume entitlement
-    await entitlementService.consumeEntitlement(
-      userId,
-      submissions.length,
-      entitlement.source,
-      entitlement.sourceId
-    );
-
-    // 9. Update campaign run status
-    await this.updateCampaignStatus(campaignRun.id, 'queued', {
-      directories_selected: directories.length,
-      directories_queued: submissions.length,
-      started_at: new Date()
-    });
-
-    return {
-      campaignRunId: campaignRun.id,
-      directoriesQueued: submissions.length,
-      entitlementRemaining: entitlement.remaining - submissions.length,
-      submissions: submissions.map(s => ({
-        id: s.id,
-        directoryName: s.directory_snapshot?.name || s.directory_name,
-        status: s.status,
-        queuePosition: s.queue_position
-      }))
-    };
+    return result.rows[0] || null;
   }
 
   /**
@@ -137,6 +174,13 @@ class CampaignRunService {
    * Create campaign run with snapshots
    */
   async createCampaignRun(userId, profile, entitlement, filters) {
+    return this.createCampaignRunTx({ query: db.query.bind(db) }, userId, profile, entitlement, filters);
+  }
+
+  /**
+   * Create campaign run with snapshots - transaction version
+   */
+  async createCampaignRunTx(client, userId, profile, entitlement, filters) {
     // Build profile snapshot (copy all relevant fields)
     const profileSnapshot = {
       id: profile.id,
@@ -171,7 +215,7 @@ class CampaignRunService {
       applied_at: new Date().toISOString()
     };
 
-    const result = await db.query(`
+    const result = await client.query(`
       INSERT INTO campaign_runs (
         user_id,
         business_profile_id,
@@ -199,9 +243,81 @@ class CampaignRunService {
   }
 
   /**
+   * Consume entitlement within transaction
+   * FIXED: Consume from subscription first, then orders
+   */
+  async consumeEntitlementTx(client, userId, count, entitlement) {
+    if (count <= 0) return;
+
+    let remaining = count;
+
+    // 1. Try subscription first (if subscriber)
+    if (entitlement.isSubscriber && remaining > 0) {
+      const now = new Date();
+      const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      // Get current allocation
+      const subscriptionAvailable = entitlement.breakdown?.subscriptionRemaining || 0;
+      const toConsumeFromSubscription = Math.min(subscriptionAvailable, remaining);
+
+      if (toConsumeFromSubscription > 0) {
+        await client.query(`
+          UPDATE subscriber_directory_allocations
+          SET submissions_used = submissions_used + $1,
+              updated_at = NOW()
+          WHERE user_id = $2 AND period_start = $3
+        `, [toConsumeFromSubscription, userId, periodStart]);
+
+        remaining -= toConsumeFromSubscription;
+      }
+    }
+
+    // 2. Consume remaining from orders (FIFO)
+    if (remaining > 0) {
+      const orders = await client.query(`
+        SELECT id, directories_allocated, directories_submitted
+        FROM directory_orders
+        WHERE user_id = $1
+          AND status IN ('paid', 'processing', 'in_progress', 'completed')
+          AND directories_submitted < directories_allocated
+        ORDER BY created_at ASC
+      `, [userId]);
+
+      for (const order of orders.rows) {
+        if (remaining <= 0) break;
+
+        const available = order.directories_allocated - order.directories_submitted;
+        const toConsume = Math.min(available, remaining);
+
+        await client.query(`
+          UPDATE directory_orders
+          SET directories_submitted = directories_submitted + $1,
+              updated_at = NOW()
+          WHERE id = $2
+        `, [toConsume, order.id]);
+
+        remaining -= toConsume;
+      }
+    }
+
+    if (remaining > 0) {
+      console.warn(`Could not consume all entitlement. Remaining: ${remaining}`);
+    }
+  }
+
+  /**
    * Select directories based on entitlement + priority + filters
+   * UPDATED to use correct schema columns (tier_num, regions array)
    */
   async selectDirectories(campaignRun, filters, limit) {
+    return this.selectDirectoriesTx({ query: db.query.bind(db) }, campaignRun, filters, limit);
+  }
+
+  /**
+   * Select directories - transaction version
+   * UPDATED to use correct schema columns
+   */
+  async selectDirectoriesTx(client, campaignRun, filters, limit) {
     const filtersSnapshot = typeof campaignRun.filters_snapshot === 'string'
       ? JSON.parse(campaignRun.filters_snapshot)
       : campaignRun.filters_snapshot;
@@ -214,25 +330,25 @@ class CampaignRunService {
     // Filter: pricing (only free/freemium)
     conditions.push(`d.pricing_model IN ('free', 'freemium')`);
 
-    // Filter: regions
+    // Filter: regions (use array overlap with regions TEXT[])
     if (filtersSnapshot.regions && filtersSnapshot.regions.length > 0) {
       // Always include 'global' + specified regions
       const regions = [...new Set(['global', ...filtersSnapshot.regions])];
-      conditions.push(`d.region_scope = ANY($${paramIndex})`);
+      conditions.push(`d.regions && $${paramIndex}::text[]`);
       params.push(regions);
       paramIndex++;
     }
 
-    // Filter: tiers
+    // Filter: tiers (use tier_num INT column)
     if (filtersSnapshot.tiers && filtersSnapshot.tiers.length > 0) {
-      conditions.push(`d.tier = ANY($${paramIndex})`);
+      conditions.push(`d.tier_num = ANY($${paramIndex}::int[])`);
       params.push(filtersSnapshot.tiers);
       paramIndex++;
     }
 
     // Filter: directory types
     if (filtersSnapshot.directory_types && filtersSnapshot.directory_types.length > 0) {
-      conditions.push(`d.directory_type = ANY($${paramIndex})`);
+      conditions.push(`d.directory_type = ANY($${paramIndex}::text[])`);
       params.push(filtersSnapshot.directory_types);
       paramIndex++;
     }
@@ -252,12 +368,13 @@ class CampaignRunService {
     }
     // 'case_by_case' = no additional filtering
 
-    // Exclude already submitted directories (from any campaign, excluding failed/skipped)
+    // Exclude already submitted directories (from any campaign)
+    // Use valid statuses only (removed 'cancelled' from exclusion if not used)
     conditions.push(`NOT EXISTS (
       SELECT 1 FROM directory_submissions ds
       WHERE ds.directory_id = d.id
         AND ds.user_id = $${paramIndex}
-        AND ds.status NOT IN ('failed', 'skipped', 'cancelled', 'blocked')
+        AND ds.status NOT IN ('failed', 'skipped', 'blocked', 'rejected')
     )`);
     params.push(campaignRun.user_id);
     paramIndex++;
@@ -270,18 +387,33 @@ class CampaignRunService {
         d.*
       FROM directories d
       WHERE ${conditions.join(' AND ')}
-      ORDER BY d.priority_score DESC, d.tier ASC, d.name ASC
+      ORDER BY
+        COALESCE(d.priority_score, 0) DESC,
+        d.tier_num ASC,
+        d.name ASC
       LIMIT $${paramIndex}
     `;
 
-    const result = await db.query(query, params);
+    console.log('selectDirectories query:', query);
+    console.log('selectDirectories params:', params);
+
+    const result = await client.query(query, params);
     return result.rows;
   }
 
   /**
    * Create submission records for selected directories
+   * UPDATED with correct column mapping
    */
   async createSubmissions(campaignRun, directories) {
+    return this.createSubmissionsTx({ query: db.query.bind(db) }, campaignRun, directories);
+  }
+
+  /**
+   * Create submission records - transaction version
+   * UPDATED with correct column mapping
+   */
+  async createSubmissionsTx(client, campaignRun, directories) {
     if (directories.length === 0) {
       return [];
     }
@@ -291,26 +423,33 @@ class CampaignRunService {
     for (let i = 0; i < directories.length; i++) {
       const directory = directories[i];
 
-      // Create directory snapshot
+      // Create directory snapshot with actual column names
       const directorySnapshot = {
         id: directory.id,
         name: directory.name,
-        slug: directory.slug,
-        website_url: directory.website_url,
+        slug: directory.slug || directory.name.toLowerCase().replace(/\s+/g, '-'),
+        website_url: directory.url || directory.website_url,
         submission_url: directory.submission_url,
-        submission_mode: directory.submission_mode,
-        verification_method: directory.verification_method,
-        requires_account: directory.requires_account,
+        submission_mode: directory.submission_mode || 'manual',
+        verification_method: directory.verification_method || 'email',
+        requires_account: directory.requires_account ?? true,
+        requires_customer_account: directory.requires_customer_account || false,
         account_creation_url: directory.account_creation_url,
-        required_fields: directory.required_fields,
-        approval_type: directory.approval_type,
-        typical_approval_days: directory.typical_approval_days,
+        required_fields: directory.required_fields || ["name", "url", "short_description"],
+        approval_type: directory.approval_type || 'review',
+        typical_approval_days: directory.typical_approval_days || 7,
+        tier_num: directory.tier_num,
+        priority_score: directory.priority_score,
+        pricing_model: directory.pricing_model,
+        directory_type: directory.directory_type,
         snapshot_at: new Date().toISOString()
       };
 
-      const verificationStatus = directory.verification_method === 'none' ? 'not_required' : 'pending';
+      const verificationStatus = (directory.verification_method === 'none' || !directory.verification_method)
+        ? 'not_required'
+        : 'pending';
 
-      const result = await db.query(`
+      const result = await client.query(`
         INSERT INTO directory_submissions (
           campaign_run_id,
           user_id,
@@ -333,11 +472,11 @@ class CampaignRunService {
         campaignRun.user_id,
         directory.id,
         directory.name,
-        directory.website_url,
+        directory.url || directory.website_url,
         JSON.stringify(directorySnapshot),
-        directory.verification_method,
+        directory.verification_method || 'email',
         verificationStatus,
-        directory.priority_score,
+        directory.priority_score || 50,
         i + 1 // queue position (1-indexed)
       ]);
 
