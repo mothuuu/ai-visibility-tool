@@ -46,33 +46,45 @@ async function runMigration() {
       console.log('  (tier_num already NOT NULL or has NULLs, continuing...)');
     }
 
-    // 2. Add regions array (normalized from region_market)
+    // 2. Add regions array (normalized from region_market if it exists)
     console.log('  Adding regions TEXT[] column...');
     await db.query(`
       ALTER TABLE directories
       ADD COLUMN IF NOT EXISTS regions TEXT[]
     `);
 
-    // Backfill regions from region_market string
+    // Check if region_market column exists
+    const regionMarketCheck = await db.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'directories' AND column_name = 'region_market'
+    `);
+    const hasRegionMarket = regionMarketCheck.rows.length > 0;
+
+    // Backfill regions
     console.log('  Backfilling regions array...');
-    await db.query(`UPDATE directories SET regions = ARRAY['global'] WHERE region_market IS NULL AND regions IS NULL`);
-    await db.query(`UPDATE directories SET regions = ARRAY['global'] WHERE region_market ILIKE '%global%' AND regions IS NULL`);
+    if (hasRegionMarket) {
+      console.log('    Found region_market column, parsing values...');
+      await db.query(`UPDATE directories SET regions = ARRAY['global'] WHERE region_market IS NULL AND regions IS NULL`);
+      await db.query(`UPDATE directories SET regions = ARRAY['global'] WHERE region_market ILIKE '%global%' AND regions IS NULL`);
 
-    // Parse comma-separated region_market into array
-    await db.query(`
-      UPDATE directories SET regions =
-        ARRAY(
-          SELECT DISTINCT LOWER(TRIM(r))
-          FROM unnest(string_to_array(region_market, ',')) AS r
-        )
-      WHERE region_market IS NOT NULL AND regions IS NULL
-    `);
+      // Parse comma-separated region_market into array
+      await db.query(`
+        UPDATE directories SET regions =
+          ARRAY(
+            SELECT DISTINCT LOWER(TRIM(r))
+            FROM unnest(string_to_array(region_market, ',')) AS r
+          )
+        WHERE region_market IS NOT NULL AND regions IS NULL
+      `);
 
-    // Normalize common patterns
-    await db.query(`
-      UPDATE directories SET regions = ARRAY['global']
-      WHERE regions @> ARRAY['worldwide'] OR regions @> ARRAY['international']
-    `);
+      // Normalize common patterns
+      await db.query(`
+        UPDATE directories SET regions = ARRAY['global']
+        WHERE regions @> ARRAY['worldwide'] OR regions @> ARRAY['international']
+      `);
+    } else {
+      console.log('    No region_market column found, defaulting all to global...');
+    }
 
     // Ensure 'global' is in all regions arrays
     await db.query(`
@@ -90,40 +102,74 @@ async function runMigration() {
       ADD COLUMN IF NOT EXISTS priority_score INTEGER DEFAULT 50
     `);
 
-    // Backfill priority_score based on tier + domain_rating
-    console.log('  Backfilling priority_score...');
-    await db.query(`
-      UPDATE directories SET priority_score =
-        CASE
-          WHEN tier_num = 1 THEN 80 + COALESCE(domain_rating::int / 5, 0)
-          WHEN tier_num = 2 THEN 60 + COALESCE(domain_rating::int / 5, 0)
-          WHEN tier_num = 3 THEN 40 + COALESCE(domain_rating::int / 5, 0)
-          ELSE 50
-        END
-      WHERE priority_score IS NULL OR priority_score = 50
+    // Check if domain_rating column exists
+    const domainRatingCheck = await db.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'directories' AND column_name = 'domain_rating'
     `);
+    const hasDomainRating = domainRatingCheck.rows.length > 0;
+
+    // Backfill priority_score based on tier (and domain_rating if available)
+    console.log('  Backfilling priority_score...');
+    if (hasDomainRating) {
+      await db.query(`
+        UPDATE directories SET priority_score =
+          CASE
+            WHEN tier_num = 1 THEN 80 + COALESCE(domain_rating::int / 5, 0)
+            WHEN tier_num = 2 THEN 60 + COALESCE(domain_rating::int / 5, 0)
+            WHEN tier_num = 3 THEN 40 + COALESCE(domain_rating::int / 5, 0)
+            ELSE 50
+          END
+        WHERE priority_score IS NULL OR priority_score = 50
+      `);
+    } else {
+      console.log('    No domain_rating column, using tier-based priority only...');
+      await db.query(`
+        UPDATE directories SET priority_score =
+          CASE
+            WHEN tier_num = 1 THEN 80
+            WHEN tier_num = 2 THEN 60
+            WHEN tier_num = 3 THEN 40
+            ELSE 50
+          END
+        WHERE priority_score IS NULL OR priority_score = 50
+      `);
+    }
 
     // Ensure no NULLs
     await db.query(`UPDATE directories SET priority_score = 50 WHERE priority_score IS NULL`);
 
-    // 4. Add pricing_model (map from pricing_type)
+    // 4. Add pricing_model (map from pricing_type if it exists)
     console.log('  Adding pricing_model column...');
     await db.query(`
       ALTER TABLE directories
       ADD COLUMN IF NOT EXISTS pricing_model VARCHAR(50) DEFAULT 'free'
     `);
 
-    // Backfill from existing pricing_type
-    await db.query(`
-      UPDATE directories SET pricing_model =
-        CASE
-          WHEN pricing_type ILIKE '%free%' THEN 'free'
-          WHEN pricing_type ILIKE '%freemium%' THEN 'freemium'
-          WHEN pricing_type ILIKE '%paid%' THEN 'paid_only'
-          ELSE 'free'
-        END
-      WHERE pricing_model IS NULL OR pricing_model = 'free'
+    // Check if pricing_type column exists
+    const pricingTypeCheck = await db.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'directories' AND column_name = 'pricing_type'
     `);
+    const hasPricingType = pricingTypeCheck.rows.length > 0;
+
+    // Backfill from existing pricing_type if available
+    if (hasPricingType) {
+      console.log('    Found pricing_type column, mapping values...');
+      await db.query(`
+        UPDATE directories SET pricing_model =
+          CASE
+            WHEN pricing_type ILIKE '%free%' THEN 'free'
+            WHEN pricing_type ILIKE '%freemium%' THEN 'freemium'
+            WHEN pricing_type ILIKE '%paid%' THEN 'paid_only'
+            ELSE 'free'
+          END
+        WHERE pricing_model IS NULL OR pricing_model = 'free'
+      `);
+    } else {
+      console.log('    No pricing_type column, defaulting all to free...');
+      await db.query(`UPDATE directories SET pricing_model = 'free' WHERE pricing_model IS NULL`);
+    }
 
     // 5. Add region_scope (for backward compatibility with service code)
     console.log('  Adding region_scope column...');
@@ -139,27 +185,40 @@ async function runMigration() {
       WHERE region_scope IS NULL OR region_scope = 'global'
     `);
 
-    // 6. Add directory_type (map from category)
+    // 6. Add directory_type (map from category if it exists)
     console.log('  Adding directory_type column...');
     await db.query(`
       ALTER TABLE directories
-      ADD COLUMN IF NOT EXISTS directory_type VARCHAR(50)
+      ADD COLUMN IF NOT EXISTS directory_type VARCHAR(50) DEFAULT 'saas_review'
     `);
 
-    // Backfill from category
-    await db.query(`
-      UPDATE directories SET directory_type =
-        CASE
-          WHEN category ILIKE '%ai%' OR category ILIKE '%artificial%' THEN 'ai_tools'
-          WHEN category ILIKE '%saas%' OR category ILIKE '%software%' OR category ILIKE '%review%' THEN 'saas_review'
-          WHEN category ILIKE '%startup%' OR category ILIKE '%product%hunt%' THEN 'startup'
-          WHEN category ILIKE '%business%' OR category ILIKE '%local%' OR category ILIKE '%citation%' THEN 'business_citation'
-          WHEN category ILIKE '%dev%' OR category ILIKE '%open%source%' OR category ILIKE '%github%' THEN 'dev_registry'
-          WHEN category ILIKE '%market%' OR category ILIKE '%alternative%' THEN 'marketplace'
-          ELSE 'saas_review'
-        END
-      WHERE directory_type IS NULL
+    // Check if category column exists
+    const categoryCheck = await db.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'directories' AND column_name = 'category'
     `);
+    const hasCategory = categoryCheck.rows.length > 0;
+
+    // Backfill from category if available
+    if (hasCategory) {
+      console.log('    Found category column, mapping values...');
+      await db.query(`
+        UPDATE directories SET directory_type =
+          CASE
+            WHEN category ILIKE '%ai%' OR category ILIKE '%artificial%' THEN 'ai_tools'
+            WHEN category ILIKE '%saas%' OR category ILIKE '%software%' OR category ILIKE '%review%' THEN 'saas_review'
+            WHEN category ILIKE '%startup%' OR category ILIKE '%product%hunt%' THEN 'startup'
+            WHEN category ILIKE '%business%' OR category ILIKE '%local%' OR category ILIKE '%citation%' THEN 'business_citation'
+            WHEN category ILIKE '%dev%' OR category ILIKE '%open%source%' OR category ILIKE '%github%' THEN 'dev_registry'
+            WHEN category ILIKE '%market%' OR category ILIKE '%alternative%' THEN 'marketplace'
+            ELSE 'saas_review'
+          END
+        WHERE directory_type IS NULL
+      `);
+    } else {
+      console.log('    No category column, defaulting all to saas_review...');
+      await db.query(`UPDATE directories SET directory_type = 'saas_review' WHERE directory_type IS NULL`);
+    }
 
     // 7. Add verification columns
     console.log('  Adding verification columns...');
