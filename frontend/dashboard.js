@@ -2001,7 +2001,7 @@ function updateBoostProgress() {
 }
 
 // Handle included plan CTA button click
-function handleIncludedCTA() {
+async function handleIncludedCTA() {
     const state = citationNetworkState;
 
     // First check if we have a business profile
@@ -2017,31 +2017,103 @@ function handleIncludedCTA() {
             navigateToSection('business-profile');
             break;
         case 'ready':
-            // Start submissions - for demo, simulate starting
-            showXeoAlert('Starting Submissions', 'Your directory submissions are starting!\n\nWe\'ll submit to ~3-5 directories per day.\n\n(This is a demo - actual functionality will be connected in Phase 2)');
-
-            // Simulate starting the process
-            citationNetworkState.includedStatus = 'in_progress';
-            citationNetworkState.includedProgress = {
-                total: 10,
-                submitted: 2,
-                live: 1,
-                pending: 1,
-                actionNeeded: 0
-            };
-            updateCitationNetworkUI();
+            // Start submissions - call real API
+            await startDirectorySubmissions();
             break;
         case 'in_progress':
         case 'complete':
-            // Show details modal or navigate to details page
-            showXeoAlert('Submission Details',
-                `Current Progress:\n\n` +
-                `• Submitted: ${state.includedProgress.submitted}\n` +
-                `• Live: ${state.includedProgress.live}\n` +
-                `• Pending: ${state.includedProgress.pending}\n` +
-                `• Action Needed: ${state.includedProgress.actionNeeded}\n\n` +
-                `(Detailed view will be available in Phase 2)`);
+            // Show details - navigate to submissions tab
+            const submissionsTab = document.querySelector('[data-citation-tab="submissions"]');
+            if (submissionsTab) {
+                submissionsTab.click();
+            }
             break;
+    }
+}
+
+// Start directory submissions via API
+async function startDirectorySubmissions() {
+    const authToken = localStorage.getItem('authToken');
+    if (!authToken) {
+        window.location.href = '/auth.html?redirect=' + encodeURIComponent(window.location.href);
+        return;
+    }
+
+    // Show loading state on button
+    const btn = document.getElementById('includedCTABtn');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading-spinner"></span> Starting...';
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/citation-network/start-submissions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ filters: {} })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            // Handle specific errors
+            if (data.code === 'PROFILE_REQUIRED' || data.code === 'PROFILE_INCOMPLETE') {
+                navigateToSection('business-profile');
+                return;
+            }
+
+            if (data.code === 'ACTIVE_CAMPAIGN_EXISTS') {
+                showXeoAlert('Campaign Active', 'You already have an active submission campaign running. Check the progress below.');
+                citationNetworkState.includedStatus = 'in_progress';
+                updateCitationNetworkUI();
+                return;
+            }
+
+            if (data.code === 'NO_ENTITLEMENT') {
+                showXeoAlert('No Submissions Available', 'You have used all your directory submissions for this period.\n\nUpgrade your plan or purchase a boost to continue.');
+                return;
+            }
+
+            if (data.code === 'NO_DIRECTORIES_AVAILABLE') {
+                showXeoAlert('No Directories Found', 'No eligible directories found matching your criteria.\n\nTry adjusting your filters or check back later.');
+                return;
+            }
+
+            throw new Error(data.error || 'Failed to start submissions');
+        }
+
+        // Success!
+        showXeoAlert('Submissions Started!',
+            `${data.directoriesQueued} directories have been queued for submission!\n\n` +
+            `We'll submit to ~3-5 directories per day.\n\n` +
+            `${data.entitlementRemaining} submissions remaining${citationNetworkState.plan !== 'freemium' ? ' this month' : ''}.`
+        );
+
+        // Update state
+        citationNetworkState.includedStatus = 'in_progress';
+        citationNetworkState.includedProgress = {
+            total: data.directoriesQueued,
+            submitted: 0,
+            live: 0,
+            pending: data.directoriesQueued,
+            actionNeeded: 0
+        };
+
+        // Refresh the UI
+        updateCitationNetworkUI();
+
+        // Also refresh from API to get latest data
+        await loadCitationNetworkData();
+
+    } catch (error) {
+        console.error('Start submissions error:', error);
+        showXeoAlert('Error', error.message || 'Failed to start submissions. Please try again.');
+    } finally {
+        // Restore button
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
     }
 }
 
@@ -2167,8 +2239,8 @@ async function loadCitationNetworkData() {
     }
 
     try {
-        // Fetch stats, profile, and orders in parallel
-        const [statsRes, profileRes, allocationRes] = await Promise.all([
+        // Fetch stats, profile, allocation, active campaign, and submission counts in parallel
+        const [statsRes, profileRes, allocationRes, activeCampaignRes, countsRes] = await Promise.all([
             fetch(`${API_BASE_URL}/citation-network/stats`, {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             }),
@@ -2176,6 +2248,12 @@ async function loadCitationNetworkData() {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             }),
             fetch(`${API_BASE_URL}/citation-network/allocation`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            }),
+            fetch(`${API_BASE_URL}/citation-network/active-campaign`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            }),
+            fetch(`${API_BASE_URL}/citation-network/submissions/counts`, {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             })
         ]);
@@ -2207,26 +2285,44 @@ async function loadCitationNetworkData() {
             }
         }
 
+        // Check for active campaign
+        if (activeCampaignRes.ok) {
+            const activeCampaignData = await activeCampaignRes.json();
+            if (activeCampaignData.hasActiveCampaign) {
+                citationNetworkState.includedStatus = 'in_progress';
+                citationNetworkState.activeCampaign = activeCampaignData.activeCampaign;
+            }
+        }
+
+        // Get submission counts
+        if (countsRes.ok) {
+            const countsData = await countsRes.json();
+            const counts = countsData.counts || {};
+
+            citationNetworkState.includedProgress = {
+                total: counts.total || 0,
+                submitted: (counts.submitted || 0) + (counts.pending_approval || 0),
+                live: (counts.live || 0) + (counts.verified || 0),
+                pending: (counts.queued || 0) + (counts.in_progress || 0),
+                actionNeeded: (counts.action_needed || 0) + (counts.needs_action || 0) + (counts.pending_verification || 0)
+            };
+
+            // If we have any submissions but no active campaign, we're likely complete
+            if (counts.total > 0 && citationNetworkState.includedStatus !== 'in_progress') {
+                citationNetworkState.includedStatus = 'in_progress';
+            }
+        }
+
         if (allocationRes.ok) {
             const allocation = await allocationRes.json();
 
             if (allocation.type === 'subscription') {
                 citationNetworkState.monthlyAllocation = allocation.allocation.base || 10;
-                citationNetworkState.includedProgress = {
-                    total: allocation.allocation.total || 10,
-                    submitted: allocation.allocation.used || 0,
-                    live: 0,
-                    pending: 0,
-                    actionNeeded: 0
-                };
-            } else if (allocation.type === 'order_based') {
-                citationNetworkState.includedProgress = {
-                    total: allocation.allocation.total || 0,
-                    submitted: allocation.allocation.submitted || 0,
-                    live: allocation.allocation.live || 0,
-                    pending: 0,
-                    actionNeeded: 0
-                };
+                // Merge with existing progress, don't overwrite
+                citationNetworkState.includedProgress.total = Math.max(
+                    citationNetworkState.includedProgress.total,
+                    allocation.allocation.total || 10
+                );
             }
         }
 
