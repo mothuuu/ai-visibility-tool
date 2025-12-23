@@ -157,42 +157,93 @@ class EntitlementService {
   async getMonthlyAllocation(userId, plan) {
     const normalizedPlan = normalizePlan(plan);
     const now = new Date();
-    const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
+    // Use ISO date string format for consistent DATE comparison in PostgreSQL
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth();
+    const periodStartStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const periodEndStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-    // Try to get existing allocation
-    let result = await db.query(`
-      SELECT * FROM subscriber_directory_allocations
-      WHERE user_id = $1 AND period_start = $2
-    `, [userId, periodStart]);
+    console.log(`[Entitlement] getMonthlyAllocation: userId=${userId}, plan=${normalizedPlan}, period=${periodStartStr} to ${periodEndStr}`);
 
-    // Auto-create if missing
-    if (result.rows.length === 0) {
-      const baseAllocation = normalizedPlan === 'agency' ? 100
-                           : normalizedPlan === 'enterprise' ? 50
-                           : normalizedPlan === 'pro' ? 25
-                           : normalizedPlan === 'diy' ? 10
-                           : 0;
+    // Calculate base allocation from plan
+    const baseAllocation = normalizedPlan === 'agency' ? 100
+                         : normalizedPlan === 'enterprise' ? 50
+                         : normalizedPlan === 'pro' ? 25
+                         : normalizedPlan === 'diy' ? 10
+                         : 0;
 
-      result = await db.query(`
-        INSERT INTO subscriber_directory_allocations
-        (user_id, period_start, period_end, base_allocation, pack_allocation, submissions_used, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, 0, 0, NOW(), NOW())
-        ON CONFLICT (user_id, period_start) DO UPDATE SET updated_at = NOW()
-        RETURNING *
-      `, [userId, periodStart, periodEnd, baseAllocation]);
+    console.log(`[Entitlement] Base allocation for ${normalizedPlan}: ${baseAllocation}`);
 
-      console.log(`[Entitlement] Created allocation for user ${userId}: ${baseAllocation} directories`);
+    if (baseAllocation === 0) {
+      console.log(`[Entitlement] WARNING: Plan ${normalizedPlan} has 0 base allocation`);
+      return { base: 0, packs: 0, total: 0, used: 0, remaining: 0 };
     }
 
-    const alloc = result.rows[0];
-    return {
-      base: alloc.base_allocation || 0,
-      packs: alloc.pack_allocation || 0,
-      total: (alloc.base_allocation || 0) + (alloc.pack_allocation || 0),
-      used: alloc.submissions_used || 0,
-      remaining: (alloc.base_allocation || 0) + (alloc.pack_allocation || 0) - (alloc.submissions_used || 0)
-    };
+    try {
+      // Use UPSERT pattern with ON CONFLICT ON CONSTRAINT
+      const result = await db.query(`
+        INSERT INTO subscriber_directory_allocations
+        (user_id, period_start, period_end, base_allocation, pack_allocation, submissions_used, created_at, updated_at)
+        VALUES ($1, $2::date, $3::date, $4, 0, 0, NOW(), NOW())
+        ON CONFLICT ON CONSTRAINT unique_user_period
+        DO UPDATE SET
+          base_allocation = GREATEST(subscriber_directory_allocations.base_allocation, EXCLUDED.base_allocation),
+          updated_at = NOW()
+        RETURNING *
+      `, [userId, periodStartStr, periodEndStr, baseAllocation]);
+
+      const alloc = result.rows[0];
+      console.log(`[Entitlement] Allocation record:`, {
+        id: alloc.id,
+        base: alloc.base_allocation,
+        packs: alloc.pack_allocation,
+        used: alloc.submissions_used
+      });
+
+      return {
+        base: alloc.base_allocation || 0,
+        packs: alloc.pack_allocation || 0,
+        total: (alloc.base_allocation || 0) + (alloc.pack_allocation || 0),
+        used: alloc.submissions_used || 0,
+        remaining: (alloc.base_allocation || 0) + (alloc.pack_allocation || 0) - (alloc.submissions_used || 0)
+      };
+    } catch (error) {
+      console.error(`[Entitlement] ERROR in getMonthlyAllocation:`, error.message);
+      console.error(`[Entitlement] Query params: userId=${userId}, periodStart=${periodStartStr}, baseAllocation=${baseAllocation}`);
+
+      // Fallback: try simple SELECT in case UPSERT failed
+      try {
+        const fallbackResult = await db.query(`
+          SELECT * FROM subscriber_directory_allocations
+          WHERE user_id = $1 AND period_start = $2::date
+        `, [userId, periodStartStr]);
+
+        if (fallbackResult.rows.length > 0) {
+          const alloc = fallbackResult.rows[0];
+          console.log(`[Entitlement] Fallback found existing allocation:`, alloc.id);
+          return {
+            base: alloc.base_allocation || 0,
+            packs: alloc.pack_allocation || 0,
+            total: (alloc.base_allocation || 0) + (alloc.pack_allocation || 0),
+            used: alloc.submissions_used || 0,
+            remaining: (alloc.base_allocation || 0) + (alloc.pack_allocation || 0) - (alloc.submissions_used || 0)
+          };
+        }
+      } catch (fallbackError) {
+        console.error(`[Entitlement] Fallback SELECT also failed:`, fallbackError.message);
+      }
+
+      // Last resort: return plan-based allocation without DB record
+      console.log(`[Entitlement] Using plan-based fallback: ${baseAllocation} directories`);
+      return {
+        base: baseAllocation,
+        packs: 0,
+        total: baseAllocation,
+        used: 0,
+        remaining: baseAllocation
+      };
+    }
   }
 
   /**
@@ -233,14 +284,16 @@ class EntitlementService {
 
     if (source === 'subscription') {
       const now = new Date();
-      const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const year = now.getUTCFullYear();
+      const month = now.getUTCMonth();
+      const periodStartStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
 
       await db.query(`
         UPDATE subscriber_directory_allocations
         SET submissions_used = submissions_used + $1,
             updated_at = NOW()
-        WHERE user_id = $2 AND period_start = $3
-      `, [count, userId, periodStart]);
+        WHERE user_id = $2 AND period_start = $3::date
+      `, [count, userId, periodStartStr]);
     } else if (source === 'order') {
       // Distribute across orders (FIFO - oldest first)
       let remaining = count;
