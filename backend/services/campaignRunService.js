@@ -175,13 +175,15 @@ class CampaignRunService {
   }
 
   /**
-   * Get business profile
+   * Get business profile - uses ORDER BY to get most recent
    */
   async getBusinessProfile(userId) {
-    const result = await db.query(
-      'SELECT * FROM business_profiles WHERE user_id = $1',
-      [userId]
-    );
+    const result = await db.query(`
+      SELECT * FROM business_profiles
+      WHERE user_id = $1
+      ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
+      LIMIT 1
+    `, [userId]);
     return result.rows[0] || null;
   }
 

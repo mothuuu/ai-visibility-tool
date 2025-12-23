@@ -97,6 +97,21 @@ const TIMEOUT_POLICY = {
 };
 
 // ============================================================================
+// AUTH TOKEN HELPER
+// ============================================================================
+
+/**
+ * Get normalized auth token from localStorage
+ * Handles both 'authToken' and 'token' keys, strips accidental 'Bearer ' prefix
+ */
+function getNormalizedAuthToken() {
+    const raw = localStorage.getItem('authToken') || localStorage.getItem('token');
+    if (!raw) return null;
+    // Strip "Bearer " prefix if accidentally stored with it
+    return raw.startsWith('Bearer ') ? raw.slice(7) : raw;
+}
+
+// ============================================================================
 
 /**
  * Convert backend score (0-100) to display score (0-1000)
@@ -416,6 +431,13 @@ function setupNavigation() {
 
 // Navigate to a specific section
 function navigateToSection(sectionId) {
+    // Validate section exists - fallback to citation-network if not found
+    const targetSection = document.getElementById(sectionId);
+    if (!targetSection) {
+        console.error(`navigateToSection: section "${sectionId}" not found, falling back to citation-network`);
+        sectionId = 'citation-network';
+    }
+
     // Update active nav item
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
@@ -2033,17 +2055,19 @@ async function handleIncludedCTA() {
 
 // Start directory submissions via API
 async function startDirectorySubmissions() {
-    const authToken = localStorage.getItem('authToken');
+    const authToken = getNormalizedAuthToken();
     if (!authToken) {
-        window.location.href = '/auth.html?redirect=' + encodeURIComponent(window.location.href);
+        showXeoAlert('Login Required', 'Please log in to start submissions.');
         return;
     }
 
     // Show loading state on button
     const btn = document.getElementById('includedCTABtn');
-    const originalHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="loading-spinner"></span> Starting...';
+    const originalHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading-spinner"></span> Starting...';
+    }
 
     try {
         const response = await fetch(`${API_BASE_URL}/citation-network/start-submissions`, {
@@ -2060,7 +2084,19 @@ async function startDirectorySubmissions() {
         if (!response.ok) {
             // Handle specific errors
             if (data.code === 'PROFILE_REQUIRED' || data.code === 'PROFILE_INCOMPLETE') {
-                navigateToSection('business-profile');
+                // Restore button before showing dialog
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+                showXeoConfirm('Complete Your Profile',
+                    'Please complete your business profile before starting submissions.\n\nWould you like to complete it now?',
+                    function(confirmed) {
+                        if (confirmed) {
+                            navigateToSection('business-profile');
+                        }
+                    }
+                );
                 return;
             }
 
@@ -2112,8 +2148,10 @@ async function startDirectorySubmissions() {
         showXeoAlert('Error', error.message || 'Failed to start submissions. Please try again.');
     } finally {
         // Restore button
-        btn.disabled = false;
-        btn.innerHTML = originalHtml;
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
     }
 }
 
@@ -2146,7 +2184,7 @@ async function handleBoostPurchase() {
                         'Please complete your business profile before purchasing a directory pack.\n\nWould you like to set it up now?',
                         function(confirmed) {
                             if (confirmed) {
-                                navigateToSection('citation-network-profile');
+                                navigateToSection('business-profile');
                             }
                         }
                     );
@@ -2212,7 +2250,7 @@ async function startCitationNetworkCheckout() {
 
         if (!response.ok) {
             if (data.redirect) {
-                navigateToSection('citation-network-profile');
+                navigateToSection('business-profile');
                 return;
             }
             throw new Error(data.error || 'Checkout failed');
@@ -2232,7 +2270,7 @@ async function startCitationNetworkCheckout() {
 
 // Load real citation network data from API
 async function loadCitationNetworkData() {
-    const authToken = localStorage.getItem('authToken');
+    const authToken = getNormalizedAuthToken();
 
     if (!authToken) {
         return; // Not logged in, keep mock state
@@ -2278,11 +2316,29 @@ async function loadCitationNetworkData() {
 
         if (profileRes.ok) {
             const profileData = await profileRes.json();
-            citationNetworkState.hasBusinessProfile = profileData.hasProfile;
 
-            if (profileData.hasProfile) {
-                citationNetworkState.includedStatus = 'ready';
+            // Use BACKEND is_complete, not just hasProfile
+            const profileComplete = profileData?.profile?.is_complete === true;
+
+            citationNetworkState.hasBusinessProfile = profileComplete;
+            citationNetworkState.includedStatus = profileComplete ? 'ready' : 'no_profile';
+
+            // Sync localStorage with backend truth
+            if (profileData.profile) {
+                const localProfile = JSON.parse(localStorage.getItem('businessProfile') || '{}');
+                if (localProfile.is_complete !== profileComplete) {
+                    // Backend disagrees with local - backend wins
+                    localStorage.setItem('businessProfile', JSON.stringify({
+                        ...localProfile,
+                        ...profileData.profile,
+                        is_complete: profileComplete
+                    }));
+                }
             }
+        } else {
+            // No profile or error
+            citationNetworkState.hasBusinessProfile = false;
+            citationNetworkState.includedStatus = 'no_profile';
         }
 
         // Check for active campaign
@@ -3654,44 +3710,59 @@ function collectProfileFormData() {
 
 async function saveBusinessProfile(formData) {
     try {
-        // Save to localStorage as backup
-        localStorage.setItem('businessProfile', JSON.stringify(formData));
-
-        // Save to backend API
-        const authToken = localStorage.getItem('authToken');
-        if (authToken) {
-            const response = await fetch(`${API_BASE_URL}/citation-network/profile`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`
-                },
-                body: JSON.stringify(formData)
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                console.error('Failed to save profile to backend:', errorData);
-                throw new Error(errorData.error || 'Failed to save profile to server');
-            }
-
-            const result = await response.json();
-            console.log('Profile saved to backend:', result);
+        const authToken = getNormalizedAuthToken();
+        if (!authToken) {
+            showXeoAlert('Login Required', 'Please log in to save your business profile.');
+            return;
         }
 
-        // Update citation network state
-        citationNetworkState.hasBusinessProfile = true;
-        citationNetworkState.includedStatus = 'ready';
+        const response = await fetch(`${API_BASE_URL}/citation-network/profile`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify(formData)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Failed to save profile to backend:', errorData);
+            throw new Error(errorData.error || 'Failed to save profile to server');
+        }
+
+        const result = await response.json();
+        console.log('Profile saved to backend:', result);
+
+        // Use BACKEND-confirmed completion status (not local assumption)
+        const isComplete = result.isComplete ?? result.profile?.is_complete ?? false;
+        const completionPercentage = result.completionPercentage ?? result.profile?.completion_percentage ?? 0;
+
+        // Update state based on BACKEND response
+        citationNetworkState.hasBusinessProfile = isComplete;
+        citationNetworkState.includedStatus = isComplete ? 'ready' : 'no_profile';
+
+        // Save to localStorage with backend completion fields
+        localStorage.setItem('businessProfile', JSON.stringify({
+            ...formData,
+            ...result.profile,
+            is_complete: isComplete,
+            completion_percentage: completionPercentage
+        }));
 
         // Update phone policy state
         citationNetworkState.phonePolicy = {
-            allowPhoneOnListings: formData.allow_phone_on_listings,
-            allowPhoneVerification: formData.allow_phone_verification,
-            verificationPhone: formData.verification_phone
+            allowPhoneOnListings: formData.allow_phone_on_listings ?? formData._frontend_extra?.allow_phone_on_listings,
+            allowPhoneVerification: formData.allow_phone_verification ?? formData._frontend_extra?.allow_phone_verification,
+            verificationPhone: formData.verification_phone ?? formData._frontend_extra?.verification_phone
         };
 
-        // Show success message
-        showXeoAlert('Profile Saved!', 'Your business profile has been saved successfully.\n\nYou can now start directory submissions.');
+        // Show appropriate message based on completion status
+        const message = isComplete
+            ? 'Your business profile has been saved successfully.\n\nYou can now start directory submissions.'
+            : 'Your business profile has been saved.\n\nPlease complete all required fields to start submissions.';
+
+        showXeoAlert('Profile Saved!', message);
 
         // Navigate back to citation network
         navigateToSection('citation-network');
@@ -3701,7 +3772,7 @@ async function saveBusinessProfile(formData) {
 
     } catch (error) {
         console.error('Failed to save profile:', error);
-        showXeoAlert('Error', 'Failed to save profile. Please try again.');
+        showXeoAlert('Save Failed', error.message || 'Failed to save profile. Please try again.');
     }
 }
 
