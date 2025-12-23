@@ -3590,43 +3590,65 @@ async function handleProfileSubmit(event) {
 }
 
 function collectProfileFormData() {
+    // Collect social links
+    const social_links = {};
+    const linkedinUrl = document.getElementById('linkedinUrl')?.value?.trim();
+    const twitterUrl = document.getElementById('twitterUrl')?.value?.trim();
+    const facebookUrl = document.getElementById('facebookUrl')?.value?.trim();
+    if (linkedinUrl) social_links.linkedin = linkedinUrl;
+    if (twitterUrl) social_links.twitter = twitterUrl;
+    if (facebookUrl) social_links.facebook = facebookUrl;
+
+    // Build long description from multiple fields
+    const longDesc = document.getElementById('longDescription')?.value?.trim() || '';
+    const extendedDesc = document.getElementById('extendedDescription')?.value?.trim() || '';
+    const business_description = extendedDesc ? `${longDesc}\n\n${extendedDesc}` : longDesc;
+
+    // Get country - use headquarters country if no physical address
+    const hasPhysicalAddress = document.querySelector('input[name="has_physical_address"]:checked')?.value === 'true';
+    const country = hasPhysicalAddress
+        ? (document.getElementById('country')?.value || 'United States')
+        : (document.getElementById('headquartersCountry')?.value || 'United States');
+
+    // Return data matching backend API field names
     return {
+        // Core fields (backend expects these exact names)
         business_name: document.getElementById('businessName')?.value?.trim() || '',
         website_url: document.getElementById('websiteUrl')?.value?.trim() || '',
-        category: document.getElementById('businessCategory')?.value || '',
-        tagline: document.getElementById('tagline')?.value?.trim() || '',
         short_description: document.getElementById('shortDescription')?.value?.trim() || '',
-        long_description: document.getElementById('longDescription')?.value?.trim() || '',
-        extended_description: document.getElementById('extendedDescription')?.value?.trim() || '',
-        has_physical_address: document.querySelector('input[name="has_physical_address"]:checked')?.value === 'true',
-        street_address: document.getElementById('streetAddress')?.value?.trim() || '',
-        suite_unit: document.getElementById('suiteUnit')?.value?.trim() || '',
-        city: document.getElementById('city')?.value?.trim() || '',
-        state_province: document.getElementById('stateProvince')?.value?.trim() || '',
-        postal_code: document.getElementById('postalCode')?.value?.trim() || '',
-        country: document.getElementById('country')?.value || '',
-        headquarters_country: document.getElementById('headquartersCountry')?.value || '',
+        business_description: business_description,
+        primary_category: document.getElementById('businessCategory')?.value || '',
         phone: document.getElementById('businessPhone')?.value?.trim() || '',
-        business_email: document.getElementById('businessEmail')?.value?.trim() || '',
-        contact_person: document.getElementById('contactPerson')?.value?.trim() || '',
-        inbox_preference: document.querySelector('input[name="inbox_preference"]:checked')?.value || 'managed',
-        customer_verification_email: document.getElementById('customerVerificationEmail')?.value?.trim() || '',
-        verification_phone: document.getElementById('verificationPhone')?.value?.trim() || '',
-        allow_phone_on_listings: document.getElementById('allowPhoneOnListings')?.checked ?? true,
-        allow_phone_verification: document.getElementById('allowPhoneVerification')?.checked ?? true,
-        year_founded: document.getElementById('yearFounded')?.value || '',
-        linkedin_url: document.getElementById('linkedinUrl')?.value?.trim() || '',
-        twitter_url: document.getElementById('twitterUrl')?.value?.trim() || '',
-        facebook_url: document.getElementById('facebookUrl')?.value?.trim() || '',
+        email: document.getElementById('businessEmail')?.value?.trim() || '',
+        address_line1: document.getElementById('streetAddress')?.value?.trim() || '',
+        address_line2: document.getElementById('suiteUnit')?.value?.trim() || '',
+        city: document.getElementById('city')?.value?.trim() || '',
+        state: document.getElementById('stateProvince')?.value?.trim() || '',
+        postal_code: document.getElementById('postalCode')?.value?.trim() || '',
+        country: country,
+        year_founded: document.getElementById('yearFounded')?.value || null,
         logo_url: currentLogoDataUrl || '',
-        is_saas_product: document.getElementById('isSaasProduct')?.checked || false,
-        pricing_model: document.getElementById('pricingModel')?.value || '',
-        key_features: keyFeatures,
-        integrations: document.getElementById('integrations')?.value?.trim() || '',
-        use_case_tags: useCaseTags,
-        consent_accepted: document.getElementById('consentAccepted')?.checked || false,
-        consent_accepted_at: new Date().toISOString(),
-        profile_completed_at: new Date().toISOString()
+        social_links: social_links,
+
+        // Additional fields for frontend state (not saved to backend profile table)
+        _frontend_extra: {
+            tagline: document.getElementById('tagline')?.value?.trim() || '',
+            has_physical_address: hasPhysicalAddress,
+            contact_person: document.getElementById('contactPerson')?.value?.trim() || '',
+            inbox_preference: document.querySelector('input[name="inbox_preference"]:checked')?.value || 'managed',
+            customer_verification_email: document.getElementById('customerVerificationEmail')?.value?.trim() || '',
+            verification_phone: document.getElementById('verificationPhone')?.value?.trim() || '',
+            allow_phone_on_listings: document.getElementById('allowPhoneOnListings')?.checked ?? true,
+            allow_phone_verification: document.getElementById('allowPhoneVerification')?.checked ?? true,
+            is_saas_product: document.getElementById('isSaasProduct')?.checked || false,
+            pricing_model: document.getElementById('pricingModel')?.value || '',
+            key_features: keyFeatures,
+            integrations: document.getElementById('integrations')?.value?.trim() || '',
+            use_case_tags: useCaseTags,
+            consent_accepted: document.getElementById('consentAccepted')?.checked || false,
+            consent_accepted_at: new Date().toISOString(),
+            profile_completed_at: new Date().toISOString()
+        }
     };
 }
 
@@ -3710,23 +3732,58 @@ function loadExistingProfile() {
 }
 
 function populateProfileForm(profile) {
-    // Populate form fields with saved data
+    // Handle both backend API format and frontend extra fields
+    const extra = profile._frontend_extra || {};
+
+    // Populate form fields with saved data (handle both old and new field names)
     if (profile.business_name) document.getElementById('businessName').value = profile.business_name;
     if (profile.website_url) document.getElementById('websiteUrl').value = profile.website_url;
-    if (profile.category) document.getElementById('businessCategory').value = profile.category;
-    if (profile.tagline) document.getElementById('tagline').value = profile.tagline;
+
+    // Category: backend uses primary_category, old localStorage used category
+    const category = profile.primary_category || profile.category;
+    if (category) document.getElementById('businessCategory').value = category;
+
+    // Tagline is frontend-only
+    const tagline = extra.tagline || profile.tagline;
+    if (tagline) document.getElementById('tagline').value = tagline;
+
     if (profile.short_description) document.getElementById('shortDescription').value = profile.short_description;
-    if (profile.long_description) document.getElementById('longDescription').value = profile.long_description;
+
+    // Description: backend uses business_description, old localStorage used long_description
+    const longDesc = profile.business_description || profile.long_description;
+    if (longDesc) document.getElementById('longDescription').value = longDesc;
+
+    // Extended description is frontend-only
     if (profile.extended_description) document.getElementById('extendedDescription').value = profile.extended_description;
+
     if (profile.phone) document.getElementById('businessPhone').value = profile.phone;
-    if (profile.business_email) document.getElementById('businessEmail').value = profile.business_email;
-    if (profile.contact_person) document.getElementById('contactPerson').value = profile.contact_person;
-    if (profile.verification_phone) document.getElementById('verificationPhone').value = profile.verification_phone;
+
+    // Email: backend uses email, old localStorage used business_email
+    const email = profile.email || profile.business_email;
+    if (email) document.getElementById('businessEmail').value = email;
+
+    // Contact person is frontend-only
+    const contactPerson = extra.contact_person || profile.contact_person;
+    if (contactPerson) document.getElementById('contactPerson').value = contactPerson;
+
+    const verificationPhone = extra.verification_phone || profile.verification_phone;
+    if (verificationPhone) document.getElementById('verificationPhone').value = verificationPhone;
+
     if (profile.year_founded) document.getElementById('yearFounded').value = profile.year_founded;
-    if (profile.linkedin_url) document.getElementById('linkedinUrl').value = profile.linkedin_url;
-    if (profile.twitter_url) document.getElementById('twitterUrl').value = profile.twitter_url;
-    if (profile.facebook_url) document.getElementById('facebookUrl').value = profile.facebook_url;
-    if (profile.integrations) document.getElementById('integrations').value = profile.integrations;
+
+    // Social links: backend stores as object, old localStorage used separate fields
+    if (profile.social_links) {
+        if (profile.social_links.linkedin) document.getElementById('linkedinUrl').value = profile.social_links.linkedin;
+        if (profile.social_links.twitter) document.getElementById('twitterUrl').value = profile.social_links.twitter;
+        if (profile.social_links.facebook) document.getElementById('facebookUrl').value = profile.social_links.facebook;
+    } else {
+        if (profile.linkedin_url) document.getElementById('linkedinUrl').value = profile.linkedin_url;
+        if (profile.twitter_url) document.getElementById('twitterUrl').value = profile.twitter_url;
+        if (profile.facebook_url) document.getElementById('facebookUrl').value = profile.facebook_url;
+    }
+
+    const integrations = extra.integrations || profile.integrations;
+    if (integrations) document.getElementById('integrations').value = integrations;
 
     // Restore logo if available
     if (profile.logo_url) {
@@ -3744,53 +3801,67 @@ function populateProfileForm(profile) {
         }
     }
 
-    // Handle address fields
-    if (profile.has_physical_address !== null) {
-        const radioValue = profile.has_physical_address ? 'true' : 'false';
+    // Handle address fields (check both old and new field names)
+    const hasPhysicalAddress = extra.has_physical_address ?? profile.has_physical_address;
+    const hasAddress = profile.address_line1 || profile.street_address || profile.city;
+
+    if (hasPhysicalAddress !== undefined || hasAddress) {
+        const radioValue = (hasPhysicalAddress || hasAddress) ? 'true' : 'false';
         const radio = document.querySelector(`input[name="has_physical_address"][value="${radioValue}"]`);
         if (radio) {
             radio.checked = true;
-            toggleAddressFields(profile.has_physical_address);
+            toggleAddressFields(hasPhysicalAddress || hasAddress);
         }
 
-        if (profile.has_physical_address) {
-            if (profile.street_address) document.getElementById('streetAddress').value = profile.street_address;
-            if (profile.suite_unit) document.getElementById('suiteUnit').value = profile.suite_unit;
+        if (hasPhysicalAddress || hasAddress) {
+            // Handle both backend (address_line1) and old localStorage (street_address) names
+            const streetAddress = profile.address_line1 || profile.street_address;
+            const suiteUnit = profile.address_line2 || profile.suite_unit;
+            const state = profile.state || profile.state_province;
+
+            if (streetAddress) document.getElementById('streetAddress').value = streetAddress;
+            if (suiteUnit) document.getElementById('suiteUnit').value = suiteUnit;
             if (profile.city) document.getElementById('city').value = profile.city;
-            if (profile.state_province) document.getElementById('stateProvince').value = profile.state_province;
+            if (state) document.getElementById('stateProvince').value = state;
             if (profile.postal_code) document.getElementById('postalCode').value = profile.postal_code;
             if (profile.country) document.getElementById('country').value = profile.country;
         } else {
-            if (profile.headquarters_country) document.getElementById('headquartersCountry').value = profile.headquarters_country;
+            const hqCountry = profile.headquarters_country || profile.country;
+            if (hqCountry) document.getElementById('headquartersCountry').value = hqCountry;
         }
     }
 
-    // Handle inbox preference
-    if (profile.inbox_preference) {
-        const radio = document.querySelector(`input[name="inbox_preference"][value="${profile.inbox_preference}"]`);
+    // Handle inbox preference (frontend-only)
+    const inboxPreference = extra.inbox_preference || profile.inbox_preference;
+    if (inboxPreference) {
+        const radio = document.querySelector(`input[name="inbox_preference"][value="${inboxPreference}"]`);
         if (radio) {
             radio.checked = true;
-            toggleInboxPreference(profile.inbox_preference);
+            toggleInboxPreference(inboxPreference);
         }
-        if (profile.customer_verification_email) {
-            document.getElementById('customerVerificationEmail').value = profile.customer_verification_email;
+        const custEmail = extra.customer_verification_email || profile.customer_verification_email;
+        if (custEmail) {
+            document.getElementById('customerVerificationEmail').value = custEmail;
         }
     }
 
-    // Handle SaaS fields
-    if (profile.is_saas_product) {
+    // Handle SaaS fields (frontend-only)
+    const isSaas = extra.is_saas_product || profile.is_saas_product;
+    if (isSaas) {
         document.getElementById('isSaasProduct').checked = true;
         toggleSaasFields();
-        if (profile.pricing_model) document.getElementById('pricingModel').value = profile.pricing_model;
+        const pricingModel = extra.pricing_model || profile.pricing_model;
+        if (pricingModel) document.getElementById('pricingModel').value = pricingModel;
 
-        keyFeatures = profile.key_features || [];
-        useCaseTags = profile.use_case_tags || [];
+        keyFeatures = extra.key_features || profile.key_features || [];
+        useCaseTags = extra.use_case_tags || profile.use_case_tags || [];
         renderFeatureTags();
         renderUseCaseTags();
     }
 
-    // Handle consent
-    if (profile.consent_accepted) {
+    // Handle consent (frontend-only)
+    const consentAccepted = extra.consent_accepted || profile.consent_accepted;
+    if (consentAccepted) {
         document.getElementById('consentAccepted').checked = true;
     }
 
