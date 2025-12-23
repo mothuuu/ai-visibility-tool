@@ -30,11 +30,11 @@ async function runMigration() {
       ADD COLUMN IF NOT EXISTS tier_num SMALLINT
     `);
 
-    // Backfill tier_num from existing tier column
+    // Backfill tier_num from existing tier column (handles "Tier 1", "Tier 2", "Tier 3", "1", "2", "3")
     console.log('  Backfilling tier_num from tier...');
-    await db.query(`UPDATE directories SET tier_num = 1 WHERE tier = 'Tier 1' OR tier::text = '1'`);
-    await db.query(`UPDATE directories SET tier_num = 2 WHERE tier = 'Tier 2' OR tier::text = '2'`);
-    await db.query(`UPDATE directories SET tier_num = 3 WHERE tier = 'Tier 3' OR tier::text = '3'`);
+    await db.query(`UPDATE directories SET tier_num = 1 WHERE tier_num IS NULL AND (tier ILIKE '%1%' OR tier ILIKE 'tier 1')`);
+    await db.query(`UPDATE directories SET tier_num = 2 WHERE tier_num IS NULL AND (tier ILIKE '%2%' OR tier ILIKE 'tier 2')`);
+    await db.query(`UPDATE directories SET tier_num = 3 WHERE tier_num IS NULL AND (tier ILIKE '%3%' OR tier ILIKE 'tier 3')`);
     await db.query(`UPDATE directories SET tier_num = 2 WHERE tier_num IS NULL`); // Default to tier 2
 
     // Make tier_num NOT NULL with default
