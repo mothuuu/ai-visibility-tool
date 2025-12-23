@@ -1817,11 +1817,11 @@ const planAllocations = {
 
 // Initialize Citation Network UI
 async function initCitationNetwork() {
-    // Initialize submissions data (mock data for now)
-    initSubmissionsData();
-
     // Load real data from API (will update state)
     await loadCitationNetworkData();
+
+    // Initialize submissions data from API
+    await initSubmissionsData();
 
     // Update main Citation Network UI
     updateCitationNetworkUI();
@@ -2640,11 +2640,66 @@ function calculateDaysRemaining(actionRequiredAt) {
     return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
-// Initialize submissions data
-function initSubmissionsData() {
-    // Load mock data for demo
-    citationNetworkState.submissions = [...mockSubmissions];
-    citationNetworkState.blockedSubmissions = [...mockBlockedSubmissions];
+// Initialize submissions data - fetch from API
+async function initSubmissionsData() {
+    const authToken = getNormalizedAuthToken();
+
+    if (!authToken) {
+        // Not logged in - show empty state
+        citationNetworkState.submissions = [];
+        citationNetworkState.blockedSubmissions = [];
+        citationNetworkState.credentials = [...mockCredentials];
+        updateProgressFromSubmissions();
+        return;
+    }
+
+    try {
+        // Fetch real submissions from API
+        const response = await fetch(`${API_BASE_URL}/citation-network/campaign-submissions`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const submissions = data.submissions || [];
+
+            // Map backend data to frontend format
+            citationNetworkState.submissions = submissions.map(sub => ({
+                id: sub.id,
+                directoryId: sub.directory_id,
+                directoryName: sub.directory_snapshot?.name || sub.directory_name || 'Unknown Directory',
+                directoryLogo: sub.directory_snapshot?.logo_url || `https://logo.clearbit.com/${sub.directory_snapshot?.domain || 'example.com'}`,
+                status: sub.status || SUBMISSION_STATUS.QUEUED,
+                actionType: sub.action_type || ACTION_REQUIRED_TYPE.NONE,
+                actionInstructions: sub.action_instructions,
+                actionRequiredAt: sub.action_required_at,
+                submittedAt: sub.submitted_at,
+                liveAt: sub.live_at,
+                verifiedAt: sub.verified_at,
+                listingUrl: sub.listing_url,
+                blockedAt: sub.blocked_at,
+                blockedReason: sub.blocked_reason,
+                daysRemaining: sub.action_required_at ? calculateDaysRemaining(sub.action_required_at) : null
+            }));
+
+            // Separate blocked submissions
+            citationNetworkState.blockedSubmissions = citationNetworkState.submissions.filter(
+                sub => sub.status === SUBMISSION_STATUS.BLOCKED
+            );
+
+            console.log('[Submissions] Loaded', citationNetworkState.submissions.length, 'real submissions');
+        } else {
+            console.warn('[Submissions] Failed to fetch, using empty state');
+            citationNetworkState.submissions = [];
+            citationNetworkState.blockedSubmissions = [];
+        }
+    } catch (error) {
+        console.error('[Submissions] Error fetching submissions:', error);
+        citationNetworkState.submissions = [];
+        citationNetworkState.blockedSubmissions = [];
+    }
+
+    // Keep mock credentials for now (these would come from a separate vault system)
     citationNetworkState.credentials = [...mockCredentials];
 
     // Calculate progress from submissions
