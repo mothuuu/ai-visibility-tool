@@ -381,6 +381,202 @@ router.post('/profile', authenticateToken, async (req, res) => {
 });
 
 /**
+ * POST /api/citation-network/start-submissions
+ * Start the directory submission process
+ */
+router.post('/start-submissions', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // 1. Check if user has a completed business profile
+    const profileResult = await db.query(
+      'SELECT id, is_complete, business_name FROM business_profiles WHERE user_id = $1',
+      [userId]
+    );
+
+    if (profileResult.rows.length === 0 || !profileResult.rows[0].is_complete) {
+      return res.status(400).json({
+        error: 'Please complete your business profile first',
+        code: 'PROFILE_INCOMPLETE',
+        redirect: '/dashboard.html?tab=citation-network&action=profile'
+      });
+    }
+
+    const businessProfileId = profileResult.rows[0].id;
+
+    // 2. Get user's allocation
+    const user = await db.query(
+      'SELECT plan, stripe_subscription_status, stripe_subscription_id FROM users WHERE id = $1',
+      [userId]
+    );
+
+    const isPaidPlan = ['diy', 'pro', 'enterprise', 'agency'].includes(user.rows[0]?.plan);
+    const isSubscriber = isPaidPlan && (
+      user.rows[0]?.stripe_subscription_status === 'active' ||
+      user.rows[0]?.stripe_subscription_id
+    );
+
+    let availableSubmissions = 0;
+    let orderId = null;
+
+    if (isSubscriber) {
+      // Get subscription-based allocation
+      const now = new Date();
+      const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const allocation = await db.query(`
+        SELECT * FROM subscriber_directory_allocations
+        WHERE user_id = $1 AND period_start = $2
+      `, [userId, periodStart]);
+
+      if (allocation.rows.length > 0) {
+        const alloc = allocation.rows[0];
+        const total = (alloc.base_allocation || 0) + (alloc.pack_allocation || 0);
+        availableSubmissions = total - (alloc.submissions_used || 0);
+      }
+    } else {
+      // Get order-based allocation
+      const orders = await db.query(`
+        SELECT id, directories_allocated, directories_submitted
+        FROM directory_orders
+        WHERE user_id = $1 AND status IN ('paid', 'processing', 'in_progress')
+        ORDER BY created_at ASC
+      `, [userId]);
+
+      for (const order of orders.rows) {
+        const remaining = order.directories_allocated - order.directories_submitted;
+        if (remaining > 0) {
+          availableSubmissions = remaining;
+          orderId = order.id;
+          break;
+        }
+      }
+    }
+
+    if (availableSubmissions <= 0) {
+      return res.status(400).json({
+        error: 'No directory submissions available. Please purchase a pack.',
+        code: 'NO_ALLOCATION'
+      });
+    }
+
+    // 3. Check if submissions are already in progress
+    const existingSubmissions = await db.query(`
+      SELECT COUNT(*) as count FROM directory_submissions
+      WHERE user_id = $1 AND status IN ('queued', 'in_progress', 'submitted', 'pending_approval')
+    `, [userId]);
+
+    if (parseInt(existingSubmissions.rows[0].count) > 0) {
+      return res.status(400).json({
+        error: 'You already have submissions in progress',
+        code: 'ALREADY_IN_PROGRESS'
+      });
+    }
+
+    // 4. Get available directories (prioritized by priority_score, free ones first)
+    const directories = await db.query(`
+      SELECT id, name, website_url, directory_type, submission_url
+      FROM directories
+      WHERE is_active = true
+        AND pricing_model IN ('free', 'freemium')
+        AND id NOT IN (
+          SELECT directory_id FROM directory_submissions
+          WHERE user_id = $1 AND directory_id IS NOT NULL
+        )
+      ORDER BY priority_score DESC, tier ASC
+      LIMIT $2
+    `, [userId, availableSubmissions]);
+
+    if (directories.rows.length === 0) {
+      return res.status(400).json({
+        error: 'No available directories to submit to',
+        code: 'NO_DIRECTORIES'
+      });
+    }
+
+    // 5. Create submission records
+    const submissionValues = directories.rows.map((dir, index) => {
+      return `($1, $2, $3, ${dir.id}, '${dir.name.replace(/'/g, "''")}', '${dir.website_url}', '${dir.directory_type}', 'queued', NOW())`;
+    }).join(', ');
+
+    await db.query(`
+      INSERT INTO directory_submissions
+        (order_id, user_id, business_profile_id, directory_id, directory_name, directory_url, directory_category, status, queued_at)
+      VALUES ${directories.rows.map((dir, i) =>
+        `($1, $2, $3, $${i * 4 + 4}, $${i * 4 + 5}, $${i * 4 + 6}, $${i * 4 + 7}, 'queued', NOW())`
+      ).join(', ')}
+    `, [
+      orderId,
+      userId,
+      businessProfileId,
+      ...directories.rows.flatMap(dir => [dir.id, dir.name, dir.website_url, dir.directory_type])
+    ]);
+
+    // 6. Update order status if applicable
+    if (orderId) {
+      await db.query(`
+        UPDATE directory_orders
+        SET status = 'in_progress', delivery_started_at = NOW(), updated_at = NOW()
+        WHERE id = $1
+      `, [orderId]);
+    }
+
+    res.json({
+      success: true,
+      message: 'Directory submissions started',
+      submissionsQueued: directories.rows.length,
+      directories: directories.rows.map(d => ({
+        id: d.id,
+        name: d.name,
+        type: d.directory_type
+      }))
+    });
+
+  } catch (error) {
+    console.error('Error starting submissions:', error);
+    res.status(500).json({ error: 'Failed to start submissions' });
+  }
+});
+
+/**
+ * GET /api/citation-network/submission-progress
+ * Get current submission progress
+ */
+router.get('/submission-progress', authenticateToken, async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'queued') as queued,
+        COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
+        COUNT(*) FILTER (WHERE status = 'submitted') as submitted,
+        COUNT(*) FILTER (WHERE status = 'pending_approval') as pending_approval,
+        COUNT(*) FILTER (WHERE status = 'live') as live,
+        COUNT(*) FILTER (WHERE status = 'needs_action') as action_needed,
+        COUNT(*) FILTER (WHERE status = 'rejected') as rejected,
+        COUNT(*) as total
+      FROM directory_submissions
+      WHERE user_id = $1
+    `, [req.user.id]);
+
+    const stats = result.rows[0];
+
+    res.json({
+      total: parseInt(stats.total) || 0,
+      queued: parseInt(stats.queued) || 0,
+      inProgress: parseInt(stats.in_progress) || 0,
+      submitted: parseInt(stats.submitted) + parseInt(stats.pending_approval) || 0,
+      live: parseInt(stats.live) || 0,
+      actionNeeded: parseInt(stats.action_needed) || 0,
+      rejected: parseInt(stats.rejected) || 0
+    });
+
+  } catch (error) {
+    console.error('Error fetching submission progress:', error);
+    res.status(500).json({ error: 'Failed to fetch progress' });
+  }
+});
+
+/**
  * GET /api/citation-network/stats
  * Get citation network stats for dashboard
  */
