@@ -260,7 +260,7 @@ router.post('/profile', authenticateToken, async (req, res) => {
   console.log('[Profile Save] business_name:', req.body.business_name);
 
   try {
-    const {
+    let {
       business_name,
       website_url,
       phone,
@@ -288,6 +288,18 @@ router.post('/profile', authenticateToken, async (req, res) => {
 
     if (!business_name) {
       return res.status(400).json({ error: 'Business name is required' });
+    }
+
+    // Handle logo_url - if it's a data URL, it's too large for VARCHAR(500)
+    // For now, skip storing data URLs (they should be uploaded to cloud storage)
+    if (logo_url && logo_url.startsWith('data:')) {
+      console.log('[Profile Save] Skipping data URL logo (too large for DB column)');
+      logo_url = null; // Don't store data URLs in the database
+    }
+
+    // Convert year_founded to integer if it's a string
+    if (year_founded && typeof year_founded === 'string') {
+      year_founded = parseInt(year_founded, 10) || null;
     }
 
     // Calculate completion percentage
