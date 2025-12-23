@@ -2230,6 +2230,137 @@ async function startCitationNetworkCheckout() {
     }
 }
 
+// Start directory submissions via API
+async function startDirectorySubmissions() {
+    const authToken = localStorage.getItem('authToken');
+
+    if (!authToken) {
+        showXeoAlert('Login Required', 'Please log in to start submissions.');
+        return;
+    }
+
+    try {
+        showXeoAlert('Starting Submissions', 'Please wait while we queue your directory submissions...');
+
+        const response = await fetch(`${API_BASE_URL}/citation-network/start-submissions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            if (data.code === 'PROFILE_INCOMPLETE') {
+                showXeoConfirm('Complete Your Profile',
+                    'Please complete your business profile before starting submissions.\n\nWould you like to complete it now?',
+                    function(confirmed) {
+                        if (confirmed) {
+                            navigateToSection('citation-network-profile');
+                        }
+                    }
+                );
+                return;
+            }
+            if (data.code === 'ALREADY_IN_PROGRESS') {
+                showXeoAlert('Submissions In Progress', 'You already have directory submissions in progress. Check the progress below.');
+                await refreshSubmissionProgress();
+                return;
+            }
+            throw new Error(data.error || 'Failed to start submissions');
+        }
+
+        // Success - update UI
+        showXeoAlert('Submissions Started!',
+            `${data.submissionsQueued} directories have been queued for submission.\n\n` +
+            `We'll submit to 3-5 directories per day.\n\n` +
+            `Check back here to monitor progress.`
+        );
+
+        // Update state
+        citationNetworkState.includedStatus = 'in_progress';
+        citationNetworkState.includedProgress = {
+            total: data.submissionsQueued,
+            submitted: 0,
+            live: 0,
+            pending: data.submissionsQueued,
+            actionNeeded: 0
+        };
+        updateCitationNetworkUI();
+
+    } catch (error) {
+        console.error('Start submissions error:', error);
+        showXeoAlert('Error', error.message || 'Failed to start submissions. Please try again.');
+    }
+}
+
+// Show detailed submission progress
+async function showSubmissionProgressDetails() {
+    const authToken = localStorage.getItem('authToken');
+
+    if (!authToken) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/citation-network/submission-progress`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (response.ok) {
+            const progress = await response.json();
+
+            showXeoAlert('Submission Progress',
+                `Directory Submission Status:\n\n` +
+                `• Queued: ${progress.queued}\n` +
+                `• In Progress: ${progress.inProgress}\n` +
+                `• Submitted: ${progress.submitted}\n` +
+                `• Live: ${progress.live}\n` +
+                `• Action Needed: ${progress.actionNeeded}\n` +
+                `• Rejected: ${progress.rejected}\n\n` +
+                `Total: ${progress.total} directories`
+            );
+        }
+    } catch (error) {
+        console.error('Error fetching progress:', error);
+    }
+}
+
+// Refresh submission progress and update UI
+async function refreshSubmissionProgress() {
+    const authToken = localStorage.getItem('authToken');
+
+    if (!authToken) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/citation-network/submission-progress`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (response.ok) {
+            const progress = await response.json();
+
+            if (progress.total > 0) {
+                citationNetworkState.includedStatus = progress.live === progress.total ? 'complete' : 'in_progress';
+                citationNetworkState.includedProgress = {
+                    total: progress.total,
+                    submitted: progress.submitted + progress.live,
+                    live: progress.live,
+                    pending: progress.queued + progress.inProgress + progress.submitted,
+                    actionNeeded: progress.actionNeeded
+                };
+                updateCitationNetworkUI();
+            }
+        }
+    } catch (error) {
+        console.error('Error refreshing progress:', error);
+    }
+}
+
 // Load real citation network data from API
 async function loadCitationNetworkData() {
     const authToken = localStorage.getItem('authToken');
@@ -2323,6 +2454,22 @@ async function loadCitationNetworkData() {
                     citationNetworkState.includedProgress.total,
                     allocation.allocation.total || 10
                 );
+            }
+        }
+
+        // Get real submission progress if available
+        if (progressRes.ok) {
+            const progress = await progressRes.json();
+
+            if (progress.total > 0) {
+                citationNetworkState.includedStatus = progress.live === progress.total ? 'complete' : 'in_progress';
+                citationNetworkState.includedProgress = {
+                    total: progress.total,
+                    submitted: progress.submitted + progress.live,
+                    live: progress.live,
+                    pending: progress.queued + progress.inProgress + progress.submitted,
+                    actionNeeded: progress.actionNeeded
+                };
             }
         }
 
