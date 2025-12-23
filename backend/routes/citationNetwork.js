@@ -255,6 +255,10 @@ router.get('/profile', authenticateToken, async (req, res) => {
  * Create or update business profile
  */
 router.post('/profile', authenticateToken, async (req, res) => {
+  console.log('[Profile Save] Received request from user:', req.user.id);
+  console.log('[Profile Save] Request body keys:', Object.keys(req.body));
+  console.log('[Profile Save] business_name:', req.body.business_name);
+
   try {
     const {
       business_name,
