@@ -22,28 +22,46 @@ class CampaignRunService {
    * FIXED: Uses transaction for atomicity
    */
   async startSubmissions(userId, filters = {}) {
+    console.log('[CampaignRun] startSubmissions called for user:', userId);
     const client = await db.getClient();
 
     try {
       await client.query('BEGIN');
+      console.log('[CampaignRun] Transaction started');
 
       // 1. Validate prerequisites
+      console.log('[CampaignRun] Step 1: Validating prerequisites...');
       const validation = await this.validatePrerequisites(userId);
       if (!validation.valid) {
+        console.log('[CampaignRun] Validation failed:', validation.error);
         throw new Error(validation.error);
       }
+      console.log('[CampaignRun] Prerequisites valid');
 
       // 2. Check for existing active campaign (with row lock)
+      console.log('[CampaignRun] Step 2: Checking for active campaign...');
       const activeCampaign = await this.getActiveCampaignWithLock(client, userId);
       if (activeCampaign) {
+        console.log('[CampaignRun] Active campaign exists:', activeCampaign.id);
         throw new Error('ACTIVE_CAMPAIGN_EXISTS');
       }
+      console.log('[CampaignRun] No active campaign');
 
       // 3. Get entitlement
+      console.log('[CampaignRun] Step 3: Calculating entitlement...');
       const entitlement = await entitlementService.calculateEntitlement(userId);
+      console.log('[CampaignRun] Entitlement result:', {
+        remaining: entitlement.remaining,
+        total: entitlement.total,
+        used: entitlement.used,
+        isSubscriber: entitlement.isSubscriber,
+        plan: entitlement.plan
+      });
       if (entitlement.remaining <= 0) {
+        console.log('[CampaignRun] NO_ENTITLEMENT - remaining is', entitlement.remaining);
         throw new Error('NO_ENTITLEMENT');
       }
+      console.log('[CampaignRun] Entitlement OK - remaining:', entitlement.remaining);
 
       // 4. Get business profile
       const profile = await this.getBusinessProfile(userId);
