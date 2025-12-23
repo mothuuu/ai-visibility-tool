@@ -3275,13 +3275,16 @@ function handleLogoUpload(input) {
         return;
     }
 
-    // Preview the image
+    // Preview the image and store the data URL
     const reader = new FileReader();
     reader.onload = function(e) {
         const previewContainer = document.getElementById('logoPreviewContainer');
         const preview = document.getElementById('logoPreview');
         const uploadPrompt = document.getElementById('logoUploadPrompt');
         const uploadArea = document.getElementById('logoUploadArea');
+
+        // Store the data URL for form submission
+        currentLogoDataUrl = e.target.result;
 
         if (preview && previewContainer && uploadPrompt && uploadArea) {
             preview.src = e.target.result;
@@ -3294,6 +3297,9 @@ function handleLogoUpload(input) {
     };
     reader.readAsDataURL(file);
 }
+
+// Logo data URL storage
+let currentLogoDataUrl = null;
 
 // Feature tags management
 let keyFeatures = [];
@@ -3710,7 +3716,7 @@ function updateProgressSteps(completedItems) {
 }
 
 // Handle profile form submission
-function handleProfileSubmit(event) {
+async function handleProfileSubmit(event) {
     event.preventDefault();
 
     if (!validateProfileForm(true)) {
@@ -3726,8 +3732,8 @@ function handleProfileSubmit(event) {
         formData.managed_inbox_email = generateSlug(formData.business_name) + '@listings.visible2ai.com';
     }
 
-    // For MVP, save to local storage and update state
-    saveBusinessProfile(formData);
+    // Save to backend and localStorage
+    await saveBusinessProfile(formData);
 }
 
 function collectProfileFormData() {
@@ -3759,6 +3765,7 @@ function collectProfileFormData() {
         linkedin_url: document.getElementById('linkedinUrl')?.value?.trim() || '',
         twitter_url: document.getElementById('twitterUrl')?.value?.trim() || '',
         facebook_url: document.getElementById('facebookUrl')?.value?.trim() || '',
+        logo_url: currentLogoDataUrl || '',
         is_saas_product: document.getElementById('isSaasProduct')?.checked || false,
         pricing_model: document.getElementById('pricingModel')?.value || '',
         key_features: keyFeatures,
@@ -3770,10 +3777,32 @@ function collectProfileFormData() {
     };
 }
 
-function saveBusinessProfile(formData) {
+async function saveBusinessProfile(formData) {
     try {
-        // Save to localStorage for MVP
+        // Save to localStorage as backup
         localStorage.setItem('businessProfile', JSON.stringify(formData));
+
+        // Save to backend API
+        const token = localStorage.getItem('token');
+        if (token) {
+            const response = await fetch(`${API_BASE_URL}/citation-network/profile`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(formData)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                console.error('Failed to save profile to backend:', errorData);
+                throw new Error(errorData.error || 'Failed to save profile to server');
+            }
+
+            const result = await response.json();
+            console.log('Profile saved to backend:', result);
+        }
 
         // Update citation network state
         citationNetworkState.hasBusinessProfile = true;
@@ -3845,6 +3874,22 @@ function populateProfileForm(profile) {
     if (profile.twitter_url) document.getElementById('twitterUrl').value = profile.twitter_url;
     if (profile.facebook_url) document.getElementById('facebookUrl').value = profile.facebook_url;
     if (profile.integrations) document.getElementById('integrations').value = profile.integrations;
+
+    // Restore logo if available
+    if (profile.logo_url) {
+        currentLogoDataUrl = profile.logo_url;
+        const previewContainer = document.getElementById('logoPreviewContainer');
+        const preview = document.getElementById('logoPreview');
+        const uploadPrompt = document.getElementById('logoUploadPrompt');
+        const uploadArea = document.getElementById('logoUploadArea');
+
+        if (preview && previewContainer && uploadPrompt && uploadArea) {
+            preview.src = profile.logo_url;
+            previewContainer.style.display = 'block';
+            uploadPrompt.style.display = 'none';
+            uploadArea.classList.add('has-file');
+        }
+    }
 
     // Handle address fields
     if (profile.has_physical_address !== null) {
