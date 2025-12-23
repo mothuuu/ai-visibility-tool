@@ -126,20 +126,35 @@ class CampaignRunService {
    * Validate prerequisites before starting
    */
   async validatePrerequisites(userId) {
+    console.log('[validatePrerequisites] Checking user:', userId);
+
     // Check business profile
     const profile = await this.getBusinessProfile(userId);
+    console.log('[validatePrerequisites] Profile found:', profile ? 'YES' : 'NO');
+
     if (!profile) {
+      console.log('[validatePrerequisites] ❌ No profile found for user', userId);
       return { valid: false, error: 'PROFILE_REQUIRED' };
     }
+
+    console.log('[validatePrerequisites] Profile details:', {
+      id: profile.id,
+      user_id: profile.user_id,
+      business_name: profile.business_name,
+      website_url: profile.website_url,
+      short_description: profile.short_description ? profile.short_description.substring(0, 30) + '...' : null
+    });
 
     // Check minimum profile completeness
     const requiredFields = ['business_name', 'website_url', 'short_description'];
     for (const field of requiredFields) {
       if (!profile[field]) {
+        console.log('[validatePrerequisites] ❌ Missing required field:', field);
         return { valid: false, error: `PROFILE_INCOMPLETE:${field}` };
       }
     }
 
+    console.log('[validatePrerequisites] ✓ All prerequisites met');
     return { valid: true };
   }
 
