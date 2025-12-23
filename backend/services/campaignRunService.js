@@ -272,7 +272,9 @@ class CampaignRunService {
     // 1. Try subscription first (if subscriber)
     if (entitlement.isSubscriber && remaining > 0) {
       const now = new Date();
-      const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const year = now.getUTCFullYear();
+      const month = now.getUTCMonth();
+      const periodStartStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
 
       // Get current allocation
       const subscriptionAvailable = entitlement.breakdown?.subscriptionRemaining || 0;
@@ -283,8 +285,8 @@ class CampaignRunService {
           UPDATE subscriber_directory_allocations
           SET submissions_used = submissions_used + $1,
               updated_at = NOW()
-          WHERE user_id = $2 AND period_start = $3
-        `, [toConsumeFromSubscription, userId, periodStart]);
+          WHERE user_id = $2 AND period_start = $3::date
+        `, [toConsumeFromSubscription, userId, periodStartStr]);
 
         remaining -= toConsumeFromSubscription;
       }
