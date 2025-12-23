@@ -22,6 +22,7 @@ class EntitlementService {
 
   /**
    * Calculate total directories a user can submit to
+   * FIXED: Properly handles subscribers who also have orders
    * Returns: { total, remaining, source, sourceId, breakdown, plan, isSubscriber }
    */
   async calculateEntitlement(userId) {
@@ -32,12 +33,15 @@ class EntitlementService {
     }
 
     const breakdown = {
-      subscription: 0,
-      orders: 0,
-      used: 0
+      subscription_total: 0,
+      subscription_used: 0,
+      subscription_remaining: 0,
+      orders_total: 0,
+      orders_used: 0,
+      orders_remaining: 0
     };
 
-    let source = 'none';
+    let primarySource = 'none';
     let sourceId = null;
 
     // 1. Check subscription allocation
@@ -50,46 +54,43 @@ class EntitlementService {
     if (isSubscriber) {
       // Get current month's allocation
       const allocation = await this.getMonthlyAllocation(userId, user.plan);
-      breakdown.subscription = allocation.total;
-      breakdown.used = allocation.used;
-      source = 'subscription';
+      breakdown.subscription_total = allocation.total;
+      breakdown.subscription_used = allocation.used;
+      breakdown.subscription_remaining = allocation.remaining;
+      primarySource = 'subscription';
       sourceId = user.stripe_subscription_id;
     }
 
-    // 2. Check order-based allocation (starter + packs)
+    // 2. Check order-based allocation (always check, even for subscribers)
     const orderAllocation = await this.getOrderAllocation(userId);
-    breakdown.orders = orderAllocation.remaining; // Only count remaining from orders
+    breakdown.orders_total = orderAllocation.total;
+    breakdown.orders_used = orderAllocation.used;
+    breakdown.orders_remaining = orderAllocation.remaining;
 
+    // If not subscriber but has orders, set primary source
     if (!isSubscriber && orderAllocation.total > 0) {
-      breakdown.used = orderAllocation.used;
-      source = 'order';
+      primarySource = 'order';
       sourceId = orderAllocation.latestOrderId;
     }
 
-    // 3. Calculate remaining
-    // For subscribers: subscription remaining + order remaining
-    // For non-subscribers: order remaining only
-    let remaining;
-    if (isSubscriber) {
-      remaining = (breakdown.subscription - breakdown.used) + breakdown.orders;
-    } else {
-      remaining = orderAllocation.remaining;
-    }
-
-    const total = breakdown.subscription + orderAllocation.total;
+    // 3. Calculate totals (sum both sources)
+    const total = breakdown.subscription_total + breakdown.orders_total;
+    const used = breakdown.subscription_used + breakdown.orders_used;
+    const remaining = breakdown.subscription_remaining + breakdown.orders_remaining;
 
     return {
       total,
+      used,
       remaining: Math.max(0, remaining),
-      source,
+      source: primarySource,
       sourceId,
       breakdown: {
-        subscription: breakdown.subscription,
-        subscriptionUsed: isSubscriber ? breakdown.used : 0,
-        subscriptionRemaining: isSubscriber ? Math.max(0, breakdown.subscription - breakdown.used) : 0,
-        orders: orderAllocation.total,
-        ordersUsed: orderAllocation.used,
-        ordersRemaining: orderAllocation.remaining
+        subscription: breakdown.subscription_total,
+        subscriptionUsed: breakdown.subscription_used,
+        subscriptionRemaining: breakdown.subscription_remaining,
+        orders: breakdown.orders_total,
+        ordersUsed: breakdown.orders_used,
+        ordersRemaining: breakdown.orders_remaining
       },
       plan: user.plan,
       isSubscriber
