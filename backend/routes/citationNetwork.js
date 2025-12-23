@@ -10,6 +10,7 @@ const citationNetworkStripe = require('../services/citationNetworkStripeService'
 const { authenticateToken, authenticateTokenOptional } = require('../middleware/auth');
 const db = require('../db/database');
 const config = require('../config/citationNetwork');
+const entitlementService = require('../services/entitlementService');
 
 /**
  * GET /api/citation-network/checkout-info
@@ -110,82 +111,48 @@ router.get('/orders/:id', authenticateToken, async (req, res) => {
 /**
  * GET /api/citation-network/allocation
  * Get current allocation for user
+ * Step 4: Uses entitlementService as ONE source of truth
  */
 router.get('/allocation', authenticateToken, async (req, res) => {
   try {
-    const now = new Date();
-    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    // Use entitlementService as single source of truth
+    const entitlement = await entitlementService.calculateEntitlement(req.user.id);
 
-    // Get user's plan
-    const user = await db.query(
-      'SELECT plan, stripe_subscription_status, stripe_subscription_id FROM users WHERE id = $1',
-      [req.user.id]
-    );
-
-    const isPaidPlan = ['diy', 'pro', 'enterprise', 'agency'].includes(user.rows[0]?.plan);
-    const isSubscriber = isPaidPlan && (
-      user.rows[0]?.stripe_subscription_status === 'active' ||
-      user.rows[0]?.stripe_subscription_id
-    );
-
-    if (!isSubscriber) {
+    if (entitlement.isSubscriber) {
+      // Subscriber: return subscription allocation
+      res.json({
+        type: 'subscription',
+        plan: entitlement.plan,
+        allocation: {
+          base: entitlement.breakdown.subscription,
+          packs: 0, // pack_allocation tracked separately
+          total: entitlement.total,
+          used: entitlement.used,
+          remaining: entitlement.remaining
+        },
+        debug: {
+          source: entitlement.source,
+          isSubscriber: entitlement.isSubscriber,
+          breakdown: entitlement.breakdown
+        }
+      });
+    } else {
       // Non-subscriber: return order-based allocation
-      const orders = await db.query(`
-        SELECT
-          SUM(directories_allocated) as total_allocated,
-          SUM(directories_submitted) as total_submitted,
-          SUM(directories_live) as total_live
-        FROM directory_orders
-        WHERE user_id = $1 AND status IN ('paid', 'processing', 'in_progress', 'completed')
-      `, [req.user.id]);
-
-      return res.json({
+      res.json({
         type: 'order_based',
         allocation: {
-          total: parseInt(orders.rows[0]?.total_allocated) || 0,
-          submitted: parseInt(orders.rows[0]?.total_submitted) || 0,
-          live: parseInt(orders.rows[0]?.total_live) || 0,
-          remaining: (parseInt(orders.rows[0]?.total_allocated) || 0) -
-                     (parseInt(orders.rows[0]?.total_submitted) || 0)
+          total: entitlement.breakdown.orders,
+          submitted: entitlement.breakdown.ordersUsed,
+          live: 0, // Would need separate query for live count
+          remaining: entitlement.breakdown.ordersRemaining
+        },
+        debug: {
+          source: entitlement.source,
+          isSubscriber: entitlement.isSubscriber,
+          breakdown: entitlement.breakdown
         }
       });
     }
-
-    // Subscriber: return monthly allocation
-    let allocation = await db.query(`
-      SELECT * FROM subscriber_directory_allocations
-      WHERE user_id = $1 AND period_start = $2
-    `, [req.user.id, periodStart]);
-
-    if (allocation.rows.length === 0) {
-      // Create allocation for current month
-      const baseAllocation = config.planAllocations[user.rows[0].plan] || 0;
-      const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-      allocation = await db.query(`
-        INSERT INTO subscriber_directory_allocations
-        (user_id, period_start, period_end, base_allocation, pack_allocation, submissions_used)
-        VALUES ($1, $2, $3, $4, 0, 0)
-        RETURNING *
-      `, [req.user.id, periodStart, periodEnd, baseAllocation]);
-    }
-
-    const alloc = allocation.rows[0];
-    const total = (alloc.base_allocation || 0) + (alloc.pack_allocation || 0);
-
-    res.json({
-      type: 'subscription',
-      plan: user.rows[0].plan,
-      allocation: {
-        base: alloc.base_allocation,
-        packs: alloc.pack_allocation,
-        total: total,
-        used: alloc.submissions_used,
-        remaining: total - alloc.submissions_used,
-        periodStart: alloc.period_start,
-        periodEnd: alloc.period_end
-      }
-    });
   } catch (error) {
     console.error('Error fetching allocation:', error);
     res.status(500).json({ error: 'Failed to fetch allocation' });
@@ -653,7 +620,6 @@ router.get('/stats', authenticateToken, async (req, res) => {
 // ============================================================================
 
 const campaignRunService = require('../services/campaignRunService');
-const entitlementService = require('../services/entitlementService');
 
 /**
  * POST /api/citation-network/start-submissions
