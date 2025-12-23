@@ -618,4 +618,354 @@ router.get('/stats', authenticateToken, async (req, res) => {
   }
 });
 
+
+// ============================================================================
+// CAMPAIGN RUN ENDPOINTS
+// ============================================================================
+
+const campaignRunService = require('../services/campaignRunService');
+const entitlementService = require('../services/entitlementService');
+
+/**
+ * POST /api/citation-network/start-submissions
+ * Start a new submission campaign
+ */
+router.post('/start-submissions', authenticateToken, async (req, res) => {
+  try {
+    const { filters = {} } = req.body;
+
+    const result = await campaignRunService.startSubmissions(req.user.id, filters);
+
+    res.json({
+      success: true,
+      message: `Started submissions for ${result.directoriesQueued} directories`,
+      ...result
+    });
+
+  } catch (error) {
+    console.error('Start submissions error:', error);
+
+    // Handle specific errors
+    if (error.message === 'PROFILE_REQUIRED') {
+      return res.status(400).json({
+        error: 'Please complete your business profile first',
+        code: 'PROFILE_REQUIRED',
+        redirect: '/dashboard.html?tab=citation-network&action=profile'
+      });
+    }
+
+    if (error.message.startsWith('PROFILE_INCOMPLETE')) {
+      const field = error.message.split(':')[1];
+      return res.status(400).json({
+        error: `Please complete your business profile. Missing: ${field}`,
+        code: 'PROFILE_INCOMPLETE',
+        missingField: field,
+        redirect: '/dashboard.html?tab=citation-network&action=profile'
+      });
+    }
+
+    if (error.message === 'ACTIVE_CAMPAIGN_EXISTS') {
+      return res.status(400).json({
+        error: 'You already have an active submission campaign. Please wait for it to complete or pause it first.',
+        code: 'ACTIVE_CAMPAIGN_EXISTS'
+      });
+    }
+
+    if (error.message === 'NO_ENTITLEMENT') {
+      return res.status(400).json({
+        error: 'No directory submissions available. Please upgrade your plan or purchase a boost.',
+        code: 'NO_ENTITLEMENT',
+        redirect: '/citation-network.html'
+      });
+    }
+
+    if (error.message === 'NO_DIRECTORIES_AVAILABLE') {
+      return res.status(400).json({
+        error: 'No eligible directories found matching your criteria. Try adjusting your filters.',
+        code: 'NO_DIRECTORIES_AVAILABLE'
+      });
+    }
+
+    res.status(500).json({ error: 'Failed to start submissions' });
+  }
+});
+
+/**
+ * GET /api/citation-network/campaign-submissions
+ * Get user's directory submissions (campaign-based)
+ */
+router.get('/campaign-submissions', authenticateToken, async (req, res) => {
+  try {
+    const { status, limit = 50, offset = 0 } = req.query;
+
+    const submissions = await campaignRunService.getUserSubmissions(req.user.id, {
+      status: status ? status.split(',') : null,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+    res.json({ submissions });
+
+  } catch (error) {
+    console.error('Get submissions error:', error);
+    res.status(500).json({ error: 'Failed to fetch submissions' });
+  }
+});
+
+/**
+ * GET /api/citation-network/submissions/counts
+ * Get submission counts by status
+ */
+router.get('/submissions/counts', authenticateToken, async (req, res) => {
+  try {
+    const counts = await campaignRunService.getSubmissionCounts(req.user.id);
+    res.json({ counts });
+  } catch (error) {
+    console.error('Get counts error:', error);
+    res.status(500).json({ error: 'Failed to fetch counts' });
+  }
+});
+
+/**
+ * GET /api/citation-network/campaign-runs
+ * Get user's campaign runs
+ */
+router.get('/campaign-runs', authenticateToken, async (req, res) => {
+  try {
+    const { limit = 20, offset = 0 } = req.query;
+
+    const campaignRuns = await campaignRunService.getCampaignRuns(req.user.id, {
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+    res.json({ campaignRuns });
+  } catch (error) {
+    console.error('Get campaign runs error:', error);
+    res.status(500).json({ error: 'Failed to fetch campaign runs' });
+  }
+});
+
+/**
+ * GET /api/citation-network/campaign-runs/:id
+ * Get specific campaign run with submissions
+ */
+router.get('/campaign-runs/:id', authenticateToken, async (req, res) => {
+  try {
+    const campaignRun = await campaignRunService.getCampaignRun(
+      req.params.id,
+      req.user.id
+    );
+
+    if (!campaignRun) {
+      return res.status(404).json({ error: 'Campaign run not found' });
+    }
+
+    res.json({ campaignRun });
+  } catch (error) {
+    console.error('Get campaign run error:', error);
+    res.status(500).json({ error: 'Failed to fetch campaign run' });
+  }
+});
+
+/**
+ * POST /api/citation-network/campaign-runs/:id/pause
+ * Pause a campaign run
+ */
+router.post('/campaign-runs/:id/pause', authenticateToken, async (req, res) => {
+  try {
+    const result = await campaignRunService.pauseCampaign(req.params.id, req.user.id);
+
+    if (!result) {
+      return res.status(404).json({ error: 'Campaign not found or cannot be paused' });
+    }
+
+    res.json({ success: true, campaignRun: result });
+  } catch (error) {
+    console.error('Pause campaign error:', error);
+    res.status(500).json({ error: 'Failed to pause campaign' });
+  }
+});
+
+/**
+ * POST /api/citation-network/campaign-runs/:id/resume
+ * Resume a paused campaign
+ */
+router.post('/campaign-runs/:id/resume', authenticateToken, async (req, res) => {
+  try {
+    const result = await campaignRunService.resumeCampaign(req.params.id, req.user.id);
+
+    if (!result) {
+      return res.status(404).json({ error: 'Campaign not found or cannot be resumed' });
+    }
+
+    res.json({ success: true, campaignRun: result });
+  } catch (error) {
+    console.error('Resume campaign error:', error);
+    res.status(500).json({ error: 'Failed to resume campaign' });
+  }
+});
+
+/**
+ * POST /api/citation-network/campaign-runs/:id/cancel
+ * Cancel a campaign run
+ */
+router.post('/campaign-runs/:id/cancel', authenticateToken, async (req, res) => {
+  try {
+    const result = await campaignRunService.cancelCampaign(req.params.id, req.user.id);
+
+    if (!result) {
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+
+    res.json({ success: true, campaignRun: result });
+  } catch (error) {
+    console.error('Cancel campaign error:', error);
+    res.status(500).json({ error: 'Failed to cancel campaign' });
+  }
+});
+
+/**
+ * GET /api/citation-network/entitlement
+ * Get user's current entitlement
+ */
+router.get('/entitlement', authenticateToken, async (req, res) => {
+  try {
+    const entitlement = await entitlementService.calculateEntitlement(req.user.id);
+    res.json({ entitlement });
+  } catch (error) {
+    console.error('Get entitlement error:', error);
+    res.status(500).json({ error: 'Failed to fetch entitlement' });
+  }
+});
+
+/**
+ * GET /api/citation-network/active-campaign
+ * Check if user has an active campaign
+ */
+router.get('/active-campaign', authenticateToken, async (req, res) => {
+  try {
+    const activeCampaign = await campaignRunService.getActiveCampaign(req.user.id);
+    res.json({
+      hasActiveCampaign: !!activeCampaign,
+      activeCampaign
+    });
+  } catch (error) {
+    console.error('Get active campaign error:', error);
+    res.status(500).json({ error: 'Failed to check active campaign' });
+  }
+});
+
+/**
+ * GET /api/citation-network/directories
+ * Get available directories (for preview/filtering)
+ */
+router.get('/directories', authenticateToken, async (req, res) => {
+  try {
+    const { type, tier, region, limit = 50 } = req.query;
+
+    let query = `
+      SELECT
+        id, name, slug, website_url, logo_url, description,
+        directory_type, tier, region_scope, priority_score,
+        submission_mode, verification_method, approval_type,
+        typical_approval_days, pricing_model
+      FROM directories
+      WHERE is_active = true AND pricing_model IN ('free', 'freemium')
+    `;
+
+    const params = [];
+    let paramIndex = 1;
+
+    if (type) {
+      query += ` AND directory_type = $${paramIndex}`;
+      params.push(type);
+      paramIndex++;
+    }
+
+    if (tier) {
+      query += ` AND tier = $${paramIndex}`;
+      params.push(parseInt(tier));
+      paramIndex++;
+    }
+
+    if (region) {
+      query += ` AND region_scope = $${paramIndex}`;
+      params.push(region);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY priority_score DESC, tier ASC LIMIT $${paramIndex}`;
+    params.push(parseInt(limit));
+
+    const result = await db.query(query, params);
+    res.json({ directories: result.rows });
+
+  } catch (error) {
+    console.error('Get directories error:', error);
+    res.status(500).json({ error: 'Failed to fetch directories' });
+  }
+});
+
+/**
+ * GET /api/citation-network/directories/count
+ * Get count of available directories by filters
+ */
+router.get('/directories/count', authenticateToken, async (req, res) => {
+  try {
+    const { types, tiers, regions, exclude_customer_owned } = req.query;
+
+    let query = `
+      SELECT COUNT(*) as count
+      FROM directories d
+      WHERE d.is_active = true
+        AND d.pricing_model IN ('free', 'freemium')
+    `;
+
+    const params = [];
+    let paramIndex = 1;
+
+    if (types) {
+      const typeArray = types.split(',');
+      query += ` AND d.directory_type = ANY($${paramIndex})`;
+      params.push(typeArray);
+      paramIndex++;
+    }
+
+    if (tiers) {
+      const tierArray = tiers.split(',').map(t => parseInt(t));
+      query += ` AND d.tier = ANY($${paramIndex})`;
+      params.push(tierArray);
+      paramIndex++;
+    }
+
+    if (regions) {
+      const regionArray = [...new Set(['global', ...regions.split(',')])];
+      query += ` AND d.region_scope = ANY($${paramIndex})`;
+      params.push(regionArray);
+      paramIndex++;
+    }
+
+    if (exclude_customer_owned === 'true') {
+      query += ` AND d.requires_customer_account = false`;
+    }
+
+    // Exclude already submitted
+    query += ` AND NOT EXISTS (
+      SELECT 1 FROM directory_submissions ds
+      WHERE ds.directory_id = d.id
+        AND ds.user_id = $${paramIndex}
+        AND ds.status NOT IN ('failed', 'skipped', 'cancelled', 'blocked')
+    )`;
+    params.push(req.user.id);
+
+    const result = await db.query(query, params);
+    res.json({ count: parseInt(result.rows[0]?.count) || 0 });
+
+  } catch (error) {
+    console.error('Get directories count error:', error);
+    res.status(500).json({ error: 'Failed to count directories' });
+  }
+});
+
 module.exports = router;
