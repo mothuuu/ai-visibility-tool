@@ -13,6 +13,7 @@
 
 const db = require('../db/database');
 const entitlementService = require('./entitlementService');
+const { USABLE_ORDER_STATUSES } = require('./entitlementService');
 
 class CampaignRunService {
 
@@ -271,7 +272,7 @@ class CampaignRunService {
     // 1. Try subscription first (if subscriber)
     if (entitlement.isSubscriber && remaining > 0) {
       const now = new Date();
-      const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 
       // Get current allocation
       const subscriptionAvailable = entitlement.breakdown?.subscriptionRemaining || 0;
@@ -289,16 +290,16 @@ class CampaignRunService {
       }
     }
 
-    // 2. Consume remaining from orders (FIFO)
+    // 2. Consume remaining from orders (FIFO) - use unified status definitions
     if (remaining > 0) {
       const orders = await client.query(`
         SELECT id, directories_allocated, directories_submitted
         FROM directory_orders
         WHERE user_id = $1
-          AND status IN ('paid', 'processing', 'in_progress', 'completed')
+          AND status = ANY($2::text[])
           AND directories_submitted < directories_allocated
         ORDER BY created_at ASC
-      `, [userId]);
+      `, [userId, USABLE_ORDER_STATUSES]);
 
       for (const order of orders.rows) {
         if (remaining <= 0) break;
