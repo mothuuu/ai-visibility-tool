@@ -32,6 +32,8 @@ class EntitlementService {
       throw new Error('User not found');
     }
 
+    console.log('[Entitlement] Calculating for user:', userId, 'plan:', user.plan, 'stripe_status:', user.stripe_subscription_status);
+
     const breakdown = {
       subscription_total: 0,
       subscription_used: 0,
@@ -45,11 +47,16 @@ class EntitlementService {
     let sourceId = null;
 
     // 1. Check subscription allocation
+    // A user is considered a subscriber if they have a paid plan and NOT explicitly canceled
     const isPaidPlan = ['diy', 'pro', 'enterprise', 'agency'].includes(user.plan);
-    const isSubscriber = isPaidPlan && (
-      user.stripe_subscription_status === 'active' ||
-      (user.stripe_subscription_id && user.stripe_subscription_status !== 'canceled')
-    );
+    const isNotCanceled = user.stripe_subscription_status !== 'canceled' &&
+                          user.stripe_subscription_status !== 'unpaid' &&
+                          user.stripe_subscription_status !== 'past_due';
+
+    // Be permissive: if they have a paid plan, give them entitlement unless explicitly problematic
+    const isSubscriber = isPaidPlan && isNotCanceled;
+
+    console.log('[Entitlement] isPaidPlan:', isPaidPlan, 'isNotCanceled:', isNotCanceled, 'isSubscriber:', isSubscriber);
 
     if (isSubscriber) {
       // Get current month's allocation
@@ -59,6 +66,7 @@ class EntitlementService {
       breakdown.subscription_remaining = allocation.remaining;
       primarySource = 'subscription';
       sourceId = user.stripe_subscription_id;
+      console.log('[Entitlement] Subscription allocation:', allocation);
     }
 
     // 2. Check order-based allocation (always check, even for subscribers)
@@ -77,6 +85,8 @@ class EntitlementService {
     const total = breakdown.subscription_total + breakdown.orders_total;
     const used = breakdown.subscription_used + breakdown.orders_used;
     const remaining = breakdown.subscription_remaining + breakdown.orders_remaining;
+
+    console.log('[Entitlement] Final: total:', total, 'used:', used, 'remaining:', remaining);
 
     return {
       total,
