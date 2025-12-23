@@ -32,7 +32,12 @@ class EntitlementService {
       throw new Error('User not found');
     }
 
-    console.log('[Entitlement] Calculating for user:', userId, 'plan:', user.plan, 'stripe_status:', user.stripe_subscription_status);
+    console.log('[Entitlement] Calculating for user:', userId);
+    console.log('[Entitlement] User data:', {
+      plan: user.plan,
+      stripe_subscription_status: user.stripe_subscription_status,
+      stripe_subscription_id: user.stripe_subscription_id
+    });
 
     const breakdown = {
       subscription_total: 0,
@@ -47,16 +52,24 @@ class EntitlementService {
     let sourceId = null;
 
     // 1. Check subscription allocation
-    // A user is considered a subscriber if they have a paid plan and NOT explicitly canceled
-    const isPaidPlan = ['diy', 'pro', 'enterprise', 'agency'].includes(user.plan);
-    const isNotCanceled = user.stripe_subscription_status !== 'canceled' &&
-                          user.stripe_subscription_status !== 'unpaid' &&
-                          user.stripe_subscription_status !== 'past_due';
+    // SIMPLIFIED: If user has a plan with positive allocation, they're a subscriber
+    const planAllocation = PLAN_ALLOCATIONS[user.plan] || 0;
+    const isPaidPlan = planAllocation > 0;
 
-    // Be permissive: if they have a paid plan, give them entitlement unless explicitly problematic
-    const isSubscriber = isPaidPlan && isNotCanceled;
+    // Only block if explicitly canceled/unpaid/past_due
+    const isBlocked = user.stripe_subscription_status === 'canceled' ||
+                      user.stripe_subscription_status === 'unpaid' ||
+                      user.stripe_subscription_status === 'past_due';
 
-    console.log('[Entitlement] isPaidPlan:', isPaidPlan, 'isNotCanceled:', isNotCanceled, 'isSubscriber:', isSubscriber);
+    // Simple check: has paid plan AND not blocked
+    const isSubscriber = isPaidPlan && !isBlocked;
+
+    console.log('[Entitlement] Check:', {
+      planAllocation,
+      isPaidPlan,
+      isBlocked,
+      isSubscriber
+    });
 
     if (isSubscriber) {
       // Get current month's allocation
