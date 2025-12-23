@@ -3658,13 +3658,13 @@ async function saveBusinessProfile(formData) {
         localStorage.setItem('businessProfile', JSON.stringify(formData));
 
         // Save to backend API
-        const token = localStorage.getItem('token');
-        if (token) {
+        const authToken = localStorage.getItem('authToken');
+        if (authToken) {
             const response = await fetch(`${API_BASE_URL}/citation-network/profile`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Authorization': `Bearer ${authToken}`
                 },
                 body: JSON.stringify(formData)
             });
