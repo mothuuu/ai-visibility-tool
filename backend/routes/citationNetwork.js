@@ -234,16 +234,25 @@ router.get('/submissions', authenticateToken, async (req, res) => {
  */
 router.get('/profile', authenticateToken, async (req, res) => {
   try {
-    const result = await db.query(
-      'SELECT * FROM business_profiles WHERE user_id = $1',
-      [req.user.id]
-    );
+    // Get the most recent profile using ORDER BY
+    const result = await db.query(`
+      SELECT * FROM business_profiles
+      WHERE user_id = $1
+      ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
+      LIMIT 1
+    `, [req.user.id]);
 
     if (result.rows.length === 0) {
       return res.json({ profile: null, hasProfile: false });
     }
 
-    res.json({ profile: result.rows[0], hasProfile: true });
+    const profile = result.rows[0];
+    res.json({
+      profile: profile,
+      hasProfile: true,
+      isComplete: profile.is_complete || false,
+      completionPercentage: profile.completion_percentage || 0
+    });
   } catch (error) {
     console.error('Error fetching profile:', error);
     res.status(500).json({ error: 'Failed to fetch profile' });
@@ -260,7 +269,7 @@ router.post('/profile', authenticateToken, async (req, res) => {
   console.log('[Profile Save] business_name:', req.body.business_name);
 
   try {
-    const {
+    let {
       business_name,
       website_url,
       phone,
@@ -290,14 +299,29 @@ router.post('/profile', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Business name is required' });
     }
 
-    // Calculate completion percentage
-    const fields = [
+    // Handle logo_url - if it's a data URL, it's too large for VARCHAR(500)
+    // For now, skip storing data URLs (they should be uploaded to cloud storage)
+    if (logo_url && logo_url.startsWith('data:')) {
+      console.log('[Profile Save] Skipping data URL logo (too large for DB column)');
+      logo_url = null; // Don't store data URLs in the database
+    }
+
+    // Convert year_founded to integer if it's a string
+    if (year_founded && typeof year_founded === 'string') {
+      year_founded = parseInt(year_founded, 10) || null;
+    }
+
+    // Calculate completion percentage based on all fields
+    const allFields = [
       business_name, website_url, phone, email, address_line1, city, state,
-      postal_code, business_description, primary_category
+      postal_code, business_description, short_description, primary_category
     ];
-    const filledFields = fields.filter(f => f && f.toString().trim()).length;
-    const completionPercentage = Math.round((filledFields / fields.length) * 100);
-    const isComplete = completionPercentage >= 80;
+    const filledFields = allFields.filter(f => f && f.toString().trim()).length;
+    const completionPercentage = Math.round((filledFields / allFields.length) * 100);
+
+    // is_complete = true ONLY when ALL required fields are non-empty
+    const requiredFields = [business_name, website_url, short_description];
+    const isComplete = requiredFields.every(f => f && f.toString().trim());
 
     // Check if profile exists
     const existing = await db.query(
@@ -374,6 +398,7 @@ router.post('/profile', authenticateToken, async (req, res) => {
     }
 
     res.json({
+      success: true,
       profile: result.rows[0],
       isComplete,
       completionPercentage
