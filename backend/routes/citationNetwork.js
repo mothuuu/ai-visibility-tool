@@ -439,6 +439,9 @@ const entitlementService = require('../services/entitlementService');
  * Start a new submission campaign
  */
 router.post('/start-submissions', authenticateToken, async (req, res) => {
+  console.log('[Start Submissions] User ID:', req.user.id);
+  console.log('[Start Submissions] User email:', req.user.email);
+
   try {
     const { filters = {} } = req.body;
 
