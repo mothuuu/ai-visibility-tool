@@ -626,13 +626,18 @@ const campaignRunService = require('../services/campaignRunService');
  * Start a new submission campaign
  */
 router.post('/start-submissions', authenticateToken, async (req, res) => {
+  console.log('[Start Submissions] ========== NEW REQUEST ==========');
   console.log('[Start Submissions] User ID:', req.user.id);
   console.log('[Start Submissions] User email:', req.user.email);
+  console.log('[Start Submissions] Timestamp:', new Date().toISOString());
 
   try {
     const { filters = {} } = req.body;
+    console.log('[Start Submissions] Filters:', JSON.stringify(filters));
 
+    console.log('[Start Submissions] Calling campaignRunService.startSubmissions...');
     const result = await campaignRunService.startSubmissions(req.user.id, filters);
+    console.log('[Start Submissions] SUCCESS - Directories queued:', result.directoriesQueued);
 
     res.json({
       success: true,
@@ -641,7 +646,8 @@ router.post('/start-submissions', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Start submissions error:', error);
+    console.error('[Start Submissions] ERROR:', error.message);
+    console.error('[Start Submissions] Stack:', error.stack);
 
     // Handle specific errors
     if (error.message === 'PROFILE_REQUIRED') {
@@ -670,6 +676,7 @@ router.post('/start-submissions', authenticateToken, async (req, res) => {
     }
 
     if (error.message === 'NO_ENTITLEMENT') {
+      console.log('[Start Submissions] Returning NO_ENTITLEMENT error');
       return res.status(400).json({
         error: 'No directory submissions available. Please upgrade your plan or purchase a boost.',
         code: 'NO_ENTITLEMENT',
