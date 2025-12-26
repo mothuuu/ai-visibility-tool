@@ -2311,8 +2311,9 @@ async function startDirectorySubmissions() {
         }
 
         // Success - update UI
+        const queued = data.directoriesQueued ?? data.submissionsQueued ?? data.directories_queued ?? 0;
         showXeoAlert('Submissions Started!',
-            `${data.submissionsQueued} directories have been queued for submission.\n\n` +
+            `${queued} directories have been queued for submission.\n\n` +
             `We'll submit to 3-5 directories per day.\n\n` +
             `Check back here to monitor progress.`
         );
@@ -2320,10 +2321,10 @@ async function startDirectorySubmissions() {
         // Update state
         citationNetworkState.includedStatus = 'in_progress';
         citationNetworkState.includedProgress = {
-            total: data.submissionsQueued,
+            total: queued,
             submitted: 0,
             live: 0,
-            pending: data.submissionsQueued,
+            pending: queued,
             actionNeeded: 0
         };
         updateCitationNetworkUI();
