@@ -900,4 +900,150 @@ router.get('/directories/count', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/citation-network/credentials
+ * Get user's stored directory credentials from credential vault
+ */
+router.get('/credentials', authenticateToken, async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT
+        cv.id,
+        cv.directory_id,
+        cv.email,
+        cv.username,
+        cv.account_created_at,
+        cv.last_login_at,
+        cv.account_status,
+        cv.notes,
+        cv.created_at,
+        cv.updated_at,
+        d.name as directory_name,
+        d.website_url as directory_url,
+        d.logo_url as directory_logo
+      FROM credential_vault cv
+      JOIN directories d ON cv.directory_id = d.id
+      WHERE cv.user_id = $1
+        AND cv.account_status = 'active'
+      ORDER BY cv.created_at DESC
+    `, [req.user.id]);
+
+    // Transform to frontend format (don't expose password)
+    const credentials = result.rows.map(row => ({
+      id: row.id,
+      directoryId: row.directory_id,
+      directoryName: row.directory_name,
+      directoryUrl: row.directory_url,
+      directoryLogo: row.directory_logo,
+      accountUrl: row.directory_url, // For backwards compatibility with mock format
+      email: row.email,
+      username: row.username,
+      createdAt: row.account_created_at || row.created_at,
+      lastLoginAt: row.last_login_at,
+      status: row.account_status,
+      handedOffAt: null, // Track handoffs separately if needed
+      notes: row.notes
+    }));
+
+    res.json({ credentials });
+  } catch (error) {
+    console.error('Get credentials error:', error);
+    res.status(500).json({ error: 'Failed to fetch credentials' });
+  }
+});
+
+/**
+ * POST /api/citation-network/credentials/:id/handoff
+ * Mark a credential as handed off to the user
+ */
+router.post('/credentials/:id/handoff', authenticateToken, async (req, res) => {
+  try {
+    // Verify ownership and update
+    const result = await db.query(`
+      UPDATE credential_vault
+      SET
+        account_status = 'handed_off',
+        notes = COALESCE(notes, '') || ' | Handed off at ' || NOW()::text,
+        updated_at = NOW()
+      WHERE id = $1 AND user_id = $2
+      RETURNING *
+    `, [req.params.id, req.user.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Credential not found' });
+    }
+
+    res.json({ success: true, credential: result.rows[0] });
+  } catch (error) {
+    console.error('Handoff credential error:', error);
+    res.status(500).json({ error: 'Failed to handoff credential' });
+  }
+});
+
+/**
+ * GET /api/citation-network/action-reminders
+ * Get submissions that need action with approaching deadlines
+ */
+router.get('/action-reminders', authenticateToken, async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT
+        ds.id,
+        ds.directory_name,
+        ds.status,
+        ds.action_type,
+        ds.action_instructions,
+        ds.action_required_at,
+        ds.action_deadline,
+        ds.verification_deadline,
+        d.website_url as directory_url,
+        CASE
+          WHEN ds.action_deadline IS NOT NULL THEN
+            EXTRACT(DAY FROM ds.action_deadline - NOW())
+          WHEN ds.verification_deadline IS NOT NULL THEN
+            EXTRACT(DAY FROM ds.verification_deadline - NOW())
+          ELSE NULL
+        END as days_remaining
+      FROM directory_submissions ds
+      LEFT JOIN directories d ON ds.directory_id = d.id
+      WHERE ds.user_id = $1
+        AND ds.status IN ('needs_action', 'action_needed', 'pending_verification')
+        AND (
+          ds.action_deadline IS NOT NULL OR
+          ds.verification_deadline IS NOT NULL
+        )
+      ORDER BY
+        COALESCE(ds.action_deadline, ds.verification_deadline) ASC
+    `, [req.user.id]);
+
+    // Categorize by urgency
+    const reminders = result.rows.map(row => ({
+      id: row.id,
+      directoryName: row.directory_name,
+      directoryUrl: row.directory_url,
+      status: row.status,
+      actionType: row.action_type,
+      actionInstructions: row.action_instructions,
+      actionRequiredAt: row.action_required_at,
+      deadline: row.action_deadline || row.verification_deadline,
+      daysRemaining: row.days_remaining,
+      urgency: row.days_remaining <= 1 ? 'critical' :
+               row.days_remaining <= 3 ? 'high' :
+               row.days_remaining <= 7 ? 'medium' : 'low'
+    }));
+
+    res.json({
+      reminders,
+      summary: {
+        total: reminders.length,
+        critical: reminders.filter(r => r.urgency === 'critical').length,
+        high: reminders.filter(r => r.urgency === 'high').length
+      }
+    });
+  } catch (error) {
+    console.error('Get action reminders error:', error);
+    res.status(500).json({ error: 'Failed to fetch action reminders' });
+  }
+});
+
 module.exports = router;

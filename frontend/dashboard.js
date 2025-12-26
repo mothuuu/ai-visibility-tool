@@ -2649,7 +2649,7 @@ async function initSubmissionsData() {
         // Not logged in - show empty state
         citationNetworkState.submissions = [];
         citationNetworkState.blockedSubmissions = [];
-        citationNetworkState.credentials = [...mockCredentials];
+        citationNetworkState.credentials = [];
         updateProgressFromSubmissions();
         return;
     }
@@ -2700,8 +2700,24 @@ async function initSubmissionsData() {
         citationNetworkState.blockedSubmissions = [];
     }
 
-    // Keep mock credentials for now (these would come from a separate vault system)
-    citationNetworkState.credentials = [...mockCredentials];
+    // Fetch real credentials from credential vault API
+    try {
+        const credentialsResponse = await fetch(`${API_BASE_URL}/citation-network/credentials`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (credentialsResponse.ok) {
+            const credData = await credentialsResponse.json();
+            citationNetworkState.credentials = credData.credentials || [];
+            console.log('[Credentials] Loaded', citationNetworkState.credentials.length, 'real credentials');
+        } else {
+            console.warn('[Credentials] Failed to fetch, using empty state');
+            citationNetworkState.credentials = [];
+        }
+    } catch (error) {
+        console.error('[Credentials] Error fetching credentials:', error);
+        citationNetworkState.credentials = [];
+    }
 
     // Calculate progress from submissions
     updateProgressFromSubmissions();
@@ -3005,13 +3021,35 @@ function requestHandoff(credentialId) {
     showXeoConfirm(
         'Request Credential Handoff',
         'After handoff, you\'ll have full ownership of this directory account. We\'ll no longer manage it for you. Continue?',
-        function(confirmed) {
+        async function(confirmed) {
             if (confirmed) {
-                const cred = citationNetworkState.credentials.find(c => c.id === credentialId);
-                if (cred) {
-                    cred.handedOffAt = new Date().toISOString();
-                    showXeoAlert('Handoff Complete', `You now have full ownership of the ${cred.directoryName} account.`);
-                    renderCredentialsList();
+                const authToken = getNormalizedAuthToken();
+                if (!authToken) {
+                    showXeoAlert('Error', 'Please log in to complete handoff');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/citation-network/credentials/${credentialId}/handoff`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    });
+
+                    if (response.ok) {
+                        const cred = citationNetworkState.credentials.find(c => c.id === credentialId);
+                        if (cred) {
+                            cred.handedOffAt = new Date().toISOString();
+                            cred.status = 'handed_off';
+                        }
+                        showXeoAlert('Handoff Complete', `You now have full ownership of the ${cred?.directoryName || 'directory'} account.`);
+                        renderCredentialsList();
+                    } else {
+                        const error = await response.json();
+                        showXeoAlert('Error', error.error || 'Failed to complete handoff');
+                    }
+                } catch (error) {
+                    console.error('Handoff error:', error);
+                    showXeoAlert('Error', 'Failed to complete handoff. Please try again.');
                 }
             }
         }
