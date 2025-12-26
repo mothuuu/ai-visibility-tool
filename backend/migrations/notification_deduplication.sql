@@ -73,12 +73,15 @@ ON user_notification_preferences(user_id);
 ALTER TABLE directory_submissions
 ADD COLUMN IF NOT EXISTS action_deadline TIMESTAMP;
 
--- Set default action_deadline for existing action_needed submissions (10 days from action_required_at)
+-- Add action_required_at if it doesn't exist
+ALTER TABLE directory_submissions
+ADD COLUMN IF NOT EXISTS action_required_at TIMESTAMP;
+
+-- Set default action_deadline for existing action_needed submissions (10 days from created_at if no action_required_at)
 UPDATE directory_submissions
-SET action_deadline = action_required_at + INTERVAL '10 days'
-WHERE status = 'action_needed'
-  AND action_deadline IS NULL
-  AND action_required_at IS NOT NULL;
+SET action_deadline = COALESCE(action_required_at, created_at) + INTERVAL '10 days'
+WHERE status IN ('action_needed', 'needs_action')
+  AND action_deadline IS NULL;
 
 -- ============================================================================
 -- Verification
