@@ -230,7 +230,10 @@ Examples:
     console.error(error.stack);
     process.exit(1);
   } finally {
-    await db.end();
+    // Close the database pool
+    if (db.pool && typeof db.pool.end === 'function') {
+      await db.pool.end();
+    }
   }
 }
 
