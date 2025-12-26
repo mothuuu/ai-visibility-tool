@@ -592,10 +592,9 @@ class CampaignRunService {
           verification_status,
           priority_score,
           queue_position,
-          queued_at,
           created_at,
           updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $8, $9, $10, NOW(), NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $8, $9, $10, NOW(), NOW())
         RETURNING *
       `, [
         campaignRun.id,
