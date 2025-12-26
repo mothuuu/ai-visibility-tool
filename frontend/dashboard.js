@@ -2961,31 +2961,43 @@ function renderCredentialsList() {
         return;
     }
 
+    // Helper to get handoff status display
+    const getHandoffBadge = (cred) => {
+        if (cred.handoffStatus === 'requested') {
+            return '<span class="submission-status-badge status-pending">Handoff Requested</span>';
+        } else if (cred.handoffStatus === 'completed' || cred.handedOffAt) {
+            return '<span class="submission-status-badge status-live">Handed Off</span>';
+        }
+        return '';
+    };
+
     container.innerHTML = credentials.map(cred => `
         <div class="credential-card" data-id="${cred.id}">
             <div class="credential-header">
                 <h4>${cred.directoryName}</h4>
-                ${cred.handedOffAt ? '<span class="submission-status-badge status-live">Handed Off</span>' : ''}
+                ${getHandoffBadge(cred)}
             </div>
             <div class="credential-fields">
                 <div class="credential-field">
                     <label>Account URL</label>
-                    <a href="${cred.accountUrl}" target="_blank" style="color: var(--brand-cyan); font-size: 0.8rem;">${cred.accountUrl}</a>
+                    <a href="${cred.accountUrl || cred.directoryUrl}" target="_blank" style="color: var(--brand-cyan); font-size: 0.8rem;">${cred.accountUrl || cred.directoryUrl}</a>
                 </div>
                 <div class="credential-field">
-                    <label>Username</label>
-                    <span class="masked" id="username-${cred.id}">••••••••</span>
+                    <label>Username/Email</label>
+                    <span class="masked" id="username-${cred.id}">${cred.emailMasked || cred.usernameMasked || '••••••••'}</span>
                 </div>
                 <div class="credential-field">
                     <label>Password</label>
-                    <span class="masked" id="password-${cred.id}">••••••••</span>
+                    <span class="masked" id="password-${cred.id}">${cred.hasPassword ? '••••••••' : 'Not stored'}</span>
                 </div>
             </div>
             <div class="credential-actions">
-                <button class="btn-reveal" onclick="revealCredentials('${cred.id}')">
-                    <i class="fas fa-eye"></i> Reveal
-                </button>
-                ${!cred.handedOffAt ? `
+                ${cred.hasPassword ? `
+                    <button class="btn-reveal" onclick="revealCredentials('${cred.id}')" ${cred.handoffStatus !== 'completed' ? 'disabled title="Request handoff to access"' : ''}>
+                        <i class="fas fa-eye"></i> Reveal
+                    </button>
+                ` : ''}
+                ${cred.handoffStatus !== 'requested' && cred.handoffStatus !== 'completed' ? `
                     <button class="btn-handoff" onclick="requestHandoff('${cred.id}')">
                         <i class="fas fa-hand-holding"></i> Request Handoff
                     </button>
@@ -2995,24 +3007,58 @@ function renderCredentialsList() {
     `).join('');
 }
 
-// Reveal credentials (simulated)
-function revealCredentials(credentialId) {
-    // In real app, this would call API with audit logging
-    const usernameEl = document.getElementById(`username-${credentialId}`);
-    const passwordEl = document.getElementById(`password-${credentialId}`);
+// Reveal credentials - currently disabled for security hardening
+async function revealCredentials(credentialId) {
+    const authToken = getNormalizedAuthToken();
+    if (!authToken) {
+        showXeoAlert('Error', 'Please log in to view credentials');
+        return;
+    }
 
-    if (usernameEl && passwordEl) {
-        // Simulate revealing (in real app, would fetch from encrypted vault)
-        usernameEl.innerHTML = `<code>user@example.com</code>`;
-        passwordEl.innerHTML = `<code>••••••••</code> <button onclick="copyPassword('${credentialId}')" style="background: none; border: none; color: var(--brand-cyan); cursor: pointer; font-size: 0.75rem;"><i class="fas fa-copy"></i></button>`;
+    try {
+        const response = await fetch(`${API_BASE_URL}/citation-network/credentials/${credentialId}/password`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (response.status === 503) {
+            // Password reveal is disabled for security
+            showXeoAlert(
+                'Feature Temporarily Disabled',
+                'Password reveal is temporarily disabled for security hardening.\n\nPlease use the "Request Handoff" button to securely receive your credentials.'
+            );
+            return;
+        }
+
+        if (!response.ok) {
+            const error = await response.json();
+            showXeoAlert('Error', error.error || 'Failed to reveal credentials');
+            return;
+        }
+
+        const data = await response.json();
+
+        const usernameEl = document.getElementById(`username-${credentialId}`);
+        const passwordEl = document.getElementById(`password-${credentialId}`);
+
+        if (usernameEl && data.email) {
+            usernameEl.innerHTML = `<code>${data.email}</code>`;
+        }
+
+        if (passwordEl && data.password) {
+            passwordEl.innerHTML = `<code>${data.password}</code> <button onclick="copyToClipboard('${data.password}')" style="background: none; border: none; color: var(--brand-cyan); cursor: pointer; font-size: 0.75rem;"><i class="fas fa-copy"></i></button>`;
+        }
+    } catch (error) {
+        console.error('Reveal credentials error:', error);
+        showXeoAlert('Error', 'Failed to reveal credentials. Please try again.');
     }
 }
 
-// Copy password to clipboard
-function copyPassword(credentialId) {
-    // In real app, this would copy actual password
-    navigator.clipboard.writeText('password123').then(() => {
-        showXeoAlert('Copied', 'Password copied to clipboard');
+// Copy text to clipboard
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        showXeoAlert('Copied', 'Copied to clipboard');
+    }).catch(() => {
+        showXeoAlert('Error', 'Failed to copy to clipboard');
     });
 }
 

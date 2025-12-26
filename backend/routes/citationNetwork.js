@@ -8,12 +8,30 @@
 
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const citationNetworkStripe = require('../services/citationNetworkStripeService');
 const { authenticateToken, authenticateTokenOptional } = require('../middleware/auth');
 const db = require('../db/database');
 const config = require('../config/citationNetwork');
 const entitlementService = require('../services/entitlementService');
 const { normalizePlan } = require('../utils/planUtils');
+
+// Rate limiters for credential endpoints (SECURITY)
+const credentialRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // 30 requests per window
+  message: { error: 'Too many credential requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const handoffRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // 10 handoff requests per hour
+  message: { error: 'Too many handoff requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 // Generate a unique request ID
 function generateRequestId() {
@@ -903,49 +921,74 @@ router.get('/directories/count', authenticateToken, async (req, res) => {
 /**
  * GET /api/citation-network/credentials
  * Get user's stored directory credentials from credential vault
+ * SECURITY: Only returns safe metadata, NEVER passwords or secrets
  */
-router.get('/credentials', authenticateToken, async (req, res) => {
+router.get('/credentials', authenticateToken, credentialRateLimiter, async (req, res) => {
   try {
+    const userId = req.user.id;
+
+    // SECURITY: Only return safe metadata, NEVER passwords or secrets
     const result = await db.query(`
       SELECT
         cv.id,
         cv.directory_id,
-        cv.email,
-        cv.username,
-        cv.account_created_at,
-        cv.last_login_at,
-        cv.account_status,
-        cv.notes,
-        cv.created_at,
-        cv.updated_at,
         d.name as directory_name,
         d.website_url as directory_url,
-        d.logo_url as directory_logo
+        d.logo_url as directory_logo,
+        -- Mask email: show first 2 chars + ***@domain
+        CASE
+          WHEN cv.email IS NOT NULL AND cv.email LIKE '%@%' THEN
+            CONCAT(LEFT(cv.email, 2), '***@', SPLIT_PART(cv.email, '@', 2))
+          WHEN cv.email IS NOT NULL THEN
+            CONCAT(LEFT(cv.email, 2), '***')
+          ELSE NULL
+        END as email_masked,
+        -- Mask username similarly
+        CASE
+          WHEN cv.username IS NOT NULL THEN
+            CONCAT(LEFT(cv.username, 2), '***')
+          ELSE NULL
+        END as username_masked,
+        cv.account_status,
+        cv.account_created_at,
+        cv.last_login_at,
+        COALESCE(cv.handoff_status, 'none') as handoff_status,
+        cv.handed_off_at,
+        cv.handoff_reason,
+        cv.created_at,
+        cv.updated_at,
+        -- Indicate if password exists without revealing it
+        CASE WHEN cv.password_encrypted IS NOT NULL THEN true ELSE false END as has_password
+        -- NEVER include: password_encrypted, password, otp_secret, 2fa_codes
       FROM credential_vault cv
       JOIN directories d ON cv.directory_id = d.id
       WHERE cv.user_id = $1
-        AND cv.account_status = 'active'
       ORDER BY cv.created_at DESC
-    `, [req.user.id]);
+    `, [userId]);
 
-    // Transform to frontend format (don't expose password)
+    // Transform to frontend format
     const credentials = result.rows.map(row => ({
       id: row.id,
       directoryId: row.directory_id,
       directoryName: row.directory_name,
       directoryUrl: row.directory_url,
       directoryLogo: row.directory_logo,
-      accountUrl: row.directory_url, // For backwards compatibility with mock format
-      email: row.email,
-      username: row.username,
+      accountUrl: row.directory_url,
+      emailMasked: row.email_masked,
+      usernameMasked: row.username_masked,
+      hasPassword: row.has_password,
       createdAt: row.account_created_at || row.created_at,
       lastLoginAt: row.last_login_at,
       status: row.account_status,
-      handedOffAt: null, // Track handoffs separately if needed
-      notes: row.notes
+      handoffStatus: row.handoff_status,
+      handedOffAt: row.handed_off_at,
+      handoffReason: row.handoff_reason
     }));
 
-    res.json({ credentials });
+    res.json({
+      credentials,
+      _security: 'Passwords and secrets are never transmitted. Use handoff to request access.'
+    });
   } catch (error) {
     console.error('Get credentials error:', error);
     res.status(500).json({ error: 'Failed to fetch credentials' });
@@ -954,30 +997,88 @@ router.get('/credentials', authenticateToken, async (req, res) => {
 
 /**
  * POST /api/citation-network/credentials/:id/handoff
- * Mark a credential as handed off to the user
+ * Request handoff of a credential to the user
+ * SECURITY: Strict ownership check, rate limited, with full audit trail
  */
-router.post('/credentials/:id/handoff', authenticateToken, async (req, res) => {
+router.post('/credentials/:id/handoff', authenticateToken, handoffRateLimiter, async (req, res) => {
   try {
-    // Verify ownership and update
-    const result = await db.query(`
-      UPDATE credential_vault
-      SET
-        account_status = 'handed_off',
-        notes = COALESCE(notes, '') || ' | Handed off at ' || NOW()::text,
-        updated_at = NOW()
-      WHERE id = $1 AND user_id = $2
-      RETURNING *
-    `, [req.params.id, req.user.id]);
+    const { id } = req.params;
+    const userId = req.user.id;
+    const { reason, notes } = req.body;
 
-    if (result.rows.length === 0) {
+    // STRICT ownership check - separate query for security
+    const credential = await db.query(
+      'SELECT id, user_id, directory_id FROM credential_vault WHERE id = $1',
+      [id]
+    );
+
+    if (credential.rows.length === 0) {
       return res.status(404).json({ error: 'Credential not found' });
     }
 
-    res.json({ success: true, credential: result.rows[0] });
+    // Verify ownership explicitly
+    if (credential.rows[0].user_id !== userId) {
+      console.warn(`[Security] User ${userId} attempted to access credential ${id} owned by ${credential.rows[0].user_id}`);
+
+      // Log the failed attempt
+      try {
+        await db.query(`
+          INSERT INTO credential_access_log (credential_id, user_id, access_type, ip_address, user_agent, success, failure_reason)
+          VALUES ($1, $2, 'handoff_request', $3, $4, false, 'Access denied - not owner')
+        `, [id, userId, req.ip, req.get('User-Agent')]);
+      } catch (logError) {
+        console.error('Failed to log access attempt:', logError);
+      }
+
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Update with audit trail
+    await db.query(`
+      UPDATE credential_vault
+      SET
+        handoff_status = 'requested',
+        handed_off_at = NOW(),
+        handed_off_by_user_id = $1,
+        handoff_reason = $2,
+        handoff_notes = $3,
+        updated_at = NOW()
+      WHERE id = $4
+    `, [userId, reason || 'User requested handoff', notes || null, id]);
+
+    // Log the successful access
+    try {
+      await db.query(`
+        INSERT INTO credential_access_log (credential_id, user_id, access_type, ip_address, user_agent, success)
+        VALUES ($1, $2, 'handoff_request', $3, $4, true)
+      `, [id, userId, req.ip, req.get('User-Agent')]);
+    } catch (logError) {
+      console.error('Failed to log access:', logError);
+    }
+
+    res.json({
+      success: true,
+      status: 'requested',
+      message: 'Handoff request submitted. You will receive access credentials shortly.'
+    });
   } catch (error) {
     console.error('Handoff credential error:', error);
-    res.status(500).json({ error: 'Failed to handoff credential' });
+    res.status(500).json({ error: 'Failed to request handoff' });
   }
+});
+
+/**
+ * GET /api/citation-network/credentials/:id/password
+ * Password reveal endpoint - DISABLED for security hardening
+ */
+router.get('/credentials/:id/password', authenticateToken, async (req, res) => {
+  // SECURITY: Password reveal is disabled until security hardening is complete
+  return res.status(503).json({
+    error: 'Password reveal is temporarily disabled for security hardening.',
+    message: 'Please use the handoff feature to request credential access.',
+    availableSoon: true,
+    alternative: 'POST /api/citation-network/credentials/:id/handoff'
+  });
 });
 
 /**
