@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const cron = require('node-cron');
 
 const aiTestingRoutes = require('./routes/ai-testing');
 const authRoutes = require('./routes/auth');
@@ -17,6 +18,10 @@ const waitlistRoutes = require('./routes/waitlist');
 const adminRoutes = require('./routes/admin');
 const stripeWebhookRoutes = require('./routes/stripe-webhook');
 const citationNetworkRoutes = require('./routes/citationNetwork');
+
+// Background jobs
+const { getWorker } = require('./jobs/submissionWorker');
+const { sendActionReminders } = require('./jobs/citationNetworkReminders');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -116,4 +121,43 @@ app.use('*', (req, res) => {
 app.listen(PORT, () => {
   console.log(`AI Visibility API server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV}`);
+
+  // ============================================================================
+  // Background Workers & Scheduled Jobs
+  // ============================================================================
+
+  // Start submission worker (processes queued directory submissions)
+  if (process.env.ENABLE_SUBMISSION_WORKER === '1') {
+    console.log('[Server] Starting submission worker...');
+    const worker = getWorker();
+    worker.start();
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+      console.log('[Server] SIGTERM received, stopping worker...');
+      worker.stop();
+    });
+    process.on('SIGINT', () => {
+      console.log('[Server] SIGINT received, stopping worker...');
+      worker.stop();
+    });
+  } else {
+    console.log('[Server] Submission worker disabled (set ENABLE_SUBMISSION_WORKER=1 to enable)');
+  }
+
+  // Schedule citation network reminder emails (daily at 9am UTC)
+  if (process.env.ENABLE_CITATION_REMINDERS === '1') {
+    console.log('[Server] Scheduling citation network reminders (daily at 9am UTC)...');
+    cron.schedule('0 9 * * *', async () => {
+      console.log('[Cron] Running citation network reminders...');
+      try {
+        const result = await sendActionReminders();
+        console.log('[Cron] Reminders complete:', result);
+      } catch (error) {
+        console.error('[Cron] Reminder job failed:', error);
+      }
+    });
+  } else {
+    console.log('[Server] Citation reminders disabled (set ENABLE_CITATION_REMINDERS=1 to enable)');
+  }
 });
