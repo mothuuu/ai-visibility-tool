@@ -22,57 +22,78 @@ class CampaignRunService {
    * FIXED: Uses transaction for atomicity
    */
   async startSubmissions(userId, filters = {}) {
-    console.log('[CampaignRun] startSubmissions called for user:', userId);
+    const reqId = Date.now();
+    console.log(`[CampaignRun:${reqId}] ========== START SUBMISSIONS ==========`);
+    console.log(`[CampaignRun:${reqId}] userId: ${userId}, type: ${typeof userId}`);
+
     const client = await db.getClient();
+    console.log(`[CampaignRun:${reqId}] DB client acquired`);
 
     try {
       await client.query('BEGIN');
-      console.log('[CampaignRun] Transaction started');
+      console.log(`[CampaignRun:${reqId}] Transaction started`);
 
       // 1. Validate prerequisites
-      console.log('[CampaignRun] Step 1: Validating prerequisites...');
+      console.log(`[CampaignRun:${reqId}] Step 1: Validating prerequisites...`);
       const validation = await this.validatePrerequisites(userId);
+      console.log(`[CampaignRun:${reqId}] Validation result:`, validation);
       if (!validation.valid) {
-        console.log('[CampaignRun] Validation failed:', validation.error);
+        console.log(`[CampaignRun:${reqId}] Validation FAILED:`, validation.error);
         throw new Error(validation.error);
       }
-      console.log('[CampaignRun] Prerequisites valid');
+      console.log(`[CampaignRun:${reqId}] Prerequisites valid`);
 
       // 2. Check for existing active campaign (with row lock)
-      console.log('[CampaignRun] Step 2: Checking for active campaign...');
+      console.log(`[CampaignRun:${reqId}] Step 2: Checking for active campaign...`);
       const activeCampaign = await this.getActiveCampaignWithLock(client, userId);
+      console.log(`[CampaignRun:${reqId}] Active campaign check result:`, activeCampaign ? activeCampaign.id : 'none');
       if (activeCampaign) {
-        console.log('[CampaignRun] Active campaign exists:', activeCampaign.id);
+        console.log(`[CampaignRun:${reqId}] Active campaign exists:`, activeCampaign.id);
         throw new Error('ACTIVE_CAMPAIGN_EXISTS');
       }
-      console.log('[CampaignRun] No active campaign');
+      console.log(`[CampaignRun:${reqId}] No active campaign`);
 
       // 3. Get entitlement
-      console.log('[CampaignRun] Step 3: Calculating entitlement...');
+      console.log(`[CampaignRun:${reqId}] Step 3: Calculating entitlement...`);
       const entitlement = await entitlementService.calculateEntitlement(userId);
-      console.log('[CampaignRun] Entitlement result:', {
+      console.log(`[CampaignRun:${reqId}] Entitlement result:`, JSON.stringify({
         remaining: entitlement.remaining,
         total: entitlement.total,
         used: entitlement.used,
         isSubscriber: entitlement.isSubscriber,
-        plan: entitlement.plan
-      });
+        plan: entitlement.plan,
+        breakdown: entitlement.breakdown
+      }));
       if (entitlement.remaining <= 0) {
-        console.log('[CampaignRun] NO_ENTITLEMENT - remaining is', entitlement.remaining);
+        console.log(`[CampaignRun:${reqId}] NO_ENTITLEMENT - remaining is ${entitlement.remaining}`);
         throw new Error('NO_ENTITLEMENT');
       }
-      console.log('[CampaignRun] Entitlement OK - remaining:', entitlement.remaining);
+      console.log(`[CampaignRun:${reqId}] Entitlement OK - remaining: ${entitlement.remaining}`);
 
       // 4. Get business profile
+      console.log(`[CampaignRun:${reqId}] Step 4: Getting business profile...`);
       const profile = await this.getBusinessProfile(userId);
+      console.log(`[CampaignRun:${reqId}] Profile found:`, profile ? {
+        id: profile.id,
+        business_name: profile.business_name,
+        is_complete: profile.is_complete
+      } : 'NULL');
 
       // 5. Create campaign run (within transaction)
+      console.log(`[CampaignRun:${reqId}] Step 5: Creating campaign run...`);
       const campaignRun = await this.createCampaignRunTx(client, userId, profile, entitlement, filters);
+      console.log(`[CampaignRun:${reqId}] Campaign run created:`, campaignRun.id);
 
       // 6. Select directories
+      console.log(`[CampaignRun:${reqId}] Step 6: Selecting directories (limit: ${entitlement.remaining})...`);
       const directories = await this.selectDirectoriesTx(client, campaignRun, filters, entitlement.remaining);
+      console.log(`[CampaignRun:${reqId}] Directories selected:`, {
+        count: directories.length,
+        firstThree: directories.slice(0, 3).map(d => ({ id: d.id, name: d.name }))
+      });
 
       if (directories.length === 0) {
+        console.log(`[CampaignRun:${reqId}] NO_DIRECTORIES_AVAILABLE - no eligible directories found`);
         // Update campaign status to failed if no directories found
         await client.query(`
           UPDATE campaign_runs
@@ -86,12 +107,17 @@ class CampaignRunService {
       }
 
       // 7. Create submission records (within transaction)
+      console.log(`[CampaignRun:${reqId}] Step 7: Creating ${directories.length} submission records...`);
       const submissions = await this.createSubmissionsTx(client, campaignRun, directories);
+      console.log(`[CampaignRun:${reqId}] Submissions created:`, submissions.length);
 
       // 8. Consume entitlement (within transaction)
+      console.log(`[CampaignRun:${reqId}] Step 8: Consuming ${submissions.length} from entitlement...`);
       await this.consumeEntitlementTx(client, userId, submissions.length, entitlement);
+      console.log(`[CampaignRun:${reqId}] Entitlement consumed`);
 
       // 9. Update campaign run status
+      console.log(`[CampaignRun:${reqId}] Step 9: Updating campaign run status to queued...`);
       await client.query(`
         UPDATE campaign_runs
         SET status = 'queued',
@@ -103,6 +129,7 @@ class CampaignRunService {
       `, [campaignRun.id, submissions.length]);
 
       await client.query('COMMIT');
+      console.log(`[CampaignRun:${reqId}] Transaction committed successfully`);
 
       return {
         campaignRunId: campaignRun.id,
