@@ -112,6 +112,123 @@ function getNormalizedAuthToken() {
 }
 
 // ============================================================================
+// JWT DECODE & USER-SCOPED STORAGE
+// ============================================================================
+
+/**
+ * Decode JWT and extract payload (no external library needed)
+ * @param {string} token - JWT token (with or without Bearer prefix)
+ * @returns {object|null} Decoded payload or null if invalid
+ */
+function decodeJWT(token) {
+    try {
+        if (!token) return null;
+        // Remove 'Bearer ' prefix if present
+        const cleanToken = token.startsWith('Bearer ') ? token.slice(7) : token;
+        // JWT is base64url encoded: header.payload.signature
+        const parts = cleanToken.split('.');
+        if (parts.length !== 3) return null;
+        // Decode payload (middle part) - handle base64url encoding
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        return payload;
+    } catch (e) {
+        console.error('[JWT] Failed to decode:', e);
+        return null;
+    }
+}
+
+/**
+ * Get current user ID from JWT token - deterministic, no async
+ * @returns {number|string|null} User ID or null if not logged in
+ */
+function getCurrentUserId() {
+    const token = getNormalizedAuthToken();
+    if (!token) return null;
+    const payload = decodeJWT(token);
+    return payload?.id || payload?.userId || payload?.user_id || payload?.sub || null;
+}
+
+/**
+ * Get user-scoped storage key to prevent data bleed between users
+ * @param {string} key - Base storage key
+ * @returns {string} User-scoped key (e.g., "businessProfile:123")
+ */
+function getUserStorageKey(key) {
+    const userId = getCurrentUserId();
+    return userId ? `${key}:${userId}` : key;
+}
+
+// Track last known user to detect user changes
+let lastKnownUserId = null;
+
+/**
+ * Check if user changed (call on app init and after login)
+ * Clears old user data if user switched accounts
+ */
+function checkUserChanged() {
+    const currentUserId = getCurrentUserId();
+
+    // Initialize on first call
+    if (lastKnownUserId === null) {
+        lastKnownUserId = currentUserId;
+        return;
+    }
+
+    // Detect user change
+    if (lastKnownUserId && currentUserId && lastKnownUserId !== currentUserId) {
+        console.log(`[Auth] User changed from ${lastKnownUserId} to ${currentUserId}, clearing old user data`);
+        clearUserLocalStorage(lastKnownUserId);
+    }
+
+    lastKnownUserId = currentUserId;
+}
+
+/**
+ * Clear user-scoped localStorage data
+ * @param {string|number|null} userId - Specific user ID to clear, or null for current user
+ */
+function clearUserLocalStorage(userId = null) {
+    const targetUserId = userId || getCurrentUserId();
+    if (!targetUserId) return;
+
+    const keysToRemove = [
+        `businessProfile:${targetUserId}`,
+        `citationNetworkState:${targetUserId}`,
+        `profileDraft:${targetUserId}`,
+        `submissionFilters:${targetUserId}`,
+        `dashboardPrefs:${targetUserId}`
+    ];
+
+    keysToRemove.forEach(key => {
+        if (localStorage.getItem(key)) {
+            localStorage.removeItem(key);
+            console.log(`[Storage] Removed ${key}`);
+        }
+    });
+
+    console.log(`[Storage] Cleared data for user ${targetUserId}`);
+}
+
+/**
+ * Logout helper - clears user data and tokens
+ */
+function handleLogout() {
+    clearUserLocalStorage();
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    lastKnownUserId = null;
+    console.log('[Auth] Logged out, cleared all user data');
+    // Redirect to login
+    window.location.href = '/login.html';
+}
+
+// Initialize user tracking on page load
+document.addEventListener('DOMContentLoaded', () => {
+    checkUserChanged();
+});
+
+// ============================================================================
 
 /**
  * Convert backend score (0-100) to display score (0-1000)
@@ -2455,12 +2572,13 @@ async function loadCitationNetworkData() {
             citationNetworkState.hasBusinessProfile = profileComplete;
             citationNetworkState.includedStatus = profileComplete ? 'ready' : 'no_profile';
 
-            // Sync localStorage with backend truth
+            // Sync localStorage with backend truth (user-scoped)
             if (profileData.profile) {
-                const localProfile = JSON.parse(localStorage.getItem('businessProfile') || '{}');
+                const storageKey = getUserStorageKey('businessProfile');
+                const localProfile = JSON.parse(localStorage.getItem(storageKey) || '{}');
                 if (localProfile.is_complete !== profileComplete) {
                     // Backend disagrees with local - backend wins
-                    localStorage.setItem('businessProfile', JSON.stringify({
+                    localStorage.setItem(storageKey, JSON.stringify({
                         ...localProfile,
                         ...profileData.profile,
                         is_complete: profileComplete
@@ -4029,8 +4147,8 @@ async function saveBusinessProfile(formData) {
         citationNetworkState.hasBusinessProfile = isComplete;
         citationNetworkState.includedStatus = isComplete ? 'ready' : 'no_profile';
 
-        // Save to localStorage with backend completion fields
-        localStorage.setItem('businessProfile', JSON.stringify({
+        // Save to localStorage with backend completion fields (user-scoped)
+        localStorage.setItem(getUserStorageKey('businessProfile'), JSON.stringify({
             ...formData,
             ...result.profile,
             is_complete: isComplete,
@@ -4075,10 +4193,10 @@ function cancelProfileForm() {
     );
 }
 
-// Load existing profile if available
+// Load existing profile if available (user-scoped)
 function loadExistingProfile() {
     try {
-        const savedProfile = localStorage.getItem('businessProfile');
+        const savedProfile = localStorage.getItem(getUserStorageKey('businessProfile'));
         if (savedProfile) {
             const profile = JSON.parse(savedProfile);
             populateProfileForm(profile);
