@@ -2237,20 +2237,23 @@ async function startDirectorySubmissions() {
             throw new Error(data.error || 'Failed to start submissions');
         }
 
-        // Success!
+        // Success! Use fallback pattern for response field name
+        const queued = data.directoriesQueued ?? data.submissionsQueued ?? data.directories_queued ?? 0;
+        const remaining = data.entitlementRemaining ?? data.entitlement_remaining ?? 0;
+
         showXeoAlert('Submissions Started!',
-            `${data.directoriesQueued} directories have been queued for submission!\n\n` +
+            `${queued} directories have been queued for submission!\n\n` +
             `We'll submit to ~3-5 directories per day.\n\n` +
-            `${data.entitlementRemaining} submissions remaining${citationNetworkState.plan !== 'freemium' ? ' this month' : ''}.`
+            `${remaining} submissions remaining${citationNetworkState.plan !== 'freemium' ? ' this month' : ''}.`
         );
 
         // Update state
         citationNetworkState.includedStatus = 'in_progress';
         citationNetworkState.includedProgress = {
-            total: data.directoriesQueued,
+            total: queued,
             submitted: 0,
             live: 0,
-            pending: data.directoriesQueued,
+            pending: queued,
             actionNeeded: 0
         };
 
