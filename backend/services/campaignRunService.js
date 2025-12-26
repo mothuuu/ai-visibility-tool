@@ -9,92 +9,133 @@
  * 5. Consume entitlement
  *
  * UPDATED: Uses transactions for atomicity and row locks for race condition prevention
+ * UPDATED: Distinct error codes for NO_ENTITLEMENT vs NO_ELIGIBLE_DIRECTORIES vs DIRECTORIES_NOT_SEEDED
  */
 
 const db = require('../db/database');
 const entitlementService = require('./entitlementService');
 const { USABLE_ORDER_STATUSES } = require('./entitlementService');
+const { normalizePlan } = require('../utils/planUtils');
+
+// Debug logging helper - only logs when CITATION_DEBUG=1
+function debugLog(requestId, ...args) {
+  if (process.env.CITATION_DEBUG === '1') {
+    const prefix = requestId ? `[CampaignRun:${requestId}]` : '[CampaignRun]';
+    console.log(prefix, ...args);
+  }
+}
+
+// Generate a unique request ID
+function generateRequestId() {
+  try {
+    return require('crypto').randomUUID();
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+}
 
 class CampaignRunService {
 
   /**
    * Start submissions - main entry point
    * FIXED: Uses transaction for atomicity
+   *
+   * @param {number} userId - User ID
+   * @param {object} filters - Directory filters
+   * @param {object} options - Options including requestId
    */
-  async startSubmissions(userId, filters = {}) {
-    const reqId = Date.now();
-    console.log(`[CampaignRun:${reqId}] ========== START SUBMISSIONS ==========`);
-    console.log(`[CampaignRun:${reqId}] userId: ${userId}, type: ${typeof userId}`);
+  async startSubmissions(userId, filters = {}, options = {}) {
+    const requestId = options.requestId || generateRequestId();
+
+    debugLog(requestId, '========== START SUBMISSIONS ==========');
+    debugLog(requestId, 'userId:', userId, 'type:', typeof userId);
+    debugLog(requestId, 'filters:', JSON.stringify(filters));
 
     const client = await db.getClient();
-    console.log(`[CampaignRun:${reqId}] DB client acquired`);
+    debugLog(requestId, 'DB client acquired');
 
     try {
       await client.query('BEGIN');
-      console.log(`[CampaignRun:${reqId}] Transaction started`);
+      debugLog(requestId, 'Transaction started');
+
+      // 0. Check if directories table is seeded
+      debugLog(requestId, 'Step 0: Checking directories table...');
+      const directoriesCheck = await this.checkDirectoriesSeeded(client);
+      debugLog(requestId, 'Directories check:', directoriesCheck);
+
+      if (!directoriesCheck.hasActive) {
+        debugLog(requestId, 'DIRECTORIES_NOT_SEEDED - no active directories');
+        throw new Error('DIRECTORIES_NOT_SEEDED');
+      }
+      if (!directoriesCheck.hasEligible) {
+        debugLog(requestId, 'DIRECTORIES_NOT_SEEDED - no eligible (free/freemium) directories');
+        throw new Error('DIRECTORIES_NOT_SEEDED');
+      }
 
       // 1. Validate prerequisites
-      console.log(`[CampaignRun:${reqId}] Step 1: Validating prerequisites...`);
+      debugLog(requestId, 'Step 1: Validating prerequisites...');
       const validation = await this.validatePrerequisites(userId);
-      console.log(`[CampaignRun:${reqId}] Validation result:`, validation);
+      debugLog(requestId, 'Validation result:', validation);
       if (!validation.valid) {
-        console.log(`[CampaignRun:${reqId}] Validation FAILED:`, validation.error);
+        debugLog(requestId, 'Validation FAILED:', validation.error);
         throw new Error(validation.error);
       }
-      console.log(`[CampaignRun:${reqId}] Prerequisites valid`);
 
       // 2. Check for existing active campaign (with row lock)
-      console.log(`[CampaignRun:${reqId}] Step 2: Checking for active campaign...`);
+      debugLog(requestId, 'Step 2: Checking for active campaign...');
       const activeCampaign = await this.getActiveCampaignWithLock(client, userId);
-      console.log(`[CampaignRun:${reqId}] Active campaign check result:`, activeCampaign ? activeCampaign.id : 'none');
       if (activeCampaign) {
-        console.log(`[CampaignRun:${reqId}] Active campaign exists:`, activeCampaign.id);
+        debugLog(requestId, 'Active campaign exists:', activeCampaign.id);
         throw new Error('ACTIVE_CAMPAIGN_EXISTS');
       }
-      console.log(`[CampaignRun:${reqId}] No active campaign`);
 
       // 3. Get entitlement
-      console.log(`[CampaignRun:${reqId}] Step 3: Calculating entitlement...`);
-      const entitlement = await entitlementService.calculateEntitlement(userId);
-      console.log(`[CampaignRun:${reqId}] Entitlement result:`, JSON.stringify({
+      debugLog(requestId, 'Step 3: Calculating entitlement...');
+      const entitlement = await entitlementService.calculateEntitlement(userId, { requestId });
+
+      debugLog(requestId, 'Entitlement result:', {
         remaining: entitlement.remaining,
         total: entitlement.total,
         used: entitlement.used,
         isSubscriber: entitlement.isSubscriber,
         plan: entitlement.plan,
-        breakdown: entitlement.breakdown
-      }));
+        subscriptionRemaining: entitlement.breakdown?.subscriptionRemaining,
+        ordersRemaining: entitlement.breakdown?.ordersRemaining
+      });
+
       if (entitlement.remaining <= 0) {
-        console.log(`[CampaignRun:${reqId}] NO_ENTITLEMENT - remaining is ${entitlement.remaining}`);
-        throw new Error('NO_ENTITLEMENT');
+        debugLog(requestId, 'NO_ENTITLEMENT - remaining is', entitlement.remaining);
+        // Attach entitlement info to error for better debugging
+        const error = new Error('NO_ENTITLEMENT');
+        error.entitlement = entitlement;
+        throw error;
       }
-      console.log(`[CampaignRun:${reqId}] Entitlement OK - remaining: ${entitlement.remaining}`);
 
       // 4. Get business profile
-      console.log(`[CampaignRun:${reqId}] Step 4: Getting business profile...`);
+      debugLog(requestId, 'Step 4: Getting business profile...');
       const profile = await this.getBusinessProfile(userId);
-      console.log(`[CampaignRun:${reqId}] Profile found:`, profile ? {
+      debugLog(requestId, 'Profile:', profile ? {
         id: profile.id,
-        business_name: profile.business_name,
-        is_complete: profile.is_complete
+        business_name: profile.business_name
       } : 'NULL');
 
       // 5. Create campaign run (within transaction)
-      console.log(`[CampaignRun:${reqId}] Step 5: Creating campaign run...`);
+      debugLog(requestId, 'Step 5: Creating campaign run...');
       const campaignRun = await this.createCampaignRunTx(client, userId, profile, entitlement, filters);
-      console.log(`[CampaignRun:${reqId}] Campaign run created:`, campaignRun.id);
+      debugLog(requestId, 'Campaign run created:', campaignRun.id);
 
       // 6. Select directories
-      console.log(`[CampaignRun:${reqId}] Step 6: Selecting directories (limit: ${entitlement.remaining})...`);
+      debugLog(requestId, 'Step 6: Selecting directories (limit:', entitlement.remaining, ')...');
       const directories = await this.selectDirectoriesTx(client, campaignRun, filters, entitlement.remaining);
-      console.log(`[CampaignRun:${reqId}] Directories selected:`, {
+
+      debugLog(requestId, 'Directories selected:', {
         count: directories.length,
         firstThree: directories.slice(0, 3).map(d => ({ id: d.id, name: d.name }))
       });
 
       if (directories.length === 0) {
-        console.log(`[CampaignRun:${reqId}] NO_DIRECTORIES_AVAILABLE - no eligible directories found`);
-        // Update campaign status to failed if no directories found
+        debugLog(requestId, 'NO_ELIGIBLE_DIRECTORIES - entitlement OK but no directories match filters');
+        // Update campaign status to failed
         await client.query(`
           UPDATE campaign_runs
           SET status = 'failed',
@@ -102,22 +143,25 @@ class CampaignRunService {
               error_details = $3,
               updated_at = NOW()
           WHERE id = $1
-        `, [campaignRun.id, 'No eligible directories found matching your criteria', JSON.stringify({ filters })]);
-        throw new Error('NO_DIRECTORIES_AVAILABLE');
+        `, [campaignRun.id, 'No eligible directories found matching your criteria', JSON.stringify({ filters, entitlement: { remaining: entitlement.remaining } })]);
+
+        const error = new Error('NO_ELIGIBLE_DIRECTORIES');
+        error.entitlement = entitlement;
+        throw error;
       }
 
       // 7. Create submission records (within transaction)
-      console.log(`[CampaignRun:${reqId}] Step 7: Creating ${directories.length} submission records...`);
+      debugLog(requestId, 'Step 7: Creating', directories.length, 'submission records...');
       const submissions = await this.createSubmissionsTx(client, campaignRun, directories);
-      console.log(`[CampaignRun:${reqId}] Submissions created:`, submissions.length);
+      debugLog(requestId, 'Submissions created:', submissions.length);
 
       // 8. Consume entitlement (within transaction)
-      console.log(`[CampaignRun:${reqId}] Step 8: Consuming ${submissions.length} from entitlement...`);
+      debugLog(requestId, 'Step 8: Consuming', submissions.length, 'from entitlement...');
       await this.consumeEntitlementTx(client, userId, submissions.length, entitlement);
-      console.log(`[CampaignRun:${reqId}] Entitlement consumed`);
+      debugLog(requestId, 'Entitlement consumed');
 
       // 9. Update campaign run status
-      console.log(`[CampaignRun:${reqId}] Step 9: Updating campaign run status to queued...`);
+      debugLog(requestId, 'Step 9: Updating campaign run status to queued...');
       await client.query(`
         UPDATE campaign_runs
         SET status = 'queued',
@@ -129,7 +173,7 @@ class CampaignRunService {
       `, [campaignRun.id, submissions.length]);
 
       await client.query('COMMIT');
-      console.log(`[CampaignRun:${reqId}] Transaction committed successfully`);
+      debugLog(requestId, 'Transaction committed successfully');
 
       return {
         campaignRunId: campaignRun.id,
@@ -145,10 +189,34 @@ class CampaignRunService {
 
     } catch (error) {
       await client.query('ROLLBACK');
+      debugLog(requestId, 'Transaction rolled back due to error:', error.message);
       throw error;
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * Check if directories table is properly seeded
+   * Returns { hasActive, hasEligible, activeCount, eligibleCount }
+   */
+  async checkDirectoriesSeeded(client) {
+    const result = await client.query(`
+      SELECT
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE is_active = true) as active,
+        COUNT(*) FILTER (WHERE is_active = true AND pricing_model IN ('free', 'freemium')) as eligible
+      FROM directories
+    `);
+
+    const row = result.rows[0];
+    return {
+      hasActive: parseInt(row.active) > 0,
+      hasEligible: parseInt(row.eligible) > 0,
+      activeCount: parseInt(row.active),
+      eligibleCount: parseInt(row.eligible),
+      totalCount: parseInt(row.total)
+    };
   }
 
   /**
@@ -172,35 +240,33 @@ class CampaignRunService {
    * Validate prerequisites before starting
    */
   async validatePrerequisites(userId) {
-    console.log('[validatePrerequisites] Checking user:', userId);
+    debugLog(null, 'validatePrerequisites for user:', userId);
 
     // Check business profile
     const profile = await this.getBusinessProfile(userId);
-    console.log('[validatePrerequisites] Profile found:', profile ? 'YES' : 'NO');
 
     if (!profile) {
-      console.log('[validatePrerequisites] ❌ No profile found for user', userId);
+      debugLog(null, 'No profile found for user', userId);
       return { valid: false, error: 'PROFILE_REQUIRED' };
     }
 
-    console.log('[validatePrerequisites] Profile details:', {
+    debugLog(null, 'Profile found:', {
       id: profile.id,
-      user_id: profile.user_id,
       business_name: profile.business_name,
-      website_url: profile.website_url,
-      short_description: profile.short_description ? profile.short_description.substring(0, 30) + '...' : null
+      website_url: profile.website_url ? 'present' : 'missing',
+      short_description: profile.short_description ? 'present' : 'missing'
     });
 
     // Check minimum profile completeness
     const requiredFields = ['business_name', 'website_url', 'short_description'];
     for (const field of requiredFields) {
       if (!profile[field]) {
-        console.log('[validatePrerequisites] ❌ Missing required field:', field);
+        debugLog(null, 'Missing required field:', field);
         return { valid: false, error: `PROFILE_INCOMPLETE:${field}` };
       }
     }
 
-    console.log('[validatePrerequisites] ✓ All prerequisites met');
+    debugLog(null, 'All prerequisites met');
     return { valid: true };
   }
 
@@ -434,7 +500,6 @@ class CampaignRunService {
     // 'case_by_case' = no additional filtering
 
     // Exclude already submitted directories (from any campaign)
-    // Use valid statuses only (removed 'cancelled' from exclusion if not used)
     conditions.push(`NOT EXISTS (
       SELECT 1 FROM directory_submissions ds
       WHERE ds.directory_id = d.id
@@ -459,8 +524,8 @@ class CampaignRunService {
       LIMIT $${paramIndex}
     `;
 
-    console.log('selectDirectories query:', query);
-    console.log('selectDirectories params:', params);
+    debugLog(null, 'selectDirectories query:', query);
+    debugLog(null, 'selectDirectories params:', params);
 
     const result = await client.query(query, params);
     return result.rows;
@@ -803,3 +868,4 @@ class CampaignRunService {
 }
 
 module.exports = new CampaignRunService();
+module.exports.generateRequestId = generateRequestId;
