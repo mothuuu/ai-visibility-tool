@@ -438,7 +438,7 @@ class CampaignRunService {
 
   /**
    * Select directories based on entitlement + priority + filters
-   * UPDATED to use correct schema columns (tier_num, regions array)
+   * FIXED: Uses correct schema columns (tier, region_scope)
    */
   async selectDirectories(campaignRun, filters, limit) {
     return this.selectDirectoriesTx({ query: db.query.bind(db) }, campaignRun, filters, limit);
@@ -446,7 +446,7 @@ class CampaignRunService {
 
   /**
    * Select directories - transaction version
-   * UPDATED to use correct schema columns
+   * FIXED: Uses correct schema columns (tier, region_scope)
    */
   async selectDirectoriesTx(client, campaignRun, filters, limit) {
     const filtersSnapshot = typeof campaignRun.filters_snapshot === 'string'
@@ -461,18 +461,18 @@ class CampaignRunService {
     // Filter: pricing (only free/freemium)
     conditions.push(`d.pricing_model IN ('free', 'freemium')`);
 
-    // Filter: regions (use array overlap with regions TEXT[])
+    // Filter: regions (region_scope is VARCHAR, not array)
+    // Match directories where region_scope is 'global' OR in the requested regions
     if (filtersSnapshot.regions && filtersSnapshot.regions.length > 0) {
-      // Always include 'global' + specified regions
       const regions = [...new Set(['global', ...filtersSnapshot.regions])];
-      conditions.push(`d.regions && $${paramIndex}::text[]`);
+      conditions.push(`d.region_scope = ANY($${paramIndex}::text[])`);
       params.push(regions);
       paramIndex++;
     }
 
-    // Filter: tiers (use tier_num INT column)
+    // Filter: tiers (column is 'tier', not 'tier_num')
     if (filtersSnapshot.tiers && filtersSnapshot.tiers.length > 0) {
-      conditions.push(`d.tier_num = ANY($${paramIndex}::int[])`);
+      conditions.push(`d.tier = ANY($${paramIndex}::int[])`);
       params.push(filtersSnapshot.tiers);
       paramIndex++;
     }
@@ -519,7 +519,7 @@ class CampaignRunService {
       WHERE ${conditions.join(' AND ')}
       ORDER BY
         COALESCE(d.priority_score, 0) DESC,
-        d.tier_num ASC,
+        d.tier ASC,
         d.name ASC
       LIMIT $${paramIndex}
     `;
@@ -568,7 +568,7 @@ class CampaignRunService {
         required_fields: directory.required_fields || ["name", "url", "short_description"],
         approval_type: directory.approval_type || 'review',
         typical_approval_days: directory.typical_approval_days || 7,
-        tier_num: directory.tier_num,
+        tier: directory.tier,
         priority_score: directory.priority_score,
         pricing_model: directory.pricing_model,
         directory_type: directory.directory_type,
