@@ -4,30 +4,28 @@
  * Calculates and manages directory submission entitlements based on:
  * - Subscription plan (DIY: 10/mo, Pro: 25/mo, Agency: 100/mo)
  * - Order-based allocations ($249 starter, $99 packs)
+ *
+ * UPDATED: Uses planUtils as single source of truth for plan allocations
  */
 
 const db = require('../db/database');
-const config = require('../config/citationNetwork');
+const {
+  PLAN_ALLOCATIONS,
+  normalizePlan,
+  isPaidPlan,
+  getPlanAllocation
+} = require('../utils/planUtils');
 
-const PLAN_ALLOCATIONS = config.planAllocations || {
-  freemium: 0,
-  free: 0,
-  diy: 10,
-  pro: 25,
-  enterprise: 50,
-  agency: 100
-};
+// Debug logging helper - only logs when CITATION_DEBUG=1
+function debugLog(requestId, ...args) {
+  if (process.env.CITATION_DEBUG === '1') {
+    const prefix = requestId ? `[Entitlement:${requestId}]` : '[Entitlement]';
+    console.log(prefix, ...args);
+  }
+}
 
 // Step 5: Unify order status definitions
 const USABLE_ORDER_STATUSES = ['paid', 'processing', 'in_progress', 'completed'];
-
-/**
- * Step 1: Normalize plan strings
- * Handles null, undefined, case variations, and whitespace
- */
-function normalizePlan(plan) {
-  return (plan || 'free').toLowerCase().trim();
-}
 
 class EntitlementService {
 
@@ -35,23 +33,27 @@ class EntitlementService {
    * Calculate total directories a user can submit to
    * FIXED: Properly handles subscribers who also have orders
    * Returns: { total, remaining, source, sourceId, breakdown, plan, isSubscriber }
+   *
+   * @param {number} userId - User ID
+   * @param {object} options - Options including requestId for logging
    */
-  async calculateEntitlement(userId) {
+  async calculateEntitlement(userId, options = {}) {
+    const requestId = options.requestId || null;
     const user = await this.getUser(userId);
 
     if (!user) {
       throw new Error('User not found');
     }
 
-    // Step 1: Normalize plan at start
+    // Step 1: Normalize plan using planUtils (single source of truth)
     const normalizedPlan = normalizePlan(user.plan);
 
-    console.log('[Entitlement] Calculating for user:', userId);
-    console.log('[Entitlement] User data:', {
+    debugLog(requestId, 'Calculating for user:', userId);
+    debugLog(requestId, 'User data:', {
       planRaw: user.plan,
       planNormalized: normalizedPlan,
       stripe_subscription_status: user.stripe_subscription_status,
-      stripe_subscription_id: user.stripe_subscription_id
+      stripe_subscription_id: user.stripe_subscription_id ? 'present' : 'null'
     });
 
     const breakdown = {
@@ -66,16 +68,17 @@ class EntitlementService {
     let primarySource = 'none';
     let sourceId = null;
 
-    // Step 2: Fix subscriber status check - more lenient
-    const isPaidPlan = ['diy', 'pro', 'enterprise', 'agency'].includes(normalizedPlan);
+    // Step 2: Check subscriber status using planUtils
+    const paidPlan = isPaidPlan(normalizedPlan);
     const validStatuses = ['active', 'trialing', 'past_due', null, undefined];
     const isNotCanceled = validStatuses.includes(user.stripe_subscription_status);
-    const isSubscriber = isPaidPlan && isNotCanceled;
+    const isSubscriber = paidPlan && isNotCanceled;
 
-    console.log('[Entitlement] Subscriber check:', {
+    debugLog(requestId, 'Subscriber check:', {
       normalizedPlan,
-      isPaidPlan,
+      isPaidPlan: paidPlan,
       stripeStatus: user.stripe_subscription_status,
+      stripeSubId: user.stripe_subscription_id ? 'present' : 'null',
       isNotCanceled,
       isSubscriber
     });
@@ -84,20 +87,34 @@ class EntitlementService {
 
     if (isSubscriber) {
       // Step 3: Get current month's allocation (auto-creates if missing)
-      allocation = await this.getMonthlyAllocation(userId, normalizedPlan);
+      allocation = await this.getMonthlyAllocation(userId, normalizedPlan, { requestId });
       breakdown.subscription_total = allocation.total;
       breakdown.subscription_used = allocation.used;
       breakdown.subscription_remaining = allocation.remaining;
       primarySource = 'subscription';
       sourceId = user.stripe_subscription_id;
-      console.log('[Entitlement] Subscription allocation:', allocation);
+
+      debugLog(requestId, 'Subscription allocation:', {
+        base: allocation.base,
+        packs: allocation.packs,
+        total: allocation.total,
+        used: allocation.used,
+        remaining: allocation.remaining
+      });
     }
 
     // Check order-based allocation (always check, even for subscribers)
-    const orderAllocation = await this.getOrderAllocation(userId);
+    const orderAllocation = await this.getOrderAllocation(userId, { requestId });
     breakdown.orders_total = orderAllocation.total;
     breakdown.orders_used = orderAllocation.used;
     breakdown.orders_remaining = orderAllocation.remaining;
+
+    debugLog(requestId, 'Order allocation:', {
+      total: orderAllocation.total,
+      used: orderAllocation.used,
+      remaining: orderAllocation.remaining,
+      latestOrderId: orderAllocation.latestOrderId
+    });
 
     // If not subscriber but has orders, set primary source
     if (!isSubscriber && orderAllocation.total > 0) {
@@ -130,10 +147,11 @@ class EntitlementService {
       isSubscriber
     };
 
-    // Step 6: Debug logging (when entitlement is 0 or in development)
-    if (result.remaining <= 0 || process.env.NODE_ENV === 'development') {
-      console.log('Entitlement calculation:', {
+    // Always log when entitlement is 0, or when debug is on
+    if (result.remaining <= 0) {
+      console.log('[Entitlement] WARNING - Zero remaining:', {
         userId,
+        requestId,
         planRaw: user.plan,
         planNormalized: normalizedPlan,
         stripeStatus: user.stripe_subscription_status,
@@ -145,43 +163,51 @@ class EntitlementService {
       });
     }
 
-    console.log('[Entitlement] Final: total:', total, 'used:', used, 'remaining:', result.remaining);
+    debugLog(requestId, 'Final result:', {
+      total,
+      used,
+      remaining: result.remaining,
+      source: primarySource,
+      isSubscriber
+    });
 
     return result;
   }
 
   /**
-   * Step 3: Get monthly allocation for subscriber (create-on-read)
-   * Auto-creates allocation record if it doesn't exist
+   * Get monthly allocation for subscriber (create-on-read with UPSERT)
+   * Uses planUtils.getPlanAllocation for the base allocation
    */
-  async getMonthlyAllocation(userId, plan) {
+  async getMonthlyAllocation(userId, plan, options = {}) {
+    const requestId = options.requestId || null;
     const normalizedPlan = normalizePlan(plan);
     const now = new Date();
-    // Use ISO date string format for consistent DATE comparison in PostgreSQL
+
+    // Use UTC dates for consistency
     const year = now.getUTCFullYear();
     const month = now.getUTCMonth();
     const periodStartStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
     const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
     const periodEndStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-    console.log(`[Entitlement] getMonthlyAllocation: userId=${userId}, plan=${normalizedPlan}, period=${periodStartStr} to ${periodEndStr}`);
+    // Get base allocation from planUtils (single source of truth)
+    const baseAllocation = getPlanAllocation(normalizedPlan);
 
-    // Calculate base allocation from plan
-    const baseAllocation = normalizedPlan === 'agency' ? 100
-                         : normalizedPlan === 'enterprise' ? 50
-                         : normalizedPlan === 'pro' ? 25
-                         : normalizedPlan === 'diy' ? 10
-                         : 0;
-
-    console.log(`[Entitlement] Base allocation for ${normalizedPlan}: ${baseAllocation}`);
+    debugLog(requestId, 'getMonthlyAllocation:', {
+      userId,
+      plan: normalizedPlan,
+      baseAllocation,
+      period: `${periodStartStr} to ${periodEndStr}`
+    });
 
     if (baseAllocation === 0) {
-      console.log(`[Entitlement] WARNING: Plan ${normalizedPlan} has 0 base allocation`);
+      debugLog(requestId, `Plan ${normalizedPlan} has 0 base allocation`);
       return { base: 0, packs: 0, total: 0, used: 0, remaining: 0 };
     }
 
     try {
       // Use UPSERT pattern with ON CONFLICT ON CONSTRAINT
+      // GREATEST ensures upgrades increase allocation but downgrades don't reduce mid-month
       const result = await db.query(`
         INSERT INTO subscriber_directory_allocations
         (user_id, period_start, period_end, base_allocation, pack_allocation, submissions_used, created_at, updated_at)
@@ -194,7 +220,8 @@ class EntitlementService {
       `, [userId, periodStartStr, periodEndStr, baseAllocation]);
 
       const alloc = result.rows[0];
-      console.log(`[Entitlement] Allocation record:`, {
+
+      debugLog(requestId, 'Allocation record:', {
         id: alloc.id,
         base: alloc.base_allocation,
         packs: alloc.pack_allocation,
@@ -209,8 +236,8 @@ class EntitlementService {
         remaining: (alloc.base_allocation || 0) + (alloc.pack_allocation || 0) - (alloc.submissions_used || 0)
       };
     } catch (error) {
-      console.error(`[Entitlement] ERROR in getMonthlyAllocation:`, error.message);
-      console.error(`[Entitlement] Query params: userId=${userId}, periodStart=${periodStartStr}, baseAllocation=${baseAllocation}`);
+      console.error(`[Entitlement:${requestId}] ERROR in getMonthlyAllocation:`, error.message);
+      console.error(`[Entitlement:${requestId}] Query params:`, { userId, periodStartStr, baseAllocation });
 
       // Fallback: try simple SELECT in case UPSERT failed
       try {
@@ -221,7 +248,7 @@ class EntitlementService {
 
         if (fallbackResult.rows.length > 0) {
           const alloc = fallbackResult.rows[0];
-          console.log(`[Entitlement] Fallback found existing allocation:`, alloc.id);
+          debugLog(requestId, 'Fallback found existing allocation:', alloc.id);
           return {
             base: alloc.base_allocation || 0,
             packs: alloc.pack_allocation || 0,
@@ -231,11 +258,11 @@ class EntitlementService {
           };
         }
       } catch (fallbackError) {
-        console.error(`[Entitlement] Fallback SELECT also failed:`, fallbackError.message);
+        console.error(`[Entitlement:${requestId}] Fallback SELECT also failed:`, fallbackError.message);
       }
 
       // Last resort: return plan-based allocation without DB record
-      console.log(`[Entitlement] Using plan-based fallback: ${baseAllocation} directories`);
+      console.log(`[Entitlement:${requestId}] Using plan-based fallback: ${baseAllocation} directories`);
       return {
         base: baseAllocation,
         packs: 0,
@@ -247,9 +274,11 @@ class EntitlementService {
   }
 
   /**
-   * Step 5: Get order-based allocation using unified status definitions
+   * Get order-based allocation using unified status definitions
    */
-  async getOrderAllocation(userId) {
+  async getOrderAllocation(userId, options = {}) {
+    const requestId = options.requestId || null;
+
     const result = await db.query(`
       SELECT
         id,
@@ -262,6 +291,7 @@ class EntitlementService {
     `, [userId, USABLE_ORDER_STATUSES]);
 
     if (result.rows.length === 0) {
+      debugLog(requestId, 'No orders found for user');
       return { total: 0, used: 0, remaining: 0, latestOrderId: null };
     }
 

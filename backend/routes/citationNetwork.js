@@ -2,6 +2,8 @@
  * AI Citation Network Routes
  *
  * Handles checkout, orders, and allocation endpoints
+ *
+ * UPDATED: Improved error handling and diagnostic logging (CITATION_DEBUG=1)
  */
 
 const express = require('express');
@@ -11,6 +13,24 @@ const { authenticateToken, authenticateTokenOptional } = require('../middleware/
 const db = require('../db/database');
 const config = require('../config/citationNetwork');
 const entitlementService = require('../services/entitlementService');
+const { normalizePlan } = require('../utils/planUtils');
+
+// Generate a unique request ID
+function generateRequestId() {
+  try {
+    return require('crypto').randomUUID();
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+}
+
+// Debug logging helper - only logs when CITATION_DEBUG=1
+function debugLog(requestId, ...args) {
+  if (process.env.CITATION_DEBUG === '1') {
+    const prefix = requestId ? `[CitationNetwork:${requestId}]` : '[CitationNetwork]';
+    console.log(prefix, ...args);
+  }
+}
 
 /**
  * GET /api/citation-network/checkout-info
@@ -624,24 +644,54 @@ const campaignRunService = require('../services/campaignRunService');
 /**
  * POST /api/citation-network/start-submissions
  * Start a new submission campaign
+ *
+ * Error codes:
+ * - PROFILE_REQUIRED (400): No business profile exists
+ * - PROFILE_INCOMPLETE (400): Profile missing required fields
+ * - ACTIVE_CAMPAIGN_EXISTS (400): User has an active campaign
+ * - NO_ENTITLEMENT (400): User has no remaining directory submissions
+ * - NO_ELIGIBLE_DIRECTORIES (400): Entitlement OK but no directories match filters
+ * - DIRECTORIES_NOT_SEEDED (503): Server misconfiguration - no directories in DB
  */
 router.post('/start-submissions', authenticateToken, async (req, res) => {
-  const requestId = Date.now();
+  const requestId = generateRequestId();
+  const normalizedPlan = normalizePlan(req.user.plan);
+
+  // Always log request start (even without debug flag)
   console.log(`[StartSubmissions:${requestId}] === REQUEST START ===`);
-  console.log(`[StartSubmissions:${requestId}] User from token:`, {
+
+  // Detailed logging behind env flag
+  debugLog(requestId, 'User from token:', {
     id: req.user.id,
     email: req.user.email,
-    plan: req.user.plan
+    planRaw: req.user.plan,
+    planNormalized: normalizedPlan
   });
-  console.log(`[StartSubmissions:${requestId}] Timestamp:`, new Date().toISOString());
 
   try {
     const { filters = {} } = req.body;
-    console.log(`[StartSubmissions:${requestId}] Filters:`, JSON.stringify(filters));
+    debugLog(requestId, 'Filters:', JSON.stringify(filters));
 
-    console.log(`[StartSubmissions:${requestId}] Calling campaignRunService.startSubmissions...`);
-    const result = await campaignRunService.startSubmissions(req.user.id, filters);
+    // Calculate entitlement first for logging (service will recalculate)
+    const entitlementPreCheck = await entitlementService.calculateEntitlement(req.user.id, { requestId });
+    debugLog(requestId, 'Pre-check entitlement:', {
+      remaining: entitlementPreCheck.remaining,
+      total: entitlementPreCheck.total,
+      isSubscriber: entitlementPreCheck.isSubscriber,
+      plan: entitlementPreCheck.plan,
+      subscriptionRemaining: entitlementPreCheck.breakdown?.subscriptionRemaining,
+      ordersRemaining: entitlementPreCheck.breakdown?.ordersRemaining
+    });
+
+    debugLog(requestId, 'Calling campaignRunService.startSubmissions...');
+    const result = await campaignRunService.startSubmissions(req.user.id, filters, { requestId });
+
     console.log(`[StartSubmissions:${requestId}] SUCCESS - Directories queued:`, result.directoriesQueued);
+    debugLog(requestId, 'Result:', {
+      campaignRunId: result.campaignRunId,
+      directoriesQueued: result.directoriesQueued,
+      entitlementRemaining: result.entitlementRemaining
+    });
 
     res.json({
       success: true,
@@ -651,9 +701,19 @@ router.post('/start-submissions', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error(`[StartSubmissions:${requestId}] ERROR:`, error.message);
-    console.error(`[StartSubmissions:${requestId}] Stack:`, error.stack);
+    debugLog(requestId, 'Error stack:', error.stack);
 
-    // Handle specific errors
+    // Build entitlement breakdown for error responses
+    const entitlementInfo = error.entitlement ? {
+      remaining: error.entitlement.remaining,
+      total: error.entitlement.total,
+      planNormalized: error.entitlement.plan,
+      isSubscriber: error.entitlement.isSubscriber,
+      subscriptionRemaining: error.entitlement.breakdown?.subscriptionRemaining,
+      ordersRemaining: error.entitlement.breakdown?.ordersRemaining
+    } : null;
+
+    // Handle specific errors with distinct codes
     if (error.message === 'PROFILE_REQUIRED') {
       return res.status(400).json({
         error: 'Please complete your business profile first',
@@ -684,18 +744,36 @@ router.post('/start-submissions', authenticateToken, async (req, res) => {
       return res.status(400).json({
         error: 'No directory submissions available. Please upgrade your plan or purchase a boost.',
         code: 'NO_ENTITLEMENT',
-        redirect: '/citation-network.html'
+        redirect: '/citation-network.html',
+        entitlement: entitlementInfo
+      });
+    }
+
+    if (error.message === 'NO_ELIGIBLE_DIRECTORIES') {
+      return res.status(400).json({
+        error: 'No eligible directories found matching your criteria. Try adjusting your filters or check back later.',
+        code: 'NO_ELIGIBLE_DIRECTORIES',
+        entitlement: entitlementInfo
       });
     }
 
     if (error.message === 'NO_DIRECTORIES_AVAILABLE') {
       return res.status(400).json({
         error: 'No eligible directories found matching your criteria. Try adjusting your filters.',
-        code: 'NO_DIRECTORIES_AVAILABLE'
+        code: 'NO_DIRECTORIES_AVAILABLE',
+        entitlement: entitlementInfo
       });
     }
 
-    res.status(500).json({ error: 'Failed to start submissions' });
+    if (error.message === 'DIRECTORIES_NOT_SEEDED') {
+      console.error(`[StartSubmissions:${requestId}] CRITICAL: directories table not seeded!`);
+      return res.status(503).json({
+        error: 'Directory database is being updated. Please try again in a few minutes.',
+        code: 'DIRECTORIES_NOT_SEEDED'
+      });
+    }
+
+    res.status(500).json({ error: 'Failed to start submissions', requestId });
   }
 });
 
