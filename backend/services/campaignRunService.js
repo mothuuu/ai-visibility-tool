@@ -71,15 +71,29 @@ class CampaignRunService {
       console.log(`[CampaignRun:${reqId}] Entitlement OK - remaining: ${entitlement.remaining}`);
 
       // 4. Get business profile
+      console.log(`[CampaignRun:${reqId}] Step 4: Getting business profile...`);
       const profile = await this.getBusinessProfile(userId);
+      console.log(`[CampaignRun:${reqId}] Profile found:`, profile ? {
+        id: profile.id,
+        business_name: profile.business_name,
+        is_complete: profile.is_complete
+      } : 'NULL');
 
       // 5. Create campaign run (within transaction)
+      console.log(`[CampaignRun:${reqId}] Step 5: Creating campaign run...`);
       const campaignRun = await this.createCampaignRunTx(client, userId, profile, entitlement, filters);
+      console.log(`[CampaignRun:${reqId}] Campaign run created:`, campaignRun.id);
 
       // 6. Select directories
+      console.log(`[CampaignRun:${reqId}] Step 6: Selecting directories (limit: ${entitlement.remaining})...`);
       const directories = await this.selectDirectoriesTx(client, campaignRun, filters, entitlement.remaining);
+      console.log(`[CampaignRun:${reqId}] Directories selected:`, {
+        count: directories.length,
+        firstThree: directories.slice(0, 3).map(d => ({ id: d.id, name: d.name }))
+      });
 
       if (directories.length === 0) {
+        console.log(`[CampaignRun:${reqId}] NO_DIRECTORIES_AVAILABLE - no eligible directories found`);
         // Update campaign status to failed if no directories found
         await client.query(`
           UPDATE campaign_runs
@@ -93,12 +107,17 @@ class CampaignRunService {
       }
 
       // 7. Create submission records (within transaction)
+      console.log(`[CampaignRun:${reqId}] Step 7: Creating ${directories.length} submission records...`);
       const submissions = await this.createSubmissionsTx(client, campaignRun, directories);
+      console.log(`[CampaignRun:${reqId}] Submissions created:`, submissions.length);
 
       // 8. Consume entitlement (within transaction)
+      console.log(`[CampaignRun:${reqId}] Step 8: Consuming ${submissions.length} from entitlement...`);
       await this.consumeEntitlementTx(client, userId, submissions.length, entitlement);
+      console.log(`[CampaignRun:${reqId}] Entitlement consumed`);
 
       // 9. Update campaign run status
+      console.log(`[CampaignRun:${reqId}] Step 9: Updating campaign run status to queued...`);
       await client.query(`
         UPDATE campaign_runs
         SET status = 'queued',
@@ -110,6 +129,7 @@ class CampaignRunService {
       `, [campaignRun.id, submissions.length]);
 
       await client.query('COMMIT');
+      console.log(`[CampaignRun:${reqId}] Transaction committed successfully`);
 
       return {
         campaignRunId: campaignRun.id,
