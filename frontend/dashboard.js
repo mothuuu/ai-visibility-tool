@@ -2636,22 +2636,6 @@ async function loadCitationNetworkData() {
             }
         }
 
-        // Get real submission progress if available
-        if (progressRes.ok) {
-            const progress = await progressRes.json();
-
-            if (progress.total > 0) {
-                citationNetworkState.includedStatus = progress.live === progress.total ? 'complete' : 'in_progress';
-                citationNetworkState.includedProgress = {
-                    total: progress.total,
-                    submitted: progress.submitted + progress.live,
-                    live: progress.live,
-                    pending: progress.queued + progress.inProgress + progress.submitted,
-                    actionNeeded: progress.actionNeeded
-                };
-            }
-        }
-
         // Update UI with real data
         updateCitationNetworkUI();
 
