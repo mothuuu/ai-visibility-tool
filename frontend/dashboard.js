@@ -36,6 +36,7 @@ const STATUS_DISPLAY = {
     [SUBMISSION_STATUS.IN_PROGRESS]: { label: 'Processing', color: 'blue', icon: 'fa-spinner fa-spin', bgClass: 'status-processing' },
     [SUBMISSION_STATUS.SUBMITTED]: { label: 'Submitted', color: 'blue', icon: 'fa-paper-plane', bgClass: 'status-submitted' },
     [SUBMISSION_STATUS.NEEDS_ACTION]: { label: 'Action Needed', color: 'orange', icon: 'fa-exclamation-circle', bgClass: 'status-action' },
+    'action_needed': { label: 'Action Needed', color: 'orange', icon: 'fa-exclamation-circle', bgClass: 'status-action' }, // DB uses this variant
     [SUBMISSION_STATUS.BLOCKED]: { label: 'Blocked', color: 'red', icon: 'fa-ban', bgClass: 'status-blocked' },
     [SUBMISSION_STATUS.IN_REVIEW]: { label: 'In Review', color: 'blue', icon: 'fa-eye', bgClass: 'status-review' },
     [SUBMISSION_STATUS.VERIFIED]: { label: 'Verifying', color: 'teal', icon: 'fa-check-circle', bgClass: 'status-verifying' },
@@ -2737,6 +2738,11 @@ function getStatusDisplay(status) {
     return STATUS_DISPLAY[status] || STATUS_DISPLAY[SUBMISSION_STATUS.QUEUED];
 }
 
+// Check if status is action needed (handles both 'needs_action' and 'action_needed' from DB)
+function isActionNeededStatus(status) {
+    return status === SUBMISSION_STATUS.NEEDS_ACTION || status === 'action_needed';
+}
+
 // Get action type display info
 function getActionTypeDisplay(actionType) {
     return ACTION_TYPE_DISPLAY[actionType] || ACTION_TYPE_DISPLAY[ACTION_REQUIRED_TYPE.NONE];
@@ -2871,6 +2877,7 @@ function updateProgressFromSubmissions() {
                 counts.pending++;
                 break;
             case SUBMISSION_STATUS.NEEDS_ACTION:
+            case 'action_needed': // DB uses this variant
                 counts.actionNeeded++;
                 break;
             case SUBMISSION_STATUS.BLOCKED:
@@ -2903,7 +2910,7 @@ function renderSubmissionsList(containerId, submissions) {
 
     container.innerHTML = submissions.map(sub => {
         const statusDisplay = getStatusDisplay(sub.status);
-        const needsAction = sub.status === SUBMISSION_STATUS.NEEDS_ACTION;
+        const needsAction = isActionNeededStatus(sub.status);
         const actionDisplay = getActionTypeDisplay(sub.actionType);
         const daysRemaining = calculateDaysRemaining(sub.actionRequiredAt);
 
@@ -3324,7 +3331,7 @@ function resumeBlockedSubmission(submissionId) {
 // Render Citation Network tabs and content
 function renderCitationNetworkTabs() {
     // Get counts for badges
-    const actionCount = citationNetworkState.submissions.filter(s => s.status === SUBMISSION_STATUS.NEEDS_ACTION).length;
+    const actionCount = citationNetworkState.submissions.filter(s => isActionNeededStatus(s.status)).length;
     const blockedCount = citationNetworkState.blockedSubmissions.length;
 
     // Update tab badges
@@ -3344,7 +3351,7 @@ function renderCitationNetworkTabs() {
     renderSubmissionsList('allSubmissionsList', citationNetworkState.submissions);
 
     // Render action needed list (filtered)
-    const actionNeeded = citationNetworkState.submissions.filter(s => s.status === SUBMISSION_STATUS.NEEDS_ACTION);
+    const actionNeeded = citationNetworkState.submissions.filter(s => isActionNeededStatus(s.status));
     renderSubmissionsList('actionSubmissionsList', actionNeeded);
 
     // Render credentials
