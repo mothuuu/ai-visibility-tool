@@ -2791,6 +2791,9 @@ async function initSubmissionsData() {
             const data = await response.json();
             const submissions = data.submissions || [];
 
+            // Debug: log raw submission statuses from API
+            console.log('[Submissions] Raw statuses from API:', submissions.map(s => ({ id: s.id, status: s.status })));
+
             // Map backend data to frontend format
             citationNetworkState.submissions = submissions.map(sub => ({
                 id: sub.id,

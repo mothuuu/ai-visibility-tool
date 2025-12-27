@@ -691,16 +691,41 @@ class CampaignRunService {
   async getUserSubmissions(userId, options = {}) {
     const { status, limit = 50, offset = 0 } = options;
 
+    // Explicitly list columns to avoid any potential column name conflicts
     let query = `
       SELECT
-        ds.*,
-        d.name as directory_name,
+        ds.id,
+        ds.user_id,
+        ds.directory_id,
+        ds.campaign_run_id,
+        ds.business_profile_id,
+        ds.directory_name,
+        ds.directory_url,
+        ds.directory_category,
+        ds.directory_snapshot,
+        ds.status,
+        ds.action_type,
+        ds.action_instructions,
+        ds.action_url,
+        ds.action_required_at,
+        ds.action_deadline,
+        ds.submitted_at,
+        ds.verified_at,
+        ds.live_at,
+        ds.listing_url,
+        ds.blocked_at,
+        ds.blocked_reason,
+        ds.has_credentials,
+        ds.notes,
+        ds.queue_position,
+        ds.retry_count,
+        ds.created_at,
+        ds.updated_at,
+        d.name as dir_name,
         d.logo_url as directory_logo,
-        d.website_url as directory_website,
-        cr.status as campaign_status
+        d.website_url as directory_website
       FROM directory_submissions ds
       LEFT JOIN directories d ON ds.directory_id = d.id
-      LEFT JOIN campaign_runs cr ON ds.campaign_run_id = cr.id
       WHERE ds.user_id = $1
     `;
 
