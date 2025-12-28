@@ -245,14 +245,78 @@ CITATION_DEBUG=1
 
 ---
 
-## 10. Related Documentation
+## 10. Table Name Clarification
 
+**CONFIRMED CANONICAL NAMES:**
+
+| Question | Answer |
+|----------|--------|
+| `directories` or `ai_directories`? | `directories` ✅ |
+| `credential_vault` or `directory_credentials`? | `credential_vault` ✅ |
+
+No references to `ai_directories` or `directory_credentials` exist in the codebase.
+
+---
+
+## 11. Status Universe
+
+### directory_submissions.status
+
+| Status | Description |
+|--------|-------------|
+| `queued` | Waiting in queue |
+| `in_progress` | Worker processing |
+| `action_needed` | User must take action ⚠️ |
+| `needs_action` | Legacy alias ⚠️ |
+| `submitted` | Submitted to directory |
+| `live` | Listing is live |
+| `failed` | Processing failed |
+| `rejected` | Directory rejected |
+| `blocked` | Deadline missed |
+| `cancelled` | User cancelled |
+
+**⚠️ STATUS INCONSISTENCY:** Both `action_needed` and `needs_action` exist. Frontend handles both.
+
+### campaign_runs.status
+
+`created` → `selecting` → `queued` → `in_progress` → `completed`
+
+### directory_orders.status
+
+`pending` → `paid` → `processing` → `in_progress` → `completed`
+
+---
+
+## 12. Worker Topology
+
+| Question | Answer |
+|----------|--------|
+| Procfile exists? | ❌ No |
+| render.yaml exists? | ❌ No |
+| Separate worker service? | ❌ No evidence |
+| Worker in web process? | ✅ If `ENABLE_SUBMISSION_WORKER=1` |
+
+**Likely Reality:** Worker may be disabled. Check production env vars.
+
+---
+
+## 13. Related Documentation
+
+### Core Audit Files
 - [phase0-endpoint-inventory.md](./phase0-endpoint-inventory.md) - All API endpoints
 - [phase0-database-schema.md](./phase0-database-schema.md) - Database tables
 - [phase0-directory-audit.md](./phase0-directory-audit.md) - Directory data
 - [phase0-worker-state.md](./phase0-worker-state.md) - Worker analysis
 - [phase0-service-map.md](./phase0-service-map.md) - Service layer
 - [phase0-gaps-list.md](./phase0-gaps-list.md) - All gaps categorized
+
+### Extended Audit Files (Phase 0.5)
+- [phase0-migrations-audit.md](./phase0-migrations-audit.md) - Migration inventory & missing columns
+- [phase0-pack-flow.md](./phase0-pack-flow.md) - $249/$99 purchase flow
+- [phase0-api-contracts.md](./phase0-api-contracts.md) - Request/response schemas
+- [phase0-frontend-mocks.md](./phase0-frontend-mocks.md) - Mock/placeholder audit
+- [phase0-worker-topology.md](./phase0-worker-topology.md) - Production worker setup
+- [phase0-status-universe.md](./phase0-status-universe.md) - Status values & constraints
 
 ---
 
