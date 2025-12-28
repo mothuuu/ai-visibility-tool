@@ -242,6 +242,54 @@ router.post('/packs/checkout', authenticateToken, async (req, res) => {
 });
 
 /**
+ * GET /api/citation-network/packs/session/:sessionId
+ * T2-2: Pack Session Verification Endpoint
+ * Check status of a pack checkout session
+ */
+router.get('/packs/session/:sessionId', authenticateToken, async (req, res) => {
+  const { sessionId } = req.params;
+
+  try {
+    const order = await db.query(
+      'SELECT * FROM directory_orders WHERE stripe_checkout_session_id = $1 AND user_id = $2',
+      [sessionId, req.user.id]
+    );
+
+    if (order.rows.length > 0) {
+      const o = order.rows[0];
+      return res.json({
+        success: true,
+        data: {
+          status: 'completed',
+          order: {
+            id: o.id,
+            packType: o.pack_type || o.order_type,
+            directoriesAllocated: o.directories_allocated,
+            directoriesSubmitted: o.directories_submitted,
+            directoriesRemaining: o.directories_allocated - o.directories_submitted,
+            paidAt: o.paid_at,
+            orderStatus: o.status
+          }
+        }
+      });
+    }
+
+    // Session not found or not completed yet
+    res.json({
+      success: true,
+      data: { status: 'pending' }
+    });
+
+  } catch (err) {
+    console.error('[PackSession] Error:', err);
+    res.status(500).json({
+      success: false,
+      error: { code: ERROR_CODES.INTERNAL_ERROR, message: 'Failed to check session status' }
+    });
+  }
+});
+
+/**
  * GET /api/citation-network/orders
  * Get user's citation network orders
  */
