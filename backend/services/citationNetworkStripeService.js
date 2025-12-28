@@ -3,13 +3,20 @@
  *
  * Handles checkout creation and product routing:
  * - Non-subscriber with no prior purchase → $249 Starter
- * - Subscriber → $99 Pack
- * - Non-subscriber who bought $249 → $99 add-on Pack
+ * - Subscriber → $99 Boost Pack
+ * - Non-subscriber who bought $249 → $99 add-on Boost Pack
+ *
+ * TIER-0 REQUIREMENTS:
+ * - Rule 4: Orders remain status='paid' forever (only check for 'paid')
+ * - Rule 12: Use PACK_CONFIG for directories
+ * - Rule 14: Use authenticated user_id (req.user.id) for metadata
+ * - Rule 15: Always include pack_type in metadata
  */
 
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const db = require('../db/database');
 const config = require('../config/citationNetwork');
+const { PACK_CONFIG } = require('../config/citationNetwork');
 
 class CitationNetworkStripeService {
 
@@ -73,18 +80,22 @@ class CitationNetworkStripeService {
       }
     }
 
+    // TIER-0 RULE 12: Get directories from PACK_CONFIG
+    const starterPack = PACK_CONFIG.starter;
+
     // 2. Create order record
     const order = await db.query(`
       INSERT INTO directory_orders (
-        user_id, order_type, amount_cents, directories_allocated,
+        user_id, pack_type, order_type, amount_cents, directories_allocated,
         stripe_price_id, status
-      ) VALUES ($1, 'starter', 24900, 100, $2, 'pending')
+      ) VALUES ($1, 'starter', 'starter', $2, $3, $4, 'pending')
       RETURNING id
-    `, [userId, config.prices.STARTER_249]);
+    `, [userId, starterPack.price, starterPack.directories, config.prices.STARTER_249]);
 
     const orderId = order.rows[0].id;
 
     // 3. Create checkout session
+    // TIER-0 RULE 14/15: Use authenticated user_id, include pack_type
     const sessionConfig = {
       mode: 'payment',
       payment_method_types: ['card'],
@@ -93,13 +104,13 @@ class CitationNetworkStripeService {
         quantity: 1
       }],
       metadata: {
-        order_id: orderId,
-        user_id: userId ? userId.toString() : 'guest',
-        order_type: 'starter',
-        directories: '100',
+        user_id: userId ? String(userId) : 'guest',
+        pack_type: 'starter',
+        order_type: 'starter', // Legacy compatibility
+        directories_allocated: String(starterPack.directories),
         product: 'citation_network'
       },
-      success_url: `${process.env.FRONTEND_URL}/citation-network-success.html?order=${orderId}&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${process.env.FRONTEND_URL}/citation-network-success.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL}/citation-network.html?cancelled=true`
     };
 
@@ -158,14 +169,17 @@ class CitationNetworkStripeService {
       }
     }
 
+    // TIER-0 RULE 12: Get directories from PACK_CONFIG
+    const boostPack = PACK_CONFIG.boost;
+
     // 3. Create order record
     const order = await db.query(`
       INSERT INTO directory_orders (
-        user_id, business_profile_id, order_type, amount_cents,
+        user_id, business_profile_id, pack_type, order_type, amount_cents,
         directories_allocated, stripe_price_id, status
-      ) VALUES ($1, $2, 'pack', 9900, 100, $3, 'pending')
+      ) VALUES ($1, $2, 'boost', 'boost', $3, $4, $5, 'pending')
       RETURNING id
-    `, [userId, profile.id, config.prices.PACK_99]);
+    `, [userId, profile.id, boostPack.price, boostPack.directories, config.prices.PACK_99]);
 
     const orderId = order.rows[0].id;
 
@@ -187,7 +201,7 @@ class CitationNetworkStripeService {
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,
-        metadata: { user_id: userId.toString() }
+        metadata: { user_id: String(userId) }
       });
       customerId = customer.id;
 
@@ -197,6 +211,7 @@ class CitationNetworkStripeService {
       );
     }
 
+    // TIER-0 RULE 14/15: Use authenticated user_id, include pack_type
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'payment',
@@ -206,13 +221,13 @@ class CitationNetworkStripeService {
         quantity: 1
       }],
       metadata: {
-        order_id: orderId,
-        user_id: userId.toString(),
-        order_type: 'pack',
-        directories: '100',
+        user_id: String(userId),
+        pack_type: 'boost',
+        order_type: 'boost', // Legacy compatibility (was 'pack')
+        directories_allocated: String(boostPack.directories),
         product: 'citation_network'
       },
-      success_url: `${process.env.FRONTEND_URL}/dashboard.html?tab=citation-network&order=${orderId}&success=true`,
+      success_url: `${process.env.FRONTEND_URL}/dashboard.html?tab=citation-network&success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL}/dashboard.html?tab=citation-network&cancelled=true`
     });
 
@@ -312,35 +327,38 @@ class CitationNetworkStripeService {
     return config.isActiveSubscriber(user);
   }
 
+  // TIER-0 RULE 4: New orders only have 'paid', but include legacy statuses for compatibility
   async hasStarterPurchase(userId) {
     const result = await db.query(`
       SELECT id FROM directory_orders
       WHERE user_id = $1
-        AND order_type = 'starter'
+        AND (order_type = 'starter' OR pack_type = 'starter')
         AND status IN ('paid', 'processing', 'in_progress', 'completed')
       LIMIT 1
     `, [userId]);
     return result.rows.length > 0;
   }
 
+  // TIER-0 RULE 4: New orders only have 'paid', but include legacy statuses for compatibility
   async getPacksThisYear(userId) {
     const result = await db.query(`
       SELECT COUNT(*) as count
       FROM directory_orders
       WHERE user_id = $1
-        AND order_type = 'pack'
+        AND (order_type IN ('pack', 'boost') OR pack_type = 'boost')
         AND status IN ('paid', 'processing', 'in_progress', 'completed')
         AND created_at >= date_trunc('year', NOW())
     `, [userId]);
     return parseInt(result.rows[0].count);
   }
 
+  // TIER-0 RULE 4: New orders only have 'paid', but include legacy statuses for compatibility
   async getTotalPacks(userId) {
     const result = await db.query(`
       SELECT COUNT(*) as count
       FROM directory_orders
       WHERE user_id = $1
-        AND order_type = 'pack'
+        AND (order_type IN ('pack', 'boost') OR pack_type = 'boost')
         AND status IN ('paid', 'processing', 'in_progress', 'completed')
     `, [userId]);
     return parseInt(result.rows[0].count);

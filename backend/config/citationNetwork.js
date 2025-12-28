@@ -148,6 +148,12 @@ const ORDER_STATUSES = {
 
 /**
  * Order statuses that count toward entitlement
+ *
+ * TIER-0 RULE 4: NEW orders remain status='paid' forever.
+ * Usage tracked via directories_submitted < directories_allocated.
+ *
+ * Legacy statuses ('processing', 'in_progress', 'completed') included for
+ * backward compatibility with existing data. New code should only set 'paid'.
  */
 const USABLE_ORDER_STATUSES = ['paid', 'processing', 'in_progress', 'completed'];
 
