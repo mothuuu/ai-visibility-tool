@@ -307,12 +307,9 @@ class CitationNetworkStripeService {
   }
 
   isActiveSubscriber(user) {
-    if (!user) return false;
-    // Check if user has an active subscription
-    const isPaidPlan = ['diy', 'pro', 'enterprise', 'agency'].includes(user.plan);
-    const hasActiveSubscription = user.stripe_subscription_status === 'active' ||
-                                   user.stripe_subscription_id; // Legacy check
-    return isPaidPlan && hasActiveSubscription;
+    // FIX T0-5: Use centralized isActiveSubscriber from config
+    // This properly requires 'active' or 'trialing' status, not just stripe_subscription_id
+    return config.isActiveSubscriber(user);
   }
 
   async hasStarterPurchase(userId) {

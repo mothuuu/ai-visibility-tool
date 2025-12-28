@@ -4,15 +4,19 @@
  * Handles checkout, orders, and allocation endpoints
  *
  * UPDATED: Improved error handling and diagnostic logging (CITATION_DEBUG=1)
+ * T0-11: Pack checkout fetches full user from DB for eligibility check
+ * T0-12: Uses PACK_CONFIG for correct pricing/eligibility
  */
 
 const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const citationNetworkStripe = require('../services/citationNetworkStripeService');
 const { authenticateToken, authenticateTokenOptional } = require('../middleware/auth');
 const db = require('../db/database');
 const config = require('../config/citationNetwork');
+const { PACK_CONFIG, ERROR_CODES, isActiveSubscriber } = require('../config/citationNetwork');
 const entitlementService = require('../services/entitlementService');
 const { normalizePlan } = require('../utils/planUtils');
 
@@ -98,6 +102,190 @@ router.post('/checkout', authenticateTokenOptional, async (req, res) => {
     }
 
     res.status(500).json({ error: 'Failed to create checkout' });
+  }
+});
+
+/**
+ * POST /api/citation-network/packs/checkout
+ * Create checkout session for a specific pack type
+ *
+ * T0-11: CRITICAL - Fetches full user from DB for eligibility check
+ * T0-12: Uses PACK_CONFIG for correct pricing (Starter=$249/100, Boost=$99/25)
+ *
+ * Pack eligibility:
+ * - Starter ($249, 100 dirs): NON-SUBSCRIBERS ONLY
+ * - Boost ($99, 25 dirs): SUBSCRIBERS ONLY
+ */
+router.post('/packs/checkout', authenticateToken, async (req, res) => {
+  const { pack_type = 'starter' } = req.body;
+
+  try {
+    // T0-11: CRITICAL - Fetch full user from DB
+    // JWT may only have id/email, not plan/stripe_subscription_status
+    const userResult = await db.query(
+      'SELECT id, email, plan, stripe_subscription_status, stripe_customer_id, subscription_manual_override FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        error: { code: ERROR_CODES.USER_NOT_FOUND, message: 'User not found' }
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // T0-12: Validate pack type against PACK_CONFIG
+    const pack = PACK_CONFIG[pack_type];
+    if (!pack) {
+      return res.status(400).json({
+        success: false,
+        error: { code: ERROR_CODES.INVALID_PACK_TYPE, message: 'Invalid pack type' }
+      });
+    }
+
+    // T0-11: Now isActiveSubscriber has full user data
+    const isSubscriber = isActiveSubscriber(user);
+
+    debugLog(null, 'Pack checkout eligibility:', {
+      userId: user.id,
+      packType: pack_type,
+      isSubscriber,
+      subscriberOnly: pack.subscriberOnly
+    });
+
+    // T0-12: Boost packs are SUBSCRIBERS ONLY
+    if (pack.subscriberOnly && !isSubscriber) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.PACK_NOT_AVAILABLE,
+          message: 'Boost packs are only available for subscribers.'
+        }
+      });
+    }
+
+    // T0-12: Starter packs are NON-SUBSCRIBERS ONLY
+    if (!pack.subscriberOnly && isSubscriber) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.PACK_NOT_AVAILABLE,
+          message: 'Subscribers should purchase Boost packs for additional capacity.',
+          suggestedPack: 'boost'
+        }
+      });
+    }
+
+    // Get the correct Stripe price ID based on pack type
+    const priceId = pack_type === 'starter'
+      ? process.env.STRIPE_STARTER_PACK_PRICE_ID || config.prices.STARTER_249
+      : process.env.STRIPE_BOOST_PACK_PRICE_ID || config.prices.PACK_99;
+
+    if (!priceId) {
+      console.error(`[PackCheckout] Missing price ID for ${pack_type}`);
+      return res.status(500).json({
+        success: false,
+        error: { code: ERROR_CODES.CONFIG_ERROR, message: 'Pack not configured' }
+      });
+    }
+
+    // Get or create Stripe customer
+    let customerId = user.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        metadata: { user_id: String(user.id) }
+      });
+      customerId = customer.id;
+      await db.query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customerId, user.id]);
+    }
+
+    // Create checkout session
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [{ price: priceId, quantity: 1 }],
+      metadata: {
+        user_id: String(user.id),
+        pack_type,
+        directories_allocated: String(pack.directories),
+        product: 'citation_network',
+        order_type: pack_type
+      },
+      success_url: `${process.env.FRONTEND_URL}/dashboard.html?section=citation-network&pack=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/dashboard.html?section=citation-network&pack=cancelled`
+    });
+
+    console.log(`[PackCheckout] Created session ${session.id} for user ${user.id}, pack=${pack_type}, dirs=${pack.directories}`);
+
+    res.json({
+      success: true,
+      data: {
+        checkoutUrl: session.url,
+        sessionId: session.id,
+        packType: pack_type,
+        directories: pack.directories,
+        price: pack.price / 100 // Convert cents to dollars for display
+      }
+    });
+
+  } catch (err) {
+    console.error('[PackCheckout] Error:', err);
+    res.status(500).json({
+      success: false,
+      error: { code: ERROR_CODES.STRIPE_ERROR, message: 'Failed to create checkout session' }
+    });
+  }
+});
+
+/**
+ * GET /api/citation-network/packs/session/:sessionId
+ * T2-2: Pack Session Verification Endpoint
+ * Check status of a pack checkout session
+ */
+router.get('/packs/session/:sessionId', authenticateToken, async (req, res) => {
+  const { sessionId } = req.params;
+
+  try {
+    const order = await db.query(
+      'SELECT * FROM directory_orders WHERE stripe_checkout_session_id = $1 AND user_id = $2',
+      [sessionId, req.user.id]
+    );
+
+    if (order.rows.length > 0) {
+      const o = order.rows[0];
+      return res.json({
+        success: true,
+        data: {
+          status: 'completed',
+          order: {
+            id: o.id,
+            packType: o.pack_type || o.order_type,
+            directoriesAllocated: o.directories_allocated,
+            directoriesSubmitted: o.directories_submitted,
+            directoriesRemaining: o.directories_allocated - o.directories_submitted,
+            paidAt: o.paid_at,
+            orderStatus: o.status
+          }
+        }
+      });
+    }
+
+    // Session not found or not completed yet
+    res.json({
+      success: true,
+      data: { status: 'pending' }
+    });
+
+  } catch (err) {
+    console.error('[PackSession] Error:', err);
+    res.status(500).json({
+      success: false,
+      error: { code: ERROR_CODES.INTERNAL_ERROR, message: 'Failed to check session status' }
+    });
   }
 });
 
@@ -520,6 +708,9 @@ router.post('/start-submissions', authenticateToken, async (req, res) => {
   const requestId = generateRequestId();
   const normalizedPlan = normalizePlan(req.user.plan);
 
+  // T0-7: Extract idempotency key from header or body for duplicate prevention
+  const idempotencyKey = req.headers['idempotency-key'] || req.body.requestId || null;
+
   // Always log request start (even without debug flag)
   console.log(`[StartSubmissions:${requestId}] === REQUEST START ===`);
 
@@ -530,24 +721,28 @@ router.post('/start-submissions', authenticateToken, async (req, res) => {
     planRaw: req.user.plan,
     planNormalized: normalizedPlan
   });
+  debugLog(requestId, 'Idempotency key:', idempotencyKey);
 
   try {
     const { filters = {} } = req.body;
     debugLog(requestId, 'Filters:', JSON.stringify(filters));
 
-    // Calculate entitlement first for logging (service will recalculate)
-    const entitlementPreCheck = await entitlementService.calculateEntitlement(req.user.id, { requestId });
-    debugLog(requestId, 'Pre-check entitlement:', {
-      remaining: entitlementPreCheck.remaining,
-      total: entitlementPreCheck.total,
-      isSubscriber: entitlementPreCheck.isSubscriber,
-      plan: entitlementPreCheck.plan,
-      subscriptionRemaining: entitlementPreCheck.breakdown?.subscriptionRemaining,
-      ordersRemaining: entitlementPreCheck.breakdown?.ordersRemaining
-    });
+    // Note: Pre-check removed - service now handles all entitlement calculation within transaction
+    // This prevents race conditions where pre-check passes but transaction-check fails
 
     debugLog(requestId, 'Calling campaignRunService.startSubmissions...');
-    const result = await campaignRunService.startSubmissions(req.user.id, filters, { requestId });
+    const result = await campaignRunService.startSubmissions(req.user.id, filters, { requestId, idempotencyKey });
+
+    // T0-7: Handle duplicate request response
+    if (result.duplicate) {
+      console.log(`[StartSubmissions:${requestId}] DUPLICATE - Returning existing campaign:`, result.campaignRunId);
+      return res.json({
+        success: true,
+        message: `Request already processed. Campaign ID: ${result.campaignRunId}`,
+        duplicate: true,
+        ...result
+      });
+    }
 
     console.log(`[StartSubmissions:${requestId}] SUCCESS - Directories queued:`, result.directoriesQueued);
     debugLog(requestId, 'Result:', {
@@ -577,6 +772,15 @@ router.post('/start-submissions', authenticateToken, async (req, res) => {
     } : null;
 
     // Handle specific errors with distinct codes
+
+    // T0-7: Handle USER_NOT_FOUND (should not happen with auth, but just in case)
+    if (error.message === 'USER_NOT_FOUND') {
+      return res.status(401).json({
+        error: 'User not found. Please log in again.',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
     if (error.message === 'PROFILE_REQUIRED') {
       return res.status(400).json({
         error: 'Please complete your business profile first',

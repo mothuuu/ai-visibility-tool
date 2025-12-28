@@ -1,15 +1,29 @@
 /**
  * Stripe Webhook Handler
  * Automatically handles subscription lifecycle events
+ *
+ * IMPORTANT: This handler expects req.body to be a raw Buffer (not parsed JSON).
+ * It must be mounted in server.js BEFORE any body-parsing middleware:
+ *
+ *   app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), stripeWebhookHandler);
+ *   app.use(express.json()); // AFTER webhook routes
+ *
+ * T0-9: ATOMIC IDEMPOTENCY
+ * - INSERT is the lock (ON CONFLICT DO NOTHING)
+ * - On processing failure, DELETE the record so retry can work
+ * - On success, mark as processed
  */
 
-const express = require('express');
-const router = express.Router();
 const db = require('../db/database');
 const { handleCitationNetworkWebhook } = require('../services/citationNetworkWebhookHandler');
 
-// POST /api/webhooks/stripe - Handle Stripe webhook events
-router.post('/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+/**
+ * Main Stripe webhook handler
+ * Called directly from server.js with raw body
+ *
+ * T0-9: Uses atomic INSERT for idempotency with cleanup on failure
+ */
+async function stripeWebhookHandler(req, res) {
   const sig = req.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -24,10 +38,19 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
       // Development mode - parse JSON directly
       event = JSON.parse(req.body.toString());
     }
+  } catch (err) {
+    console.error('[Webhook] Signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
 
-    console.log(`🔔 [Stripe Webhook] Received event: ${event.type}`);
+  console.log(`🔔 [Stripe Webhook] Received event: ${event.type} (${event.id})`);
 
-    // Log event to database
+  // T0-9: ATOMIC idempotency check - INSERT is the lock
+  // If INSERT succeeds, we "own" this event and must process it
+  // If INSERT fails (conflict), event was already claimed by another handler
+  let eventId = null;
+
+  try {
     const eventLogResult = await db.query(`
       INSERT INTO stripe_events (event_id, event_type, customer_id, subscription_id, event_data)
       VALUES ($1, $2, $3, $4, $5)
@@ -41,70 +64,84 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
       JSON.stringify(event.data.object)
     ]);
 
-    // Skip if we've already processed this event
+    // If nothing returned, this event was already processed (duplicate)
     if (eventLogResult.rows.length === 0) {
-      console.log(`⏭️  Event ${event.id} already processed`);
-      return res.json({ received: true });
+      console.log(`⏭️  [Webhook] Duplicate event ${event.id}, skipping`);
+      return res.json({ received: true, duplicate: true });
     }
 
-    const eventId = eventLogResult.rows[0].id;
+    eventId = eventLogResult.rows[0].id;
+    console.log(`🔒 [Webhook] Acquired lock for event ${event.id} (db id: ${eventId})`);
+
+    // Now safe to process - we hold the "lock"
+    let handled = false;
 
     // Try citation network handler first (for one-time payments)
-    try {
-      const handledByCitationNetwork = await handleCitationNetworkWebhook(event);
-      if (handledByCitationNetwork) {
-        console.log(`📦 Event ${event.type} handled by Citation Network`);
-        await db.query(`
-          UPDATE stripe_events
-          SET processed = TRUE, processed_at = NOW()
-          WHERE id = $1
-        `, [eventId]);
-        return res.json({ received: true });
+    const handledByCitationNetwork = await handleCitationNetworkWebhook(event);
+    if (handledByCitationNetwork) {
+      console.log(`📦 Event ${event.type} handled by Citation Network`);
+      handled = true;
+    }
+
+    // Handle subscription events if not handled by citation network
+    if (!handled) {
+      switch (event.type) {
+        case 'customer.subscription.deleted':
+          await handleSubscriptionDeleted(event.data.object, eventId);
+          handled = true;
+          break;
+
+        case 'customer.subscription.updated':
+          await handleSubscriptionUpdated(event.data.object, eventId);
+          handled = true;
+          break;
+
+        case 'invoice.payment_failed':
+          await handlePaymentFailed(event.data.object, eventId);
+          handled = true;
+          break;
+
+        case 'invoice.payment_succeeded':
+          await handlePaymentSucceeded(event.data.object, eventId);
+          handled = true;
+          break;
+
+        case 'customer.subscription.created':
+          await handleSubscriptionCreated(event.data.object, eventId);
+          handled = true;
+          break;
+
+        default:
+          console.log(`ℹ️  Unhandled event type: ${event.type}`);
       }
-    } catch (cnError) {
-      console.error('❌ Citation Network webhook error:', cnError.message);
     }
 
-    // Handle the event (subscription events)
-    switch (event.type) {
-      case 'customer.subscription.deleted':
-        await handleSubscriptionDeleted(event.data.object, eventId);
-        break;
-
-      case 'customer.subscription.updated':
-        await handleSubscriptionUpdated(event.data.object, eventId);
-        break;
-
-      case 'invoice.payment_failed':
-        await handlePaymentFailed(event.data.object, eventId);
-        break;
-
-      case 'invoice.payment_succeeded':
-        await handlePaymentSucceeded(event.data.object, eventId);
-        break;
-
-      case 'customer.subscription.created':
-        await handleSubscriptionCreated(event.data.object, eventId);
-        break;
-
-      default:
-        console.log(`ℹ️  Unhandled event type: ${event.type}`);
-    }
-
-    // Mark event as processed
+    // Mark event as successfully processed
     await db.query(`
       UPDATE stripe_events
       SET processed = TRUE, processed_at = NOW()
       WHERE id = $1
     `, [eventId]);
 
+    console.log(`✅ [Webhook] Event ${event.id} processed successfully`);
     res.json({ received: true });
 
   } catch (error) {
-    console.error('❌ [Stripe Webhook] Error:', error.message);
-    return res.status(400).json({ error: 'Webhook error' });
+    console.error(`❌ [Webhook] Error processing ${event.id}:`, error.message);
+
+    // T0-9: If processing fails, remove the idempotency record so retry can work
+    if (eventId) {
+      try {
+        await db.query('DELETE FROM stripe_events WHERE id = $1', [eventId]);
+        console.log(`🔓 [Webhook] Released lock for event ${event.id} (allowing retry)`);
+      } catch (cleanupError) {
+        console.error(`⚠️  [Webhook] Failed to cleanup event ${event.id}:`, cleanupError.message);
+      }
+    }
+
+    return res.status(500).json({ error: 'Processing failed' });
   }
-});
+}
 
 /**
  * Handle subscription deletion (user canceled)
@@ -317,4 +354,4 @@ async function handleSubscriptionCreated(subscription, eventId) {
   `, [user.id, eventId]);
 }
 
-module.exports = router;
+module.exports = { stripeWebhookHandler };

@@ -10,12 +10,13 @@
  *
  * UPDATED: Uses transactions for atomicity and row locks for race condition prevention
  * UPDATED: Distinct error codes for NO_ENTITLEMENT vs NO_ELIGIBLE_DIRECTORIES vs DIRECTORIES_NOT_SEEDED
+ * FIX T0-7: Locks user row FIRST to serialize all requests per user
  */
 
 const db = require('../db/database');
 const entitlementService = require('./entitlementService');
 const { USABLE_ORDER_STATUSES } = require('./entitlementService');
-const { normalizePlan } = require('../utils/planUtils');
+const { normalizePlan, ERROR_CODES } = require('../config/citationNetwork');
 
 // Debug logging helper - only logs when CITATION_DEBUG=1
 function debugLog(requestId, ...args) {
@@ -46,10 +47,12 @@ class CampaignRunService {
    */
   async startSubmissions(userId, filters = {}, options = {}) {
     const requestId = options.requestId || generateRequestId();
+    const idempotencyKey = options.idempotencyKey || null;
 
     debugLog(requestId, '========== START SUBMISSIONS ==========');
     debugLog(requestId, 'userId:', userId, 'type:', typeof userId);
     debugLog(requestId, 'filters:', JSON.stringify(filters));
+    debugLog(requestId, 'idempotencyKey:', idempotencyKey);
 
     const client = await db.getClient();
     debugLog(requestId, 'DB client acquired');
@@ -58,8 +61,44 @@ class CampaignRunService {
       await client.query('BEGIN');
       debugLog(requestId, 'Transaction started');
 
-      // 0. Check if directories table is seeded
-      debugLog(requestId, 'Step 0: Checking directories table...');
+      // =========================================================================
+      // T0-7: CRITICAL - Lock user row FIRST to serialize ALL requests per user
+      // =========================================================================
+      debugLog(requestId, 'Step 0: Locking user row (FOR UPDATE)...');
+      const userResult = await client.query(
+        'SELECT * FROM users WHERE id = $1 FOR UPDATE',
+        [userId]
+      );
+
+      if (userResult.rows.length === 0) {
+        debugLog(requestId, 'USER_NOT_FOUND');
+        throw new Error('USER_NOT_FOUND');
+      }
+
+      const user = userResult.rows[0];
+      debugLog(requestId, 'User locked:', { id: user.id, plan: user.plan, stripeStatus: user.stripe_subscription_status });
+
+      // T0-7: Check idempotency key (if provided)
+      if (idempotencyKey) {
+        const existing = await client.query(
+          'SELECT * FROM campaign_runs WHERE user_id = $1 AND request_id = $2',
+          [userId, idempotencyKey]
+        );
+
+        if (existing.rows.length > 0) {
+          debugLog(requestId, 'Duplicate request detected - returning existing campaign');
+          await client.query('COMMIT');
+          return {
+            campaignRunId: existing.rows[0].id,
+            directoriesQueued: existing.rows[0].directories_queued || 0,
+            entitlementRemaining: null, // Not recalculated for duplicates
+            duplicate: true
+          };
+        }
+      }
+
+      // 0.5. Check if directories table is seeded
+      debugLog(requestId, 'Step 0.5: Checking directories table...');
       const directoriesCheck = await this.checkDirectoriesSeeded(client);
       debugLog(requestId, 'Directories check:', directoriesCheck);
 
@@ -81,7 +120,7 @@ class CampaignRunService {
         throw new Error(validation.error);
       }
 
-      // 2. Check for existing active campaign (with row lock)
+      // 2. Check for existing active campaign (already serialized by user lock)
       debugLog(requestId, 'Step 2: Checking for active campaign...');
       const activeCampaign = await this.getActiveCampaignWithLock(client, userId);
       if (activeCampaign) {
@@ -89,9 +128,9 @@ class CampaignRunService {
         throw new Error('ACTIVE_CAMPAIGN_EXISTS');
       }
 
-      // 3. Get entitlement
-      debugLog(requestId, 'Step 3: Calculating entitlement...');
-      const entitlement = await entitlementService.calculateEntitlement(userId, { requestId });
+      // 3. Get entitlement using client (T0-6: proper transaction handling)
+      debugLog(requestId, 'Step 3: Calculating entitlement with client...');
+      const entitlement = await entitlementService.calculateEntitlementWithClient(client, userId, user, { requestId });
 
       debugLog(requestId, 'Entitlement result:', {
         remaining: entitlement.remaining,
@@ -119,9 +158,9 @@ class CampaignRunService {
         business_name: profile.business_name
       } : 'NULL');
 
-      // 5. Create campaign run (within transaction)
+      // 5. Create campaign run (within transaction, with idempotency key if provided)
       debugLog(requestId, 'Step 5: Creating campaign run...');
-      const campaignRun = await this.createCampaignRunTx(client, userId, profile, entitlement, filters);
+      const campaignRun = await this.createCampaignRunTx(client, userId, profile, entitlement, filters, idempotencyKey);
       debugLog(requestId, 'Campaign run created:', campaignRun.id);
 
       // 6. Select directories
@@ -155,10 +194,15 @@ class CampaignRunService {
       const submissions = await this.createSubmissionsTx(client, campaignRun, directories);
       debugLog(requestId, 'Submissions created:', submissions.length);
 
-      // 8. Consume entitlement (within transaction)
-      debugLog(requestId, 'Step 8: Consuming', submissions.length, 'from entitlement...');
-      await this.consumeEntitlementTx(client, userId, submissions.length, entitlement);
-      debugLog(requestId, 'Entitlement consumed');
+      // 8. Consume entitlement using client with row locks (T0-7)
+      debugLog(requestId, 'Step 8: Consuming', submissions.length, 'from entitlement with locks...');
+      const consumeResult = await entitlementService.consumeEntitlementWithClient(client, userId, submissions.length, entitlement);
+      debugLog(requestId, 'Entitlement consumed:', {
+        consumed: consumeResult.consumed,
+        subscriptionConsumed: consumeResult.subscriptionConsumed,
+        ordersConsumed: consumeResult.ordersConsumed,
+        remaining: consumeResult.remaining
+      });
 
       // 9. Update campaign run status
       debugLog(requestId, 'Step 9: Updating campaign run status to queued...');
@@ -178,7 +222,9 @@ class CampaignRunService {
       return {
         campaignRunId: campaignRun.id,
         directoriesQueued: submissions.length,
-        entitlementRemaining: entitlement.remaining - submissions.length,
+        entitlementRemaining: consumeResult.remaining,
+        subscriptionRemaining: consumeResult.subscriptionRemaining,
+        ordersRemaining: consumeResult.ordersRemaining,
         submissions: submissions.map(s => ({
           id: s.id,
           directoryName: s.directory_snapshot?.name || s.directory_name,
@@ -302,14 +348,15 @@ class CampaignRunService {
   /**
    * Create campaign run with snapshots
    */
-  async createCampaignRun(userId, profile, entitlement, filters) {
-    return this.createCampaignRunTx({ query: db.query.bind(db) }, userId, profile, entitlement, filters);
+  async createCampaignRun(userId, profile, entitlement, filters, idempotencyKey = null) {
+    return this.createCampaignRunTx({ query: db.query.bind(db) }, userId, profile, entitlement, filters, idempotencyKey);
   }
 
   /**
    * Create campaign run with snapshots - transaction version
+   * T0-7: Now accepts idempotency key (request_id) for duplicate prevention
    */
-  async createCampaignRunTx(client, userId, profile, entitlement, filters) {
+  async createCampaignRunTx(client, userId, profile, entitlement, filters, idempotencyKey = null) {
     // Build profile snapshot (copy all relevant fields)
     const profileSnapshot = {
       id: profile.id,
@@ -354,8 +401,9 @@ class CampaignRunService {
         entitlement_source_id,
         directories_entitled,
         filters_snapshot,
-        status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'selecting')
+        status,
+        request_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'selecting', $9)
       RETURNING *
     `, [
       userId,
@@ -365,7 +413,8 @@ class CampaignRunService {
       entitlement.source,
       entitlement.sourceId,
       entitlement.remaining,
-      JSON.stringify(filtersSnapshot)
+      JSON.stringify(filtersSnapshot),
+      idempotencyKey
     ]);
 
     return result.rows[0];
