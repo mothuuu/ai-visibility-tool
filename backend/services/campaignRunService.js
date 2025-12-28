@@ -111,14 +111,17 @@ class CampaignRunService {
         throw new Error('DIRECTORIES_NOT_SEEDED');
       }
 
-      // 1. Validate prerequisites
-      debugLog(requestId, 'Step 1: Validating prerequisites...');
-      const validation = await this.validatePrerequisites(userId);
+      // 1. Validate prerequisites (T0-8: use client-aware version)
+      debugLog(requestId, 'Step 1: Validating prerequisites with client...');
+      const validation = await this.validatePrerequisitesWithClient(client, userId);
       debugLog(requestId, 'Validation result:', validation);
       if (!validation.valid) {
         debugLog(requestId, 'Validation FAILED:', validation.error);
         throw new Error(validation.error);
       }
+
+      // T0-8: Profile is now returned from validatePrerequisitesWithClient
+      const profile = validation.profile;
 
       // 2. Check for existing active campaign (already serialized by user lock)
       debugLog(requestId, 'Step 2: Checking for active campaign...');
@@ -150,9 +153,8 @@ class CampaignRunService {
         throw error;
       }
 
-      // 4. Get business profile
-      debugLog(requestId, 'Step 4: Getting business profile...');
-      const profile = await this.getBusinessProfile(userId);
+      // 4. Profile already retrieved in step 1 (T0-8: no separate db.query call)
+      debugLog(requestId, 'Step 4: Using profile from validation...');
       debugLog(requestId, 'Profile:', profile ? {
         id: profile.id,
         business_name: profile.business_name
@@ -317,6 +319,41 @@ class CampaignRunService {
   }
 
   /**
+   * T0-8: Validate prerequisites using transaction client
+   * Must be used inside transaction to maintain atomicity
+   */
+  async validatePrerequisitesWithClient(client, userId) {
+    debugLog(null, 'validatePrerequisitesWithClient for user:', userId);
+
+    // Check business profile using client
+    const profile = await this.getBusinessProfileWithClient(client, userId);
+
+    if (!profile) {
+      debugLog(null, 'No profile found for user', userId);
+      return { valid: false, error: 'PROFILE_REQUIRED', profile: null };
+    }
+
+    debugLog(null, 'Profile found:', {
+      id: profile.id,
+      business_name: profile.business_name,
+      website_url: profile.website_url ? 'present' : 'missing',
+      short_description: profile.short_description ? 'present' : 'missing'
+    });
+
+    // Check minimum profile completeness
+    const requiredFields = ['business_name', 'website_url', 'short_description'];
+    for (const field of requiredFields) {
+      if (!profile[field]) {
+        debugLog(null, 'Missing required field:', field);
+        return { valid: false, error: `PROFILE_INCOMPLETE:${field}`, profile };
+      }
+    }
+
+    debugLog(null, 'All prerequisites met');
+    return { valid: true, profile };
+  }
+
+  /**
    * Check for existing active campaign
    */
   async getActiveCampaign(userId) {
@@ -337,6 +374,20 @@ class CampaignRunService {
    */
   async getBusinessProfile(userId) {
     const result = await db.query(`
+      SELECT * FROM business_profiles
+      WHERE user_id = $1
+      ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
+      LIMIT 1
+    `, [userId]);
+    return result.rows[0] || null;
+  }
+
+  /**
+   * T0-8: Get business profile using transaction client
+   * Must be used inside transaction to maintain atomicity
+   */
+  async getBusinessProfileWithClient(client, userId) {
+    const result = await client.query(`
       SELECT * FROM business_profiles
       WHERE user_id = $1
       ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
