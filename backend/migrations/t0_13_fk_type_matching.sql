@@ -5,14 +5,29 @@
 -- CRITICAL: This migration detects the type of users.id (INTEGER, BIGINT, UUID)
 -- and creates directory_orders.user_id with the EXACT same type.
 -- Type mismatch breaks FK constraints.
+--
+-- T0-13 REQUIREMENTS:
+-- - directory_orders.id must be BIGSERIAL PRIMARY KEY (NOT UUID)
+-- - directory_orders.user_id must match users.id type exactly
+-- - FAIL LOUDLY if existing table still has UUID id column
 
 DO $$
 DECLARE
   user_id_type TEXT;
+  existing_id_type TEXT;
 BEGIN
-  -- Skip if table already exists
+  -- Check if table already exists
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'directory_orders') THEN
-    RAISE NOTICE 'Table directory_orders already exists, skipping creation';
+    -- SAFETY CHECK: Fail loudly if existing table has UUID id (half-fixed state)
+    SELECT data_type INTO existing_id_type
+    FROM information_schema.columns
+    WHERE table_name = 'directory_orders' AND column_name = 'id';
+
+    IF existing_id_type = 'uuid' THEN
+      RAISE EXCEPTION 'CRITICAL T0-13: directory_orders.id is still UUID! Run t0_13_directory_orders_bigserial.sql first to migrate to BIGSERIAL.';
+    END IF;
+
+    RAISE NOTICE 'Table directory_orders already exists with id type: %, skipping creation', existing_id_type;
     RETURN;
   END IF;
 
@@ -23,10 +38,10 @@ BEGIN
 
   RAISE NOTICE 'Detected users.id type: %', user_id_type;
 
-  -- Create table with matching FK type
+  -- Create table with matching FK type (id is always BIGSERIAL per T0-13)
   IF user_id_type = 'integer' THEN
     CREATE TABLE directory_orders (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      id BIGSERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       business_profile_id INTEGER REFERENCES business_profiles(id),
       stripe_checkout_session_id VARCHAR(255) UNIQUE,
@@ -52,7 +67,7 @@ BEGIN
     );
   ELSIF user_id_type = 'bigint' THEN
     CREATE TABLE directory_orders (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      id BIGSERIAL PRIMARY KEY,
       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       business_profile_id INTEGER REFERENCES business_profiles(id),
       stripe_checkout_session_id VARCHAR(255) UNIQUE,
@@ -78,7 +93,7 @@ BEGIN
     );
   ELSIF user_id_type = 'uuid' THEN
     CREATE TABLE directory_orders (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      id BIGSERIAL PRIMARY KEY,
       user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       business_profile_id INTEGER REFERENCES business_profiles(id),
       stripe_checkout_session_id VARCHAR(255) UNIQUE,
@@ -111,5 +126,5 @@ BEGIN
   CREATE INDEX IF NOT EXISTS idx_directory_orders_status ON directory_orders(status);
   CREATE INDEX IF NOT EXISTS idx_directory_orders_created_at ON directory_orders(created_at);
 
-  RAISE NOTICE 'Created directory_orders table with user_id type: %', user_id_type;
+  RAISE NOTICE 'Created directory_orders table with id=BIGSERIAL, user_id type: %', user_id_type;
 END $$;

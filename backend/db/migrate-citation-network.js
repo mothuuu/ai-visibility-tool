@@ -84,10 +84,10 @@ async function migrateCitationNetwork() {
     `);
     console.log('✅ Business profiles table created');
 
-    // Create directory_orders table
+    // Create directory_orders table (T0-13: id is BIGSERIAL, not UUID)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS directory_orders (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        id BIGSERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         business_profile_id UUID REFERENCES business_profiles(id),
 
