@@ -2,10 +2,13 @@
  * AI Citation Network Webhook Handler
  *
  * Handles payment webhooks for citation network orders
+ *
+ * T0-10: Only grants pack allocation when payment_status === 'paid'
  */
 
 const db = require('../db/database');
 const config = require('../config/citationNetwork');
+const { isActiveSubscriber, getPlanAllocation } = require('../config/citationNetwork');
 
 /**
  * Handle Citation Network payment webhooks
@@ -41,7 +44,22 @@ async function handleCitationNetworkWebhook(event) {
 }
 
 async function handlePaymentSuccess(orderId, session) {
-  console.log(`📦 Processing citation network payment success for order ${orderId}`);
+  console.log(`📦 Processing citation network payment for order ${orderId}`);
+
+  // T0-10: CRITICAL - Only grant entitlement if actually paid
+  // checkout.session.completed doesn't guarantee payment succeeded
+  if (session.payment_status !== 'paid') {
+    console.log(`⚠️  [CitationNetwork] Session ${session.id} not paid (status: ${session.payment_status}), skipping order ${orderId}`);
+    return;
+  }
+
+  // T0-10: Also verify it's a one-time payment (not subscription)
+  if (session.mode !== 'payment') {
+    console.log(`⚠️  [CitationNetwork] Session ${session.id} is not payment mode (mode: ${session.mode}), skipping order ${orderId}`);
+    return;
+  }
+
+  console.log(`✅ [CitationNetwork] Payment verified for order ${orderId} (status: paid, mode: payment)`);
 
   // 1. Update order status
   await db.query(`
@@ -142,35 +160,39 @@ async function createOrGetUser(session) {
 
 async function addPackAllocation(userId, order) {
   // Get user to check if subscriber
-  const user = await db.query(
-    'SELECT plan, stripe_subscription_status, stripe_subscription_id FROM users WHERE id = $1',
+  const userResult = await db.query(
+    'SELECT * FROM users WHERE id = $1',
     [userId]
   );
 
-  const isPaidPlan = ['diy', 'pro', 'enterprise', 'agency'].includes(user.rows[0]?.plan);
-  const isSubscriber = isPaidPlan && (
-    user.rows[0]?.stripe_subscription_status === 'active' ||
-    user.rows[0]?.stripe_subscription_id
-  );
+  const user = userResult.rows[0];
+  if (!user) {
+    console.error(`❌ User ${userId} not found for pack allocation`);
+    return;
+  }
+
+  // T0-5: Use central isActiveSubscriber function for consistent eligibility check
+  const isSubscriber = isActiveSubscriber(user);
 
   if (isSubscriber) {
-    // Add to current month's allocation
-    const now = new Date();
-    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-    // Get base allocation for plan
-    const baseAllocation = config.planAllocations[user.rows[0].plan] || 0;
+    // Add to current month's allocation using DATE_TRUNC for consistency (T0-6)
+    const baseAllocation = getPlanAllocation(user.plan);
 
     await db.query(`
       INSERT INTO subscriber_directory_allocations (
         user_id, period_start, period_end, base_allocation, pack_allocation
-      ) VALUES ($1, $2, $3, $4, 100)
+      ) VALUES (
+        $1,
+        DATE_TRUNC('month', NOW())::date,
+        (DATE_TRUNC('month', NOW()) + INTERVAL '1 month' - INTERVAL '1 day')::date,
+        $2,
+        100
+      )
       ON CONFLICT (user_id, period_start)
       DO UPDATE SET
         pack_allocation = subscriber_directory_allocations.pack_allocation + 100,
         updated_at = NOW()
-    `, [userId, periodStart, periodEnd, baseAllocation]);
+    `, [userId, baseAllocation]);
 
     console.log(`📊 Added pack allocation for subscriber ${userId}`);
   }

@@ -202,6 +202,74 @@ async startSubmissions(userId, filters, options) {
 
 ---
 
+## T0-9: Atomic Webhook Idempotency (FIXED)
+
+**Problem:** SELECT → INSERT race condition. Two concurrent webhooks both pass SELECT, causing double-processing.
+
+**Solution in `backend/routes/stripe-webhook.js`:**
+```javascript
+async function stripeWebhookHandler(req, res) {
+  // Verify signature first
+  const event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+
+  // T0-9: ATOMIC idempotency check - INSERT is the lock
+  const eventLogResult = await db.query(`
+    INSERT INTO stripe_events (event_id, event_type, ...)
+    VALUES ($1, $2, ...)
+    ON CONFLICT (event_id) DO NOTHING
+    RETURNING id
+  `, [event.id, event.type, ...]);
+
+  // If nothing returned, this event was already processed
+  if (eventLogResult.rows.length === 0) {
+    return res.json({ received: true, duplicate: true });
+  }
+
+  const eventId = eventLogResult.rows[0].id;
+
+  try {
+    // Process event...
+    await db.query('UPDATE stripe_events SET processed = TRUE WHERE id = $1', [eventId]);
+    res.json({ received: true });
+  } catch (error) {
+    // T0-9: If processing fails, remove record so retry can work
+    await db.query('DELETE FROM stripe_events WHERE id = $1', [eventId]);
+    res.status(500).json({ error: 'Processing failed' });
+  }
+}
+```
+
+**Key:** INSERT is the lock. On failure, DELETE allows retry.
+
+---
+
+## T0-10: Only Grant Pack on Paid Status (FIXED)
+
+**Problem:** `checkout.session.completed` doesn't guarantee payment succeeded.
+
+**Solution in `backend/services/citationNetworkWebhookHandler.js`:**
+```javascript
+async function handlePaymentSuccess(orderId, session) {
+  // T0-10: CRITICAL - Only grant entitlement if actually paid
+  if (session.payment_status !== 'paid') {
+    console.log(`Session ${session.id} not paid (status: ${session.payment_status}), skipping`);
+    return;
+  }
+
+  // T0-10: Also verify it's a one-time payment (not subscription)
+  if (session.mode !== 'payment') {
+    console.log(`Session ${session.id} is not payment mode (mode: ${session.mode}), skipping`);
+    return;
+  }
+
+  // Now safe to grant entitlement...
+}
+```
+
+**Key:** Check `payment_status === 'paid'` AND `mode === 'payment'` before granting.
+
+---
+
 ## Quick Reference: Creating New Migrations
 
 1. Create SQL file: `backend/migrations/my_migration_name.sql`
