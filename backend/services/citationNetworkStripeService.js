@@ -2,12 +2,15 @@
  * AI Citation Network Stripe Service
  *
  * Handles checkout creation and product routing:
- * - Non-subscriber with no prior purchase → $249 Starter
- * - Subscriber → $99 Boost Pack
- * - Non-subscriber who bought $249 → $99 add-on Boost Pack
+ * - Non-subscriber → $249 Starter (100 directories)
+ * - Subscriber → $99 Boost Pack (25 directories)
+ *
+ * P1 ENTITLEMENT CORRECTNESS:
+ * - Starter: NON-SUBSCRIBERS ONLY
+ * - Boost: SUBSCRIBERS ONLY (requires active/trialing subscription)
  *
  * TIER-0 REQUIREMENTS:
- * - Rule 4: Orders remain status='paid' forever (only check for 'paid')
+ * - Rule 4: Orders remain status='paid' forever
  * - Rule 12: Use PACK_CONFIG for directories
  * - Rule 14: Use authenticated user_id (req.user.id) for metadata
  * - Rule 15: Always include pack_type in metadata
@@ -16,32 +19,34 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const db = require('../db/database');
 const config = require('../config/citationNetwork');
-const { PACK_CONFIG } = require('../config/citationNetwork');
+const { PACK_CONFIG, ERROR_CODES } = require('../config/citationNetwork');
 
 class CitationNetworkStripeService {
 
   /**
    * Determine which product the user should see and create checkout
+   *
+   * P1 ENTITLEMENT CORRECTNESS:
+   * - Starter: NON-SUBSCRIBERS ONLY (first purchase)
+   * - Boost: SUBSCRIBERS ONLY (requires active subscription)
    */
   async createCheckout(userId, email) {
     // 1. Get user info (if logged in)
     let user = null;
     let isSubscriber = false;
-    let hasStarterPurchase = false;
 
     if (userId) {
       user = await this.getUser(userId);
       isSubscriber = this.isActiveSubscriber(user);
-      hasStarterPurchase = await this.hasStarterPurchase(userId);
     }
 
-    // 2. Determine which checkout to create
-    if (!isSubscriber && !hasStarterPurchase) {
-      // First-time non-subscriber → $249 Starter
-      return this.createStarterCheckout(userId, email, user);
+    // 2. P1: Strict pack eligibility - starter for non-subscribers, boost for subscribers
+    if (isSubscriber) {
+      // Subscriber → $99 Boost Pack ONLY
+      return this.createBoostCheckout(userId, user);
     } else {
-      // Subscriber OR returning buyer → $99 Pack
-      return this.createPackCheckout(userId, user);
+      // Non-subscriber → $249 Starter ONLY
+      return this.createStarterCheckout(userId, email, user);
     }
   }
 
@@ -139,34 +144,33 @@ class CitationNetworkStripeService {
   }
 
   /**
-   * Create $99 Pack checkout (subscribers or returning buyers)
+   * Create $99 Boost checkout (SUBSCRIBERS ONLY)
+   *
+   * P1 ENTITLEMENT CORRECTNESS:
+   * - Boost packs are ONLY available to active subscribers
+   * - Non-subscribers must purchase Starter pack instead
    */
-  async createPackCheckout(userId, user) {
+  async createBoostCheckout(userId, user) {
     if (!userId || !user) {
-      throw new Error('Must be logged in to purchase pack');
+      throw new Error('Must be logged in to purchase boost pack');
+    }
+
+    // P1: STRICT - Boost is SUBSCRIBERS ONLY
+    const isSubscriber = this.isActiveSubscriber(user);
+    if (!isSubscriber) {
+      throw new Error(ERROR_CODES.PACK_NOT_AVAILABLE);
     }
 
     // 1. Verify business profile exists
     const profile = await this.getBusinessProfile(userId);
     if (!profile) {
-      throw new Error('PROFILE_REQUIRED');
+      throw new Error(ERROR_CODES.PROFILE_REQUIRED);
     }
 
-    // 2. Check pack limits
-    const isSubscriber = this.isActiveSubscriber(user);
-
-    if (isSubscriber) {
-      // Subscribers: max 2 packs per year
-      const packsThisYear = await this.getPacksThisYear(userId);
-      if (packsThisYear >= config.maxPacksPerYear) {
-        throw new Error(`Maximum ${config.maxPacksPerYear} packs per year. You've used ${packsThisYear}.`);
-      }
-    } else {
-      // Non-subscribers: max 2 packs total (as add-ons to starter)
-      const totalPacks = await this.getTotalPacks(userId);
-      if (totalPacks >= config.maxPacksPerStarter) {
-        throw new Error(`Maximum ${config.maxPacksPerStarter} add-on packs allowed.`);
-      }
+    // 2. Check pack limits (subscribers: max 2 packs per year)
+    const packsThisYear = await this.getPacksThisYear(userId);
+    if (packsThisYear >= config.maxPacksPerYear) {
+      throw new Error(`Maximum ${config.maxPacksPerYear} packs per year. You've used ${packsThisYear}.`);
     }
 
     // TIER-0 RULE 12: Get directories from PACK_CONFIG
@@ -248,47 +252,46 @@ class CitationNetworkStripeService {
 
   /**
    * Get what the user should see (for UI display)
+   *
+   * P1 ENTITLEMENT CORRECTNESS:
+   * - Non-subscribers see Starter ($249, 100 directories)
+   * - Subscribers see Boost ($99, 25 directories)
    */
   async getCheckoutInfo(userId) {
     let user = null;
     let isSubscriber = false;
-    let hasStarterPurchase = false;
 
     if (userId) {
       user = await this.getUser(userId);
       isSubscriber = this.isActiveSubscriber(user);
-      hasStarterPurchase = await this.hasStarterPurchase(userId);
     }
 
-    // Determine product and eligibility
-    if (!isSubscriber && !hasStarterPurchase) {
+    // P1: Strict eligibility - starter for non-subscribers, boost for subscribers
+    if (!isSubscriber) {
+      // Non-subscriber → Starter pack
+      const hasStarterPurchase = userId ? await this.hasStarterPurchase(userId) : false;
+
       return {
         product: 'starter',
         price: 249,
         priceId: config.prices.STARTER_249,
-        description: 'Get listed on 100+ directories',
-        canPurchase: true,
-        reason: null,
+        directories: PACK_CONFIG.starter.directories,
+        description: `Get listed on ${PACK_CONFIG.starter.directories}+ directories`,
+        canPurchase: !hasStarterPurchase,
+        reason: hasStarterPurchase ? 'You already have a Starter pack. Subscribe for more directories.' : null,
         isSubscriber: false,
         hasProfile: false
       };
     } else {
-      // Check limits
+      // Subscriber → Boost pack
       let canPurchase = true;
       let reason = null;
 
-      if (isSubscriber) {
-        const packsThisYear = await this.getPacksThisYear(userId);
-        if (packsThisYear >= config.maxPacksPerYear) {
-          canPurchase = false;
-          reason = `Maximum ${config.maxPacksPerYear} packs per year reached`;
-        }
-      } else {
-        const totalPacks = await this.getTotalPacks(userId);
-        if (totalPacks >= config.maxPacksPerStarter) {
-          canPurchase = false;
-          reason = `Maximum ${config.maxPacksPerStarter} add-on packs reached`;
-        }
+      // Check pack limits
+      const packsThisYear = await this.getPacksThisYear(userId);
+      if (packsThisYear >= config.maxPacksPerYear) {
+        canPurchase = false;
+        reason = `Maximum ${config.maxPacksPerYear} packs per year reached`;
       }
 
       // Check for business profile
@@ -299,13 +302,14 @@ class CitationNetworkStripeService {
       }
 
       return {
-        product: 'pack',
+        product: 'boost',
         price: 99,
         priceId: config.prices.PACK_99,
-        description: 'Add 100 more directories',
+        directories: PACK_CONFIG.boost.directories,
+        description: `Add ${PACK_CONFIG.boost.directories} more directories`,
         canPurchase,
         reason,
-        isSubscriber,
+        isSubscriber: true,
         hasProfile: !!profile
       };
     }
