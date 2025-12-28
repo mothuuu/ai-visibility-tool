@@ -5,16 +5,21 @@
  * - Subscription plan (DIY: 10/mo, Pro: 25/mo, Agency: 100/mo)
  * - Order-based allocations ($249 starter, $99 packs)
  *
- * UPDATED: Uses planUtils as single source of truth for plan allocations
+ * UPDATED: Uses citationNetwork config as single source of truth
+ * FIX T0-5: Uses isActiveSubscriber() to properly check subscription status
+ *           (null/undefined stripe_subscription_status is no longer treated as valid)
  */
 
 const db = require('../db/database');
 const {
   PLAN_ALLOCATIONS,
+  USABLE_ORDER_STATUSES,
   normalizePlan,
-  isPaidPlan,
-  getPlanAllocation
-} = require('../utils/planUtils');
+  getPlanAllocation,
+  isActiveSubscriber,
+  isSubscriberPlan,
+  ALLOWED_STRIPE_STATUSES
+} = require('../config/citationNetwork');
 
 // Debug logging helper - only logs when CITATION_DEBUG=1
 function debugLog(requestId, ...args) {
@@ -24,8 +29,7 @@ function debugLog(requestId, ...args) {
   }
 }
 
-// Step 5: Unify order status definitions
-const USABLE_ORDER_STATUSES = ['paid', 'processing', 'in_progress', 'completed'];
+// Note: USABLE_ORDER_STATUSES is now imported from citationNetwork config
 
 class EntitlementService {
 
@@ -68,18 +72,18 @@ class EntitlementService {
     let primarySource = 'none';
     let sourceId = null;
 
-    // Step 2: Check subscriber status using planUtils
-    const paidPlan = isPaidPlan(normalizedPlan);
-    const validStatuses = ['active', 'trialing', 'past_due', null, undefined];
-    const isNotCanceled = validStatuses.includes(user.stripe_subscription_status);
-    const isSubscriber = paidPlan && isNotCanceled;
+    // Step 2: Check subscriber status using isActiveSubscriber()
+    // FIX T0-5: CRITICAL - null/undefined stripe_subscription_status is NO LONGER treated as valid
+    // User must have explicit 'active' or 'trialing' status to be considered a subscriber
+    const isSubscriber = isActiveSubscriber(user);
+    const paidPlan = isSubscriberPlan(normalizedPlan);
 
     debugLog(requestId, 'Subscriber check:', {
       normalizedPlan,
-      isPaidPlan: paidPlan,
+      isSubscriberPlan: paidPlan,
       stripeStatus: user.stripe_subscription_status,
       stripeSubId: user.stripe_subscription_id ? 'present' : 'null',
-      isNotCanceled,
+      manualOverride: user.subscription_manual_override || false,
       isSubscriber
     });
 
@@ -420,5 +424,6 @@ class EntitlementService {
 // Export both the service instance and the helper functions
 module.exports = new EntitlementService();
 module.exports.normalizePlan = normalizePlan;
+module.exports.isActiveSubscriber = isActiveSubscriber;
 module.exports.USABLE_ORDER_STATUSES = USABLE_ORDER_STATUSES;
 module.exports.PLAN_ALLOCATIONS = PLAN_ALLOCATIONS;
