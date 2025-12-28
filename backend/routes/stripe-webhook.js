@@ -5,13 +5,14 @@
  * IMPORTANT: This handler expects req.body to be a raw Buffer (not parsed JSON).
  * It must be mounted in server.js BEFORE any body-parsing middleware:
  *
- *   app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), stripeWebhookHandler);
+ *   app.post('/api/webhooks/stripe', express.raw({ type: 'application/json', limit: '2mb' }), handleStripeWebhook);
  *   app.use(express.json()); // AFTER webhook routes
  *
- * TIER-0 REQUIREMENTS:
- * - Rule 2: ALWAYS verify signature via constructEvent (NEVER JSON.parse in prod)
- * - Rule 6: Idempotency INSERT + side effects + status update in ONE transaction
- * - Rule 9: On failure, ROLLBACK removes idempotency record so retry can work
+ * P0 REQUIREMENTS:
+ * - T0-1: ALWAYS verify signature via constructEvent (NO dev-mode bypass)
+ * - T0-9: Idempotency INSERT + side effects + status update in ONE transaction
+ * - Store FULL event in payload (not just data.object)
+ * - Guard missing stripe-signature header
  */
 
 const db = require('../db/database');
@@ -20,39 +21,42 @@ const { handleCitationNetworkWebhook } = require('../services/citationNetworkWeb
 
 /**
  * Main Stripe webhook handler
- * Called directly from server.js with raw body
+ * Exported as a function (not router) for direct mounting in server.js
  *
- * TIER-0: Uses transactional processing with atomic idempotency
+ * P0: Uses transactional processing with atomic idempotency
+ *
+ * @param {Request} req - Express request (body must be raw Buffer)
+ * @param {Response} res - Express response
  */
-async function stripeWebhookHandler(req, res) {
+async function handleStripeWebhook(req, res) {
   const sig = req.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
+  // P0: Guard missing stripe-signature header
+  if (!sig) {
+    console.error('[Webhook] Missing stripe-signature header');
+    return res.status(400).json({ error: 'Missing stripe-signature header' });
+  }
+
+  // P0: Guard missing webhook secret configuration
+  if (!endpointSecret) {
+    console.error('[Webhook] STRIPE_WEBHOOK_SECRET not configured');
+    return res.status(500).json({ error: 'Webhook not configured' });
+  }
+
   let event;
 
-  // TIER-0 RULE 2: ALWAYS verify signature - NEVER bypass in production
+  // P0 T0-1: ALWAYS verify signature - NO dev-mode bypass
   try {
-    if (!endpointSecret) {
-      // No secret configured - configuration error in production
-      console.error('[Webhook] STRIPE_WEBHOOK_SECRET not configured');
-      if (process.env.NODE_ENV === 'production') {
-        return res.status(500).json({ error: 'Webhook not configured' });
-      }
-      // In development only, allow unsigned webhooks with a warning
-      console.warn('[Webhook] WARNING: Running without signature verification (dev only)');
-      event = JSON.parse(req.body.toString());
-    } else {
-      // ALWAYS verify signature when secret is available
-      event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
-    }
+    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
   } catch (err) {
     console.error('[Webhook] Signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    return res.status(400).json({ error: `Webhook signature verification failed: ${err.message}` });
   }
 
   console.log(`🔔 [Stripe Webhook] Received event: ${event.type} (${event.id})`);
 
-  // TIER-0 RULE 6: ALL processing in ONE transaction
+  // P0 T0-9: ALL processing in ONE transaction
   const client = await db.pool.connect();
   let eventDbId = null;
 
@@ -60,17 +64,16 @@ async function stripeWebhookHandler(req, res) {
     await client.query('BEGIN');
 
     // Atomic idempotency check - INSERT is the lock
+    // P0: Store FULL event in payload (not just data.object)
     const eventLogResult = await client.query(`
-      INSERT INTO stripe_events (event_id, event_type, customer_id, subscription_id, event_data)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO processed_stripe_events (event_id, event_type, processed_at, payload)
+      VALUES ($1, $2, NOW(), $3::jsonb)
       ON CONFLICT (event_id) DO NOTHING
-      RETURNING id
+      RETURNING event_id
     `, [
       event.id,
       event.type,
-      event.data.object.customer || null,
-      event.data.object.id || null,
-      JSON.stringify(event.data.object)
+      JSON.stringify(event) // Store FULL event
     ]);
 
     // If nothing returned, this event was already processed (duplicate)
@@ -81,8 +84,8 @@ async function stripeWebhookHandler(req, res) {
       return res.json({ received: true, duplicate: true });
     }
 
-    eventDbId = eventLogResult.rows[0].id;
-    console.log(`🔒 [Webhook] Acquired lock for event ${event.id} (db id: ${eventDbId})`);
+    eventDbId = eventLogResult.rows[0].event_id;
+    console.log(`🔒 [Webhook] Acquired lock for event ${event.id}`);
 
     // Process event - all handlers receive the transaction client
     let handled = false;
@@ -98,27 +101,27 @@ async function stripeWebhookHandler(req, res) {
     if (!handled) {
       switch (event.type) {
         case 'customer.subscription.deleted':
-          await handleSubscriptionDeleted(event.data.object, eventDbId, client);
+          await handleSubscriptionDeleted(event.data.object, client);
           handled = true;
           break;
 
         case 'customer.subscription.updated':
-          await handleSubscriptionUpdated(event.data.object, eventDbId, client);
+          await handleSubscriptionUpdated(event.data.object, client);
           handled = true;
           break;
 
         case 'invoice.payment_failed':
-          await handlePaymentFailed(event.data.object, eventDbId, client);
+          await handlePaymentFailed(event.data.object, client);
           handled = true;
           break;
 
         case 'invoice.payment_succeeded':
-          await handlePaymentSucceeded(event.data.object, eventDbId, client);
+          await handlePaymentSucceeded(event.data.object, client);
           handled = true;
           break;
 
         case 'customer.subscription.created':
-          await handleSubscriptionCreated(event.data.object, eventDbId, client);
+          await handleSubscriptionCreated(event.data.object, client);
           handled = true;
           break;
 
@@ -126,13 +129,6 @@ async function stripeWebhookHandler(req, res) {
           console.log(`ℹ️  Unhandled event type: ${event.type}`);
       }
     }
-
-    // Mark event as successfully processed
-    await client.query(`
-      UPDATE stripe_events
-      SET processed = TRUE, processed_at = NOW()
-      WHERE id = $1
-    `, [eventDbId]);
 
     // COMMIT the entire transaction
     await client.query('COMMIT');
@@ -153,15 +149,13 @@ async function stripeWebhookHandler(req, res) {
 
 /**
  * Handle subscription deletion (user canceled)
- * TIER-0: Uses transaction client from webhook handler
  */
-async function handleSubscriptionDeleted(subscription, eventId, client) {
+async function handleSubscriptionDeleted(subscription, client) {
   console.log(`🗑️  Subscription deleted: ${subscription.id}`);
 
   const customerId = subscription.customer;
   const queryFn = client ? client.query.bind(client) : db.query.bind(db);
 
-  // Find user by Stripe customer ID
   const userResult = await queryFn(
     'SELECT id, email, plan FROM users WHERE stripe_customer_id = $1',
     [customerId]
@@ -175,39 +169,30 @@ async function handleSubscriptionDeleted(subscription, eventId, client) {
   const user = userResult.rows[0];
   const oldPlan = user.plan;
 
-  // Downgrade user to free plan
   await queryFn(`
     UPDATE users
     SET
       plan = 'free',
       stripe_subscription_id = NULL,
+      stripe_subscription_status = 'canceled',
       subscription_cancel_at = NOW(),
       updated_at = NOW()
     WHERE id = $1
   `, [user.id]);
 
   console.log(`✅ User ${user.email} downgraded from ${oldPlan} to free`);
-
-  // Update event log with user info
-  await queryFn(`
-    UPDATE stripe_events
-    SET user_id = $1
-    WHERE id = $2
-  `, [user.id, eventId]);
 }
 
 /**
  * Handle subscription updates (plan change, payment update)
- * TIER-0: Uses transaction client from webhook handler
  */
-async function handleSubscriptionUpdated(subscription, eventId, client) {
+async function handleSubscriptionUpdated(subscription, client) {
   console.log(`🔄 Subscription updated: ${subscription.id}`);
 
   const customerId = subscription.customer;
   const status = subscription.status;
   const queryFn = client ? client.query.bind(client) : db.query.bind(db);
 
-  // Find user
   const userResult = await queryFn(
     'SELECT id, email, plan FROM users WHERE stripe_customer_id = $1',
     [customerId]
@@ -220,15 +205,18 @@ async function handleSubscriptionUpdated(subscription, eventId, client) {
 
   const user = userResult.rows[0];
 
-  // Handle subscription status changes
+  // Update stripe_subscription_status
+  await queryFn(`
+    UPDATE users
+    SET stripe_subscription_status = $1, updated_at = NOW()
+    WHERE id = $2
+  `, [status, user.id]);
+
   if (status === 'active' || status === 'trialing') {
-    // Subscription is active - ensure user has correct plan
     console.log(`✅ Subscription active for ${user.email}`);
   } else if (status === 'past_due') {
     console.log(`⚠️  Payment past due for ${user.email}`);
-    // Give 3-day grace period before downgrading
   } else if (status === 'canceled' || status === 'unpaid') {
-    // Downgrade to free
     await queryFn(`
       UPDATE users
       SET plan = 'free', updated_at = NOW()
@@ -236,26 +224,17 @@ async function handleSubscriptionUpdated(subscription, eventId, client) {
     `, [user.id]);
     console.log(`❌ User ${user.email} downgraded due to status: ${status}`);
   }
-
-  // Update event log
-  await queryFn(`
-    UPDATE stripe_events
-    SET user_id = $1
-    WHERE id = $2
-  `, [user.id, eventId]);
 }
 
 /**
  * Handle failed payment
- * TIER-0: Uses transaction client from webhook handler
  */
-async function handlePaymentFailed(invoice, eventId, client) {
+async function handlePaymentFailed(invoice, client) {
   console.log(`❌ Payment failed for invoice: ${invoice.id}`);
 
   const customerId = invoice.customer;
   const queryFn = client ? client.query.bind(client) : db.query.bind(db);
 
-  // Find user
   const userResult = await queryFn(
     'SELECT id, email, plan FROM users WHERE stripe_customer_id = $1',
     [customerId]
@@ -267,41 +246,27 @@ async function handlePaymentFailed(invoice, eventId, client) {
   }
 
   const user = userResult.rows[0];
-
   console.log(`⚠️  Payment failed for ${user.email} - attempt ${invoice.attempt_count}`);
 
-  // After 3 failed attempts, downgrade to free
   if (invoice.attempt_count >= 3) {
     await queryFn(`
       UPDATE users
       SET plan = 'free', updated_at = NOW()
       WHERE id = $1
     `, [user.id]);
-
     console.log(`❌ User ${user.email} downgraded after ${invoice.attempt_count} failed payment attempts`);
-  } else {
-    console.log(`📧 Notifying ${user.email} of failed payment (attempt ${invoice.attempt_count}/3)`);
   }
-
-  // Update event log
-  await queryFn(`
-    UPDATE stripe_events
-    SET user_id = $1
-    WHERE id = $2
-  `, [user.id, eventId]);
 }
 
 /**
  * Handle successful payment
- * TIER-0: Uses transaction client from webhook handler
  */
-async function handlePaymentSucceeded(invoice, eventId, client) {
+async function handlePaymentSucceeded(invoice, client) {
   console.log(`✅ Payment succeeded for invoice: ${invoice.id}`);
 
   const customerId = invoice.customer;
   const queryFn = client ? client.query.bind(client) : db.query.bind(db);
 
-  // Find user
   const userResult = await queryFn(
     'SELECT id, email FROM users WHERE stripe_customer_id = $1',
     [customerId]
@@ -313,28 +278,18 @@ async function handlePaymentSucceeded(invoice, eventId, client) {
   }
 
   const user = userResult.rows[0];
-
   console.log(`💰 Payment succeeded for ${user.email}: $${(invoice.amount_paid / 100).toFixed(2)}`);
-
-  // Update event log
-  await queryFn(`
-    UPDATE stripe_events
-    SET user_id = $1
-    WHERE id = $2
-  `, [user.id, eventId]);
 }
 
 /**
  * Handle new subscription created
- * TIER-0: Uses transaction client from webhook handler
  */
-async function handleSubscriptionCreated(subscription, eventId, client) {
+async function handleSubscriptionCreated(subscription, client) {
   console.log(`🆕 Subscription created: ${subscription.id}`);
 
   const customerId = subscription.customer;
   const queryFn = client ? client.query.bind(client) : db.query.bind(db);
 
-  // Find user
   const userResult = await queryFn(
     'SELECT id, email FROM users WHERE stripe_customer_id = $1',
     [customerId]
@@ -346,22 +301,14 @@ async function handleSubscriptionCreated(subscription, eventId, client) {
   }
 
   const user = userResult.rows[0];
-
   console.log(`✅ New subscription for ${user.email}`);
 
-  // Update subscription ID
   await queryFn(`
     UPDATE users
-    SET stripe_subscription_id = $1, updated_at = NOW()
-    WHERE id = $2
-  `, [subscription.id, user.id]);
-
-  // Update event log
-  await queryFn(`
-    UPDATE stripe_events
-    SET user_id = $1
-    WHERE id = $2
-  `, [user.id, eventId]);
+    SET stripe_subscription_id = $1, stripe_subscription_status = $2, updated_at = NOW()
+    WHERE id = $3
+  `, [subscription.id, subscription.status, user.id]);
 }
 
-module.exports = { stripeWebhookHandler };
+// Export as function (not object with named export)
+module.exports = handleStripeWebhook;

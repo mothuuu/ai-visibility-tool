@@ -56,10 +56,15 @@ async function handleCitationNetworkWebhook(event, client) {
   const normalizedPackType = packType === 'pack' ? 'boost' : packType;
 
   switch (event.type) {
-    // TIER-0 RULE 13: Handle both completed and async_payment_succeeded
+    // P0 T0-13: Handle both completed and async_payment_succeeded
     case 'checkout.session.completed':
     case 'checkout.session.async_payment_succeeded':
       await handlePaymentSuccess(session, userId, normalizedPackType, client);
+      return true;
+
+    // P0 T0-13: Handle async payment failure
+    case 'checkout.session.async_payment_failed':
+      await handleAsyncPaymentFailed(session, client);
       return true;
 
     case 'checkout.session.expired':
@@ -227,6 +232,28 @@ async function addPackAllocation(userId, directories, queryFn) {
   } else {
     console.log(`ℹ️  [CitationNetwork] User ${userId} is not subscriber, allocation tracked in order`);
   }
+}
+
+/**
+ * Handle async payment failure (P0 T0-13)
+ * Log the failure but don't cancel the order - user may retry payment
+ */
+async function handleAsyncPaymentFailed(session, client) {
+  const queryFn = client ? client.query.bind(client) : db.query.bind(db);
+
+  console.log(`❌ [CitationNetwork] Async payment failed for session ${session.id}`);
+
+  // Update order status to failed (not cancelled - user may retry)
+  await queryFn(`
+    UPDATE directory_orders
+    SET status = 'payment_failed',
+        updated_at = NOW()
+    WHERE stripe_checkout_session_id = $1
+      AND status = 'pending'
+  `, [session.id]);
+
+  // TODO: Send notification to user about failed payment
+  console.log(`📧 [CitationNetwork] Would notify user of failed async payment for session ${session.id}`);
 }
 
 /**
