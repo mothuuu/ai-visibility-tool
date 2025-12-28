@@ -270,6 +270,138 @@ async function handlePaymentSuccess(orderId, session) {
 
 ---
 
+## T0-11: Fetch Full User for Eligibility Check (FIXED)
+
+**Problem:** `req.user` from JWT may only have id/email, not plan/stripe_subscription_status.
+
+**Solution in `backend/routes/citationNetwork.js` (`/packs/checkout`):**
+```javascript
+router.post('/packs/checkout', authenticateToken, async (req, res) => {
+  // T0-11: CRITICAL - Fetch full user from DB
+  const userResult = await db.query(
+    'SELECT id, email, plan, stripe_subscription_status, subscription_manual_override FROM users WHERE id = $1',
+    [req.user.id]
+  );
+
+  const user = userResult.rows[0];
+
+  // Now isActiveSubscriber has full user data
+  const isSubscriber = isActiveSubscriber(user);
+  // ...
+});
+```
+
+**Key:** Always fetch full user from DB before eligibility checks.
+
+---
+
+## T0-12: Correct Pack Pricing + Eligibility (VERIFIED)
+
+**Config in `backend/config/citationNetwork.js`:**
+```javascript
+const PACK_CONFIG = {
+  starter: {
+    price: 24900,           // $249 in cents
+    directories: 100,
+    subscriberOnly: false   // NON-SUBSCRIBERS ONLY
+  },
+  boost: {
+    price: 9900,            // $99 in cents
+    directories: 25,        // NOT 100 - smaller add-on pack
+    subscriberOnly: true    // SUBSCRIBERS ONLY
+  }
+};
+```
+
+**Key:** Starter=$249/100dirs for non-subscribers, Boost=$99/25dirs for subscribers.
+
+---
+
+## T0-13: Migration FK Type Must Match EXACTLY (MIGRATION)
+
+**Problem:** Creating `directory_orders.user_id BIGINT` when `users.id` is INTEGER breaks FK.
+
+**Solution:** Migration `t0_13_fk_type_matching.sql` detects `users.id` type and creates matching FK.
+
+```sql
+DO $$
+DECLARE user_id_type TEXT;
+BEGIN
+  SELECT data_type INTO user_id_type
+  FROM information_schema.columns
+  WHERE table_name = 'users' AND column_name = 'id';
+
+  IF user_id_type = 'integer' THEN
+    CREATE TABLE directory_orders (
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      -- ...
+    );
+  ELSIF user_id_type = 'bigint' THEN
+    -- ...
+  END IF;
+END $$;
+```
+
+---
+
+## T0-14: Plan Normalization Must Skip ENUM Columns (MIGRATION)
+
+**Problem:** If `users.plan` is ENUM, `UPDATE SET plan = LOWER(TRIM(plan))` fails.
+
+**Solution:** Migration `t0_14_enum_safe_plan_normalization.sql` checks column type first:
+
+```sql
+DO $$
+DECLARE plan_data_type TEXT;
+BEGIN
+  SELECT data_type INTO plan_data_type
+  FROM information_schema.columns
+  WHERE table_name = 'users' AND column_name = 'plan';
+
+  IF plan_data_type = 'USER-DEFINED' THEN
+    -- Skip: ENUM values are already constrained
+    RETURN;
+  END IF;
+
+  -- Only normalize text-based columns
+  UPDATE users SET plan = LOWER(TRIM(plan)) WHERE plan IS NOT NULL;
+END $$;
+```
+
+---
+
+## T0-15: Bidirectional Table Aliases (MIGRATION)
+
+**Problem:** Only creating VIEW in one direction breaks the other direction.
+
+**Solution:** Migration `t0_15_bidirectional_table_aliases.sql` creates both directions:
+
+```sql
+-- directories <-> ai_directories (BIDIRECTIONAL)
+DO $$ BEGIN
+  -- Direction 1: directories -> ai_directories
+  IF NOT EXISTS (SELECT 1 FROM information_schema.tables
+                 WHERE table_name = 'directories' AND table_type = 'BASE TABLE')
+  THEN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'ai_directories') THEN
+      CREATE VIEW directories AS SELECT * FROM ai_directories;
+    END IF;
+  END IF;
+
+  -- Direction 2: ai_directories -> directories (REVERSE)
+  IF NOT EXISTS (SELECT 1 FROM information_schema.tables
+                 WHERE table_name = 'ai_directories' AND table_type = 'BASE TABLE')
+  THEN
+    IF EXISTS (SELECT 1 FROM information_schema.tables
+               WHERE table_name = 'directories' AND table_type = 'BASE TABLE') THEN
+      CREATE VIEW ai_directories AS SELECT * FROM directories;
+    END IF;
+  END IF;
+END $$;
+```
+
+---
+
 ## Quick Reference: Creating New Migrations
 
 1. Create SQL file: `backend/migrations/my_migration_name.sql`

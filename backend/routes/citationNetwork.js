@@ -4,15 +4,19 @@
  * Handles checkout, orders, and allocation endpoints
  *
  * UPDATED: Improved error handling and diagnostic logging (CITATION_DEBUG=1)
+ * T0-11: Pack checkout fetches full user from DB for eligibility check
+ * T0-12: Uses PACK_CONFIG for correct pricing/eligibility
  */
 
 const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const citationNetworkStripe = require('../services/citationNetworkStripeService');
 const { authenticateToken, authenticateTokenOptional } = require('../middleware/auth');
 const db = require('../db/database');
 const config = require('../config/citationNetwork');
+const { PACK_CONFIG, ERROR_CODES, isActiveSubscriber } = require('../config/citationNetwork');
 const entitlementService = require('../services/entitlementService');
 const { normalizePlan } = require('../utils/planUtils');
 
@@ -98,6 +102,142 @@ router.post('/checkout', authenticateTokenOptional, async (req, res) => {
     }
 
     res.status(500).json({ error: 'Failed to create checkout' });
+  }
+});
+
+/**
+ * POST /api/citation-network/packs/checkout
+ * Create checkout session for a specific pack type
+ *
+ * T0-11: CRITICAL - Fetches full user from DB for eligibility check
+ * T0-12: Uses PACK_CONFIG for correct pricing (Starter=$249/100, Boost=$99/25)
+ *
+ * Pack eligibility:
+ * - Starter ($249, 100 dirs): NON-SUBSCRIBERS ONLY
+ * - Boost ($99, 25 dirs): SUBSCRIBERS ONLY
+ */
+router.post('/packs/checkout', authenticateToken, async (req, res) => {
+  const { pack_type = 'starter' } = req.body;
+
+  try {
+    // T0-11: CRITICAL - Fetch full user from DB
+    // JWT may only have id/email, not plan/stripe_subscription_status
+    const userResult = await db.query(
+      'SELECT id, email, plan, stripe_subscription_status, stripe_customer_id, subscription_manual_override FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        error: { code: ERROR_CODES.USER_NOT_FOUND, message: 'User not found' }
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // T0-12: Validate pack type against PACK_CONFIG
+    const pack = PACK_CONFIG[pack_type];
+    if (!pack) {
+      return res.status(400).json({
+        success: false,
+        error: { code: ERROR_CODES.INVALID_PACK_TYPE, message: 'Invalid pack type' }
+      });
+    }
+
+    // T0-11: Now isActiveSubscriber has full user data
+    const isSubscriber = isActiveSubscriber(user);
+
+    debugLog(null, 'Pack checkout eligibility:', {
+      userId: user.id,
+      packType: pack_type,
+      isSubscriber,
+      subscriberOnly: pack.subscriberOnly
+    });
+
+    // T0-12: Boost packs are SUBSCRIBERS ONLY
+    if (pack.subscriberOnly && !isSubscriber) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.PACK_NOT_AVAILABLE,
+          message: 'Boost packs are only available for subscribers.'
+        }
+      });
+    }
+
+    // T0-12: Starter packs are NON-SUBSCRIBERS ONLY
+    if (!pack.subscriberOnly && isSubscriber) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.PACK_NOT_AVAILABLE,
+          message: 'Subscribers should purchase Boost packs for additional capacity.',
+          suggestedPack: 'boost'
+        }
+      });
+    }
+
+    // Get the correct Stripe price ID based on pack type
+    const priceId = pack_type === 'starter'
+      ? process.env.STRIPE_STARTER_PACK_PRICE_ID || config.prices.STARTER_249
+      : process.env.STRIPE_BOOST_PACK_PRICE_ID || config.prices.PACK_99;
+
+    if (!priceId) {
+      console.error(`[PackCheckout] Missing price ID for ${pack_type}`);
+      return res.status(500).json({
+        success: false,
+        error: { code: ERROR_CODES.CONFIG_ERROR, message: 'Pack not configured' }
+      });
+    }
+
+    // Get or create Stripe customer
+    let customerId = user.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        metadata: { user_id: String(user.id) }
+      });
+      customerId = customer.id;
+      await db.query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customerId, user.id]);
+    }
+
+    // Create checkout session
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [{ price: priceId, quantity: 1 }],
+      metadata: {
+        user_id: String(user.id),
+        pack_type,
+        directories_allocated: String(pack.directories),
+        product: 'citation_network',
+        order_type: pack_type
+      },
+      success_url: `${process.env.FRONTEND_URL}/dashboard.html?section=citation-network&pack=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/dashboard.html?section=citation-network&pack=cancelled`
+    });
+
+    console.log(`[PackCheckout] Created session ${session.id} for user ${user.id}, pack=${pack_type}, dirs=${pack.directories}`);
+
+    res.json({
+      success: true,
+      data: {
+        checkoutUrl: session.url,
+        sessionId: session.id,
+        packType: pack_type,
+        directories: pack.directories,
+        price: pack.price / 100 // Convert cents to dollars for display
+      }
+    });
+
+  } catch (err) {
+    console.error('[PackCheckout] Error:', err);
+    res.status(500).json({
+      success: false,
+      error: { code: ERROR_CODES.STRIPE_ERROR, message: 'Failed to create checkout session' }
+    });
   }
 });
 
