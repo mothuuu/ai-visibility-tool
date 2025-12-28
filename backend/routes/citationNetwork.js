@@ -520,6 +520,9 @@ router.post('/start-submissions', authenticateToken, async (req, res) => {
   const requestId = generateRequestId();
   const normalizedPlan = normalizePlan(req.user.plan);
 
+  // T0-7: Extract idempotency key from header or body for duplicate prevention
+  const idempotencyKey = req.headers['idempotency-key'] || req.body.requestId || null;
+
   // Always log request start (even without debug flag)
   console.log(`[StartSubmissions:${requestId}] === REQUEST START ===`);
 
@@ -530,24 +533,28 @@ router.post('/start-submissions', authenticateToken, async (req, res) => {
     planRaw: req.user.plan,
     planNormalized: normalizedPlan
   });
+  debugLog(requestId, 'Idempotency key:', idempotencyKey);
 
   try {
     const { filters = {} } = req.body;
     debugLog(requestId, 'Filters:', JSON.stringify(filters));
 
-    // Calculate entitlement first for logging (service will recalculate)
-    const entitlementPreCheck = await entitlementService.calculateEntitlement(req.user.id, { requestId });
-    debugLog(requestId, 'Pre-check entitlement:', {
-      remaining: entitlementPreCheck.remaining,
-      total: entitlementPreCheck.total,
-      isSubscriber: entitlementPreCheck.isSubscriber,
-      plan: entitlementPreCheck.plan,
-      subscriptionRemaining: entitlementPreCheck.breakdown?.subscriptionRemaining,
-      ordersRemaining: entitlementPreCheck.breakdown?.ordersRemaining
-    });
+    // Note: Pre-check removed - service now handles all entitlement calculation within transaction
+    // This prevents race conditions where pre-check passes but transaction-check fails
 
     debugLog(requestId, 'Calling campaignRunService.startSubmissions...');
-    const result = await campaignRunService.startSubmissions(req.user.id, filters, { requestId });
+    const result = await campaignRunService.startSubmissions(req.user.id, filters, { requestId, idempotencyKey });
+
+    // T0-7: Handle duplicate request response
+    if (result.duplicate) {
+      console.log(`[StartSubmissions:${requestId}] DUPLICATE - Returning existing campaign:`, result.campaignRunId);
+      return res.json({
+        success: true,
+        message: `Request already processed. Campaign ID: ${result.campaignRunId}`,
+        duplicate: true,
+        ...result
+      });
+    }
 
     console.log(`[StartSubmissions:${requestId}] SUCCESS - Directories queued:`, result.directoriesQueued);
     debugLog(requestId, 'Result:', {
@@ -577,6 +584,15 @@ router.post('/start-submissions', authenticateToken, async (req, res) => {
     } : null;
 
     // Handle specific errors with distinct codes
+
+    // T0-7: Handle USER_NOT_FOUND (should not happen with auth, but just in case)
+    if (error.message === 'USER_NOT_FOUND') {
+      return res.status(401).json({
+        error: 'User not found. Please log in again.',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
     if (error.message === 'PROFILE_REQUIRED') {
       return res.status(400).json({
         error: 'Please complete your business profile first',

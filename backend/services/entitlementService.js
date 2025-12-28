@@ -419,6 +419,230 @@ class EntitlementService {
       breakdown: entitlement.breakdown
     };
   }
+
+  // ===========================================================================
+  // T0-6 & T0-7: Client-based methods for transactional operations
+  // ===========================================================================
+
+  /**
+   * T0-6: Get or create monthly allocation using provided client (for transactions)
+   * Uses DATE_TRUNC for proper date handling
+   *
+   * @param {object} client - Database client from pool.connect()
+   * @param {number} userId - User ID
+   * @param {string} plan - User's plan (will be normalized)
+   * @param {object} options - Options including requestId
+   */
+  async getOrCreateMonthlyAllocationWithClient(client, userId, plan, options = {}) {
+    const requestId = options.requestId || null;
+    const normalizedPlan = normalizePlan(plan);
+    const baseAllocation = getPlanAllocation(normalizedPlan);
+
+    debugLog(requestId, 'getOrCreateMonthlyAllocationWithClient:', {
+      userId,
+      plan: normalizedPlan,
+      baseAllocation
+    });
+
+    if (baseAllocation === 0) {
+      return { base: 0, packs: 0, total: 0, used: 0, remaining: 0 };
+    }
+
+    // T0-6: Use DATE_TRUNC for proper period_start handling
+    const result = await client.query(`
+      INSERT INTO subscriber_directory_allocations (
+        user_id, period_start, period_end, base_allocation, pack_allocation, submissions_used, created_at, updated_at
+      ) VALUES (
+        $1,
+        DATE_TRUNC('month', NOW())::date,
+        (DATE_TRUNC('month', NOW()) + INTERVAL '1 month' - INTERVAL '1 day')::date,
+        $2,
+        0,
+        0,
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT (user_id, period_start)
+      DO UPDATE SET
+        base_allocation = GREATEST(subscriber_directory_allocations.base_allocation, EXCLUDED.base_allocation),
+        updated_at = NOW()
+      RETURNING *
+    `, [userId, baseAllocation]);
+
+    const alloc = result.rows[0];
+
+    return {
+      base: alloc.base_allocation || 0,
+      packs: alloc.pack_allocation || 0,
+      total: (alloc.base_allocation || 0) + (alloc.pack_allocation || 0),
+      used: alloc.submissions_used || 0,
+      remaining: (alloc.base_allocation || 0) + (alloc.pack_allocation || 0) - (alloc.submissions_used || 0)
+    };
+  }
+
+  /**
+   * T0-7: Calculate entitlement using provided client (for transactions)
+   * Used within a transaction that has already locked the user row
+   *
+   * @param {object} client - Database client from pool.connect()
+   * @param {number} userId - User ID
+   * @param {object} user - User object (already fetched with FOR UPDATE)
+   * @param {object} options - Options including requestId
+   */
+  async calculateEntitlementWithClient(client, userId, user, options = {}) {
+    const requestId = options.requestId || null;
+    const normalizedPlan = normalizePlan(user.plan);
+
+    debugLog(requestId, 'calculateEntitlementWithClient:', { userId, plan: normalizedPlan });
+
+    const breakdown = {
+      subscription_total: 0,
+      subscription_used: 0,
+      subscription_remaining: 0,
+      orders_total: 0,
+      orders_used: 0,
+      orders_remaining: 0
+    };
+
+    let primarySource = 'none';
+    let sourceId = null;
+
+    // Check subscriber status
+    const isSubscriber = isActiveSubscriber(user);
+
+    let allocation = null;
+
+    if (isSubscriber) {
+      // Get/create allocation using client
+      allocation = await this.getOrCreateMonthlyAllocationWithClient(client, userId, normalizedPlan, { requestId });
+      breakdown.subscription_total = allocation.total;
+      breakdown.subscription_used = allocation.used;
+      breakdown.subscription_remaining = allocation.remaining;
+      primarySource = 'subscription';
+      sourceId = user.stripe_subscription_id;
+    }
+
+    // Get order allocation using client
+    const orderResult = await client.query(`
+      SELECT id, directories_allocated, directories_submitted
+      FROM directory_orders
+      WHERE user_id = $1
+        AND status = ANY($2::text[])
+      ORDER BY created_at DESC
+    `, [userId, USABLE_ORDER_STATUSES]);
+
+    if (orderResult.rows.length > 0) {
+      breakdown.orders_total = orderResult.rows.reduce((sum, o) => sum + (o.directories_allocated || 0), 0);
+      breakdown.orders_used = orderResult.rows.reduce((sum, o) => sum + (o.directories_submitted || 0), 0);
+      breakdown.orders_remaining = Math.max(0, breakdown.orders_total - breakdown.orders_used);
+
+      if (!isSubscriber && breakdown.orders_total > 0) {
+        primarySource = 'order';
+        sourceId = orderResult.rows[0].id;
+      }
+    }
+
+    // Calculate totals
+    const total = breakdown.subscription_total + breakdown.orders_total;
+    const used = breakdown.subscription_used + breakdown.orders_used;
+    const remaining = breakdown.subscription_remaining + breakdown.orders_remaining;
+
+    return {
+      total,
+      used,
+      remaining: Math.max(0, remaining),
+      source: primarySource,
+      sourceId,
+      breakdown: {
+        subscription: breakdown.subscription_total,
+        subscriptionUsed: breakdown.subscription_used,
+        subscription_remaining: breakdown.subscription_remaining,
+        subscriptionRemaining: breakdown.subscription_remaining,
+        orders: breakdown.orders_total,
+        ordersUsed: breakdown.orders_used,
+        orders_remaining: breakdown.orders_remaining,
+        ordersRemaining: breakdown.orders_remaining
+      },
+      plan: normalizedPlan,
+      isSubscriber
+    };
+  }
+
+  /**
+   * T0-7: Consume entitlement using provided client with row locks
+   * Consumes from subscription first, then orders (FIFO)
+   *
+   * @param {object} client - Database client from pool.connect()
+   * @param {number} userId - User ID
+   * @param {number} count - Number of submissions to consume
+   * @param {object} entitlement - Entitlement object from calculateEntitlementWithClient
+   */
+  async consumeEntitlementWithClient(client, userId, count, entitlement) {
+    if (count <= 0) return { remaining: entitlement.remaining };
+
+    let remaining = count;
+    let subscriptionConsumed = 0;
+    let ordersConsumed = 0;
+
+    // 1. Consume from subscription first (if subscriber)
+    if (entitlement.isSubscriber && remaining > 0) {
+      const subscriptionAvailable = entitlement.breakdown?.subscriptionRemaining || 0;
+      const toConsume = Math.min(subscriptionAvailable, remaining);
+
+      if (toConsume > 0) {
+        // Lock and update allocation row
+        await client.query(`
+          UPDATE subscriber_directory_allocations
+          SET submissions_used = submissions_used + $1,
+              updated_at = NOW()
+          WHERE user_id = $2
+            AND period_start = DATE_TRUNC('month', NOW())::date
+        `, [toConsume, userId]);
+
+        remaining -= toConsume;
+        subscriptionConsumed = toConsume;
+      }
+    }
+
+    // 2. Consume remaining from orders (FIFO with row locks)
+    if (remaining > 0) {
+      const orders = await client.query(`
+        SELECT id, directories_allocated, directories_submitted
+        FROM directory_orders
+        WHERE user_id = $1
+          AND status = ANY($2::text[])
+          AND directories_submitted < directories_allocated
+        ORDER BY created_at ASC
+        FOR UPDATE
+      `, [userId, USABLE_ORDER_STATUSES]);
+
+      for (const order of orders.rows) {
+        if (remaining <= 0) break;
+
+        const available = order.directories_allocated - order.directories_submitted;
+        const toConsume = Math.min(available, remaining);
+
+        await client.query(`
+          UPDATE directory_orders
+          SET directories_submitted = directories_submitted + $1,
+              updated_at = NOW()
+          WHERE id = $2
+        `, [toConsume, order.id]);
+
+        remaining -= toConsume;
+        ordersConsumed += toConsume;
+      }
+    }
+
+    return {
+      consumed: count - remaining,
+      subscriptionConsumed,
+      ordersConsumed,
+      subscriptionRemaining: (entitlement.breakdown?.subscriptionRemaining || 0) - subscriptionConsumed,
+      ordersRemaining: (entitlement.breakdown?.ordersRemaining || 0) - ordersConsumed,
+      remaining: entitlement.remaining - (count - remaining)
+    };
+  }
 }
 
 // Export both the service instance and the helper functions
