@@ -107,6 +107,101 @@ const dbUserId = parseInt(user_id);
 
 ---
 
+## T0-5: Plan Normalization + Subscriber Eligibility (FIXED)
+
+**Problem:** Plan casing mismatch + "null status treated as subscriber" = zero entitlement for paying users.
+
+**Solution in `backend/config/citationNetwork.js`:**
+```javascript
+const ALLOWED_STRIPE_STATUSES = ['active', 'trialing'];
+
+function isActiveSubscriber(user) {
+  const planNormalized = normalizePlan(user.plan);
+
+  // Manual override for enterprise deals
+  if (user.subscription_manual_override === true) {
+    return SUBSCRIBER_PLANS.includes(planNormalized);
+  }
+
+  // MUST have explicit active status - null/undefined NOT valid
+  const stripeStatus = (user.stripe_subscription_status || '').toLowerCase().trim();
+  return SUBSCRIBER_PLANS.includes(planNormalized) &&
+         ALLOWED_STRIPE_STATUSES.includes(stripeStatus);
+}
+```
+
+**Commit:** `73d5c25`
+
+---
+
+## T0-6: Monthly Allocation Correctness (FIXED)
+
+**Problem:** Wrong `period_start` type or missing constraint = duplicate/missing allocations.
+
+**Solution in `entitlementService.js`:**
+```javascript
+async getOrCreateMonthlyAllocationWithClient(client, userId, plan) {
+  return client.query(`
+    INSERT INTO subscriber_directory_allocations (...)
+    VALUES ($1, DATE_TRUNC('month', NOW())::date, ...)
+    ON CONFLICT (user_id, period_start) DO UPDATE SET ...
+    RETURNING *
+  `, [userId, baseAllocation]);
+}
+```
+
+**Key:** Use `DATE_TRUNC('month', NOW())::date` instead of JS date strings.
+
+**Commit:** `c9790ce`
+
+---
+
+## T0-7: Transactional Reservation with User Row Lock (FIXED)
+
+**Problem:** Without user row lock, concurrent requests double-consume credits.
+
+**Solution in `campaignRunService.js`:**
+```javascript
+async startSubmissions(userId, filters, options) {
+  await client.query('BEGIN');
+
+  // CRITICAL: Lock user row FIRST
+  const userResult = await client.query(
+    'SELECT * FROM users WHERE id = $1 FOR UPDATE',
+    [userId]
+  );
+
+  // Check idempotency key
+  if (idempotencyKey) { /* return existing if duplicate */ }
+
+  // All entitlement ops use client-based methods
+  const entitlement = await entitlementService.calculateEntitlementWithClient(client, ...);
+  const consumeResult = await entitlementService.consumeEntitlementWithClient(client, ...);
+
+  await client.query('COMMIT');
+}
+```
+
+**Commit:** `c9790ce`
+
+---
+
+## T0-8: WithClient Functions Must Use Client Consistently (VERIFIED)
+
+**Problem:** Functions internally calling `pool.query` break transaction isolation.
+
+**Verification:** All `*WithClient` functions use `client.query`:
+
+| Method | Lines | Uses `client.query` |
+|--------|-------|---------------------|
+| `getOrCreateMonthlyAllocationWithClient` | 436-481 | ✓ Line 452 |
+| `calculateEntitlementWithClient` | 492-569 | ✓ Lines 517, 526 |
+| `consumeEntitlementWithClient` | 580-645 | ✓ Lines 594, 609, 625 |
+
+**Note:** The non-WithClient versions (e.g., `getMonthlyAllocation`) correctly use `db.query` for non-transactional use cases.
+
+---
+
 ## Quick Reference: Creating New Migrations
 
 1. Create SQL file: `backend/migrations/my_migration_name.sql`
