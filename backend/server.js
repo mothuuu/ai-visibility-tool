@@ -19,7 +19,8 @@ const adminRoutes = require('./routes/admin');
 const citationNetworkRoutes = require('./routes/citationNetwork');
 
 // Stripe webhook handler - imported directly for raw body mounting
-const { stripeWebhookHandler } = require('./routes/stripe-webhook');
+// P0: Export as function, not object
+const handleStripeWebhook = require('./routes/stripe-webhook');
 
 // Background jobs
 const { getWorker } = require('./jobs/submissionWorker');
@@ -36,20 +37,20 @@ app.set('trust proxy', 1);
 // ============================================================================
 // CRITICAL: Stripe Webhooks - MUST be mounted BEFORE any body parsing middleware
 // ============================================================================
-// Stripe signature verification requires the raw request body. If express.json()
-// parses the body first, signature verification will fail.
+// P0 T0-1: Stripe signature verification requires the raw request body.
+// If express.json() parses the body first, signature verification will fail.
 // See: https://stripe.com/docs/webhooks/signatures
 app.post(
   '/api/webhooks/stripe',
-  express.raw({ type: 'application/json' }),
-  stripeWebhookHandler
+  express.raw({ type: 'application/json', limit: '2mb' }),
+  handleStripeWebhook
 );
 
 // Legacy subscription webhook path (same handler)
 app.post(
   '/api/subscription/webhook',
-  express.raw({ type: 'application/json' }),
-  stripeWebhookHandler
+  express.raw({ type: 'application/json', limit: '2mb' }),
+  handleStripeWebhook
 );
 
 // ============================================================================
