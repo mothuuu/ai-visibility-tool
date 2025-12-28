@@ -16,8 +16,10 @@ const feedbackRoutes = require('./routes/feedback');
 const supportChatRoutes = require('./routes/support-chat');
 const waitlistRoutes = require('./routes/waitlist');
 const adminRoutes = require('./routes/admin');
-const stripeWebhookRoutes = require('./routes/stripe-webhook');
 const citationNetworkRoutes = require('./routes/citationNetwork');
+
+// Stripe webhook handler - imported directly for raw body mounting
+const { stripeWebhookHandler } = require('./routes/stripe-webhook');
 
 // Background jobs
 const { getWorker } = require('./jobs/submissionWorker');
@@ -31,10 +33,28 @@ const PORT = process.env.PORT || 3001;
 // This is required for rate limiting and IP-based features to work correctly
 app.set('trust proxy', 1);
 
-// Stripe webhook needs raw body - must be before express.json()
-app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }));
-app.use('/api/subscription/webhook', express.raw({ type: 'application/json' }));
+// ============================================================================
+// CRITICAL: Stripe Webhooks - MUST be mounted BEFORE any body parsing middleware
+// ============================================================================
+// Stripe signature verification requires the raw request body. If express.json()
+// parses the body first, signature verification will fail.
+// See: https://stripe.com/docs/webhooks/signatures
+app.post(
+  '/api/webhooks/stripe',
+  express.raw({ type: 'application/json' }),
+  stripeWebhookHandler
+);
 
+// Legacy subscription webhook path (same handler)
+app.post(
+  '/api/subscription/webhook',
+  express.raw({ type: 'application/json' }),
+  stripeWebhookHandler
+);
+
+// ============================================================================
+// Body Parsing Middleware - AFTER webhook routes
+// ============================================================================
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -77,11 +97,9 @@ const limiter = rateLimit({
 });
 
 app.use('/api/', limiter);
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Routes
-app.use('/api/webhooks', stripeWebhookRoutes); // Stripe webhooks (must be before other routes)
+// NOTE: Stripe webhook routes are mounted at the top of server.js BEFORE body parsing
 app.use('/api/auth', authRoutes);
 app.use('/api', aiTestingRoutes);
 app.use('/api/subscription', subscriptionRoutes);

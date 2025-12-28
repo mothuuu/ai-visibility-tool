@@ -1,15 +1,22 @@
 /**
  * Stripe Webhook Handler
  * Automatically handles subscription lifecycle events
+ *
+ * IMPORTANT: This handler expects req.body to be a raw Buffer (not parsed JSON).
+ * It must be mounted in server.js BEFORE any body-parsing middleware:
+ *
+ *   app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), stripeWebhookHandler);
+ *   app.use(express.json()); // AFTER webhook routes
  */
 
-const express = require('express');
-const router = express.Router();
 const db = require('../db/database');
 const { handleCitationNetworkWebhook } = require('../services/citationNetworkWebhookHandler');
 
-// POST /api/webhooks/stripe - Handle Stripe webhook events
-router.post('/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+/**
+ * Main Stripe webhook handler
+ * Called directly from server.js with raw body
+ */
+async function stripeWebhookHandler(req, res) {
   const sig = req.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -104,7 +111,7 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
     console.error('❌ [Stripe Webhook] Error:', error.message);
     return res.status(400).json({ error: 'Webhook error' });
   }
-});
+}
 
 /**
  * Handle subscription deletion (user canceled)
@@ -317,4 +324,4 @@ async function handleSubscriptionCreated(subscription, eventId) {
   `, [user.id, eventId]);
 }
 
-module.exports = router;
+module.exports = { stripeWebhookHandler };
