@@ -626,7 +626,12 @@ router.get('/stats', authenticateToken, async (req, res) => {
         COUNT(*) FILTER (WHERE status IN ('paid', 'processing', 'in_progress', 'completed')) as total_orders,
         SUM(directories_allocated) FILTER (WHERE status IN ('paid', 'processing', 'in_progress', 'completed')) as total_directories,
         SUM(directories_submitted) FILTER (WHERE status IN ('paid', 'processing', 'in_progress', 'completed')) as total_submitted,
-        SUM(directories_live) FILTER (WHERE status IN ('paid', 'processing', 'in_progress', 'completed')) as total_live
+        SUM(directories_live) FILTER (WHERE status IN ('paid', 'processing', 'in_progress', 'completed')) as total_live,
+        COUNT(*) FILTER (
+          WHERE pack_type = 'boost'
+            AND status IN ('paid', 'processing', 'in_progress', 'completed')
+            AND created_at >= DATE_TRUNC('year', NOW())
+        ) as boosts_this_year
       FROM directory_orders
       WHERE user_id = $1
     `, [req.user.id]);
@@ -637,8 +642,13 @@ router.get('/stats', authenticateToken, async (req, res) => {
       [req.user.id]
     );
 
+    const boostsThisYear = parseInt(orderStats.rows[0]?.boosts_this_year) || 0;
+    const maxBoostsPerYear = 2;
+
     res.json({
       orders: parseInt(orderStats.rows[0]?.total_orders) || 0,
+      boostsThisYear,
+      boostsRemaining: Math.max(0, maxBoostsPerYear - boostsThisYear),
       directories: {
         allocated: parseInt(orderStats.rows[0]?.total_directories) || 0,
         submitted: parseInt(orderStats.rows[0]?.total_submitted) || 0,
