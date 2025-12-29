@@ -4,6 +4,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const db = require('../db/database');
 const jwt = require('jsonwebtoken');
 const { authenticateToken } = require('../middleware/auth');
+const { handleCitationNetworkWebhook } = require('../services/citationNetworkWebhookHandler');
 
 // Price IDs from your Stripe dashboard
 // Monthly prices
@@ -156,7 +157,23 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     let result;
     switch (event.type) {
       case 'checkout.session.completed':
-        result = await handleCheckoutComplete(event.data.object);
+      case 'checkout.session.async_payment_succeeded':
+      case 'checkout.session.async_payment_failed':
+      case 'checkout.session.expired':
+        // Check if this is a citation network order
+        const session = event.data.object;
+        if (session.metadata?.product === 'citation_network') {
+          console.log(`📦 Routing to Citation Network webhook handler for ${event.type}`);
+          const handled = await handleCitationNetworkWebhook(event);
+          if (handled) {
+            result = { handler: 'citation_network', success: true };
+            break;
+          }
+        }
+        // Fall through for subscription checkouts (only for checkout.session.completed)
+        if (event.type === 'checkout.session.completed') {
+          result = await handleCheckoutComplete(event.data.object);
+        }
         break;
       
       case 'customer.subscription.updated':
