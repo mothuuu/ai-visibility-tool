@@ -1195,6 +1195,50 @@ router.get('/directories/count', authenticateToken, async (req, res) => {
 });
 
 /**
+ * GET /api/citation-network/directories/intelligence-summary
+ * Returns aggregate intelligence readiness stats for Phase 4 planning.
+ * MUST be placed before /directories/:id routes to avoid path conflicts.
+ */
+router.get('/directories/intelligence-summary', authenticateToken, async (req, res) => {
+  try {
+    // Overall summary
+    const summary = await db.query(`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE is_active = true) AS active,
+        COUNT(*) FILTER (WHERE search_type IS NOT NULL) AS has_search_type,
+        COUNT(*) FILTER (WHERE form_fields_mapping IS NOT NULL) AS has_form_mapping,
+        COUNT(*) FILTER (WHERE api_config IS NOT NULL) AS has_api_config,
+        COUNT(*) FILTER (WHERE duplicate_check_config IS NOT NULL) AS has_duplicate_config,
+        COUNT(*) FILTER (WHERE requires_captcha = true) AS requires_captcha_count,
+        COUNT(*) FILTER (WHERE requires_email_verification = true) AS requires_email_verification_count
+      FROM directories
+    `);
+
+    // Breakdown by submission_mode + search_type (for Phase 4 rollout planning)
+    const byModeAndSearchType = await db.query(`
+      SELECT
+        submission_mode,
+        COALESCE(search_type, 'NULL') AS search_type,
+        COUNT(*) AS count,
+        COUNT(*) FILTER (WHERE form_fields_mapping IS NOT NULL) AS with_mapping
+      FROM directories
+      WHERE is_active = true
+      GROUP BY submission_mode, search_type
+      ORDER BY count DESC
+    `);
+
+    res.json({
+      summary: summary.rows[0],
+      byModeAndSearchType: byModeAndSearchType.rows
+    });
+  } catch (error) {
+    console.error('[IntelligenceSummary] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch intelligence summary' });
+  }
+});
+
+/**
  * GET /api/citation-network/directories/:id/intelligence
  * Get automation intelligence for a specific directory
  * Phase 3: Returns form field mappings, duplicate check config, API config, etc.
