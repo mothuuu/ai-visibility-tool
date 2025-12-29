@@ -91,8 +91,9 @@ async function migrateCitationNetwork() {
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         business_profile_id UUID REFERENCES business_profiles(id),
 
-        -- Order type
+        -- Order type (T0-12: pack_type for PACK_CONFIG lookup)
         order_type VARCHAR(50) NOT NULL, -- 'starter' ($249) or 'pack' ($99)
+        pack_type VARCHAR(50), -- 'starter' or 'boost' (Rule 12: for PACK_CONFIG lookup)
 
         -- Stripe
         stripe_checkout_session_id VARCHAR(255),
@@ -123,6 +124,13 @@ async function migrateCitationNetwork() {
       );
     `);
     console.log('✅ Directory orders table created');
+
+    // Ensure pack_type column exists (for tables created before T0-12)
+    await pool.query(`
+      ALTER TABLE directory_orders
+      ADD COLUMN IF NOT EXISTS pack_type VARCHAR(50);
+    `);
+    console.log('✅ Ensured pack_type column exists');
 
     // Create subscriber_directory_allocations table
     await pool.query(`
@@ -223,10 +231,11 @@ async function migrateCitationNetwork() {
     console.log('✅ Directories master table created');
 
     // Create directory_submissions table for tracking individual submissions
+    // T0-13: order_id is BIGINT to match directory_orders.id (BIGSERIAL)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS directory_submissions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        order_id UUID REFERENCES directory_orders(id) ON DELETE CASCADE,
+        order_id BIGINT REFERENCES directory_orders(id) ON DELETE CASCADE,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         business_profile_id UUID REFERENCES business_profiles(id),
         directory_id INTEGER REFERENCES directories(id),
