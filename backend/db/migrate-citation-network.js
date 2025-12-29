@@ -136,14 +136,21 @@ async function migrateCitationNetwork() {
     await pool.query(`
       DO $$
       BEGIN
+        -- Check if constraint already exists by name
         IF NOT EXISTS (
-          SELECT 1 FROM pg_indexes
-          WHERE tablename = 'directory_orders'
-            AND indexdef LIKE '%stripe_checkout_session_id%UNIQUE%'
-        ) AND NOT EXISTS (
           SELECT 1 FROM pg_constraint
-          WHERE conname LIKE '%stripe_checkout_session_id%'
-            AND contype = 'u'
+          WHERE conname = 'directory_orders_stripe_session_unique'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM pg_constraint c
+          JOIN pg_class t ON c.conrelid = t.oid
+          WHERE t.relname = 'directory_orders'
+            AND c.contype = 'u'
+            AND EXISTS (
+              SELECT 1 FROM pg_attribute a
+              WHERE a.attrelid = t.oid
+                AND a.attname = 'stripe_checkout_session_id'
+                AND a.attnum = ANY(c.conkey)
+            )
         ) THEN
           -- First remove any duplicates (keep the most recent)
           DELETE FROM directory_orders a
@@ -156,6 +163,10 @@ async function migrateCitationNetwork() {
           ALTER TABLE directory_orders
           ADD CONSTRAINT directory_orders_stripe_session_unique
           UNIQUE (stripe_checkout_session_id);
+
+          RAISE NOTICE 'Added UNIQUE constraint to stripe_checkout_session_id';
+        ELSE
+          RAISE NOTICE 'UNIQUE constraint already exists on stripe_checkout_session_id';
         END IF;
       END $$;
     `);
