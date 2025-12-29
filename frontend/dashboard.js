@@ -2291,11 +2291,7 @@ async function startDirectorySubmissions() {
 async function handleBoostPurchase() {
     const state = citationNetworkState;
 
-    if (state.boostsRemaining <= 0) {
-        showXeoAlert('Maximum Boosts Reached', 'You have used both of your annual boosts.\n\nYour next boost will be available at the start of the next year.');
-        return;
-    }
-
+    // FIRST check if user has an active boost that needs attention
     if (state.hasActiveBoost) {
         // Check if submissions need to be started
         const progress = state.boostProgress || {};
@@ -2306,7 +2302,7 @@ async function handleBoostPurchase() {
         if (needsStart) {
             // Start submissions for this boost
             showXeoConfirm('Start Directory Submissions',
-                `You have 100 directory submissions ready.\n\nStart submitting to directories now?\n\n• We'll submit to 3-5 directories per day\n• You'll be notified of any actions needed\n• Track progress in this dashboard`,
+                `You have ${progress.total || 100} directory submissions ready.\n\nStart submitting to directories now?\n\n• We'll submit to 3-5 directories per day\n• You'll be notified of any actions needed\n• Track progress in this dashboard`,
                 async function(confirmed) {
                     if (confirmed) {
                         await startDirectorySubmissions();
@@ -2317,14 +2313,23 @@ async function handleBoostPurchase() {
             // Show progress
             showXeoAlert('Boost Progress',
                 `Current Boost Progress:\n\n` +
-                `• Submitted: ${progress.submitted || 0}/100\n` +
+                `• Submitted: ${progress.submitted || 0}/${progress.total || 100}\n` +
                 `• Live: ${progress.live || 0}\n` +
                 `• Pending: ${progress.pending || 0}\n` +
                 `• Action Needed: ${progress.actionNeeded || 0}`);
         }
-    } else {
-        // Real Stripe checkout integration
-        try {
+        return;
+    }
+
+    // Only check boosts remaining when trying to purchase a NEW boost
+    if (state.boostsRemaining <= 0) {
+        showXeoAlert('Maximum Boosts Reached', 'You have used both of your annual boosts.\n\nYour next boost will be available at the start of the next year.');
+        return;
+    }
+
+    // No active boost, try to purchase one
+    // Real Stripe checkout integration
+    try {
             // First check if we can purchase (for business profile requirement)
             const checkoutInfo = await fetchCitationNetworkCheckoutInfo();
 
