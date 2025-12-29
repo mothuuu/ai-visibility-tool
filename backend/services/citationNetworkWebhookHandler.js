@@ -194,7 +194,7 @@ async function handlePaymentSuccess(session, userId, packType, client) {
 async function addPackAllocation(userId, directories, queryFn) {
   // Get user to check if subscriber
   const userResult = await queryFn(
-    'SELECT id, plan, stripe_subscription_status, subscription_manual_override FROM users WHERE id = $1',
+    'SELECT id, plan, stripe_subscription_status FROM users WHERE id = $1',
     [userId]
   );
 
