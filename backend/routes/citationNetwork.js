@@ -1356,6 +1356,73 @@ router.get('/action-reminders', authenticateToken, async (req, res) => {
 // ============================================================================
 
 /**
+ * GET /api/citation-network/submissions/:id/debug
+ * Debug endpoint to check if a submission exists (development only)
+ */
+router.get('/submissions/:id/debug', authenticateToken, async (req, res) => {
+  const submissionId = req.params.id;
+  const userId = req.user.id;
+
+  console.log(`[SubmissionDebug] Checking submission: ${submissionId} for user: ${userId} (type: ${typeof userId})`);
+
+  try {
+    // Check if table exists
+    const tableCheck = await db.query(`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'directory_submissions'
+      ) as exists
+    `);
+
+    if (!tableCheck.rows[0].exists) {
+      return res.json({
+        exists: false,
+        error: 'directory_submissions table does not exist',
+        suggestion: 'Run migrations first'
+      });
+    }
+
+    // Check submission
+    const result = await db.query(`
+      SELECT id, user_id, status, directory_name
+      FROM directory_submissions
+      WHERE id = $1::uuid
+    `, [submissionId]);
+
+    if (result.rows.length === 0) {
+      return res.json({
+        exists: false,
+        submissionId,
+        userId,
+        error: 'Submission not found with this ID'
+      });
+    }
+
+    const sub = result.rows[0];
+    const belongsToUser = String(sub.user_id) === String(userId);
+
+    return res.json({
+      exists: true,
+      submissionId: sub.id,
+      submissionUserId: sub.user_id,
+      requestUserId: userId,
+      belongsToUser,
+      status: sub.status,
+      directoryName: sub.directory_name,
+      userIdTypes: {
+        submissionUserId: typeof sub.user_id,
+        requestUserId: typeof userId
+      }
+    });
+  } catch (error) {
+    return res.json({
+      exists: false,
+      error: error.message,
+      code: error.code
+    });
+  }
+});
+
+/**
  * PATCH /api/citation-network/submissions/:id/status
  * Update a submission's status (e.g., mark as verified/complete)
  *
@@ -1402,24 +1469,47 @@ router.patch('/submissions/:id/status', authenticateToken, async (req, res) => {
   }
 
   try {
-    // First check if the table exists and has the required columns
-    // Use a simpler update that doesn't depend on verified_at existing
+    // First check if submission exists at all (helps diagnose issues)
+    const existsCheck = await db.query(
+      'SELECT id, user_id FROM directory_submissions WHERE id = $1::uuid',
+      [submissionId]
+    );
+
+    if (existsCheck.rows.length === 0) {
+      console.log(`[SubmissionStatus] Submission ${submissionId} not found in database`);
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Submission not found' }
+      });
+    }
+
+    // Check ownership - use string comparison for safety across different ID types
+    const submissionOwnerId = existsCheck.rows[0].user_id;
+    if (String(submissionOwnerId) !== String(userId)) {
+      console.log(`[SubmissionStatus] Ownership mismatch: submission belongs to ${submissionOwnerId}, request from ${userId}`);
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Submission does not belong to user' }
+      });
+    }
+
+    // Now do the update
     const result = await db.query(`
       UPDATE directory_submissions
       SET
         status = $1,
         action_type = COALESCE($2, action_type),
         updated_at = NOW()
-      WHERE id = $3::uuid AND user_id = $4
+      WHERE id = $3::uuid
       RETURNING id, status, action_type, updated_at, directory_name
-    `, [status, actionType || null, submissionId, userId]);
+    `, [status, actionType || null, submissionId]);
 
-    // Check if update affected any rows
+    // This should always return a row now since we checked existence above
     if (result.rows.length === 0) {
-      console.log(`[SubmissionStatus] No rows updated for submissionId=${submissionId}, userId=${userId}`);
-      return res.status(404).json({
+      console.log(`[SubmissionStatus] Unexpected: No rows updated after existence check`);
+      return res.status(500).json({
         success: false,
-        error: { code: 'NOT_FOUND', message: 'Submission not found or does not belong to user' }
+        error: { code: 'UPDATE_FAILED', message: 'Update failed unexpectedly' }
       });
     }
 
