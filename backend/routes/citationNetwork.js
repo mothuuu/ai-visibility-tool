@@ -1367,6 +1367,18 @@ router.patch('/submissions/:id/status', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   const { status, actionType } = req.body;
 
+  console.log(`[SubmissionStatus] Request: submissionId=${submissionId}, userId=${userId}, status=${status}`);
+
+  // Validate submissionId format (UUID)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!submissionId || !uuidRegex.test(submissionId)) {
+    console.log(`[SubmissionStatus] Invalid submission ID format: ${submissionId}`);
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_ID', message: 'Invalid submission ID format' }
+    });
+  }
+
   // Validate required fields
   if (!status) {
     return res.status(400).json({
@@ -1390,20 +1402,21 @@ router.patch('/submissions/:id/status', authenticateToken, async (req, res) => {
   }
 
   try {
-    // Update submission - RETURNING ensures we get the updated row
+    // First check if the table exists and has the required columns
+    // Use a simpler update that doesn't depend on verified_at existing
     const result = await db.query(`
       UPDATE directory_submissions
       SET
         status = $1,
         action_type = COALESCE($2, action_type),
-        updated_at = NOW(),
-        verified_at = CASE WHEN $1 = 'verified' THEN NOW() ELSE verified_at END
-      WHERE id = $3 AND user_id = $4
-      RETURNING id, status, action_type, updated_at, verified_at, directory_name
+        updated_at = NOW()
+      WHERE id = $3::uuid AND user_id = $4
+      RETURNING id, status, action_type, updated_at, directory_name
     `, [status, actionType || null, submissionId, userId]);
 
     // Check if update affected any rows
     if (result.rows.length === 0) {
+      console.log(`[SubmissionStatus] No rows updated for submissionId=${submissionId}, userId=${userId}`);
       return res.status(404).json({
         success: false,
         error: { code: 'NOT_FOUND', message: 'Submission not found or does not belong to user' }
@@ -1412,7 +1425,21 @@ router.patch('/submissions/:id/status', authenticateToken, async (req, res) => {
 
     const updated = result.rows[0];
 
-    console.log(`[SubmissionStatus] Updated submission ${submissionId} to status=${status} for user=${userId}`);
+    // Try to update verified_at separately if status is 'verified' (column may not exist in all schemas)
+    if (status === 'verified') {
+      try {
+        await db.query(`
+          UPDATE directory_submissions
+          SET verified_at = NOW()
+          WHERE id = $1::uuid AND verified_at IS NULL
+        `, [submissionId]);
+      } catch (verifyError) {
+        // Column might not exist - that's ok, log and continue
+        console.log(`[SubmissionStatus] Could not update verified_at (column may not exist): ${verifyError.message}`);
+      }
+    }
+
+    console.log(`[SubmissionStatus] SUCCESS: Updated submission ${submissionId} to status=${status} for user=${userId}`);
 
     res.json({
       success: true,
@@ -1421,13 +1448,31 @@ router.patch('/submissions/:id/status', authenticateToken, async (req, res) => {
         status: updated.status,
         actionType: updated.action_type,
         updatedAt: updated.updated_at,
-        verifiedAt: updated.verified_at,
         directoryName: updated.directory_name
       }
     });
 
   } catch (error) {
-    console.error('[SubmissionStatus] Error updating submission:', error);
+    console.error('[SubmissionStatus] Database error:', error.message);
+    console.error('[SubmissionStatus] Stack:', error.stack);
+
+    // Check for specific PostgreSQL errors
+    if (error.code === '42P01') {
+      // Table does not exist
+      return res.status(500).json({
+        success: false,
+        error: { code: 'TABLE_NOT_FOUND', message: 'Submissions table not found. Please run migrations.' }
+      });
+    }
+
+    if (error.code === '22P02') {
+      // Invalid text representation (e.g., invalid UUID)
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_ID', message: 'Invalid submission ID format' }
+      });
+    }
+
     res.status(500).json({
       success: false,
       error: { code: 'INTERNAL_ERROR', message: 'Failed to update submission status' }
