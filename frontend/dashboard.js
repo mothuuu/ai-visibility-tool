@@ -3058,7 +3058,7 @@ async function markActionComplete(submissionId) {
 
     try {
         // Call API to persist the status change
-        const response = await fetch(`/api/citation-network/submissions/${submissionId}/status`, {
+        const response = await fetch(`${API_BASE_URL}/citation-network/submissions/${submissionId}/status`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
