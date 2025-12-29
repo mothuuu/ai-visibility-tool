@@ -3021,7 +3021,7 @@ function closeActionModal(event) {
 }
 
 // Submit verification code
-function submitVerificationCode(submissionId) {
+async function submitVerificationCode(submissionId) {
     const codeInput = document.getElementById('verificationCodeInput');
     const code = codeInput?.value?.trim();
 
@@ -3030,33 +3030,69 @@ function submitVerificationCode(submissionId) {
         return;
     }
 
-    // Simulate verification (in real app, this would call API)
     showXeoAlert('Verifying...', 'Checking your verification code...');
 
-    setTimeout(() => {
-        markActionComplete(submissionId);
-    }, 1500);
+    // Add small delay for UX, then call the API
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await markActionComplete(submissionId);
 }
 
-// Mark action as complete
-function markActionComplete(submissionId) {
+// Mark action as complete - Bug 1 Fix: Now persists to database via API
+async function markActionComplete(submissionId) {
     const submission = citationNetworkState.submissions.find(s => s.id === submissionId);
-    if (!submission) return;
+    if (!submission) {
+        showXeoAlert('Error', 'Submission not found.');
+        return;
+    }
 
-    // Update status
-    submission.status = SUBMISSION_STATUS.VERIFIED;
-    submission.actionType = ACTION_REQUIRED_TYPE.NONE;
-    submission.verifiedAt = new Date().toISOString();
+    const authToken = getNormalizedAuthToken();
+    if (!authToken) {
+        showXeoAlert('Error', 'Please log in to mark submissions as complete.');
+        return;
+    }
 
-    // Close modal
+    // Close modal first for better UX
     closeActionModal();
 
-    // Show success
-    showXeoAlert('Verification Complete!', `${submission.directoryName} is now verified and will go live soon.`);
+    try {
+        // Call API to persist the status change
+        const response = await fetch(`/api/citation-network/submissions/${submissionId}/status`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+                status: 'verified',
+                actionType: 'none'
+            })
+        });
 
-    // Re-render
-    updateProgressFromSubmissions();
-    renderCitationNetworkTabs();
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            const errorMsg = data.error?.message || 'Failed to update submission status';
+            console.error('[MarkComplete] API error:', data);
+            showXeoAlert('Error', errorMsg);
+            return;
+        }
+
+        // Update local state only after successful API call
+        submission.status = SUBMISSION_STATUS.VERIFIED;
+        submission.actionType = ACTION_REQUIRED_TYPE.NONE;
+        submission.verifiedAt = data.submission?.verifiedAt || new Date().toISOString();
+
+        // Show success
+        showXeoAlert('Verification Complete!', `${submission.directoryName} is now verified and will go live soon.`);
+
+        // Re-render to update counts and UI
+        updateProgressFromSubmissions();
+        renderCitationNetworkTabs();
+
+    } catch (error) {
+        console.error('[MarkComplete] Network error:', error);
+        showXeoAlert('Error', 'Network error. Please try again.');
+    }
 }
 
 // Render credentials list
