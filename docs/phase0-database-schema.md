@@ -95,7 +95,7 @@ Primary migrations: `migrate-citation-network.js`, `migrate-campaign-runs.js`
 
 ## Table: `directories`
 
-**Migration:** `migrate-citation-network.js`
+**Migrations:** `migrate-citation-network.js`, `phase3_directory_intelligence.sql`
 
 | Column | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -132,6 +132,15 @@ Primary migrations: `migrate-citation-network.js`, `migrate-campaign-runs.js`
 | `notes` | TEXT | - | |
 | `created_at` | TIMESTAMP | CURRENT_TIMESTAMP | |
 | `updated_at` | TIMESTAMP | CURRENT_TIMESTAMP | |
+| **Phase 3 Intelligence Columns** ||||
+| `form_fields_mapping` | JSONB | - | Field mappings for form automation |
+| `search_type` | VARCHAR(50) | 'none' | none/name_search/url_search |
+| `search_url_template` | TEXT | - | URL template for duplicate checking |
+| `requires_captcha` | BOOLEAN | false | Whether directory has CAPTCHA |
+| `requires_email_verification` | BOOLEAN | false | Whether email verification needed |
+| `requires_payment` | BOOLEAN | false | Whether payment required to submit |
+| `api_config` | JSONB | - | API integration configuration |
+| `duplicate_check_config` | JSONB | - | Duplicate detection configuration |
 
 ---
 
