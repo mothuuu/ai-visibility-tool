@@ -16,6 +16,8 @@
  */
 
 const db = require('../db/database');
+const campaignRunService = require('../services/campaignRunService');
+const { USABLE_ORDER_STATUSES } = require('../config/citationNetwork');
 
 // Per-directory rate limits (max submissions per hour)
 const DIRECTORY_RATE_LIMITS = {
@@ -31,6 +33,10 @@ const DIRECTORY_RATE_LIMITS = {
 // Global rate limit: max submissions per day across all directories
 const MAX_SUBMISSIONS_PER_DAY = 50;
 
+// Per-user rate limits (base and boosted)
+const BASE_RATE_PER_USER = 5;
+const BOOSTED_RATE_PER_USER = 15;
+
 // Batch settings
 const BATCH_SIZE = 5;
 const BATCH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes between batches
@@ -43,6 +49,42 @@ class SubmissionWorker {
     this.processedToday = 0;
     this.lastResetDate = new Date().toDateString();
     this.shutdownRequested = false;
+    // Track per-user submissions today: { [userId]: count }
+    this.userSubmissionsToday = {};
+  }
+
+  /**
+   * Get the daily submission rate for a user based on boost status
+   * Returns BASE_RATE_PER_USER (5) for regular users
+   * Returns BOOSTED_RATE_PER_USER (15) for users with active boost credits
+   */
+  async getUserDailyRate(userId) {
+    try {
+      const rateInfo = await campaignRunService.getDailySubmissionRate(userId);
+      return rateInfo;
+    } catch (error) {
+      console.error(`[SubmissionWorker] Error getting rate for user ${userId}:`, error.message);
+      // Default to base rate on error
+      return {
+        dailyRate: BASE_RATE_PER_USER,
+        boostActive: false,
+        boostRemaining: 0
+      };
+    }
+  }
+
+  /**
+   * Check how many submissions a user has remaining today
+   */
+  async getUserRemainingToday(userId) {
+    const rateInfo = await this.getUserDailyRate(userId);
+    const usedToday = this.userSubmissionsToday[userId] || 0;
+    return {
+      remaining: Math.max(0, rateInfo.dailyRate - usedToday),
+      dailyRate: rateInfo.dailyRate,
+      usedToday,
+      boostActive: rateInfo.boostActive
+    };
   }
 
   /**
@@ -96,8 +138,9 @@ class SubmissionWorker {
     // Reset daily counter at midnight
     const today = new Date().toDateString();
     if (today !== this.lastResetDate) {
-      console.log(`[SubmissionWorker] New day - resetting counter (was ${this.processedToday})`);
+      console.log(`[SubmissionWorker] New day - resetting counters (global: ${this.processedToday}, users: ${Object.keys(this.userSubmissionsToday).length})`);
       this.processedToday = 0;
+      this.userSubmissionsToday = {}; // Reset per-user counters
       this.lastResetDate = today;
     }
 
@@ -197,6 +240,7 @@ class SubmissionWorker {
       console.log(`[SubmissionWorker] Claimed ${batch.rows.length} submissions for processing`);
 
       // Process each submission (outside transaction - each gets its own)
+      // Group submissions by user to check per-user rate limits
       for (const submission of batch.rows) {
         if (this.shutdownRequested) {
           console.log('[SubmissionWorker] Shutdown requested, stopping batch processing');
@@ -208,16 +252,42 @@ class SubmissionWorker {
           break;
         }
 
+        // Check per-user daily rate limit
+        const userId = submission.user_id;
+        const userRemaining = await this.getUserRemainingToday(userId);
+
+        if (userRemaining.remaining <= 0) {
+          console.log(`[SubmissionWorker] User ${userId} at daily limit (${userRemaining.dailyRate}), skipping submission ${submission.id}`);
+          // Put back to queued so it can be processed tomorrow
+          await db.query(`
+            UPDATE directory_submissions
+            SET status = 'queued', updated_at = NOW()
+            WHERE id = $1 AND status = 'in_progress'
+          `, [submission.id]);
+          continue;
+        }
+
         try {
           await this.processSubmission(submission);
           this.processedToday++;
+          // Track per-user submissions
+          this.userSubmissionsToday[userId] = (this.userSubmissionsToday[userId] || 0) + 1;
+
+          // Log boost status for visibility
+          if (userRemaining.boostActive) {
+            console.log(`[SubmissionWorker] User ${userId} processed (boosted rate: ${userRemaining.dailyRate}/day, remaining: ${userRemaining.remaining - 1})`);
+          }
         } catch (error) {
           console.error(`[SubmissionWorker] Failed to process ${submission.id}:`, error.message);
           await this.markFailed(submission.id, error.message);
         }
       }
 
-      console.log(`[SubmissionWorker] Batch complete. Today: ${this.processedToday}/${MAX_SUBMISSIONS_PER_DAY}`);
+      // Log per-user stats
+      const userStats = Object.entries(this.userSubmissionsToday)
+        .map(([uid, count]) => `${uid}:${count}`)
+        .join(', ');
+      console.log(`[SubmissionWorker] Batch complete. Global: ${this.processedToday}/${MAX_SUBMISSIONS_PER_DAY}. Users: ${userStats || 'none'}`);
 
     } catch (error) {
       await client.query('ROLLBACK');
@@ -462,7 +532,10 @@ class SubmissionWorker {
       isRunning: this.isRunning,
       processedToday: this.processedToday,
       dailyLimit: MAX_SUBMISSIONS_PER_DAY,
-      lastResetDate: this.lastResetDate
+      lastResetDate: this.lastResetDate,
+      userSubmissionsToday: this.userSubmissionsToday,
+      baseRatePerUser: BASE_RATE_PER_USER,
+      boostedRatePerUser: BOOSTED_RATE_PER_USER
     };
   }
 }
@@ -481,7 +554,9 @@ module.exports = {
   SubmissionWorker,
   getWorker,
   MAX_SUBMISSIONS_PER_DAY,
-  DIRECTORY_RATE_LIMITS
+  DIRECTORY_RATE_LIMITS,
+  BASE_RATE_PER_USER,
+  BOOSTED_RATE_PER_USER
 };
 
 // Run directly if called from command line
