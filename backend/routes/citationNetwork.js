@@ -183,12 +183,24 @@ router.post('/packs/checkout', authenticateToken, async (req, res) => {
       ? process.env.STRIPE_STARTER_PACK_PRICE_ID || config.prices.STARTER_249
       : process.env.STRIPE_BOOST_PACK_PRICE_ID || config.prices.PACK_99;
 
-    if (!priceId) {
-      console.error(`[PackCheckout] Missing price ID for ${pack_type}`);
-      return res.status(500).json({
-        success: false,
-        error: { code: ERROR_CODES.CONFIG_ERROR, message: 'Pack not configured' }
-      });
+    // Build line_items - use price_data as fallback if no price ID configured
+    let lineItems;
+    if (priceId) {
+      lineItems = [{ price: priceId, quantity: 1 }];
+    } else {
+      console.warn(`[PackCheckout] No price ID for ${pack_type}, using price_data`);
+      const packName = pack_type === 'starter' ? 'Starter Pack' : 'Boost Pack';
+      lineItems = [{
+        price_data: {
+          currency: 'usd',
+          unit_amount: pack.price, // From PACK_CONFIG (in cents)
+          product_data: {
+            name: `AI Citation Network - ${packName}`,
+            description: `${pack.directories} directory submissions`
+          }
+        },
+        quantity: 1
+      }];
     }
 
     // Get or create Stripe customer
@@ -207,7 +219,7 @@ router.post('/packs/checkout', authenticateToken, async (req, res) => {
       customer: customerId,
       mode: 'payment',
       payment_method_types: ['card'],
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: lineItems,
       metadata: {
         user_id: String(user.id),
         pack_type,

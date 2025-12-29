@@ -88,6 +88,12 @@ class CitationNetworkStripeService {
     // TIER-0 RULE 12: Get directories from PACK_CONFIG
     const starterPack = PACK_CONFIG.starter;
 
+    // Validate price ID is configured
+    const starterPriceId = config.prices.STARTER_249;
+    if (!starterPriceId) {
+      console.warn('[CitationNetwork] STRIPE_PRICE_SPRINT_249 not set, will use price_data');
+    }
+
     // 2. Create order record
     const order = await db.query(`
       INSERT INTO directory_orders (
@@ -95,19 +101,31 @@ class CitationNetworkStripeService {
         stripe_price_id, status
       ) VALUES ($1, 'starter', 'starter', $2, $3, $4, 'pending')
       RETURNING id
-    `, [userId, starterPack.price, starterPack.directories, config.prices.STARTER_249]);
+    `, [userId, starterPack.price, starterPack.directories, starterPriceId || 'dynamic']);
 
     const orderId = order.rows[0].id;
 
     // 3. Create checkout session
     // TIER-0 RULE 14/15: Use authenticated user_id, include pack_type
+    // Build line_items based on whether price ID is configured
+    const lineItems = starterPriceId
+      ? [{ price: starterPriceId, quantity: 1 }]
+      : [{
+          price_data: {
+            currency: 'usd',
+            unit_amount: starterPack.price, // 24900 = $249
+            product_data: {
+              name: 'AI Citation Network - Starter Pack',
+              description: `${starterPack.directories} directory submissions`
+            }
+          },
+          quantity: 1
+        }];
+
     const sessionConfig = {
       mode: 'payment',
       payment_method_types: ['card'],
-      line_items: [{
-        price: config.prices.STARTER_249,
-        quantity: 1
-      }],
+      line_items: lineItems,
       metadata: {
         user_id: userId ? String(userId) : 'guest',
         pack_type: 'starter',
@@ -176,6 +194,12 @@ class CitationNetworkStripeService {
     // TIER-0 RULE 12: Get directories from PACK_CONFIG
     const boostPack = PACK_CONFIG.boost;
 
+    // Validate price ID is configured
+    const boostPriceId = config.prices.PACK_99;
+    if (!boostPriceId) {
+      console.warn('[CitationNetwork] STRIPE_PRICE_PACK_99 not set, will use price_data');
+    }
+
     // 3. Create order record
     const order = await db.query(`
       INSERT INTO directory_orders (
@@ -183,7 +207,7 @@ class CitationNetworkStripeService {
         directories_allocated, stripe_price_id, status
       ) VALUES ($1, $2, 'boost', 'boost', $3, $4, $5, 'pending')
       RETURNING id
-    `, [userId, profile.id, boostPack.price, boostPack.directories, config.prices.PACK_99]);
+    `, [userId, profile.id, boostPack.price, boostPack.directories, boostPriceId || 'dynamic']);
 
     const orderId = order.rows[0].id;
 
@@ -216,14 +240,26 @@ class CitationNetworkStripeService {
     }
 
     // TIER-0 RULE 14/15: Use authenticated user_id, include pack_type
+    // Build line_items based on whether price ID is configured
+    const lineItems = boostPriceId
+      ? [{ price: boostPriceId, quantity: 1 }]
+      : [{
+          price_data: {
+            currency: 'usd',
+            unit_amount: boostPack.price, // 9900 = $99
+            product_data: {
+              name: 'AI Citation Network - Boost Pack',
+              description: `Add ${boostPack.directories} directory submissions`
+            }
+          },
+          quantity: 1
+        }];
+
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'payment',
       payment_method_types: ['card'],
-      line_items: [{
-        price: config.prices.PACK_99,
-        quantity: 1
-      }],
+      line_items: lineItems,
       metadata: {
         user_id: String(userId),
         pack_type: 'boost',
