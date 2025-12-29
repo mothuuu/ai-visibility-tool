@@ -96,7 +96,7 @@ async function migrateCitationNetwork() {
         pack_type VARCHAR(50), -- 'starter' or 'boost' (Rule 12: for PACK_CONFIG lookup)
 
         -- Stripe
-        stripe_checkout_session_id VARCHAR(255),
+        stripe_checkout_session_id VARCHAR(255) UNIQUE,
         stripe_payment_intent_id VARCHAR(255),
         stripe_price_id VARCHAR(255),
 
@@ -131,6 +131,35 @@ async function migrateCitationNetwork() {
       ADD COLUMN IF NOT EXISTS pack_type VARCHAR(50);
     `);
     console.log('✅ Ensured pack_type column exists');
+
+    // Ensure stripe_checkout_session_id has UNIQUE constraint (required for webhook UPSERT)
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_indexes
+          WHERE tablename = 'directory_orders'
+            AND indexdef LIKE '%stripe_checkout_session_id%UNIQUE%'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname LIKE '%stripe_checkout_session_id%'
+            AND contype = 'u'
+        ) THEN
+          -- First remove any duplicates (keep the most recent)
+          DELETE FROM directory_orders a
+          USING directory_orders b
+          WHERE a.stripe_checkout_session_id = b.stripe_checkout_session_id
+            AND a.stripe_checkout_session_id IS NOT NULL
+            AND a.id < b.id;
+
+          -- Then add the unique constraint
+          ALTER TABLE directory_orders
+          ADD CONSTRAINT directory_orders_stripe_session_unique
+          UNIQUE (stripe_checkout_session_id);
+        END IF;
+      END $$;
+    `);
+    console.log('✅ Ensured stripe_checkout_session_id is UNIQUE');
 
     // Create subscriber_directory_allocations table
     await pool.query(`
