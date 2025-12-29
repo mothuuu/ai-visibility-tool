@@ -240,20 +240,19 @@ class CitationNetworkStripeService {
     }
 
     // TIER-0 RULE 14/15: Use authenticated user_id, include pack_type
-    // Build line_items based on whether price ID is configured
-    const lineItems = boostPriceId
-      ? [{ price: boostPriceId, quantity: 1 }]
-      : [{
-          price_data: {
-            currency: 'usd',
-            unit_amount: boostPack.price, // 9900 = $99
-            product_data: {
-              name: 'AI Citation Network - Boost Pack',
-              description: `Add ${boostPack.directories} directory submissions`
-            }
-          },
-          quantity: 1
-        }];
+    // ALWAYS use price_data for boost to ensure correct $99 price
+    // (env var STRIPE_PRICE_PACK_99 may point to wrong product)
+    const lineItems = [{
+      price_data: {
+        currency: 'usd',
+        unit_amount: boostPack.price, // 9900 = $99
+        product_data: {
+          name: 'AI Citation Network - Boost Pack',
+          description: `Add ${boostPack.directories} directory submissions`
+        }
+      },
+      quantity: 1
+    }];
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,

@@ -178,30 +178,20 @@ router.post('/packs/checkout', authenticateToken, async (req, res) => {
       });
     }
 
-    // Get the correct Stripe price ID based on pack type
-    const priceId = pack_type === 'starter'
-      ? process.env.STRIPE_STARTER_PACK_PRICE_ID || config.prices.STARTER_249
-      : process.env.STRIPE_BOOST_PACK_PRICE_ID || config.prices.PACK_99;
-
-    // Build line_items - use price_data as fallback if no price ID configured
-    let lineItems;
-    if (priceId) {
-      lineItems = [{ price: priceId, quantity: 1 }];
-    } else {
-      console.warn(`[PackCheckout] No price ID for ${pack_type}, using price_data`);
-      const packName = pack_type === 'starter' ? 'Starter Pack' : 'Boost Pack';
-      lineItems = [{
-        price_data: {
-          currency: 'usd',
-          unit_amount: pack.price, // From PACK_CONFIG (in cents)
-          product_data: {
-            name: `AI Citation Network - ${packName}`,
-            description: `${pack.directories} directory submissions`
-          }
-        },
-        quantity: 1
-      }];
-    }
+    // Build line_items - ALWAYS use price_data to ensure correct pricing
+    // (env vars may point to wrong Stripe products)
+    const packName = pack_type === 'starter' ? 'Starter Pack' : 'Boost Pack';
+    const lineItems = [{
+      price_data: {
+        currency: 'usd',
+        unit_amount: pack.price, // From PACK_CONFIG: 9900 ($99) for boost, 24900 ($249) for starter
+        product_data: {
+          name: `AI Citation Network - ${packName}`,
+          description: `${pack.directories} directory submissions`
+        }
+      },
+      quantity: 1
+    }];
 
     // Get or create Stripe customer
     let customerId = user.stripe_customer_id;
