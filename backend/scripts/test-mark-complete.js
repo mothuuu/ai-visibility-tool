@@ -24,19 +24,35 @@ const db = require('../db/database');
 // Simulated API call (directly calling the DB update logic from the route)
 async function callMarkCompleteAPI(userId, submissionId, newStatus) {
   // This simulates what the PATCH /api/citation-network/submissions/:id/status does
-  // Uses the same query structure as the updated endpoint (no verified_at dependency)
+  // First check if submission exists
+  const existsCheck = await db.query(
+    'SELECT id, user_id FROM directory_submissions WHERE id = $1::uuid',
+    [submissionId]
+  );
+
+  if (existsCheck.rows.length === 0) {
+    return { success: false, error: 'NOT_FOUND', message: 'Submission not found' };
+  }
+
+  // Check ownership
+  const submissionOwnerId = existsCheck.rows[0].user_id;
+  if (String(submissionOwnerId) !== String(userId)) {
+    return { success: false, error: 'FORBIDDEN', message: `Belongs to user ${submissionOwnerId}, not ${userId}` };
+  }
+
+  // Now do the update
   const result = await db.query(`
     UPDATE directory_submissions
     SET
       status = $1,
       action_type = 'none',
       updated_at = NOW()
-    WHERE id = $2::uuid AND user_id = $3
+    WHERE id = $2::uuid
     RETURNING id, status, action_type, updated_at, directory_name
-  `, [newStatus, submissionId, userId]);
+  `, [newStatus, submissionId]);
 
   if (result.rows.length === 0) {
-    return { success: false, error: 'NOT_FOUND' };
+    return { success: false, error: 'UPDATE_FAILED' };
   }
 
   // Try to update verified_at separately (column may not exist)
