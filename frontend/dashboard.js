@@ -2703,8 +2703,26 @@ async function loadCitationNetworkData() {
         if (allocationRes.ok) {
             const allocation = await allocationRes.json();
 
+            // Update plan from allocation response (backend now returns plan, planDisplayName, planAllocation)
+            if (allocation.plan) {
+                citationNetworkState.plan = allocation.plan;
+            }
+
+            // Also use the user object's plan as fallback
+            if (!citationNetworkState.plan && user && user.plan) {
+                const normalizedPlan = (user.plan || 'diy').toLowerCase().replace('plan_', '');
+                if (['diy', 'pro', 'agency', 'enterprise', 'free', 'freemium'].includes(normalizedPlan)) {
+                    citationNetworkState.plan = normalizedPlan;
+                }
+            }
+
+            // Update monthly allocation from API
+            if (allocation.planAllocation) {
+                citationNetworkState.monthlyAllocation = allocation.planAllocation;
+            }
+
             if (allocation.type === 'subscription') {
-                citationNetworkState.monthlyAllocation = allocation.allocation.base || 10;
+                citationNetworkState.monthlyAllocation = allocation.allocation.base || allocation.planAllocation || 10;
                 // Merge with existing progress, don't overwrite
                 citationNetworkState.includedProgress.total = Math.max(
                     citationNetworkState.includedProgress.total,

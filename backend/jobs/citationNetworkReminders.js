@@ -265,7 +265,7 @@ async function sendReminderEmail(submission, reminderType, daysRemaining) {
           </p>
 
           <p style="text-align: center;">
-            <a href="${FRONTEND_URL}/dashboard#citation-network" class="button">Complete Action Now</a>
+            <a href="${FRONTEND_URL}/dashboard.html?tab=citation-network&submission=${submission.submission_id}" class="button">Complete Action Now</a>
           </p>
 
           ${reminderType === 'action_final_warning' ? `
@@ -277,7 +277,7 @@ async function sendReminderEmail(submission, reminderType, daysRemaining) {
           <p>Best regards,<br>The AI Citation Network Team</p>
         </div>
         <div class="footer">
-          <p><a href="${FRONTEND_URL}/settings/notifications">Manage notification preferences</a></p>
+          <p><a href="${FRONTEND_URL}/dashboard.html?tab=settings">Manage notification preferences</a></p>
           <p>&copy; ${new Date().getFullYear()} AI Visibility Score. All rights reserved.</p>
         </div>
       </div>
@@ -297,14 +297,14 @@ ${submission.action_instructions || 'Please complete the verification process to
 
 Time remaining: ${daysRemaining} days
 
-Complete your action here: ${FRONTEND_URL}/dashboard#citation-network
+Complete your action here: ${FRONTEND_URL}/dashboard.html?tab=citation-network&submission=${submission.submission_id}
 
 ${reminderType === 'action_final_warning' ? `⚠️ WARNING: If no action is taken within ${daysRemaining} days, this submission will be blocked.` : ''}
 
 Best regards,
 The AI Citation Network Team
 
-Manage notifications: ${FRONTEND_URL}/settings/notifications
+Manage notifications: ${FRONTEND_URL}/dashboard.html?tab=settings
   `;
 
   return await sendEmail({
@@ -351,9 +351,9 @@ async function sendSubmissionLiveNotification(userId, submissionId, directoryNam
         <p>Hi ${user.name || 'there'},</p>
         <p>Your listing on <strong>${directoryName}</strong> is now live and visible to AI models!</p>
         ${listingUrl ? `<p><a href="${listingUrl}" style="color: #00B9DA;">View your live listing →</a></p>` : ''}
-        <p><a href="${FRONTEND_URL}/dashboard#citation-network">View all submissions</a></p>
+        <p><a href="${FRONTEND_URL}/dashboard.html?tab=citation-network">View all submissions</a></p>
       `,
-      text: `Your ${directoryName} listing is now LIVE! ${listingUrl ? `View it here: ${listingUrl}` : ''}`
+      text: `Your ${directoryName} listing is now LIVE! ${listingUrl ? `View it here: ${listingUrl}` : ''}\n\nView all submissions: ${FRONTEND_URL}/dashboard.html?tab=citation-network`
     });
 
     // Record notification

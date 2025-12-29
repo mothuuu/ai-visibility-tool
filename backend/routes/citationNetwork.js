@@ -315,11 +315,37 @@ router.get('/allocation', authenticateToken, async (req, res) => {
     // Use entitlementService as single source of truth
     const entitlement = await entitlementService.calculateEntitlement(req.user.id);
 
+    // Plan display names for frontend
+    const PLAN_DISPLAY_NAMES = {
+      'free': 'Free Plan',
+      'freemium': 'Free Plan',
+      'diy': 'DIY Plan',
+      'pro': 'Pro Plan',
+      'agency': 'Agency Plan',
+      'enterprise': 'Enterprise Plan'
+    };
+
+    // Plan monthly allocations
+    const PLAN_ALLOCATIONS = {
+      'free': 0,
+      'freemium': 0,
+      'diy': 10,
+      'pro': 25,
+      'agency': 25,
+      'enterprise': 100
+    };
+
+    const planName = entitlement.plan || 'free';
+    const planDisplayName = PLAN_DISPLAY_NAMES[planName] || 'Free Plan';
+    const planAllocation = PLAN_ALLOCATIONS[planName] || 0;
+
     if (entitlement.isSubscriber) {
       // Subscriber: return subscription allocation
       res.json({
         type: 'subscription',
-        plan: entitlement.plan,
+        plan: planName,
+        planDisplayName,
+        planAllocation,
         allocation: {
           base: entitlement.breakdown.subscription,
           packs: 0, // pack_allocation tracked separately
@@ -330,13 +356,19 @@ router.get('/allocation', authenticateToken, async (req, res) => {
         debug: {
           source: entitlement.source,
           isSubscriber: entitlement.isSubscriber,
-          breakdown: entitlement.breakdown
+          breakdown: {
+            ...entitlement.breakdown,
+            plan: planName
+          }
         }
       });
     } else {
       // Non-subscriber: return order-based allocation
       res.json({
         type: 'order_based',
+        plan: planName,
+        planDisplayName,
+        planAllocation,
         allocation: {
           total: entitlement.breakdown.orders,
           submitted: entitlement.breakdown.ordersUsed,
@@ -346,7 +378,10 @@ router.get('/allocation', authenticateToken, async (req, res) => {
         debug: {
           source: entitlement.source,
           isSubscriber: entitlement.isSubscriber,
-          breakdown: entitlement.breakdown
+          breakdown: {
+            ...entitlement.breakdown,
+            plan: planName
+          }
         }
       });
     }
