@@ -161,6 +161,18 @@ async function migrateCitationNetwork() {
     `);
     console.log('✅ Ensured stripe_checkout_session_id is UNIQUE');
 
+    // Create processed_stripe_events table for webhook idempotency
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS processed_stripe_events (
+        event_id VARCHAR(255) PRIMARY KEY,
+        event_type VARCHAR(100) NOT NULL,
+        processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        payload JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('✅ Processed stripe events table created');
+
     // Create subscriber_directory_allocations table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS subscriber_directory_allocations (
