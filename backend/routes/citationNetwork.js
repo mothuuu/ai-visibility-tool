@@ -120,10 +120,9 @@ router.post('/packs/checkout', authenticateToken, async (req, res) => {
   const { pack_type = 'starter' } = req.body;
 
   try {
-    // T0-11: CRITICAL - Fetch full user from DB
-    // JWT may only have id/email, not plan/stripe_subscription_status
+    // T0-11: Fetch user from DB for Stripe customer ID
     const userResult = await db.query(
-      'SELECT id, email, plan, stripe_subscription_status, stripe_customer_id, subscription_manual_override FROM users WHERE id = $1',
+      'SELECT id, email, plan, stripe_subscription_status, stripe_customer_id FROM users WHERE id = $1',
       [req.user.id]
     );
 
@@ -145,19 +144,8 @@ router.post('/packs/checkout', authenticateToken, async (req, res) => {
       });
     }
 
-    // T0-11: Now isActiveSubscriber has full user data
-    const isSubscriber = isActiveSubscriber(user);
-
-    debugLog(null, 'Pack checkout eligibility:', {
-      userId: user.id,
-      packType: pack_type,
-      isSubscriber,
-      subscriberOnly: pack.subscriberOnly
-    });
-
     // NOTE: Subscriber checks removed - UI controls who sees which button
     // If user can click the button, they should be able to purchase
-    // This fixes issues where subscription status is inconsistent between frontend/backend
 
     // Build line_items - ALWAYS use price_data to ensure correct pricing
     // (env vars may point to wrong Stripe products)
