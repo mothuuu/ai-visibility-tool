@@ -2095,15 +2095,26 @@ function updateBoostCardUI() {
 
     // Update CTA button
     if (boostCTABtn) {
-        if (state.boostsRemaining <= 0) {
+        if (state.boostsRemaining <= 0 && !state.hasActiveBoost) {
             boostCTABtn.innerHTML = '<i class="fas fa-ban"></i> Maximum Reached';
             boostCTABtn.className = 'btn-citation-disabled';
             boostCTABtn.disabled = true;
             boostCTABtn.title = 'Next boost available next year';
         } else if (state.hasActiveBoost) {
-            boostCTABtn.innerHTML = '<i class="fas fa-chart-line"></i> View Progress';
-            boostCTABtn.className = 'btn-citation-secondary';
-            boostCTABtn.disabled = false;
+            // Check if submissions need to be started (no queued or submitted directories)
+            const progress = state.boostProgress || {};
+            const needsStart = (progress.pending || 0) === 0 &&
+                               (progress.submitted || 0) === 0 &&
+                               (progress.live || 0) === 0;
+            if (needsStart) {
+                boostCTABtn.innerHTML = '<i class="fas fa-play-circle"></i> Start Submissions';
+                boostCTABtn.className = 'btn-citation-primary';
+                boostCTABtn.disabled = false;
+            } else {
+                boostCTABtn.innerHTML = '<i class="fas fa-chart-line"></i> View Progress';
+                boostCTABtn.className = 'btn-citation-secondary';
+                boostCTABtn.disabled = false;
+            }
         } else {
             const btnText = state.boostsUsedThisYear > 0 ? 'Purchase Another — $99' : 'Purchase Boost — $99';
             boostCTABtn.innerHTML = `<i class="fas fa-shopping-cart"></i> ${btnText}`;
@@ -2286,13 +2297,31 @@ async function handleBoostPurchase() {
     }
 
     if (state.hasActiveBoost) {
-        // Show progress
-        showXeoAlert('Boost Progress',
-            `Current Boost Progress:\n\n` +
-            `• Submitted: ${state.boostProgress.submitted}/100\n` +
-            `• Live: ${state.boostProgress.live}\n` +
-            `• Pending: ${state.boostProgress.pending}\n` +
-            `• Action Needed: ${state.boostProgress.actionNeeded}`);
+        // Check if submissions need to be started
+        const progress = state.boostProgress || {};
+        const needsStart = (progress.pending || 0) === 0 &&
+                           (progress.submitted || 0) === 0 &&
+                           (progress.live || 0) === 0;
+
+        if (needsStart) {
+            // Start submissions for this boost
+            showXeoConfirm('Start Directory Submissions',
+                `You have 100 directory submissions ready.\n\nStart submitting to directories now?\n\n• We'll submit to 3-5 directories per day\n• You'll be notified of any actions needed\n• Track progress in this dashboard`,
+                async function(confirmed) {
+                    if (confirmed) {
+                        await startDirectorySubmissions();
+                    }
+                }
+            );
+        } else {
+            // Show progress
+            showXeoAlert('Boost Progress',
+                `Current Boost Progress:\n\n` +
+                `• Submitted: ${progress.submitted || 0}/100\n` +
+                `• Live: ${progress.live || 0}\n` +
+                `• Pending: ${progress.pending || 0}\n` +
+                `• Action Needed: ${progress.actionNeeded || 0}`);
+        }
     } else {
         // Real Stripe checkout integration
         try {
