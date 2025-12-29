@@ -72,7 +72,7 @@ const PACK_CONFIG = {
   },
   boost: {
     price: 9900,            // $99 in cents
-    directories: 25,        // NOT 100 - smaller add-on pack
+    directories: 100,       // Same as starter - 100 directories
     name: 'Boost Pack',
     subscriberOnly: true    // Subscribers OR returning buyers
   }

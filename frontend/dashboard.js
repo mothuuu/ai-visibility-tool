@@ -2318,7 +2318,7 @@ async function handleBoostPurchase() {
             // Show BOOST purchase confirmation (this IS the boost button, so show boost info)
             // Don't use checkoutInfo.product/price - those may be wrong due to subscription check issues
             showXeoConfirm('Purchase Boost Pack',
-                `Add 25 directory submissions for $99?\n\n• One-time purchase\n• 30-day delivery\n• Full tracking dashboard`,
+                `Add 100 directory submissions for $99?\n\n• One-time purchase\n• 30-day delivery\n• Full tracking dashboard`,
                 async function(confirmed) {
                     if (confirmed) {
                         // Use /packs/checkout with explicit pack_type to bypass subscription check issues
@@ -2595,8 +2595,9 @@ async function loadCitationNetworkData() {
         // Update state with real data
         if (statsRes.ok) {
             const stats = await statsRes.json();
-            citationNetworkState.boostsUsedThisYear = stats.orders || 0;
-            citationNetworkState.boostsRemaining = Math.max(0, 2 - stats.orders);
+            // Use DB-backed boostsRemaining from API (counts boost orders this year)
+            citationNetworkState.boostsUsedThisYear = stats.boostsThisYear || 0;
+            citationNetworkState.boostsRemaining = stats.boostsRemaining ?? Math.max(0, 2 - (stats.boostsThisYear || 0));
             citationNetworkState.hasActiveBoost = stats.directories?.allocated > 0;
 
             if (stats.directories) {
