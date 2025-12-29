@@ -1195,6 +1195,114 @@ router.get('/directories/count', authenticateToken, async (req, res) => {
 });
 
 /**
+ * GET /api/citation-network/directories/:id/intelligence
+ * Get automation intelligence for a specific directory
+ * Phase 3: Returns form field mappings, duplicate check config, API config, etc.
+ */
+router.get('/directories/:id/intelligence', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await db.query(`
+      SELECT
+        id, slug, name, directory_type,
+        -- Phase 3 intelligence columns
+        search_type,
+        search_url_template,
+        requires_captcha,
+        requires_email_verification,
+        requires_payment,
+        form_fields_mapping,
+        api_config,
+        duplicate_check_config,
+        -- Existing relevant columns
+        submission_url,
+        submission_mode,
+        verification_method,
+        required_fields,
+        max_description_length,
+        typical_approval_days
+      FROM directories
+      WHERE id = $1 AND is_active = true
+    `, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Directory not found' });
+    }
+
+    res.json({ intelligence: result.rows[0] });
+
+  } catch (error) {
+    console.error('Get directory intelligence error:', error);
+    res.status(500).json({ error: 'Failed to fetch directory intelligence' });
+  }
+});
+
+/**
+ * GET /api/citation-network/directories/intelligence
+ * Get automation intelligence for multiple directories (batch)
+ * Query params: ids (comma-separated) or slugs (comma-separated)
+ */
+router.get('/directories/intelligence', authenticateToken, async (req, res) => {
+  try {
+    const { ids, slugs, limit = 50 } = req.query;
+
+    let query = `
+      SELECT
+        id, slug, name, directory_type,
+        search_type,
+        search_url_template,
+        requires_captcha,
+        requires_email_verification,
+        requires_payment,
+        form_fields_mapping,
+        api_config,
+        duplicate_check_config,
+        submission_url,
+        submission_mode,
+        verification_method,
+        required_fields,
+        max_description_length,
+        typical_approval_days
+      FROM directories
+      WHERE is_active = true
+    `;
+
+    const params = [];
+    let paramIndex = 1;
+
+    if (ids) {
+      const idList = ids.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+      if (idList.length > 0) {
+        query += ` AND id = ANY($${paramIndex}::int[])`;
+        params.push(idList);
+        paramIndex++;
+      }
+    } else if (slugs) {
+      const slugList = slugs.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      if (slugList.length > 0) {
+        query += ` AND slug = ANY($${paramIndex}::text[])`;
+        params.push(slugList);
+        paramIndex++;
+      }
+    }
+
+    query += ` ORDER BY priority_score DESC LIMIT $${paramIndex}`;
+    params.push(parseInt(limit));
+
+    const result = await db.query(query, params);
+    res.json({
+      intelligence: result.rows,
+      count: result.rows.length
+    });
+
+  } catch (error) {
+    console.error('Get directories intelligence error:', error);
+    res.status(500).json({ error: 'Failed to fetch directories intelligence' });
+  }
+});
+
+/**
  * GET /api/citation-network/credentials
  * Get user's stored directory credentials from credential vault
  * SECURITY: Only returns safe metadata, NEVER passwords or secrets

@@ -8,15 +8,23 @@ const pool = new Pool({
   }
 });
 
+// Check for --force flag (only with force do we truncate)
+const forceMode = process.argv.includes('--force');
+
 async function seedDirectories() {
   try {
     console.log('🔄 Seeding directories table with 50 directories...');
 
-    // Clear existing directories
-    await pool.query('TRUNCATE directories RESTART IDENTITY CASCADE;');
-    console.log('✅ Cleared existing directories');
+    if (forceMode) {
+      // Clear existing directories only with --force
+      await pool.query('TRUNCATE directories RESTART IDENTITY CASCADE;');
+      console.log('✅ Cleared existing directories (--force mode)');
+    } else {
+      console.log('ℹ️  Running in UPSERT mode (use --force to truncate first)');
+    }
 
-    // Insert all directories
+    // Insert all directories with UPSERT (ON CONFLICT DO UPDATE)
+    // COALESCE preserves non-NULL values for intelligence columns (populated by backfill)
     await pool.query(`
       INSERT INTO directories (
         name, slug, website_url, logo_url, description,
@@ -701,7 +709,45 @@ async function seedDirectories() {
         'review', 5,
         'free', NULL,
         true, 'valid', NULL
-      );
+      )
+      ON CONFLICT (slug) DO UPDATE SET
+        -- Update core fields
+        name = EXCLUDED.name,
+        website_url = EXCLUDED.website_url,
+        logo_url = EXCLUDED.logo_url,
+        description = EXCLUDED.description,
+        directory_type = EXCLUDED.directory_type,
+        tier = EXCLUDED.tier,
+        region_scope = EXCLUDED.region_scope,
+        priority_score = EXCLUDED.priority_score,
+        submission_mode = EXCLUDED.submission_mode,
+        submission_url = EXCLUDED.submission_url,
+        requires_account = EXCLUDED.requires_account,
+        account_creation_url = EXCLUDED.account_creation_url,
+        verification_method = EXCLUDED.verification_method,
+        requires_customer_account = EXCLUDED.requires_customer_account,
+        publishes_phone_publicly = EXCLUDED.publishes_phone_publicly,
+        requires_phone_verification = EXCLUDED.requires_phone_verification,
+        required_fields = EXCLUDED.required_fields,
+        max_description_length = EXCLUDED.max_description_length,
+        accepts_logo = EXCLUDED.accepts_logo,
+        approval_type = EXCLUDED.approval_type,
+        typical_approval_days = EXCLUDED.typical_approval_days,
+        pricing_model = EXCLUDED.pricing_model,
+        free_tier_limitations = EXCLUDED.free_tier_limitations,
+        is_active = EXCLUDED.is_active,
+        validation_status = EXCLUDED.validation_status,
+        notes = EXCLUDED.notes,
+        updated_at = NOW(),
+        -- PRESERVE intelligence columns (use COALESCE to keep existing non-NULL values)
+        search_type = COALESCE(directories.search_type, EXCLUDED.search_type),
+        search_url_template = COALESCE(directories.search_url_template, EXCLUDED.search_url_template),
+        requires_captcha = COALESCE(directories.requires_captcha, EXCLUDED.requires_captcha),
+        requires_email_verification = COALESCE(directories.requires_email_verification, EXCLUDED.requires_email_verification),
+        requires_payment = COALESCE(directories.requires_payment, EXCLUDED.requires_payment),
+        form_fields_mapping = COALESCE(directories.form_fields_mapping, EXCLUDED.form_fields_mapping),
+        api_config = COALESCE(directories.api_config, EXCLUDED.api_config),
+        duplicate_check_config = COALESCE(directories.duplicate_check_config, EXCLUDED.duplicate_check_config);
     `);
 
     console.log('✅ Inserted 50 directories');
