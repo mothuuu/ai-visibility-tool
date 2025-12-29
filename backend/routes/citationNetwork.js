@@ -1351,4 +1351,88 @@ router.get('/action-reminders', authenticateToken, async (req, res) => {
   }
 });
 
+// ============================================================================
+// SUBMISSION STATUS UPDATES
+// ============================================================================
+
+/**
+ * PATCH /api/citation-network/submissions/:id/status
+ * Update a submission's status (e.g., mark as verified/complete)
+ *
+ * Bug 1 Fix: This endpoint persists the "Mark Complete" action to the database.
+ * Previously, markActionComplete() only updated local frontend state.
+ */
+router.patch('/submissions/:id/status', authenticateToken, async (req, res) => {
+  const submissionId = req.params.id;
+  const userId = req.user.id;
+  const { status, actionType } = req.body;
+
+  // Validate required fields
+  if (!status) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'MISSING_STATUS', message: 'Status is required' }
+    });
+  }
+
+  // Validate status value
+  const validStatuses = [
+    'queued', 'in_progress', 'submitted', 'pending_approval',
+    'pending_verification', 'verified', 'live', 'rejected',
+    'action_needed', 'needs_action', 'blocked', 'failed', 'skipped', 'cancelled'
+  ];
+
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_STATUS', message: `Invalid status: ${status}. Valid: ${validStatuses.join(', ')}` }
+    });
+  }
+
+  try {
+    // Update submission - RETURNING ensures we get the updated row
+    const result = await db.query(`
+      UPDATE directory_submissions
+      SET
+        status = $1,
+        action_type = COALESCE($2, action_type),
+        updated_at = NOW(),
+        verified_at = CASE WHEN $1 = 'verified' THEN NOW() ELSE verified_at END
+      WHERE id = $3 AND user_id = $4
+      RETURNING id, status, action_type, updated_at, verified_at, directory_name
+    `, [status, actionType || null, submissionId, userId]);
+
+    // Check if update affected any rows
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Submission not found or does not belong to user' }
+      });
+    }
+
+    const updated = result.rows[0];
+
+    console.log(`[SubmissionStatus] Updated submission ${submissionId} to status=${status} for user=${userId}`);
+
+    res.json({
+      success: true,
+      submission: {
+        id: updated.id,
+        status: updated.status,
+        actionType: updated.action_type,
+        updatedAt: updated.updated_at,
+        verifiedAt: updated.verified_at,
+        directoryName: updated.directory_name
+      }
+    });
+
+  } catch (error) {
+    console.error('[SubmissionStatus] Error updating submission:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to update submission status' }
+    });
+  }
+});
+
 module.exports = router;
