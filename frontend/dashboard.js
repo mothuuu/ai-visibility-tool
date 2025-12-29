@@ -3041,7 +3041,7 @@ async function submitVerificationCode(submissionId) {
 async function markActionComplete(submissionId) {
     const submission = citationNetworkState.submissions.find(s => s.id === submissionId);
     if (!submission) {
-        showXeoAlert('Error', 'Submission not found.');
+        showXeoAlert('Error', 'Submission not found in local state.');
         return;
     }
 
@@ -3053,6 +3053,8 @@ async function markActionComplete(submissionId) {
 
     // Close modal first for better UX
     closeActionModal();
+
+    console.log(`[MarkComplete] Updating submission ${submissionId} to verified...`);
 
     try {
         // Call API to persist the status change
@@ -3068,19 +3070,30 @@ async function markActionComplete(submissionId) {
             })
         });
 
+        // Handle non-JSON responses (e.g., HTML error pages)
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            console.error('[MarkComplete] Non-JSON response:', response.status, contentType);
+            showXeoAlert('Error', `Server error (${response.status}). Please try again.`);
+            return;
+        }
+
         const data = await response.json();
 
         if (!response.ok || !data.success) {
             const errorMsg = data.error?.message || 'Failed to update submission status';
-            console.error('[MarkComplete] API error:', data);
+            const errorCode = data.error?.code || 'UNKNOWN';
+            console.error(`[MarkComplete] API error (${errorCode}):`, data);
             showXeoAlert('Error', errorMsg);
             return;
         }
 
+        console.log('[MarkComplete] Success:', data);
+
         // Update local state only after successful API call
         submission.status = SUBMISSION_STATUS.VERIFIED;
         submission.actionType = ACTION_REQUIRED_TYPE.NONE;
-        submission.verifiedAt = data.submission?.verifiedAt || new Date().toISOString();
+        submission.verifiedAt = data.submission?.updatedAt || new Date().toISOString();
 
         // Show success
         showXeoAlert('Verification Complete!', `${submission.directoryName} is now verified and will go live soon.`);
@@ -3090,8 +3103,15 @@ async function markActionComplete(submissionId) {
         renderCitationNetworkTabs();
 
     } catch (error) {
-        console.error('[MarkComplete] Network error:', error);
-        showXeoAlert('Error', 'Network error. Please try again.');
+        console.error('[MarkComplete] Exception:', error);
+        // Provide more specific error message based on error type
+        if (error instanceof TypeError && error.message.includes('fetch')) {
+            showXeoAlert('Error', 'Network error. Check your internet connection.');
+        } else if (error instanceof SyntaxError) {
+            showXeoAlert('Error', 'Server returned invalid response. Please try again.');
+        } else {
+            showXeoAlert('Error', `Error: ${error.message || 'Unknown error'}`);
+        }
     }
 }
 

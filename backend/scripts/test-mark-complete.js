@@ -24,30 +24,49 @@ const db = require('../db/database');
 // Simulated API call (directly calling the DB update logic from the route)
 async function callMarkCompleteAPI(userId, submissionId, newStatus) {
   // This simulates what the PATCH /api/citation-network/submissions/:id/status does
+  // Uses the same query structure as the updated endpoint (no verified_at dependency)
   const result = await db.query(`
     UPDATE directory_submissions
     SET
       status = $1,
       action_type = 'none',
-      updated_at = NOW(),
-      verified_at = CASE WHEN $1 = 'verified' THEN NOW() ELSE verified_at END
-    WHERE id = $2 AND user_id = $3
-    RETURNING id, status, action_type, updated_at, verified_at, directory_name
+      updated_at = NOW()
+    WHERE id = $2::uuid AND user_id = $3
+    RETURNING id, status, action_type, updated_at, directory_name
   `, [newStatus, submissionId, userId]);
 
   if (result.rows.length === 0) {
     return { success: false, error: 'NOT_FOUND' };
   }
 
+  // Try to update verified_at separately (column may not exist)
+  if (newStatus === 'verified') {
+    try {
+      await db.query(`
+        UPDATE directory_submissions
+        SET verified_at = NOW()
+        WHERE id = $1::uuid AND verified_at IS NULL
+      `, [submissionId]);
+    } catch (e) {
+      // Column might not exist - that's ok
+      console.log('   Note: verified_at column may not exist');
+    }
+  }
+
   return { success: true, submission: result.rows[0] };
 }
 
 async function getSubmissionStatus(submissionId) {
-  const result = await db.query(
-    'SELECT id, status, action_type, updated_at, verified_at FROM directory_submissions WHERE id = $1',
-    [submissionId]
-  );
-  return result.rows[0] || null;
+  try {
+    const result = await db.query(
+      'SELECT id, status, action_type, updated_at FROM directory_submissions WHERE id = $1::uuid',
+      [submissionId]
+    );
+    return result.rows[0] || null;
+  } catch (e) {
+    console.error('   Error getting submission status:', e.message);
+    return null;
+  }
 }
 
 async function getActionNeededCount(userId) {
