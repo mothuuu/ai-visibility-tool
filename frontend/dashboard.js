@@ -2296,7 +2296,7 @@ async function handleBoostPurchase() {
     } else {
         // Real Stripe checkout integration
         try {
-            // First check if we can purchase
+            // First check if we can purchase (for business profile requirement)
             const checkoutInfo = await fetchCitationNetworkCheckoutInfo();
 
             if (!checkoutInfo.canPurchase) {
@@ -2315,15 +2315,14 @@ async function handleBoostPurchase() {
                 return;
             }
 
-            // Show purchase confirmation
-            const productName = checkoutInfo.product === 'starter' ? 'AI Citation Network Starter' : 'Directory Pack';
-            const price = checkoutInfo.price;
-
-            showXeoConfirm(`Purchase ${productName}`,
-                `Add 100 directory submissions for $${price}?\n\n• One-time purchase\n• 30-day delivery\n• Full tracking dashboard`,
+            // Show BOOST purchase confirmation (this IS the boost button, so show boost info)
+            // Don't use checkoutInfo.product/price - those may be wrong due to subscription check issues
+            showXeoConfirm('Purchase Boost Pack',
+                `Add 25 directory submissions for $99?\n\n• One-time purchase\n• 30-day delivery\n• Full tracking dashboard`,
                 async function(confirmed) {
                     if (confirmed) {
-                        await startCitationNetworkCheckout();
+                        // Use /packs/checkout with explicit pack_type to bypass subscription check issues
+                        await startBoostPackCheckout();
                     }
                 }
             );
@@ -2346,6 +2345,50 @@ async function fetchCitationNetworkCheckoutInfo() {
     }
 
     return await response.json();
+}
+
+// Start Boost Pack checkout - explicitly requests boost pack
+async function startBoostPackCheckout() {
+    const authToken = localStorage.getItem('authToken');
+
+    if (!authToken) {
+        showXeoAlert('Login Required', 'Please log in to purchase a boost pack.');
+        return;
+    }
+
+    try {
+        // Use /packs/checkout with explicit pack_type: 'boost'
+        const response = await fetch(`${API_BASE_URL}/citation-network/packs/checkout`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ pack_type: 'boost' })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            if (data.redirect) {
+                navigateToSection('business-profile');
+                return;
+            }
+            throw new Error(data.error?.message || data.error || 'Checkout failed');
+        }
+
+        // Redirect to Stripe checkout
+        if (data.data?.checkoutUrl) {
+            window.location.href = data.data.checkoutUrl;
+        } else if (data.url) {
+            window.location.href = data.url;
+        } else {
+            throw new Error('No checkout URL received');
+        }
+    } catch (error) {
+        console.error('Boost checkout error:', error);
+        showXeoAlert('Checkout Failed', error.message || 'Unable to start checkout. Please try again.');
+    }
 }
 
 // Start the Stripe checkout process

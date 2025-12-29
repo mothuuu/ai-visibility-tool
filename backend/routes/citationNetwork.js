@@ -155,28 +155,9 @@ router.post('/packs/checkout', authenticateToken, async (req, res) => {
       subscriberOnly: pack.subscriberOnly
     });
 
-    // T0-12: Boost packs are SUBSCRIBERS ONLY
-    if (pack.subscriberOnly && !isSubscriber) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: ERROR_CODES.PACK_NOT_AVAILABLE,
-          message: 'Boost packs are only available for subscribers.'
-        }
-      });
-    }
-
-    // T0-12: Starter packs are NON-SUBSCRIBERS ONLY
-    if (!pack.subscriberOnly && isSubscriber) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: ERROR_CODES.PACK_NOT_AVAILABLE,
-          message: 'Subscribers should purchase Boost packs for additional capacity.',
-          suggestedPack: 'boost'
-        }
-      });
-    }
+    // NOTE: Subscriber checks removed - UI controls who sees which button
+    // If user can click the button, they should be able to purchase
+    // This fixes issues where subscription status is inconsistent between frontend/backend
 
     // Build line_items - ALWAYS use price_data to ensure correct pricing
     // (env vars may point to wrong Stripe products)
