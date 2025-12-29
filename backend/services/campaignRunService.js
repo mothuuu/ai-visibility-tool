@@ -126,9 +126,47 @@ class CampaignRunService {
       // 2. Check for existing active campaign (already serialized by user lock)
       debugLog(requestId, 'Step 2: Checking for active campaign...');
       const activeCampaign = await this.getActiveCampaignWithLock(client, userId);
+
+      // If active campaign exists, check if we can expand it with additional entitlement
       if (activeCampaign) {
-        debugLog(requestId, 'Active campaign exists:', activeCampaign.id);
-        throw new Error('ACTIVE_CAMPAIGN_EXISTS');
+        debugLog(requestId, 'Active campaign exists:', activeCampaign.id, '- checking for expansion...');
+
+        // Get current entitlement to see if user has more than what's queued
+        const entitlement = await entitlementService.calculateEntitlementWithClient(client, userId, user, { requestId });
+
+        debugLog(requestId, 'Checking expansion eligibility:', {
+          remaining: entitlement.remaining,
+          campaignId: activeCampaign.id
+        });
+
+        if (entitlement.remaining > 0) {
+          // User has additional entitlement - expand the campaign
+          debugLog(requestId, 'Expanding active campaign with', entitlement.remaining, 'additional directories');
+
+          const expandResult = await this.expandCampaignTx(client, userId, activeCampaign.id, entitlement, filters, { requestId });
+
+          if (expandResult.directoriesAdded > 0) {
+            await client.query('COMMIT');
+            debugLog(requestId, 'Campaign expanded successfully');
+
+            return {
+              campaignRunId: activeCampaign.id,
+              directoriesQueued: expandResult.directoriesAdded,
+              totalQueued: expandResult.totalQueued,
+              entitlementRemaining: expandResult.entitlementRemaining,
+              expanded: true,
+              message: `Added ${expandResult.directoriesAdded} directories to existing campaign`
+            };
+          } else {
+            // No eligible directories to add - report but allow to continue
+            debugLog(requestId, 'No eligible directories to add to existing campaign');
+            throw new Error('NO_ELIGIBLE_DIRECTORIES');
+          }
+        } else {
+          // No additional entitlement - block with clear message
+          debugLog(requestId, 'No additional entitlement to expand campaign');
+          throw new Error('ACTIVE_CAMPAIGN_EXISTS');
+        }
       }
 
       // 3. Get entitlement using client (T0-6: proper transaction handling)
@@ -713,6 +751,183 @@ class CampaignRunService {
     }
 
     return submissions;
+  }
+
+  /**
+   * Expand an existing campaign with additional directories
+   * Called when user has an active campaign but purchased more entitlement (e.g., boost pack)
+   *
+   * @param {object} client - Database client (within transaction)
+   * @param {number} userId - User ID
+   * @param {string} campaignId - Campaign run ID to expand
+   * @param {object} entitlement - Entitlement object from calculateEntitlementWithClient
+   * @param {object} filters - Directory filters
+   * @param {object} options - Options including requestId
+   */
+  async expandCampaignTx(client, userId, campaignId, entitlement, filters = {}, options = {}) {
+    const requestId = options.requestId || null;
+    debugLog(requestId, 'expandCampaignTx:', { campaignId, remaining: entitlement.remaining });
+
+    // Get current campaign to use its profile snapshot
+    const campaignResult = await client.query(
+      'SELECT * FROM campaign_runs WHERE id = $1',
+      [campaignId]
+    );
+
+    if (campaignResult.rows.length === 0) {
+      throw new Error('Campaign not found');
+    }
+
+    const campaign = campaignResult.rows[0];
+
+    // Get the highest current queue position
+    const positionResult = await client.query(
+      'SELECT COALESCE(MAX(queue_position), 0) as max_position FROM directory_submissions WHERE campaign_run_id = $1',
+      [campaignId]
+    );
+    const startPosition = parseInt(positionResult.rows[0].max_position) + 1;
+
+    // Use campaign's existing filters if none provided
+    const filtersSnapshot = filters && Object.keys(filters).length > 0
+      ? filters
+      : (typeof campaign.filters_snapshot === 'string'
+          ? JSON.parse(campaign.filters_snapshot)
+          : campaign.filters_snapshot);
+
+    // Select additional directories (up to remaining entitlement)
+    const directories = await this.selectDirectoriesTx(client, campaign, filtersSnapshot, entitlement.remaining);
+
+    debugLog(requestId, 'Found', directories.length, 'additional directories to add');
+
+    if (directories.length === 0) {
+      return { directoriesAdded: 0, totalQueued: campaign.directories_queued || 0, entitlementRemaining: entitlement.remaining };
+    }
+
+    // Create submission records for new directories
+    const submissions = [];
+    for (let i = 0; i < directories.length; i++) {
+      const directory = directories[i];
+      const queuePosition = startPosition + i;
+
+      const directorySnapshot = {
+        id: directory.id,
+        name: directory.name,
+        slug: directory.slug || directory.name.toLowerCase().replace(/\s+/g, '-'),
+        website_url: directory.url || directory.website_url,
+        submission_url: directory.submission_url,
+        submission_mode: directory.submission_mode || 'manual',
+        verification_method: directory.verification_method || 'email',
+        requires_account: directory.requires_account ?? true,
+        requires_customer_account: directory.requires_customer_account || false,
+        tier: directory.tier,
+        priority_score: directory.priority_score,
+        pricing_model: directory.pricing_model,
+        directory_type: directory.directory_type,
+        snapshot_at: new Date().toISOString()
+      };
+
+      const verificationStatus = (directory.verification_method === 'none' || !directory.verification_method)
+        ? 'not_required'
+        : 'pending';
+
+      const result = await client.query(`
+        INSERT INTO directory_submissions (
+          campaign_run_id,
+          user_id,
+          directory_id,
+          directory_name,
+          directory_url,
+          directory_snapshot,
+          status,
+          verification_type,
+          verification_status,
+          priority_score,
+          queue_position,
+          created_at,
+          updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $8, $9, $10, NOW(), NOW())
+        RETURNING *
+      `, [
+        campaignId,
+        userId,
+        directory.id,
+        directory.name,
+        directory.url || directory.website_url,
+        JSON.stringify(directorySnapshot),
+        directory.verification_method || 'email',
+        verificationStatus,
+        directory.priority_score || 50,
+        queuePosition
+      ]);
+
+      submissions.push(result.rows[0]);
+    }
+
+    // Consume entitlement for the new directories
+    const consumeResult = await entitlementService.consumeEntitlementWithClient(client, userId, submissions.length, entitlement);
+
+    // Update campaign queued count
+    const newQueuedCount = (campaign.directories_queued || 0) + submissions.length;
+    await client.query(`
+      UPDATE campaign_runs
+      SET directories_queued = $1,
+          directories_selected = COALESCE(directories_selected, 0) + $2,
+          updated_at = NOW()
+      WHERE id = $3
+    `, [newQueuedCount, submissions.length, campaignId]);
+
+    debugLog(requestId, 'Campaign expanded:', {
+      directoriesAdded: submissions.length,
+      totalQueued: newQueuedCount,
+      entitlementRemaining: consumeResult.remaining
+    });
+
+    return {
+      directoriesAdded: submissions.length,
+      totalQueued: newQueuedCount,
+      entitlementRemaining: consumeResult.remaining,
+      submissions: submissions.map(s => ({
+        id: s.id,
+        directoryName: s.directory_name,
+        status: s.status,
+        queuePosition: s.queue_position
+      }))
+    };
+  }
+
+  /**
+   * Get daily submission rate for a user based on boost status
+   * Base rate: 5 per day
+   * Boosted rate: 15 per day (when user has active boost credits)
+   *
+   * @param {number} userId - User ID
+   * @returns {object} { dailyRate, boostActive, boostRemaining }
+   */
+  async getDailySubmissionRate(userId) {
+    const BASE_RATE = 5;
+    const BOOSTED_RATE = 15;
+
+    // Check if user has active (unused) boost credits
+    const boostResult = await db.query(`
+      SELECT COALESCE(SUM(directories_allocated - directories_submitted), 0) as boost_remaining
+      FROM directory_orders
+      WHERE user_id = $1
+        AND status = ANY($2::text[])
+        AND pack_type = 'boost'
+        AND directories_submitted < directories_allocated
+        AND (expires_at IS NULL OR expires_at > NOW())
+    `, [userId, USABLE_ORDER_STATUSES]);
+
+    const boostRemaining = parseInt(boostResult.rows[0]?.boost_remaining || 0);
+    const boostActive = boostRemaining > 0;
+
+    return {
+      dailyRate: boostActive ? BOOSTED_RATE : BASE_RATE,
+      boostActive,
+      boostRemaining,
+      baseRate: BASE_RATE,
+      boostedRate: BOOSTED_RATE
+    };
   }
 
   /**

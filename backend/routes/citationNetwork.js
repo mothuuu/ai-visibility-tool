@@ -725,16 +725,24 @@ router.post('/start-submissions', authenticateToken, async (req, res) => {
       });
     }
 
-    console.log(`[StartSubmissions:${requestId}] SUCCESS - Directories queued:`, result.directoriesQueued);
+    // Check if this was an expansion of an existing campaign
+    const isExpansion = result.expanded === true;
+    const message = isExpansion
+      ? `Added ${result.directoriesQueued} directories to existing campaign (total: ${result.totalQueued})`
+      : `Started submissions for ${result.directoriesQueued} directories`;
+
+    console.log(`[StartSubmissions:${requestId}] SUCCESS - ${isExpansion ? 'EXPANDED' : 'NEW'} - Directories:`, result.directoriesQueued);
     debugLog(requestId, 'Result:', {
       campaignRunId: result.campaignRunId,
       directoriesQueued: result.directoriesQueued,
-      entitlementRemaining: result.entitlementRemaining
+      entitlementRemaining: result.entitlementRemaining,
+      expanded: isExpansion
     });
 
     res.json({
       success: true,
-      message: `Started submissions for ${result.directoriesQueued} directories`,
+      message,
+      expanded: isExpansion,
       ...result
     });
 
@@ -782,8 +790,10 @@ router.post('/start-submissions', authenticateToken, async (req, res) => {
 
     if (error.message === 'ACTIVE_CAMPAIGN_EXISTS') {
       return res.status(400).json({
-        error: 'You already have an active submission campaign. Please wait for it to complete or pause it first.',
-        code: 'ACTIVE_CAMPAIGN_EXISTS'
+        error: 'You already have an active submission campaign with no additional entitlement. Purchase a boost pack to add more directories.',
+        code: 'ACTIVE_CAMPAIGN_EXISTS',
+        canExpand: false,
+        suggestion: 'Purchase a Boost Pack to add more directories to your campaign.'
       });
     }
 
@@ -962,12 +972,28 @@ router.post('/campaign-runs/:id/cancel', authenticateToken, async (req, res) => 
 
 /**
  * GET /api/citation-network/entitlement
- * Get user's current entitlement
+ * Get user's current entitlement including daily rate and boost status
  */
 router.get('/entitlement', authenticateToken, async (req, res) => {
   try {
+    // Get base entitlement
     const entitlement = await entitlementService.calculateEntitlement(req.user.id);
-    res.json({ entitlement });
+
+    // Get daily rate information (based on boost status)
+    const rateInfo = await campaignRunService.getDailySubmissionRate(req.user.id);
+
+    // Combine into enhanced entitlement response
+    res.json({
+      entitlement: {
+        ...entitlement,
+        // Add rate information
+        dailyRate: rateInfo.dailyRate,
+        boostActive: rateInfo.boostActive,
+        boostRemaining: rateInfo.boostRemaining,
+        baseRate: rateInfo.baseRate,
+        boostedRate: rateInfo.boostedRate
+      }
+    });
   } catch (error) {
     console.error('Get entitlement error:', error);
     res.status(500).json({ error: 'Failed to fetch entitlement' });
@@ -981,13 +1007,43 @@ router.get('/entitlement', authenticateToken, async (req, res) => {
 router.get('/active-campaign', authenticateToken, async (req, res) => {
   try {
     const activeCampaign = await campaignRunService.getActiveCampaign(req.user.id);
+
+    // Also include entitlement info so UI knows if expansion is possible
+    let canExpand = false;
+    let additionalEntitlement = 0;
+    if (activeCampaign) {
+      try {
+        const entitlement = await entitlementService.calculateEntitlement(req.user.id);
+        canExpand = entitlement.remaining > 0;
+        additionalEntitlement = entitlement.remaining;
+      } catch (e) {
+        console.error('Error checking expansion eligibility:', e);
+      }
+    }
+
     res.json({
       hasActiveCampaign: !!activeCampaign,
-      activeCampaign
+      activeCampaign,
+      canExpand,
+      additionalEntitlement
     });
   } catch (error) {
     console.error('Get active campaign error:', error);
     res.status(500).json({ error: 'Failed to check active campaign' });
+  }
+});
+
+/**
+ * GET /api/citation-network/daily-rate
+ * Get user's current daily submission rate (test endpoint)
+ */
+router.get('/daily-rate', authenticateToken, async (req, res) => {
+  try {
+    const rateInfo = await campaignRunService.getDailySubmissionRate(req.user.id);
+    res.json(rateInfo);
+  } catch (error) {
+    console.error('Get daily rate error:', error);
+    res.status(500).json({ error: 'Failed to get daily rate' });
   }
 });
 
