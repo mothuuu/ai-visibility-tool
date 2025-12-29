@@ -2330,40 +2330,39 @@ async function handleBoostPurchase() {
     // No active boost, try to purchase one
     // Real Stripe checkout integration
     try {
-            // First check if we can purchase (for business profile requirement)
-            const checkoutInfo = await fetchCitationNetworkCheckoutInfo();
+        // First check if we can purchase (for business profile requirement)
+        const checkoutInfo = await fetchCitationNetworkCheckoutInfo();
 
-            if (!checkoutInfo.canPurchase) {
-                if (checkoutInfo.reason && checkoutInfo.reason.includes('profile')) {
-                    showXeoConfirm('Business Profile Required',
-                        'Please complete your business profile before purchasing a directory pack.\n\nWould you like to set it up now?',
-                        function(confirmed) {
-                            if (confirmed) {
-                                navigateToSection('business-profile');
-                            }
+        if (!checkoutInfo.canPurchase) {
+            if (checkoutInfo.reason && checkoutInfo.reason.includes('profile')) {
+                showXeoConfirm('Business Profile Required',
+                    'Please complete your business profile before purchasing a directory pack.\n\nWould you like to set it up now?',
+                    function(confirmed) {
+                        if (confirmed) {
+                            navigateToSection('business-profile');
                         }
-                    );
-                } else {
-                    showXeoAlert('Cannot Purchase', checkoutInfo.reason || 'Unable to complete purchase at this time.');
-                }
-                return;
-            }
-
-            // Show BOOST purchase confirmation (this IS the boost button, so show boost info)
-            // Don't use checkoutInfo.product/price - those may be wrong due to subscription check issues
-            showXeoConfirm('Purchase Boost Pack',
-                `Add 100 directory submissions for $99?\n\n• One-time purchase\n• 30-day delivery\n• Full tracking dashboard`,
-                async function(confirmed) {
-                    if (confirmed) {
-                        // Use /packs/checkout with explicit pack_type to bypass subscription check issues
-                        await startBoostPackCheckout();
                     }
-                }
-            );
-        } catch (error) {
-            console.error('Error checking checkout info:', error);
-            showXeoAlert('Error', 'Unable to load checkout information. Please try again.');
+                );
+            } else {
+                showXeoAlert('Cannot Purchase', checkoutInfo.reason || 'Unable to complete purchase at this time.');
+            }
+            return;
         }
+
+        // Show BOOST purchase confirmation (this IS the boost button, so show boost info)
+        // Don't use checkoutInfo.product/price - those may be wrong due to subscription check issues
+        showXeoConfirm('Purchase Boost Pack',
+            `Add 100 directory submissions for $99?\n\n• One-time purchase\n• 30-day delivery\n• Full tracking dashboard`,
+            async function(confirmed) {
+                if (confirmed) {
+                    // Use /packs/checkout with explicit pack_type to bypass subscription check issues
+                    await startBoostPackCheckout();
+                }
+            }
+        );
+    } catch (error) {
+        console.error('Error checking checkout info:', error);
+        showXeoAlert('Error', 'Unable to load checkout information. Please try again.');
     }
 }
 
