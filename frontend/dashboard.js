@@ -42,7 +42,9 @@ const STATUS_DISPLAY = {
     [SUBMISSION_STATUS.VERIFIED]: { label: 'Verifying', color: 'teal', icon: 'fa-check-circle', bgClass: 'status-verifying' },
     [SUBMISSION_STATUS.LIVE]: { label: 'Live', color: 'green', icon: 'fa-check', bgClass: 'status-live' },
     [SUBMISSION_STATUS.REJECTED]: { label: 'Rejected', color: 'red', icon: 'fa-times', bgClass: 'status-rejected' },
-    [SUBMISSION_STATUS.FAILED]: { label: 'Failed', color: 'red', icon: 'fa-exclamation-triangle', bgClass: 'status-failed' }
+    [SUBMISSION_STATUS.FAILED]: { label: 'Failed', color: 'red', icon: 'fa-exclamation-triangle', bgClass: 'status-failed' },
+    // Phase 4: Already Listed status - business already has a listing
+    'already_listed': { label: 'Already Listed', color: 'green', icon: 'fa-check-double', bgClass: 'status-already-listed' }
 };
 
 // Action type display mapping
@@ -54,7 +56,10 @@ const ACTION_TYPE_DISPLAY = {
     [ACTION_REQUIRED_TYPE.POSTCARD]: { label: 'Postcard Verification', icon: 'fa-envelope-open-text', description: 'Enter code from postcard mailed to your address' },
     [ACTION_REQUIRED_TYPE.VIDEO]: { label: 'Video Verification', icon: 'fa-video', description: 'Complete a short video verification' },
     [ACTION_REQUIRED_TYPE.CAPTCHA]: { label: 'CAPTCHA', icon: 'fa-robot', description: 'Complete the CAPTCHA challenge' },
-    [ACTION_REQUIRED_TYPE.MANUAL_REVIEW]: { label: 'Manual Review', icon: 'fa-user-check', description: 'Awaiting manual review by directory' }
+    [ACTION_REQUIRED_TYPE.MANUAL_REVIEW]: { label: 'Manual Review', icon: 'fa-user-check', description: 'Awaiting manual review by directory' },
+    // Phase 4: Duplicate detection action types
+    'duplicate_review': { label: 'Verify Listing', icon: 'fa-search', description: 'We found a possible existing listing. Please verify if this is your business.' },
+    'manual_submission': { label: 'Manual Submission', icon: 'fa-hand-pointer', description: 'Automatic submission was skipped. Please submit your listing manually.' }
 };
 
 // Valid status transitions
