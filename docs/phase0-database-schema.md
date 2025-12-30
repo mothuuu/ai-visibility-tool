@@ -195,7 +195,7 @@ Both coexist. If `form_fields_mapping` is NULL, backfill auto-generates a starte
 
 ## Table: `directory_submissions`
 
-**Migrations:** `migrate-citation-network.js`, `migrate-campaign-runs.js`
+**Migrations:** `migrate-citation-network.js`, `migrate-campaign-runs.js`, `phase4_duplicate_detection.sql`
 
 | Column | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -243,6 +243,13 @@ Both coexist. If `form_fields_mapping` is NULL, backfill auto-generates a starte
 | `failed_at` | TIMESTAMP | - | |
 | `created_at` | TIMESTAMP | CURRENT_TIMESTAMP | |
 | `updated_at` | TIMESTAMP | CURRENT_TIMESTAMP | |
+| **Phase 4 Duplicate Detection Columns** ||||
+| `duplicate_check_status` | VARCHAR(50) | NULL | not_checked/no_match/possible_match/match_found/skipped/error |
+| `duplicate_check_evidence` | JSONB | NULL | Structured proof (search_url, match_reason, etc.) |
+| `listing_url` | TEXT | NULL | URL of existing listing if found |
+| `listing_found_at` | TIMESTAMP | NULL | When the existing listing was found |
+| `duplicate_check_performed_at` | TIMESTAMP | NULL | When duplicate check was performed |
+| `duplicate_check_method` | VARCHAR(50) | NULL | internal_search/api_search/site_search/manual/skipped/error |
 
 **Status Values:**
 - `queued` - Waiting in queue
@@ -255,9 +262,19 @@ Both coexist. If `form_fields_mapping` is NULL, backfill auto-generates a starte
 - `live` - Listing is live
 - `rejected` - Directory rejected
 - `failed` - Processing failed
-- `blocked` - Blocked (e.g., deadline missed)
+- `blocked` - Blocked (e.g., deadline missed, duplicate check ambiguous)
 - `skipped` - User skipped
 - `cancelled` - Cancelled
+- `already_listed` - Business already listed in directory (no submission needed)
+
+**Duplicate Check Status Values (Phase 4):**
+- `match_found` - Confident match, existing listing found → status set to `already_listed`
+- `no_match` - No duplicate found → eligible for submission (status = `queued`)
+- `possible_match` - Ambiguous result → status set to `blocked`, needs review
+- `error` - Check failed → status set to `blocked`
+- `skipped` - Check not performed (e.g., `site_search` not supported) → status set to `blocked`
+
+**Important:** Entitlement is only consumed for `queued` submissions. `already_listed` and `blocked` do not consume entitlement.
 
 ---
 
