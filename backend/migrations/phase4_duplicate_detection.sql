@@ -44,6 +44,10 @@ BEGIN
   END IF;
 END $$;
 
+-- Unique constraint for UPSERT (idempotent submissions per campaign+directory)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_directory_submissions_campaign_directory
+  ON directory_submissions(campaign_run_id, directory_id);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_directory_submissions_listing_url
   ON directory_submissions(listing_url)

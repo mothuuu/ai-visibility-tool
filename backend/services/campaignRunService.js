@@ -17,7 +17,10 @@ const db = require('../db/database');
 const entitlementService = require('./entitlementService');
 const { USABLE_ORDER_STATUSES } = require('./entitlementService');
 const { normalizePlan, ERROR_CODES } = require('../config/citationNetwork');
-const duplicateChecker = require('./duplicateCheckerService');
+const duplicateDetection = require('./duplicateDetectionService');
+
+// Confidence threshold for match_found → already_listed
+const MATCH_CONFIDENCE_THRESHOLD = duplicateDetection.CONFIDENCE_THRESHOLDS.MATCH_FOUND;
 
 // Debug logging helper - only logs when CITATION_DEBUG=1
 function debugLog(requestId, ...args) {
@@ -813,45 +816,50 @@ class CampaignRunService {
       }
     };
 
-    // Map business profile to the format expected by duplicateChecker
+    // Map business profile to the format expected by duplicateDetection service
     const businessData = {
       name: businessProfile.business_name,
+      business_name: businessProfile.business_name,
       website_url: businessProfile.website_url,
       short_description: businessProfile.short_description
     };
 
-    // Run duplicate checks (with rate limiting handled by the service)
-    const duplicateResults = await duplicateChecker.batchCheckForDuplicates(directories, businessData);
-    results.stats.checked = duplicateResults.size;
+    // Run duplicate checks using new duplicateDetectionService
+    const { resultsMap, summary } = await duplicateDetection.batchCheckForListings(directories, businessData);
+
+    // Copy summary stats
+    results.stats.checked = summary.total;
+    results.stats.matchFound = summary.matchFound;
+    results.stats.noMatch = summary.noMatch;
+    results.stats.possibleMatch = summary.possibleMatch;
+    results.stats.error = summary.error;
+    results.stats.skipped = summary.skipped;
+
+    debugLog(requestId, 'Duplicate check summary:', summary);
+
+    // Track queue position for queued submissions only
+    let queuePosition = 1;
 
     // Process results and create submissions
-    for (let i = 0; i < directories.length; i++) {
-      const directory = directories[i];
-      // SAFETY: Join by directoryId, never by array index
-      const checkResult = duplicateResults.get(directory.id) || {
-        status: duplicateChecker.DUPLICATE_CHECK_STATUSES.SKIPPED,
-        evidence: { reason: 'Check not performed' }
-      };
+    for (const directory of directories) {
+      // SAFETY: Join by directoryId, NEVER by array index
+      const dupeResult = resultsMap.get(directory.id);
 
-      // Update stats
-      switch (checkResult.status) {
-        case duplicateChecker.DUPLICATE_CHECK_STATUSES.MATCH_FOUND:
-          results.stats.matchFound++;
-          break;
-        case duplicateChecker.DUPLICATE_CHECK_STATUSES.NO_MATCH:
-          results.stats.noMatch++;
-          break;
-        case duplicateChecker.DUPLICATE_CHECK_STATUSES.POSSIBLE_MATCH:
-          results.stats.possibleMatch++;
-          break;
-        case duplicateChecker.DUPLICATE_CHECK_STATUSES.ERROR:
-          results.stats.error++;
-          break;
-        case duplicateChecker.DUPLICATE_CHECK_STATUSES.SKIPPED:
-        default:
-          results.stats.skipped++;
-          break;
+      // If no result, treat as skipped
+      if (!dupeResult) {
+        debugLog(requestId, `No duplicate check result for directory ${directory.id}, treating as skipped`);
       }
+
+      const checkResult = dupeResult || {
+        directoryId: directory.id,
+        method: 'skipped',
+        status: 'skipped',
+        confidence: 0,
+        listingUrl: null,
+        searchUrl: null,
+        evidence: { reason: 'Check not performed' },
+        checkedAt: new Date()
+      };
 
       // Create directory snapshot
       const directorySnapshot = {
@@ -880,25 +888,45 @@ class CampaignRunService {
         ? 'not_required'
         : 'pending';
 
-      // Determine status based on duplicate check result
+      // Determine status based on duplicate check result + confidence threshold
       let submissionStatus;
       let blockedReason = null;
+      let assignedQueuePosition = null;
 
-      if (checkResult.status === duplicateChecker.DUPLICATE_CHECK_STATUSES.MATCH_FOUND) {
+      if (checkResult.status === 'match_found' && checkResult.confidence >= MATCH_CONFIDENCE_THRESHOLD) {
+        // High-confidence match → already_listed, no entitlement consumption
         submissionStatus = 'already_listed';
-      } else if (checkResult.status === duplicateChecker.DUPLICATE_CHECK_STATUSES.NO_MATCH) {
+        debugLog(requestId, `Directory ${directory.id}: match_found (confidence ${checkResult.confidence}) → already_listed`);
+      } else if (checkResult.status === 'no_match') {
+        // No match → queue and consume entitlement
         submissionStatus = 'queued';
+        assignedQueuePosition = queuePosition++;
+        debugLog(requestId, `Directory ${directory.id}: no_match → queued at position ${assignedQueuePosition}`);
       } else {
-        // skipped, error, possible_match → blocked
+        // possible_match, skipped, error, or low-confidence match_found → blocked
         submissionStatus = 'blocked';
-        blockedReason = `Duplicate check: ${checkResult.status}${checkResult.evidence?.reason ? ' - ' + checkResult.evidence.reason : ''}`;
+        if (checkResult.status === 'match_found') {
+          blockedReason = `Duplicate check: possible match (confidence ${(checkResult.confidence * 100).toFixed(0)}% < ${(MATCH_CONFIDENCE_THRESHOLD * 100).toFixed(0)}% threshold)`;
+        } else if (checkResult.status === 'possible_match') {
+          blockedReason = `Duplicate check: possible_match (confidence ${(checkResult.confidence * 100).toFixed(0)}%)`;
+        } else {
+          blockedReason = `Duplicate check: ${checkResult.status}${checkResult.evidence?.reason ? ' - ' + checkResult.evidence.reason : ''}`;
+        }
+        debugLog(requestId, `Directory ${directory.id}: ${checkResult.status} → blocked: ${blockedReason}`);
       }
 
-      // Determine method and listing_found_at
-      const checkMethod = checkResult.evidence?.method || 'skipped';
-      const hasListing = checkResult.status === duplicateChecker.DUPLICATE_CHECK_STATUSES.MATCH_FOUND && checkResult.existingListingUrl;
+      // Determine listing_found_at
+      const hasListing = submissionStatus === 'already_listed' && checkResult.listingUrl;
 
-      // Create the submission record
+      // Build evidence with additional metadata
+      const evidenceToStore = {
+        ...checkResult.evidence,
+        confidence: checkResult.confidence,
+        searchUrl: checkResult.searchUrl,
+        checkedAt: checkResult.checkedAt?.toISOString() || new Date().toISOString()
+      };
+
+      // UPSERT: Insert or update if exists (idempotent)
       const result = await client.query(`
         INSERT INTO directory_submissions (
           campaign_run_id,
@@ -922,6 +950,18 @@ class CampaignRunService {
           created_at,
           updated_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), $17, NOW(), NOW())
+        ON CONFLICT (campaign_run_id, directory_id)
+        DO UPDATE SET
+          status = EXCLUDED.status,
+          queue_position = EXCLUDED.queue_position,
+          blocked_reason = EXCLUDED.blocked_reason,
+          duplicate_check_status = EXCLUDED.duplicate_check_status,
+          duplicate_check_evidence = EXCLUDED.duplicate_check_evidence,
+          listing_url = EXCLUDED.listing_url,
+          listing_found_at = EXCLUDED.listing_found_at,
+          duplicate_check_performed_at = NOW(),
+          duplicate_check_method = EXCLUDED.duplicate_check_method,
+          updated_at = NOW()
         RETURNING *
       `, [
         campaignRun.id,
@@ -934,13 +974,13 @@ class CampaignRunService {
         directory.verification_method || 'email',
         verificationStatus,
         directory.priority_score || 50,
-        submissionStatus === 'queued' ? i + 1 : null, // Only queued get queue position
+        assignedQueuePosition,
         blockedReason,
         checkResult.status,
-        JSON.stringify(checkResult.evidence),
-        checkResult.existingListingUrl || null,
+        JSON.stringify(evidenceToStore),
+        checkResult.listingUrl || null,
         hasListing ? new Date() : null,
-        checkMethod
+        checkResult.method || 'skipped'
       ]);
 
       const submission = result.rows[0];
