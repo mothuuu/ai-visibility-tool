@@ -805,6 +805,7 @@ class CampaignRunService {
     const results = {
       queuedSubmissions: [],
       alreadyListedSubmissions: [],
+      actionNeededSubmissions: [],
       blockedSubmissions: [],
       stats: {
         checked: 0,
@@ -889,9 +890,23 @@ class CampaignRunService {
         : 'pending';
 
       // Determine status based on duplicate check result + confidence threshold
+      // PHASE 4 FIX: Use action_needed instead of blocked for ambiguous duplicate outcomes
       let submissionStatus;
       let blockedReason = null;
       let assignedQueuePosition = null;
+      let actionType = null;
+      let actionUrl = null;
+      let actionInstructions = null;
+
+      // Helper to get best available submission URL
+      const getSubmissionUrl = () => {
+        return directory.submission_url ||
+               directory.directory_url ||
+               directory.website_url ||
+               directory.url ||
+               checkResult.searchUrl ||
+               null;
+      };
 
       if (checkResult.status === 'match_found' && checkResult.confidence >= MATCH_CONFIDENCE_THRESHOLD) {
         // High-confidence match → already_listed, no entitlement consumption
@@ -902,17 +917,22 @@ class CampaignRunService {
         submissionStatus = 'queued';
         assignedQueuePosition = queuePosition++;
         debugLog(requestId, `Directory ${directory.id}: no_match → queued at position ${assignedQueuePosition}`);
+      } else if (checkResult.status === 'possible_match' || (checkResult.status === 'match_found' && checkResult.confidence < MATCH_CONFIDENCE_THRESHOLD)) {
+        // Possible match or low-confidence match → action_needed for manual review
+        submissionStatus = 'action_needed';
+        actionType = 'duplicate_review';
+        actionUrl = checkResult.searchUrl || checkResult.listingUrl || getSubmissionUrl();
+        const confPercent = (checkResult.confidence * 100).toFixed(0);
+        actionInstructions = `Possible existing listing detected (${confPercent}% confidence). Please verify manually if your business is already listed.`;
+        debugLog(requestId, `Directory ${directory.id}: ${checkResult.status} (confidence ${checkResult.confidence}) → action_needed/duplicate_review`);
       } else {
-        // possible_match, skipped, error, or low-confidence match_found → blocked
-        submissionStatus = 'blocked';
-        if (checkResult.status === 'match_found') {
-          blockedReason = `Duplicate check: possible match (confidence ${(checkResult.confidence * 100).toFixed(0)}% < ${(MATCH_CONFIDENCE_THRESHOLD * 100).toFixed(0)}% threshold)`;
-        } else if (checkResult.status === 'possible_match') {
-          blockedReason = `Duplicate check: possible_match (confidence ${(checkResult.confidence * 100).toFixed(0)}%)`;
-        } else {
-          blockedReason = `Duplicate check: ${checkResult.status}${checkResult.evidence?.reason ? ' - ' + checkResult.evidence.reason : ''}`;
-        }
-        debugLog(requestId, `Directory ${directory.id}: ${checkResult.status} → blocked: ${blockedReason}`);
+        // skipped, error, or missing result → action_needed for manual submission
+        submissionStatus = 'action_needed';
+        actionType = 'manual_submission';
+        actionUrl = getSubmissionUrl();
+        const reason = checkResult.evidence?.reason || checkResult.status || 'unknown';
+        actionInstructions = `Automatic duplicate check was ${checkResult.status}. Please submit your listing manually at ${directory.name}.`;
+        debugLog(requestId, `Directory ${directory.id}: ${checkResult.status} → action_needed/manual_submission`);
       }
 
       // Determine listing_found_at
@@ -927,6 +947,7 @@ class CampaignRunService {
       };
 
       // UPSERT: Insert or update if exists (idempotent)
+      // PHASE 4 FIX: Include action fields for action_needed status
       const result = await client.query(`
         INSERT INTO directory_submissions (
           campaign_run_id,
@@ -941,6 +962,9 @@ class CampaignRunService {
           priority_score,
           queue_position,
           blocked_reason,
+          action_type,
+          action_url,
+          action_instructions,
           duplicate_check_status,
           duplicate_check_evidence,
           listing_url,
@@ -949,12 +973,15 @@ class CampaignRunService {
           duplicate_check_method,
           created_at,
           updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), $17, NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW(), $20, NOW(), NOW())
         ON CONFLICT (campaign_run_id, directory_id)
         DO UPDATE SET
           status = EXCLUDED.status,
           queue_position = EXCLUDED.queue_position,
           blocked_reason = EXCLUDED.blocked_reason,
+          action_type = EXCLUDED.action_type,
+          action_url = EXCLUDED.action_url,
+          action_instructions = EXCLUDED.action_instructions,
           duplicate_check_status = EXCLUDED.duplicate_check_status,
           duplicate_check_evidence = EXCLUDED.duplicate_check_evidence,
           listing_url = EXCLUDED.listing_url,
@@ -976,6 +1003,9 @@ class CampaignRunService {
         directory.priority_score || 50,
         assignedQueuePosition,
         blockedReason,
+        actionType,
+        actionUrl,
+        actionInstructions,
         checkResult.status,
         JSON.stringify(evidenceToStore),
         checkResult.listingUrl || null,
@@ -990,12 +1020,18 @@ class CampaignRunService {
         results.queuedSubmissions.push(submission);
       } else if (submissionStatus === 'already_listed') {
         results.alreadyListedSubmissions.push(submission);
+      } else if (submissionStatus === 'action_needed') {
+        results.actionNeededSubmissions.push(submission);
       } else {
         results.blockedSubmissions.push(submission);
       }
     }
 
     debugLog(requestId, 'Phase 4 complete:', results.stats);
+    debugLog(requestId, 'Results breakdown: queued=', results.queuedSubmissions.length,
+      'alreadyListed=', results.alreadyListedSubmissions.length,
+      'actionNeeded=', results.actionNeededSubmissions.length,
+      'blocked=', results.blockedSubmissions.length);
     return results;
   }
 
