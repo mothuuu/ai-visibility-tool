@@ -157,6 +157,40 @@ const ORDER_STATUSES = {
  */
 const USABLE_ORDER_STATUSES = ['paid', 'processing', 'in_progress', 'completed'];
 
+/**
+ * Billable submission statuses - statuses that consume entitlement
+ *
+ * PHASE 4 RULE: Entitlement is ONLY consumed for statuses that represent
+ * actual submission work. already_listed and blocked do NOT consume.
+ *
+ * - queued: In queue, work will be done
+ * - in_progress: Worker is processing
+ * - submitted: Successfully submitted to directory
+ * - pending_approval: Awaiting directory approval
+ * - action_needed: User action required (work was done)
+ * - live: Listing is live
+ * - verified: Verification complete
+ * - rejected: Directory rejected (work was done, counts as attempt)
+ * - failed: Submission failed (work was attempted)
+ *
+ * NOT BILLABLE:
+ * - already_listed: No submission needed, business already exists
+ * - blocked: Blocked before any work was done (e.g., ambiguous duplicate check)
+ * - cancelled: Cancelled by user before processing
+ * - skipped: User skipped this directory
+ */
+const BILLABLE_STATUSES = [
+  'queued',
+  'in_progress',
+  'submitted',
+  'pending_approval',
+  'action_needed',
+  'live',
+  'verified',
+  'rejected',
+  'failed'
+];
+
 // =============================================================================
 // ERROR CODES
 // =============================================================================
@@ -344,6 +378,7 @@ module.exports = {
   SUBMISSION_STATUSES,
   ORDER_STATUSES,
   USABLE_ORDER_STATUSES,
+  BILLABLE_STATUSES,
 
   // Error codes
   ERROR_CODES,

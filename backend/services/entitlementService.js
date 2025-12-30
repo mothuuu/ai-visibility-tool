@@ -14,6 +14,7 @@ const db = require('../db/database');
 const {
   PLAN_ALLOCATIONS,
   USABLE_ORDER_STATUSES,
+  BILLABLE_STATUSES,
   normalizePlan,
   getPlanAllocation,
   isActiveSubscriber,
@@ -650,4 +651,5 @@ module.exports = new EntitlementService();
 module.exports.normalizePlan = normalizePlan;
 module.exports.isActiveSubscriber = isActiveSubscriber;
 module.exports.USABLE_ORDER_STATUSES = USABLE_ORDER_STATUSES;
+module.exports.BILLABLE_STATUSES = BILLABLE_STATUSES;
 module.exports.PLAN_ALLOCATIONS = PLAN_ALLOCATIONS;

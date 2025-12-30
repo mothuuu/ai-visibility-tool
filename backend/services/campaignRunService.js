@@ -1228,11 +1228,13 @@ class CampaignRunService {
 
   /**
    * Get all submissions for a user (across all campaigns)
+   * Updated for Phase 4: includes duplicate detection fields
    */
   async getUserSubmissions(userId, options = {}) {
     const { status, limit = 50, offset = 0 } = options;
 
     // Explicitly list columns to avoid any potential column name conflicts
+    // Phase 4: Added duplicate detection fields
     let query = `
       SELECT
         ds.id,
@@ -1254,12 +1256,17 @@ class CampaignRunService {
         ds.verified_at,
         ds.live_at,
         ds.listing_url,
+        ds.listing_found_at,
         ds.blocked_at,
         ds.blocked_reason,
         ds.has_credentials,
         ds.notes,
         ds.queue_position,
         ds.retry_count,
+        ds.duplicate_check_status,
+        ds.duplicate_check_method,
+        ds.duplicate_check_performed_at,
+        ds.duplicate_check_evidence,
         ds.created_at,
         ds.updated_at,
         d.name as dir_name,
@@ -1284,7 +1291,26 @@ class CampaignRunService {
       paramIndex++;
     }
 
-    query += ` ORDER BY ds.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    // Order: already_listed near top, then by status priority, then by created_at
+    query += `
+      ORDER BY
+        CASE ds.status
+          WHEN 'already_listed' THEN 1
+          WHEN 'action_needed' THEN 2
+          WHEN 'live' THEN 3
+          WHEN 'verified' THEN 4
+          WHEN 'queued' THEN 5
+          WHEN 'in_progress' THEN 6
+          WHEN 'submitted' THEN 7
+          WHEN 'pending_approval' THEN 8
+          WHEN 'blocked' THEN 9
+          WHEN 'failed' THEN 10
+          WHEN 'rejected' THEN 11
+          ELSE 12
+        END,
+        ds.created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
     params.push(limit, offset);
 
     const result = await db.query(query, params);
