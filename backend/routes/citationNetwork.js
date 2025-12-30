@@ -1508,13 +1508,14 @@ router.get('/duplicate-check/stats', authenticateToken, async (req, res) => {
         ds.id,
         ds.directory_name,
         ds.duplicate_check_status,
-        ds.existing_listing_url,
-        ds.duplicate_checked_at,
+        ds.listing_url,
+        ds.duplicate_check_performed_at,
+        ds.duplicate_check_method,
         ds.duplicate_check_evidence
       FROM directory_submissions ds
       WHERE ds.user_id = $1
-        AND ds.duplicate_checked_at IS NOT NULL
-      ORDER BY ds.duplicate_checked_at DESC
+        AND ds.duplicate_check_performed_at IS NOT NULL
+      ORDER BY ds.duplicate_check_performed_at DESC
       LIMIT 10
     `, [userId]);
 
@@ -1528,8 +1529,9 @@ router.get('/duplicate-check/stats', authenticateToken, async (req, res) => {
         id: r.id,
         directoryName: r.directory_name,
         status: r.duplicate_check_status,
-        existingListingUrl: r.existing_listing_url,
-        checkedAt: r.duplicate_checked_at
+        listingUrl: r.listing_url,
+        checkedAt: r.duplicate_check_performed_at,
+        method: r.duplicate_check_method
       }))
     });
 

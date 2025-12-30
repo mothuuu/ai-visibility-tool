@@ -297,7 +297,7 @@ class CampaignRunService {
           status: s.status,
           queuePosition: s.queue_position,
           duplicateCheckStatus: s.duplicate_check_status,
-          existingListingUrl: s.existing_listing_url
+          listingUrl: s.listing_url
         }))
       };
 
@@ -894,6 +894,10 @@ class CampaignRunService {
         blockedReason = `Duplicate check: ${checkResult.status}${checkResult.evidence?.reason ? ' - ' + checkResult.evidence.reason : ''}`;
       }
 
+      // Determine method and listing_found_at
+      const checkMethod = checkResult.evidence?.method || 'skipped';
+      const hasListing = checkResult.status === duplicateChecker.DUPLICATE_CHECK_STATUSES.MATCH_FOUND && checkResult.existingListingUrl;
+
       // Create the submission record
       const result = await client.query(`
         INSERT INTO directory_submissions (
@@ -911,11 +915,13 @@ class CampaignRunService {
           blocked_reason,
           duplicate_check_status,
           duplicate_check_evidence,
-          existing_listing_url,
-          duplicate_checked_at,
+          listing_url,
+          listing_found_at,
+          duplicate_check_performed_at,
+          duplicate_check_method,
           created_at,
           updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), $17, NOW(), NOW())
         RETURNING *
       `, [
         campaignRun.id,
@@ -932,7 +938,9 @@ class CampaignRunService {
         blockedReason,
         checkResult.status,
         JSON.stringify(checkResult.evidence),
-        checkResult.existingListingUrl || null
+        checkResult.existingListingUrl || null,
+        hasListing ? new Date() : null,
+        checkMethod
       ]);
 
       const submission = result.rows[0];

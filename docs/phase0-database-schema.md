@@ -244,10 +244,12 @@ Both coexist. If `form_fields_mapping` is NULL, backfill auto-generates a starte
 | `created_at` | TIMESTAMP | CURRENT_TIMESTAMP | |
 | `updated_at` | TIMESTAMP | CURRENT_TIMESTAMP | |
 | **Phase 4 Duplicate Detection Columns** ||||
-| `duplicate_check_status` | VARCHAR(50) | NULL | match_found/no_match/possible_match/error/skipped |
+| `duplicate_check_status` | VARCHAR(50) | NULL | not_checked/no_match/possible_match/match_found/skipped/error |
 | `duplicate_check_evidence` | JSONB | NULL | Structured proof (search_url, match_reason, etc.) |
-| `existing_listing_url` | TEXT | NULL | URL of existing listing if found |
-| `duplicate_checked_at` | TIMESTAMP | NULL | When duplicate check was performed |
+| `listing_url` | TEXT | NULL | URL of existing listing if found |
+| `listing_found_at` | TIMESTAMP | NULL | When the existing listing was found |
+| `duplicate_check_performed_at` | TIMESTAMP | NULL | When duplicate check was performed |
+| `duplicate_check_method` | VARCHAR(50) | NULL | internal_search/api_search/site_search/manual/skipped/error |
 
 **Status Values:**
 - `queued` - Waiting in queue

@@ -1,82 +1,87 @@
--- Phase 4: Duplicate Detection Migration
--- Date: 2025-12-30
--- Description: Add columns to directory_submissions for storing duplicate check outcomes
---
--- Outcomes:
---   match_found: Confident duplicate exists - can mark already_listed
---   no_match: No duplicate found - eligible for submission
---   possible_match: Ambiguous result - do not queue, do not consume entitlement
---   error: Check failed - do not queue, do not consume entitlement
---   skipped: Check not performed (e.g., site_search not supported) - do not queue
+-- Phase 4: Duplicate Detection - Evidence + Status support
+-- Additive only. Postgres.
 
--- ============================================================================
--- Add duplicate check columns to directory_submissions
--- ============================================================================
-
--- Status of the duplicate check (tri-state outcome)
+-- Columns
 ALTER TABLE directory_submissions
-ADD COLUMN IF NOT EXISTS duplicate_check_status VARCHAR(50);
+  ADD COLUMN IF NOT EXISTS listing_url TEXT;
 
--- Evidence/proof for the duplicate check outcome
--- Schema: { search_url, match_reason, excerpt, confidence, method, checked_at, response_time_ms }
 ALTER TABLE directory_submissions
-ADD COLUMN IF NOT EXISTS duplicate_check_evidence JSONB;
+  ADD COLUMN IF NOT EXISTS listing_found_at TIMESTAMP;
 
--- URL of the existing listing (if found)
 ALTER TABLE directory_submissions
-ADD COLUMN IF NOT EXISTS existing_listing_url TEXT;
+  ADD COLUMN IF NOT EXISTS duplicate_check_performed_at TIMESTAMP;
 
--- Timestamp when duplicate check was performed
 ALTER TABLE directory_submissions
-ADD COLUMN IF NOT EXISTS duplicate_checked_at TIMESTAMP;
+  ADD COLUMN IF NOT EXISTS duplicate_check_method VARCHAR(50);
 
--- ============================================================================
--- Add CHECK constraint for duplicate_check_status enum
--- ============================================================================
+ALTER TABLE directory_submissions
+  ADD COLUMN IF NOT EXISTS duplicate_check_status VARCHAR(50);
 
+ALTER TABLE directory_submissions
+  ADD COLUMN IF NOT EXISTS duplicate_check_evidence JSONB;
+
+-- CHECK: duplicate_check_method
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_duplicate_check_status') THEN
-    ALTER TABLE directory_submissions ADD CONSTRAINT chk_duplicate_check_status
-      CHECK (duplicate_check_status IS NULL OR duplicate_check_status IN (
-        'match_found',
-        'no_match',
-        'possible_match',
-        'error',
-        'skipped'
-      ));
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_directory_submissions_dupe_method') THEN
+    ALTER TABLE directory_submissions ADD CONSTRAINT chk_directory_submissions_dupe_method
+      CHECK (
+        duplicate_check_method IS NULL OR
+        duplicate_check_method IN ('internal_search', 'api_search', 'site_search', 'manual', 'skipped', 'error')
+      );
   END IF;
 END $$;
 
--- ============================================================================
--- Create index for querying by duplicate check status
--- ============================================================================
+-- CHECK: duplicate_check_status
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_directory_submissions_dupe_status') THEN
+    ALTER TABLE directory_submissions ADD CONSTRAINT chk_directory_submissions_dupe_status
+      CHECK (
+        duplicate_check_status IS NULL OR
+        duplicate_check_status IN ('not_checked', 'no_match', 'possible_match', 'match_found', 'skipped', 'error')
+      );
+  END IF;
+END $$;
 
-CREATE INDEX IF NOT EXISTS idx_submissions_duplicate_check_status
-ON directory_submissions(duplicate_check_status)
-WHERE duplicate_check_status IS NOT NULL;
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_directory_submissions_listing_url
+  ON directory_submissions(listing_url)
+  WHERE listing_url IS NOT NULL;
 
--- Index for finding already_listed submissions efficiently
-CREATE INDEX IF NOT EXISTS idx_submissions_already_listed
-ON directory_submissions(status, user_id)
-WHERE status = 'already_listed';
+CREATE INDEX IF NOT EXISTS idx_directory_submissions_dupe_status
+  ON directory_submissions(duplicate_check_status)
+  WHERE duplicate_check_status IS NOT NULL;
 
--- ============================================================================
--- Verification
--- ============================================================================
+CREATE INDEX IF NOT EXISTS idx_directory_submissions_status_already_listed
+  ON directory_submissions(status)
+  WHERE status = 'already_listed';
 
+-- Update existing status CHECK constraint (if present) to include 'already_listed'
 DO $$
 DECLARE
-  col_count INTEGER;
+  c RECORD;
+  constraint_def TEXT;
 BEGIN
-  SELECT COUNT(*) INTO col_count
-  FROM information_schema.columns
-  WHERE table_name = 'directory_submissions'
-    AND column_name IN ('duplicate_check_status', 'duplicate_check_evidence', 'existing_listing_url', 'duplicate_checked_at');
+  FOR c IN
+    SELECT conname, pg_get_constraintdef(pg_constraint.oid) AS def
+    FROM pg_constraint
+    WHERE conrelid = 'directory_submissions'::regclass
+      AND contype = 'c'
+      AND pg_get_constraintdef(pg_constraint.oid) ILIKE '%status%'
+      AND pg_get_constraintdef(pg_constraint.oid) NOT ILIKE '%duplicate_check_status%'
+  LOOP
+    constraint_def := c.def;
 
-  IF col_count = 4 THEN
-    RAISE NOTICE 'Phase 4 Duplicate Detection migration completed successfully. All 4 columns added.';
-  ELSE
-    RAISE WARNING 'Phase 4 migration incomplete. Expected 4 columns, found %', col_count;
-  END IF;
+    -- Only handle constraints that look like an IN (...) list on status
+    IF constraint_def ILIKE '%status%IN%' AND constraint_def NOT ILIKE '%already_listed%' THEN
+      EXECUTE format('ALTER TABLE directory_submissions DROP CONSTRAINT %I', c.conname);
+
+      EXECUTE
+        'ALTER TABLE directory_submissions ADD CONSTRAINT ' || quote_ident(c.conname) || ' ' ||
+        regexp_replace(constraint_def, '\)\s*$', ', ''already_listed'')', 1, 1);
+
+      RAISE NOTICE 'Updated status CHECK constraint % to include already_listed', c.conname;
+    END IF;
+  END LOOP;
 END $$;

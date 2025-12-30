@@ -25,6 +25,7 @@ const db = require('../db');
 // =============================================================================
 
 const DUPLICATE_CHECK_STATUSES = {
+  NOT_CHECKED: 'not_checked',
   MATCH_FOUND: 'match_found',
   NO_MATCH: 'no_match',
   POSSIBLE_MATCH: 'possible_match',
@@ -562,15 +563,23 @@ async function batchCheckForDuplicates(directories, businessProfile, options = {
  * @returns {Object} Updated submission record
  */
 async function saveCheckResult(submissionId, checkResult) {
+  // Determine the method from evidence
+  const method = checkResult.evidence?.method || 'skipped';
+
+  // Set listing_found_at when we find a match
+  const hasListing = checkResult.status === DUPLICATE_CHECK_STATUSES.MATCH_FOUND && checkResult.existingListingUrl;
+
   const updateQuery = `
     UPDATE directory_submissions
     SET
       duplicate_check_status = $1,
       duplicate_check_evidence = $2,
-      existing_listing_url = $3,
-      duplicate_checked_at = NOW(),
+      listing_url = $3,
+      listing_found_at = $4,
+      duplicate_check_performed_at = NOW(),
+      duplicate_check_method = $5,
       updated_at = NOW()
-    WHERE id = $4
+    WHERE id = $6
     RETURNING *
   `;
 
@@ -578,6 +587,8 @@ async function saveCheckResult(submissionId, checkResult) {
     checkResult.status,
     JSON.stringify(checkResult.evidence),
     checkResult.existingListingUrl || null,
+    hasListing ? new Date() : null,
+    method,
     submissionId
   ]);
 
