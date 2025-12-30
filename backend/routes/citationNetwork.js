@@ -19,6 +19,7 @@ const config = require('../config/citationNetwork');
 const { PACK_CONFIG, ERROR_CODES, isActiveSubscriber } = require('../config/citationNetwork');
 const entitlementService = require('../services/entitlementService');
 const { normalizePlan } = require('../utils/planUtils');
+const duplicateChecker = require('../services/duplicateCheckerService');
 
 // Rate limiters for credential endpoints (SECURITY)
 const credentialRateLimiter = rateLimit({
@@ -1343,6 +1344,198 @@ router.get('/directories/intelligence', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Get directories intelligence error:', error);
     res.status(500).json({ error: 'Failed to fetch directories intelligence' });
+  }
+});
+
+/**
+ * POST /api/citation-network/duplicate-check
+ * Check if a business is already listed in a specific directory
+ * Phase 4: Manual duplicate check endpoint (for testing/debugging)
+ */
+router.post('/duplicate-check', authenticateToken, async (req, res) => {
+  try {
+    const { directoryId, businessName, websiteUrl } = req.body;
+
+    if (!directoryId) {
+      return res.status(400).json({ error: 'directoryId is required' });
+    }
+
+    if (!businessName && !websiteUrl) {
+      return res.status(400).json({ error: 'businessName or websiteUrl is required' });
+    }
+
+    // Get directory with intelligence columns
+    const dirResult = await db.query(`
+      SELECT id, slug, name, directory_type, website_url,
+             search_type, search_url_template, duplicate_check_config, api_config
+      FROM directories
+      WHERE id = $1 AND is_active = true
+    `, [directoryId]);
+
+    if (dirResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Directory not found' });
+    }
+
+    const directory = dirResult.rows[0];
+    const businessProfile = {
+      name: businessName || '',
+      website_url: websiteUrl || ''
+    };
+
+    // Run duplicate check
+    const result = await duplicateChecker.checkForDuplicate(directory, businessProfile);
+
+    res.json({
+      directoryId: directory.id,
+      directoryName: directory.name,
+      searchType: directory.search_type,
+      result: {
+        status: result.status,
+        existingListingUrl: result.existingListingUrl || null,
+        fromCache: result.fromCache || false,
+        evidence: result.evidence
+      }
+    });
+
+  } catch (error) {
+    console.error('[DuplicateCheck] Error:', error);
+    res.status(500).json({ error: 'Failed to perform duplicate check' });
+  }
+});
+
+/**
+ * POST /api/citation-network/duplicate-check/batch
+ * Check duplicates for multiple directories at once
+ * Phase 4: Batch duplicate check endpoint
+ */
+router.post('/duplicate-check/batch', authenticateToken, async (req, res) => {
+  try {
+    const { directoryIds, businessName, websiteUrl } = req.body;
+
+    if (!directoryIds || !Array.isArray(directoryIds) || directoryIds.length === 0) {
+      return res.status(400).json({ error: 'directoryIds array is required' });
+    }
+
+    if (directoryIds.length > 50) {
+      return res.status(400).json({ error: 'Maximum 50 directories per batch' });
+    }
+
+    if (!businessName && !websiteUrl) {
+      return res.status(400).json({ error: 'businessName or websiteUrl is required' });
+    }
+
+    // Get directories with intelligence columns
+    const dirResult = await db.query(`
+      SELECT id, slug, name, directory_type, website_url,
+             search_type, search_url_template, duplicate_check_config, api_config
+      FROM directories
+      WHERE id = ANY($1::int[]) AND is_active = true
+    `, [directoryIds]);
+
+    if (dirResult.rows.length === 0) {
+      return res.status(404).json({ error: 'No directories found' });
+    }
+
+    const directories = dirResult.rows;
+    const businessProfile = {
+      name: businessName || '',
+      website_url: websiteUrl || ''
+    };
+
+    // Run batch duplicate check
+    const resultsMap = await duplicateChecker.batchCheckForDuplicates(directories, businessProfile);
+
+    // Convert Map to array of results
+    const results = directories.map(dir => {
+      const check = resultsMap.get(dir.id) || {
+        status: duplicateChecker.DUPLICATE_CHECK_STATUSES.ERROR,
+        evidence: { error: 'Check not performed' }
+      };
+      return {
+        directoryId: dir.id,
+        directoryName: dir.name,
+        searchType: dir.search_type,
+        status: check.status,
+        existingListingUrl: check.existingListingUrl || null,
+        fromCache: check.fromCache || false
+      };
+    });
+
+    // Calculate summary stats
+    const stats = {
+      total: results.length,
+      matchFound: results.filter(r => r.status === 'match_found').length,
+      noMatch: results.filter(r => r.status === 'no_match').length,
+      possibleMatch: results.filter(r => r.status === 'possible_match').length,
+      error: results.filter(r => r.status === 'error').length,
+      skipped: results.filter(r => r.status === 'skipped').length
+    };
+
+    res.json({ results, stats });
+
+  } catch (error) {
+    console.error('[DuplicateCheckBatch] Error:', error);
+    res.status(500).json({ error: 'Failed to perform batch duplicate check' });
+  }
+});
+
+/**
+ * GET /api/citation-network/duplicate-check/stats
+ * Get duplicate check statistics and cache info
+ * Phase 4: Monitoring endpoint
+ */
+router.get('/duplicate-check/stats', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get user's submissions with duplicate check info
+    const submissionStats = await db.query(`
+      SELECT
+        duplicate_check_status,
+        COUNT(*) as count
+      FROM directory_submissions
+      WHERE user_id = $1
+        AND duplicate_check_status IS NOT NULL
+      GROUP BY duplicate_check_status
+    `, [userId]);
+
+    // Get cache stats
+    const cacheStats = duplicateChecker.getCacheStats();
+
+    // Get recent duplicate checks for this user
+    const recentChecks = await db.query(`
+      SELECT
+        ds.id,
+        ds.directory_name,
+        ds.duplicate_check_status,
+        ds.existing_listing_url,
+        ds.duplicate_checked_at,
+        ds.duplicate_check_evidence
+      FROM directory_submissions ds
+      WHERE ds.user_id = $1
+        AND ds.duplicate_checked_at IS NOT NULL
+      ORDER BY ds.duplicate_checked_at DESC
+      LIMIT 10
+    `, [userId]);
+
+    res.json({
+      submissionStats: submissionStats.rows.reduce((acc, row) => {
+        acc[row.duplicate_check_status] = parseInt(row.count);
+        return acc;
+      }, {}),
+      cacheStats,
+      recentChecks: recentChecks.rows.map(r => ({
+        id: r.id,
+        directoryName: r.directory_name,
+        status: r.duplicate_check_status,
+        existingListingUrl: r.existing_listing_url,
+        checkedAt: r.duplicate_checked_at
+      }))
+    });
+
+  } catch (error) {
+    console.error('[DuplicateCheckStats] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch duplicate check stats' });
   }
 });
 

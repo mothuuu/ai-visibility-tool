@@ -17,6 +17,7 @@ const db = require('../db/database');
 const entitlementService = require('./entitlementService');
 const { USABLE_ORDER_STATUSES } = require('./entitlementService');
 const { normalizePlan, ERROR_CODES } = require('../config/citationNetwork');
+const duplicateChecker = require('./duplicateCheckerService');
 
 // Debug logging helper - only logs when CITATION_DEBUG=1
 function debugLog(requestId, ...args) {
@@ -229,47 +230,74 @@ class CampaignRunService {
         throw error;
       }
 
-      // 7. Create submission records (within transaction)
-      debugLog(requestId, 'Step 7: Creating', directories.length, 'submission records...');
-      const submissions = await this.createSubmissionsTx(client, campaignRun, directories);
-      debugLog(requestId, 'Submissions created:', submissions.length);
+      // 7. Phase 4: Check for duplicates and create submissions
+      debugLog(requestId, 'Step 7: Running duplicate checks and creating submissions...');
+      const submissionResults = await this.checkDuplicatesAndCreateSubmissionsTx(
+        client, campaignRun, directories, profile, requestId
+      );
 
-      // 8. Consume entitlement using client with row locks (T0-7)
-      debugLog(requestId, 'Step 8: Consuming', submissions.length, 'from entitlement with locks...');
-      const consumeResult = await entitlementService.consumeEntitlementWithClient(client, userId, submissions.length, entitlement);
-      debugLog(requestId, 'Entitlement consumed:', {
-        consumed: consumeResult.consumed,
-        subscriptionConsumed: consumeResult.subscriptionConsumed,
-        ordersConsumed: consumeResult.ordersConsumed,
-        remaining: consumeResult.remaining
+      debugLog(requestId, 'Phase 4 results:', {
+        queued: submissionResults.queuedSubmissions.length,
+        alreadyListed: submissionResults.alreadyListedSubmissions.length,
+        blocked: submissionResults.blockedSubmissions.length,
+        stats: submissionResults.stats
       });
 
+      // 8. Consume entitlement ONLY for queued submissions (not already_listed or blocked)
+      const toConsume = submissionResults.queuedSubmissions.length;
+      debugLog(requestId, 'Step 8: Consuming', toConsume, 'from entitlement (only queued)...');
+
+      let consumeResult = { consumed: 0, remaining: entitlement.remaining };
+      if (toConsume > 0) {
+        consumeResult = await entitlementService.consumeEntitlementWithClient(client, userId, toConsume, entitlement);
+        debugLog(requestId, 'Entitlement consumed:', {
+          consumed: consumeResult.consumed,
+          subscriptionConsumed: consumeResult.subscriptionConsumed,
+          ordersConsumed: consumeResult.ordersConsumed,
+          remaining: consumeResult.remaining
+        });
+      } else {
+        debugLog(requestId, 'No entitlement consumed (no queued submissions)');
+      }
+
+      // Calculate total submissions created
+      const allSubmissions = [
+        ...submissionResults.queuedSubmissions,
+        ...submissionResults.alreadyListedSubmissions,
+        ...submissionResults.blockedSubmissions
+      ];
+
       // 9. Update campaign run status
-      debugLog(requestId, 'Step 9: Updating campaign run status to queued...');
+      debugLog(requestId, 'Step 9: Updating campaign run status...');
       await client.query(`
         UPDATE campaign_runs
         SET status = 'queued',
             directories_selected = $2,
-            directories_queued = $2,
+            directories_queued = $3,
             started_at = NOW(),
             updated_at = NOW()
         WHERE id = $1
-      `, [campaignRun.id, submissions.length]);
+      `, [campaignRun.id, allSubmissions.length, submissionResults.queuedSubmissions.length]);
 
       await client.query('COMMIT');
       debugLog(requestId, 'Transaction committed successfully');
 
       return {
         campaignRunId: campaignRun.id,
-        directoriesQueued: submissions.length,
+        directoriesQueued: submissionResults.queuedSubmissions.length,
+        directoriesAlreadyListed: submissionResults.alreadyListedSubmissions.length,
+        directoriesBlocked: submissionResults.blockedSubmissions.length,
+        duplicateCheckStats: submissionResults.stats,
         entitlementRemaining: consumeResult.remaining,
         subscriptionRemaining: consumeResult.subscriptionRemaining,
         ordersRemaining: consumeResult.ordersRemaining,
-        submissions: submissions.map(s => ({
+        submissions: allSubmissions.map(s => ({
           id: s.id,
           directoryName: s.directory_snapshot?.name || s.directory_name,
           status: s.status,
-          queuePosition: s.queue_position
+          queuePosition: s.queue_position,
+          duplicateCheckStatus: s.duplicate_check_status,
+          existingListingUrl: s.existing_listing_url
         }))
       };
 
@@ -754,6 +782,176 @@ class CampaignRunService {
   }
 
   /**
+   * Phase 4: Check for duplicates and create submissions with appropriate status
+   *
+   * Outcomes:
+   *   - match_found: Create with status='already_listed', no entitlement consumed
+   *   - no_match: Create with status='queued', consume entitlement
+   *   - skipped/error/possible_match: Create with status='blocked', no entitlement consumed
+   *
+   * @param {object} client - Database client (within transaction)
+   * @param {object} campaignRun - The campaign run record
+   * @param {Array} directories - Array of directory records
+   * @param {object} businessProfile - The business profile to check
+   * @param {string} requestId - Request ID for logging
+   * @returns {object} { queuedSubmissions, alreadyListedSubmissions, blockedSubmissions, stats }
+   */
+  async checkDuplicatesAndCreateSubmissionsTx(client, campaignRun, directories, businessProfile, requestId) {
+    debugLog(requestId, 'Phase 4: Running duplicate checks for', directories.length, 'directories');
+
+    const results = {
+      queuedSubmissions: [],
+      alreadyListedSubmissions: [],
+      blockedSubmissions: [],
+      stats: {
+        checked: 0,
+        matchFound: 0,
+        noMatch: 0,
+        possibleMatch: 0,
+        error: 0,
+        skipped: 0
+      }
+    };
+
+    // Map business profile to the format expected by duplicateChecker
+    const businessData = {
+      name: businessProfile.business_name,
+      website_url: businessProfile.website_url,
+      short_description: businessProfile.short_description
+    };
+
+    // Run duplicate checks (with rate limiting handled by the service)
+    const duplicateResults = await duplicateChecker.batchCheckForDuplicates(directories, businessData);
+    results.stats.checked = duplicateResults.size;
+
+    // Process results and create submissions
+    for (let i = 0; i < directories.length; i++) {
+      const directory = directories[i];
+      // SAFETY: Join by directoryId, never by array index
+      const checkResult = duplicateResults.get(directory.id) || {
+        status: duplicateChecker.DUPLICATE_CHECK_STATUSES.SKIPPED,
+        evidence: { reason: 'Check not performed' }
+      };
+
+      // Update stats
+      switch (checkResult.status) {
+        case duplicateChecker.DUPLICATE_CHECK_STATUSES.MATCH_FOUND:
+          results.stats.matchFound++;
+          break;
+        case duplicateChecker.DUPLICATE_CHECK_STATUSES.NO_MATCH:
+          results.stats.noMatch++;
+          break;
+        case duplicateChecker.DUPLICATE_CHECK_STATUSES.POSSIBLE_MATCH:
+          results.stats.possibleMatch++;
+          break;
+        case duplicateChecker.DUPLICATE_CHECK_STATUSES.ERROR:
+          results.stats.error++;
+          break;
+        case duplicateChecker.DUPLICATE_CHECK_STATUSES.SKIPPED:
+        default:
+          results.stats.skipped++;
+          break;
+      }
+
+      // Create directory snapshot
+      const directorySnapshot = {
+        id: directory.id,
+        name: directory.name,
+        slug: directory.slug || directory.name.toLowerCase().replace(/\s+/g, '-'),
+        website_url: directory.url || directory.website_url,
+        submission_url: directory.submission_url,
+        submission_mode: directory.submission_mode || 'manual',
+        verification_method: directory.verification_method || 'email',
+        requires_account: directory.requires_account ?? true,
+        requires_customer_account: directory.requires_customer_account || false,
+        account_creation_url: directory.account_creation_url,
+        required_fields: directory.required_fields || ["name", "url", "short_description"],
+        approval_type: directory.approval_type || 'review',
+        typical_approval_days: directory.typical_approval_days || 7,
+        tier: directory.tier,
+        priority_score: directory.priority_score,
+        pricing_model: directory.pricing_model,
+        directory_type: directory.directory_type,
+        search_type: directory.search_type,
+        snapshot_at: new Date().toISOString()
+      };
+
+      const verificationStatus = (directory.verification_method === 'none' || !directory.verification_method)
+        ? 'not_required'
+        : 'pending';
+
+      // Determine status based on duplicate check result
+      let submissionStatus;
+      let blockedReason = null;
+
+      if (checkResult.status === duplicateChecker.DUPLICATE_CHECK_STATUSES.MATCH_FOUND) {
+        submissionStatus = 'already_listed';
+      } else if (checkResult.status === duplicateChecker.DUPLICATE_CHECK_STATUSES.NO_MATCH) {
+        submissionStatus = 'queued';
+      } else {
+        // skipped, error, possible_match → blocked
+        submissionStatus = 'blocked';
+        blockedReason = `Duplicate check: ${checkResult.status}${checkResult.evidence?.reason ? ' - ' + checkResult.evidence.reason : ''}`;
+      }
+
+      // Create the submission record
+      const result = await client.query(`
+        INSERT INTO directory_submissions (
+          campaign_run_id,
+          user_id,
+          directory_id,
+          directory_name,
+          directory_url,
+          directory_snapshot,
+          status,
+          verification_type,
+          verification_status,
+          priority_score,
+          queue_position,
+          blocked_reason,
+          duplicate_check_status,
+          duplicate_check_evidence,
+          existing_listing_url,
+          duplicate_checked_at,
+          created_at,
+          updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW(), NOW())
+        RETURNING *
+      `, [
+        campaignRun.id,
+        campaignRun.user_id,
+        directory.id,
+        directory.name,
+        directory.url || directory.website_url,
+        JSON.stringify(directorySnapshot),
+        submissionStatus,
+        directory.verification_method || 'email',
+        verificationStatus,
+        directory.priority_score || 50,
+        submissionStatus === 'queued' ? i + 1 : null, // Only queued get queue position
+        blockedReason,
+        checkResult.status,
+        JSON.stringify(checkResult.evidence),
+        checkResult.existingListingUrl || null
+      ]);
+
+      const submission = result.rows[0];
+
+      // Categorize submission
+      if (submissionStatus === 'queued') {
+        results.queuedSubmissions.push(submission);
+      } else if (submissionStatus === 'already_listed') {
+        results.alreadyListedSubmissions.push(submission);
+      } else {
+        results.blockedSubmissions.push(submission);
+      }
+    }
+
+    debugLog(requestId, 'Phase 4 complete:', results.stats);
+    return results;
+  }
+
+  /**
    * Expand an existing campaign with additional directories
    * Called when user has an active campaign but purchased more entitlement (e.g., boost pack)
    *
@@ -803,94 +1001,74 @@ class CampaignRunService {
       return { directoriesAdded: 0, totalQueued: campaign.directories_queued || 0, entitlementRemaining: entitlement.remaining };
     }
 
-    // Create submission records for new directories
-    const submissions = [];
-    for (let i = 0; i < directories.length; i++) {
-      const directory = directories[i];
-      const queuePosition = startPosition + i;
+    // Get the business profile for duplicate checking
+    const profileSnapshot = typeof campaign.profile_snapshot === 'string'
+      ? JSON.parse(campaign.profile_snapshot)
+      : campaign.profile_snapshot;
 
-      const directorySnapshot = {
-        id: directory.id,
-        name: directory.name,
-        slug: directory.slug || directory.name.toLowerCase().replace(/\s+/g, '-'),
-        website_url: directory.url || directory.website_url,
-        submission_url: directory.submission_url,
-        submission_mode: directory.submission_mode || 'manual',
-        verification_method: directory.verification_method || 'email',
-        requires_account: directory.requires_account ?? true,
-        requires_customer_account: directory.requires_customer_account || false,
-        tier: directory.tier,
-        priority_score: directory.priority_score,
-        pricing_model: directory.pricing_model,
-        directory_type: directory.directory_type,
-        snapshot_at: new Date().toISOString()
-      };
+    // Map profile snapshot to the format expected by duplicate checker
+    const businessProfile = {
+      business_name: profileSnapshot.business_name,
+      website_url: profileSnapshot.website_url,
+      short_description: profileSnapshot.short_description
+    };
 
-      const verificationStatus = (directory.verification_method === 'none' || !directory.verification_method)
-        ? 'not_required'
-        : 'pending';
+    // Phase 4: Run duplicate checks and create submissions
+    const submissionResults = await this.checkDuplicatesAndCreateSubmissionsTx(
+      client, campaign, directories, businessProfile, requestId
+    );
 
-      const result = await client.query(`
-        INSERT INTO directory_submissions (
-          campaign_run_id,
-          user_id,
-          directory_id,
-          directory_name,
-          directory_url,
-          directory_snapshot,
-          status,
-          verification_type,
-          verification_status,
-          priority_score,
-          queue_position,
-          created_at,
-          updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $8, $9, $10, NOW(), NOW())
-        RETURNING *
-      `, [
-        campaignId,
-        userId,
-        directory.id,
-        directory.name,
-        directory.url || directory.website_url,
-        JSON.stringify(directorySnapshot),
-        directory.verification_method || 'email',
-        verificationStatus,
-        directory.priority_score || 50,
-        queuePosition
-      ]);
+    debugLog(requestId, 'Expand duplicate check results:', {
+      queued: submissionResults.queuedSubmissions.length,
+      alreadyListed: submissionResults.alreadyListedSubmissions.length,
+      blocked: submissionResults.blockedSubmissions.length
+    });
 
-      submissions.push(result.rows[0]);
+    // Consume entitlement ONLY for queued submissions
+    const toConsume = submissionResults.queuedSubmissions.length;
+    let consumeResult = { consumed: 0, remaining: entitlement.remaining };
+    if (toConsume > 0) {
+      consumeResult = await entitlementService.consumeEntitlementWithClient(client, userId, toConsume, entitlement);
     }
 
-    // Consume entitlement for the new directories
-    const consumeResult = await entitlementService.consumeEntitlementWithClient(client, userId, submissions.length, entitlement);
+    // Calculate totals
+    const allSubmissions = [
+      ...submissionResults.queuedSubmissions,
+      ...submissionResults.alreadyListedSubmissions,
+      ...submissionResults.blockedSubmissions
+    ];
+    const newQueuedCount = (campaign.directories_queued || 0) + submissionResults.queuedSubmissions.length;
 
-    // Update campaign queued count
-    const newQueuedCount = (campaign.directories_queued || 0) + submissions.length;
+    // Update campaign counts
     await client.query(`
       UPDATE campaign_runs
       SET directories_queued = $1,
           directories_selected = COALESCE(directories_selected, 0) + $2,
           updated_at = NOW()
       WHERE id = $3
-    `, [newQueuedCount, submissions.length, campaignId]);
+    `, [newQueuedCount, allSubmissions.length, campaignId]);
 
     debugLog(requestId, 'Campaign expanded:', {
-      directoriesAdded: submissions.length,
+      directoriesAdded: allSubmissions.length,
+      directoriesQueued: submissionResults.queuedSubmissions.length,
       totalQueued: newQueuedCount,
       entitlementRemaining: consumeResult.remaining
     });
 
     return {
-      directoriesAdded: submissions.length,
+      directoriesAdded: allSubmissions.length,
+      directoriesQueued: submissionResults.queuedSubmissions.length,
+      directoriesAlreadyListed: submissionResults.alreadyListedSubmissions.length,
+      directoriesBlocked: submissionResults.blockedSubmissions.length,
       totalQueued: newQueuedCount,
       entitlementRemaining: consumeResult.remaining,
-      submissions: submissions.map(s => ({
+      duplicateCheckStats: submissionResults.stats,
+      submissions: allSubmissions.map(s => ({
         id: s.id,
         directoryName: s.directory_name,
         status: s.status,
-        queuePosition: s.queue_position
+        queuePosition: s.queue_position,
+        duplicateCheckStatus: s.duplicate_check_status
       }))
     };
   }
