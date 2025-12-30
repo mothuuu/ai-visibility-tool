@@ -133,14 +133,63 @@ Primary migrations: `migrate-citation-network.js`, `migrate-campaign-runs.js`
 | `created_at` | TIMESTAMP | CURRENT_TIMESTAMP | |
 | `updated_at` | TIMESTAMP | CURRENT_TIMESTAMP | |
 | **Phase 3 Intelligence Columns** ||||
-| `form_fields_mapping` | JSONB | - | Field mappings for form automation |
-| `search_type` | VARCHAR(50) | 'none' | none/name_search/url_search |
-| `search_url_template` | TEXT | - | URL template for duplicate checking |
-| `requires_captcha` | BOOLEAN | false | Whether directory has CAPTCHA |
-| `requires_email_verification` | BOOLEAN | false | Whether email verification needed |
-| `requires_payment` | BOOLEAN | false | Whether payment required to submit |
-| `api_config` | JSONB | - | API integration configuration |
-| `duplicate_check_config` | JSONB | - | Duplicate detection configuration |
+| `search_type` | VARCHAR(50) | NULL | How to check for existing listings. CHECK constraint: NULL, 'none', 'site_search', 'internal_search', 'api_search' |
+| `search_url_template` | TEXT | NULL | URL template for internal search. Tokens: `{business_name}`, `{website_domain}`, `{slug}` |
+| `requires_captcha` | BOOLEAN | NULL | Whether directory has CAPTCHA. NULL = unknown. |
+| `requires_email_verification` | BOOLEAN | NULL | Whether email verification required. NULL = unknown. |
+| `requires_payment` | BOOLEAN | NULL | Whether payment required for listing. NULL = unknown. |
+| `form_fields_mapping` | JSONB | NULL | Rich field mapping for automation (see schema below) |
+| `api_config` | JSONB | NULL | API integration configuration |
+| `duplicate_check_config` | JSONB | NULL | Duplicate detection configuration |
+
+### Token Style for `search_url_template`
+
+Use **single curly braces**: `{token_name}`
+
+Supported tokens:
+- `{business_name}` - URL-encoded business name
+- `{website_domain}` - Domain extracted from website URL
+- `{slug}` - URL-friendly slug of business name
+
+Example: `https://www.g2.com/search?query={business_name}`
+
+**Do NOT use double curly braces** (`{{token}}`) - standardize on single.
+
+### `form_fields_mapping` JSON Schema
+
+```json
+{
+  "version": 1,
+  "workflow": "web_form",
+  "field_map": [
+    {
+      "our_field": "name",
+      "directory_field": "Product Name",
+      "selector": "#product-name",
+      "input_type": "text",
+      "required": true,
+      "constraints": { "max_length": 80 }
+    }
+  ],
+  "alternates": [
+    { "our_field": "social_proof", "one_of": ["twitter_url", "linkedin_url"] }
+  ],
+  "steps": [
+    { "name": "Start submission", "url": "https://example.com/submit" }
+  ],
+  "notes": "Optional notes about submission process"
+}
+```
+
+- `workflow`: `"web_form" | "email" | "api" | "editorial"`
+- `field_map[].input_type`: `"text" | "url" | "textarea" | "file" | "select"`
+
+### Relationship with `required_fields`
+
+- `required_fields` (existing): Simple array for quick validation
+- `form_fields_mapping` (Phase 3): Rich structure for automation
+
+Both coexist. If `form_fields_mapping` is NULL, backfill auto-generates a starter mapping from `required_fields`.
 
 ---
 
