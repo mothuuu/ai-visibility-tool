@@ -2887,6 +2887,7 @@ async function initSubmissionsData() {
                 status: sub.status || SUBMISSION_STATUS.QUEUED,
                 actionType: sub.action_type || ACTION_REQUIRED_TYPE.NONE,
                 actionInstructions: sub.action_instructions,
+                actionUrl: sub.action_url,
                 actionRequiredAt: sub.action_required_at,
                 submittedAt: sub.submitted_at,
                 liveAt: sub.live_at,
@@ -3085,6 +3086,14 @@ function showActionModal(submissionId) {
                                 <strong>${daysRemaining} days remaining</strong> before this submission is blocked
                             </p>
                         </div>
+                    ` : ''}
+
+                    ${submission.actionUrl ? `
+                        <a href="${submission.actionUrl}" target="_blank" rel="noopener noreferrer"
+                           class="btn-profile-save"
+                           style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; padding: 0.875rem 1.25rem; margin-bottom: 1rem; text-decoration: none; font-size: 1rem;">
+                            <i class="fas fa-external-link-alt"></i> Go to Directory
+                        </a>
                     ` : ''}
 
                     ${(submission.actionType === ACTION_REQUIRED_TYPE.SMS || submission.actionType === ACTION_REQUIRED_TYPE.PHONE) ? `
