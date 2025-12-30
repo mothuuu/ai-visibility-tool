@@ -2250,14 +2250,23 @@ async function startDirectorySubmissions() {
         }
 
         // Success! Use fallback pattern for response field name
-        const queued = data.directoriesQueued ?? data.submissionsQueued ?? data.directories_queued ?? 0;
-        const remaining = data.entitlementRemaining ?? data.entitlement_remaining ?? 0;
+        const queued = data.queued ?? data.directoriesQueued ?? data.submissionsQueued ?? data.directories_queued ?? 0;
+        const remaining = data.remaining ?? data.entitlementRemaining ?? data.entitlement_remaining ?? 0;
+        const addedToExisting = data.addedToExisting ?? false;
 
-        showXeoAlert('Submissions Started!',
-            `${queued} directories have been queued for submission!\n\n` +
-            `We'll submit to ~3-5 directories per day.\n\n` +
-            `${remaining} submissions remaining${citationNetworkState.plan !== 'freemium' ? ' this month' : ''}.`
-        );
+        if (addedToExisting) {
+            showXeoAlert('Directories Added!',
+                `${queued} additional directories have been added to your campaign!\n\n` +
+                `We'll continue submitting to ~3-5 directories per day.\n\n` +
+                `${remaining} submissions remaining.`
+            );
+        } else {
+            showXeoAlert('Submissions Started!',
+                `${queued} directories have been queued for submission!\n\n` +
+                `We'll submit to ~3-5 directories per day.\n\n` +
+                `${remaining} submissions remaining${citationNetworkState.plan !== 'freemium' ? ' this month' : ''}.`
+            );
+        }
 
         // Update state
         citationNetworkState.includedStatus = 'in_progress';
@@ -2508,12 +2517,22 @@ async function startDirectorySubmissions() {
         }
 
         // Success - update UI
-        const queued = data.directoriesQueued ?? data.submissionsQueued ?? data.directories_queued ?? 0;
-        showXeoAlert('Submissions Started!',
-            `${queued} directories have been queued for submission.\n\n` +
-            `We'll submit to 3-5 directories per day.\n\n` +
-            `Check back here to monitor progress.`
-        );
+        const queued = data.queued ?? data.directoriesQueued ?? data.submissionsQueued ?? data.directories_queued ?? 0;
+        const addedToExisting = data.addedToExisting ?? false;
+
+        if (addedToExisting) {
+            showXeoAlert('Directories Added!',
+                `${queued} additional directories have been added to your campaign!\n\n` +
+                `We'll continue submitting to 3-5 directories per day.\n\n` +
+                `Check back here to monitor progress.`
+            );
+        } else {
+            showXeoAlert('Submissions Started!',
+                `${queued} directories have been queued for submission.\n\n` +
+                `We'll submit to 3-5 directories per day.\n\n` +
+                `Check back here to monitor progress.`
+            );
+        }
 
         // Update state
         citationNetworkState.includedStatus = 'in_progress';

@@ -126,12 +126,9 @@ class CampaignRunService {
       // 2. Check for existing active campaign (already serialized by user lock)
       debugLog(requestId, 'Step 2: Checking for active campaign...');
       const activeCampaign = await this.getActiveCampaignWithLock(client, userId);
-      if (activeCampaign) {
-        debugLog(requestId, 'Active campaign exists:', activeCampaign.id);
-        throw new Error('ACTIVE_CAMPAIGN_EXISTS');
-      }
 
       // 3. Get entitlement using client (T0-6: proper transaction handling)
+      // NOTE: We calculate entitlement BEFORE checking active campaign to allow adding boost submissions
       debugLog(requestId, 'Step 3: Calculating entitlement with client...');
       const entitlement = await entitlementService.calculateEntitlementWithClient(client, userId, user, { requestId });
 
@@ -144,6 +141,65 @@ class CampaignRunService {
         subscriptionRemaining: entitlement.breakdown?.subscriptionRemaining,
         ordersRemaining: entitlement.breakdown?.ordersRemaining
       });
+
+      // If active campaign exists, try to add more submissions if there's remaining entitlement
+      if (activeCampaign) {
+        debugLog(requestId, 'Active campaign exists:', activeCampaign.id);
+
+        if (entitlement.remaining > 0) {
+          // User has additional entitlement (e.g., from boost purchase) - add to existing campaign
+          debugLog(requestId, 'Adding', entitlement.remaining, 'more directories to existing campaign');
+
+          // Select additional directories not already submitted by user
+          // selectDirectoriesTx already excludes previously submitted directories
+          const additionalDirectories = await this.selectDirectoriesTx(
+            client,
+            activeCampaign,
+            filters,
+            entitlement.remaining
+          );
+
+          if (additionalDirectories.length === 0) {
+            debugLog(requestId, 'No additional eligible directories to add');
+            const error = new Error('NO_ADDITIONAL_DIRECTORIES');
+            error.entitlement = entitlement;
+            error.activeCampaign = activeCampaign;
+            throw error;
+          }
+
+          // Create submission records for additional directories
+          const newSubmissions = await this.createSubmissionsTx(client, activeCampaign, additionalDirectories);
+          debugLog(requestId, 'Added', newSubmissions.length, 'new submissions to campaign');
+
+          // Consume the additional entitlement
+          const consumeResult = await entitlementService.consumeEntitlementWithClient(
+            client, userId, newSubmissions.length, entitlement
+          );
+
+          // Update campaign totals
+          await client.query(`
+            UPDATE campaign_runs
+            SET total_directories = total_directories + $2,
+                updated_at = NOW()
+            WHERE id = $1
+          `, [activeCampaign.id, newSubmissions.length]);
+
+          await client.query('COMMIT');
+          debugLog(requestId, 'COMMIT successful - added to existing campaign');
+
+          return {
+            campaignRunId: activeCampaign.id,
+            queued: newSubmissions.length,
+            remaining: consumeResult.remaining,
+            addedToExisting: true,
+            message: `Added ${newSubmissions.length} directories to your existing campaign`
+          };
+        } else {
+          // No remaining entitlement - truly blocked
+          debugLog(requestId, 'Active campaign exists but no remaining entitlement');
+          throw new Error('ACTIVE_CAMPAIGN_EXISTS');
+        }
+      }
 
       if (entitlement.remaining <= 0) {
         debugLog(requestId, 'NO_ENTITLEMENT - remaining is', entitlement.remaining);

@@ -782,8 +782,15 @@ router.post('/start-submissions', authenticateToken, async (req, res) => {
 
     if (error.message === 'ACTIVE_CAMPAIGN_EXISTS') {
       return res.status(400).json({
-        error: 'You already have an active submission campaign. Please wait for it to complete or pause it first.',
+        error: 'You already have an active submission campaign and have used all your available submissions. Purchase a boost pack to add more directories.',
         code: 'ACTIVE_CAMPAIGN_EXISTS'
+      });
+    }
+
+    if (error.message === 'NO_ADDITIONAL_DIRECTORIES') {
+      return res.status(400).json({
+        error: 'No additional eligible directories found. All available directories have already been queued for submission.',
+        code: 'NO_ADDITIONAL_DIRECTORIES'
       });
     }
 
