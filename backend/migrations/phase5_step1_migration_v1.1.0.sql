@@ -350,7 +350,7 @@ CREATE TABLE IF NOT EXISTS submission_targets (
   -- Foreign keys
   business_profile_id UUID NOT NULL REFERENCES business_profiles(id) ON DELETE CASCADE,
   directory_id INTEGER NOT NULL REFERENCES directories(id) ON DELETE CASCADE,
-  order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
+  order_id UUID, -- FK to orders added conditionally below (orders table may not exist)
 
   -- Configuration
   connector_key VARCHAR(64),
@@ -384,6 +384,18 @@ CREATE TABLE IF NOT EXISTS submission_targets (
 COMMENT ON TABLE submission_targets IS 'Links a business profile to a directory for submission tracking';
 COMMENT ON COLUMN submission_targets.current_status IS 'Denormalized from latest run for efficient queries';
 COMMENT ON COLUMN submission_targets.current_run_id IS 'Points to the active/latest submission run';
+
+-- Conditionally add FK to orders if the table exists
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'orders') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_submission_targets_order') THEN
+      ALTER TABLE submission_targets
+        ADD CONSTRAINT fk_submission_targets_order
+        FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL;
+    END IF;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS submission_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
