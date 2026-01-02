@@ -403,6 +403,82 @@ class WorkerService {
 
     return results;
   }
+
+  /**
+   * Deterministic single-tick execution for tests.
+   * Processes queued runs without timers or intervals.
+   *
+   * @param {Object} options - Tick options
+   * @param {number} [options.batchSize=10] - Max runs to process
+   * @returns {Promise<Object>} Tick results
+   */
+  async tickOnce(options = {}) {
+    const { batchSize = 10 } = options;
+
+    // First, process any ready deferred runs
+    const deferredResult = await pool.query(
+      `SELECT id FROM submission_runs
+       WHERE status = $1
+         AND next_run_at <= NOW()
+         AND (locked_at IS NULL OR lease_expires_at < NOW())
+       ORDER BY next_run_at ASC
+       LIMIT $2`,
+      [SUBMISSION_STATUS.DEFERRED, batchSize]
+    );
+
+    for (const run of deferredResult.rows) {
+      try {
+        await stateMachine.transitionRunStatus(run.id, {
+          toStatus: SUBMISSION_STATUS.QUEUED,
+          reason: STATUS_REASON.SCHEDULED,
+          triggeredBy: TRIGGERED_BY.SCHEDULER
+        });
+      } catch (error) {
+        console.error(`Failed to requeue deferred run ${run.id}:`, error.message);
+      }
+    }
+
+    // Now get queued runs
+    const queuedResult = await pool.query(
+      `SELECT id FROM submission_runs
+       WHERE status = $1
+         AND (locked_at IS NULL OR lease_expires_at < NOW())
+       ORDER BY created_at ASC
+       LIMIT $2`,
+      [SUBMISSION_STATUS.QUEUED, batchSize]
+    );
+
+    const results = {
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      runs: []
+    };
+
+    for (const run of queuedResult.rows) {
+      try {
+        const result = await this.processRun(run.id);
+        results.processed++;
+        if (result.success) {
+          results.succeeded++;
+        } else {
+          results.failed++;
+        }
+        results.runs.push(result);
+      } catch (error) {
+        results.processed++;
+        results.failed++;
+        results.runs.push({ success: false, runId: run.id, error: error.message });
+      }
+    }
+
+    return results;
+  }
 }
 
-module.exports = new WorkerService();
+// Singleton instance
+const workerServiceInstance = new WorkerService();
+
+// Export both the instance and the class for testing
+module.exports = workerServiceInstance;
+module.exports.WorkerService = WorkerService;
