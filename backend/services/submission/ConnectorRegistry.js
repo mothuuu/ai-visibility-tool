@@ -8,6 +8,7 @@
 'use strict';
 
 const ManualPacketConnector = require('./connectors/ManualPacketConnector');
+const BetaListConnector = require('./connectors/BetaListConnector');
 
 class ConnectorRegistry {
   constructor() {
@@ -16,6 +17,9 @@ class ConnectorRegistry {
     // Register built-in connectors
     this.register('manual', new ManualPacketConnector());
     this.register('manual_packet', new ManualPacketConnector());
+
+    // Register directory-specific connectors
+    this.register('betalist-v1', new BetaListConnector());
   }
 
   /**
