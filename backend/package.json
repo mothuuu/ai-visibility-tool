@@ -29,6 +29,7 @@
     "stripe": "^19.1.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "supertest": "^7.1.4"
   }
 }

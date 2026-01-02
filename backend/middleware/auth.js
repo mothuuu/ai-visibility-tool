@@ -1,7 +1,32 @@
 const jwt = require('jsonwebtoken');
 const db = require('../db/database');
 
+/**
+ * Test-only authentication bypass.
+ * ONLY active when NODE_ENV==='test' AND header 'x-test-user-id' is set.
+ * This does NOT weaken production authentication.
+ */
+function handleTestAuth(req) {
+  if (process.env.NODE_ENV === 'test' && req.headers['x-test-user-id']) {
+    return {
+      id: req.headers['x-test-user-id'],
+      email: req.headers['x-test-user-email'] || 'test@example.com',
+      name: req.headers['x-test-user-name'] || 'Test User',
+      role: req.headers['x-test-user-role'] || 'user',
+      plan: req.headers['x-test-user-plan'] || 'pro'
+    };
+  }
+  return null;
+}
+
 async function authenticateToken(req, res, next) {
+  // Test auth bypass (only in test environment)
+  const testUser = handleTestAuth(req);
+  if (testUser) {
+    req.user = testUser;
+    return next();
+  }
+
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
