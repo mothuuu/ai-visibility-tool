@@ -11,6 +11,8 @@
 -- - Rate limits are conservative (5 submissions/day)
 -- ============================================
 
+BEGIN;
+
 INSERT INTO directories (
   name,
   slug,
@@ -129,15 +131,4 @@ ON CONFLICT (slug) DO UPDATE SET
   is_active = EXCLUDED.is_active,
   updated_at = NOW();
 
--- Verify the insert/update
-DO $$
-DECLARE
-  v_count INTEGER;
-BEGIN
-  SELECT COUNT(*) INTO v_count FROM directories WHERE slug = 'betalist';
-  IF v_count = 1 THEN
-    RAISE NOTICE '✓ BetaList directory seeded successfully';
-  ELSE
-    RAISE WARNING '⚠ BetaList directory seed may have failed';
-  END IF;
-END $$;
+COMMIT;

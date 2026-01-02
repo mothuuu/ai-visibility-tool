@@ -32,17 +32,19 @@ function generateUUID() {
  * @returns {Promise<Object>} Created user
  */
 async function seedUser(options = {}) {
-  const id = generateUUID();
-  const email = options.email || `test-${id.substring(0, 8)}@example.com`;
+  // Generate unique email suffix for test isolation
+  const uniqueSuffix = crypto.randomUUID().substring(0, 8);
+  const email = options.email || `test-${uniqueSuffix}@example.com`;
   const name = options.name || 'Test User';
   const plan = options.plan || 'pro';
 
+  // Let database auto-generate the integer ID (users.id is SERIAL)
   const result = await pool.query(
-    `INSERT INTO users (id, email, name, plan, email_verified, password_hash, created_at)
-     VALUES ($1, $2, $3, $4, true, 'test-hash', NOW())
-     ON CONFLICT (email) DO UPDATE SET name = $3
+    `INSERT INTO users (email, name, plan, email_verified, password_hash, created_at)
+     VALUES ($1, $2, $3, true, 'test-hash', NOW())
+     ON CONFLICT (email) DO UPDATE SET name = $2
      RETURNING *`,
-    [id, email, name, plan]
+    [email, name, plan]
   );
 
   return result.rows[0];
