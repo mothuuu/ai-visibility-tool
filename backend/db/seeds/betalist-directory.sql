@@ -30,7 +30,6 @@ INSERT INTO directories (
   capabilities,
   field_requirements,
   is_active,
-  priority,
   da_score,
   traffic_estimate,
   created_at,
@@ -97,7 +96,6 @@ INSERT INTO directories (
     }
   }'::jsonb,
   true,
-  50,
   70,
   500000,
   NOW(),
@@ -121,7 +119,6 @@ ON CONFLICT (slug) DO UPDATE SET
   capabilities = EXCLUDED.capabilities,
   field_requirements = EXCLUDED.field_requirements,
   is_active = EXCLUDED.is_active,
-  priority = EXCLUDED.priority,
   updated_at = NOW();
 
 -- Verify the insert/update
