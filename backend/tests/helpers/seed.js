@@ -129,8 +129,8 @@ async function seedTestDirectory(options = {}) {
   result = await pool.query(
     `INSERT INTO directories (
       name, slug, website_url, submission_url, connector_key,
-      default_submission_mode, da_score, traffic_estimate, is_active, priority
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, 50)
+      default_submission_mode, priority_score, is_active
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, true)
     RETURNING *`,
     [
       name,
@@ -139,8 +139,7 @@ async function seedTestDirectory(options = {}) {
       options.submissionUrl || 'https://test-directory.example.com/submit',
       connectorKey,
       submissionMode,
-      options.daScore || 50,
-      options.trafficEstimate || 10000
+      options.priorityScore || 50
     ]
   );
 

@@ -17,6 +17,9 @@ INSERT INTO directories (
   website_url,
   submission_url,
   description,
+  directory_type,
+  tier,
+  priority_score,
   integration_bucket,
   default_submission_mode,
   connector_key,
@@ -27,12 +30,10 @@ INSERT INTO directories (
   rate_limit_rpm,
   rate_limit_rpd,
   avg_approval_days,
+  typical_approval_days,
   capabilities,
   field_requirements,
   is_active,
-  priority,
-  da_score,
-  traffic_estimate,
   created_at,
   updated_at
 ) VALUES (
@@ -41,6 +42,9 @@ INSERT INTO directories (
   'https://betalist.com',
   'https://betalist.com/submit',
   'Discover and get early access to tomorrow''s startups',
+  'startup',
+  '1',
+  85,
   'B',
   'form',
   'betalist-v1',
@@ -50,6 +54,7 @@ INSERT INTO directories (
   'Manual submission recommended. Form-based submission, no public API. Automation not enabled by default due to TOS uncertainty.',
   2,
   5,
+  3,
   3,
   '["validate", "submit"]'::jsonb,
   '{
@@ -97,9 +102,6 @@ INSERT INTO directories (
     }
   }'::jsonb,
   true,
-  50,
-  70,
-  500000,
   NOW(),
   NOW()
 )
@@ -108,6 +110,9 @@ ON CONFLICT (slug) DO UPDATE SET
   website_url = EXCLUDED.website_url,
   submission_url = EXCLUDED.submission_url,
   description = EXCLUDED.description,
+  directory_type = EXCLUDED.directory_type,
+  tier = EXCLUDED.tier,
+  priority_score = EXCLUDED.priority_score,
   integration_bucket = EXCLUDED.integration_bucket,
   default_submission_mode = EXCLUDED.default_submission_mode,
   connector_key = EXCLUDED.connector_key,
@@ -118,10 +123,10 @@ ON CONFLICT (slug) DO UPDATE SET
   rate_limit_rpm = EXCLUDED.rate_limit_rpm,
   rate_limit_rpd = EXCLUDED.rate_limit_rpd,
   avg_approval_days = EXCLUDED.avg_approval_days,
+  typical_approval_days = EXCLUDED.typical_approval_days,
   capabilities = EXCLUDED.capabilities,
   field_requirements = EXCLUDED.field_requirements,
   is_active = EXCLUDED.is_active,
-  priority = EXCLUDED.priority,
   updated_at = NOW();
 
 -- Verify the insert/update
