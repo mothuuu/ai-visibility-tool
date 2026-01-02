@@ -58,20 +58,18 @@ async function seedUser(options = {}) {
  * @returns {Promise<Object>} Created profile
  */
 async function seedBusinessProfile(userId, options = {}) {
-  const id = generateUUID();
-
   // Default description that meets BetaList's 160-500 char requirement
   const defaultDescription = options.description ||
     'A test business for E2E testing that provides innovative solutions for modern challenges. We help businesses grow by offering comprehensive services and cutting-edge technology.';
 
+  // Let database auto-generate the integer ID (business_profiles.id is SERIAL)
   const result = await pool.query(
     `INSERT INTO business_profiles (
-      id, user_id, business_name, website, description,
+      user_id, business_name, website, description,
       address, city, state, zip, phone, email, created_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
     RETURNING *`,
     [
-      id,
       userId,
       options.businessName || 'Test Business',
       options.website || 'https://test-business.example.com',
