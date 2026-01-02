@@ -58,6 +58,10 @@ async function seedUser(options = {}) {
 async function seedBusinessProfile(userId, options = {}) {
   const id = generateUUID();
 
+  // Default description that meets BetaList's 160-500 char requirement
+  const defaultDescription = options.description ||
+    'A test business for E2E testing that provides innovative solutions for modern challenges. We help businesses grow by offering comprehensive services and cutting-edge technology.';
+
   const result = await pool.query(
     `INSERT INTO business_profiles (
       id, user_id, business_name, website, description,
@@ -69,7 +73,7 @@ async function seedBusinessProfile(userId, options = {}) {
       userId,
       options.businessName || 'Test Business',
       options.website || 'https://test-business.example.com',
-      options.description || 'A test business for E2E testing',
+      defaultDescription,
       options.address || '123 Test Street',
       options.city || 'Test City',
       options.state || 'TS',
@@ -79,7 +83,13 @@ async function seedBusinessProfile(userId, options = {}) {
     ]
   );
 
-  return result.rows[0];
+  // Add virtual fields for connectors that need them (not stored in DB)
+  const profile = result.rows[0];
+  profile.tagline = options.tagline || 'Innovative solutions for modern business';
+  profile.short_description = profile.tagline;
+  profile.categories = options.categories || ['Technology', 'SaaS'];
+
+  return profile;
 }
 
 /**
@@ -91,6 +101,8 @@ async function seedBusinessProfile(userId, options = {}) {
 async function seedTestDirectory(options = {}) {
   const name = options.name || 'Test Directory';
   const slug = options.slug || 'test-directory';
+  const connectorKey = options.connectorKey || 'test-connector-v1';
+  const submissionMode = options.submissionMode || 'api';
 
   // First try to find existing directory
   let result = await pool.query(
@@ -102,13 +114,13 @@ async function seedTestDirectory(options = {}) {
     // Update existing directory with test connector
     result = await pool.query(
       `UPDATE directories
-       SET connector_key = 'test-connector-v1',
-           default_submission_mode = 'api',
-           submission_url = $2,
+       SET connector_key = $2,
+           default_submission_mode = $3,
+           submission_url = $4,
            updated_at = NOW()
        WHERE slug = $1
        RETURNING *`,
-      [slug, options.submissionUrl || 'https://test-directory.example.com/submit']
+      [slug, connectorKey, submissionMode, options.submissionUrl || 'https://test-directory.example.com/submit']
     );
     return result.rows[0];
   }
@@ -125,14 +137,32 @@ async function seedTestDirectory(options = {}) {
       slug,
       options.websiteUrl || 'https://test-directory.example.com',
       options.submissionUrl || 'https://test-directory.example.com/submit',
-      'test-connector-v1',
-      'api',
+      connectorKey,
+      submissionMode,
       options.daScore || 50,
       options.trafficEstimate || 10000
     ]
   );
 
   return result.rows[0];
+}
+
+/**
+ * Seeds the BetaList directory with betalist-v1 connector
+ *
+ * @param {Object} [options] - Directory options
+ * @returns {Promise<Object>} Created/updated directory
+ */
+async function seedBetaListDirectory(options = {}) {
+  return seedTestDirectory({
+    name: 'BetaList',
+    slug: 'betalist',
+    connectorKey: 'betalist-v1',
+    submissionMode: 'form',
+    websiteUrl: 'https://betalist.com',
+    submissionUrl: 'https://betalist.com/submit',
+    ...options
+  });
 }
 
 /**
@@ -220,6 +250,7 @@ module.exports = {
   seedUser,
   seedBusinessProfile,
   seedTestDirectory,
+  seedBetaListDirectory,
   seedSubmissionTarget,
   seedSubmissionRun,
   seedCompleteScenario
