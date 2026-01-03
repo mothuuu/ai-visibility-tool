@@ -62,12 +62,12 @@ async function seedBusinessProfile(userId, options = {}) {
   const defaultDescription = options.description ||
     'A test business for E2E testing that provides innovative solutions for modern challenges. We help businesses grow by offering comprehensive services and cutting-edge technology.';
 
-  // Let database auto-generate the integer ID (business_profiles.id is SERIAL)
+  // business_profiles.id is UUID with default gen_random_uuid()
   const result = await pool.query(
     `INSERT INTO business_profiles (
-      user_id, business_name, website, description,
-      address, city, state, zip, phone, email, created_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+      user_id, business_name, website_url, business_description,
+      address_line1, city, state, postal_code, phone, email
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     RETURNING *`,
     [
       userId,
@@ -85,6 +85,9 @@ async function seedBusinessProfile(userId, options = {}) {
 
   // Add virtual fields for connectors that need them (not stored in DB)
   const profile = result.rows[0];
+  // Map DB columns to connector expected fields
+  profile.website = profile.website_url;
+  profile.description = profile.business_description;
   profile.tagline = options.tagline || 'Innovative solutions for modern business';
   profile.short_description = profile.tagline;
   profile.categories = options.categories || ['Technology', 'SaaS'];
