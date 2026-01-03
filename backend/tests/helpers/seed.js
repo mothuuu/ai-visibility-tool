@@ -63,11 +63,16 @@ async function seedBusinessProfile(userId, options = {}) {
     'A test business for E2E testing that provides innovative solutions for modern challenges. We help businesses grow by offering comprehensive services and cutting-edge technology.';
 
   // business_profiles.id is UUID with default gen_random_uuid()
+  // Use ON CONFLICT to handle unique constraint on user_id
   const result = await pool.query(
     `INSERT INTO business_profiles (
       user_id, business_name, website_url, business_description,
       address_line1, city, state, postal_code, phone, email
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    ON CONFLICT (user_id) DO UPDATE SET
+      business_name = EXCLUDED.business_name,
+      website_url = EXCLUDED.website_url,
+      business_description = EXCLUDED.business_description
     RETURNING *`,
     [
       userId,
