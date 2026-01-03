@@ -8,8 +8,10 @@ const db = require('../db/database');
  */
 function handleTestAuth(req) {
   if (process.env.NODE_ENV === 'test' && req.headers['x-test-user-id']) {
+    // Parse user ID as integer since users.id is SERIAL (integer)
+    const userId = parseInt(req.headers['x-test-user-id'], 10);
     return {
-      id: req.headers['x-test-user-id'],
+      id: isNaN(userId) ? req.headers['x-test-user-id'] : userId,
       email: req.headers['x-test-user-email'] || 'test@example.com',
       name: req.headers['x-test-user-name'] || 'Test User',
       role: req.headers['x-test-user-role'] || 'user',
