@@ -62,8 +62,8 @@ class WorkerService {
       const targetResult = await pool.query(
         `SELECT st.*, d.name as directory_name, d.connector_key, d.submission_url,
                 d.default_submission_mode, d.rate_limit_rpm, d.capabilities,
-                bp.business_name, bp.website, bp.description, bp.address,
-                bp.city, bp.state, bp.zip, bp.phone, bp.email
+                bp.business_name, bp.website_url, bp.business_description,
+                bp.address_line1, bp.city, bp.state, bp.postal_code, bp.phone, bp.email
          FROM submission_targets st
          JOIN directories d ON d.id = st.directory_id
          JOIN business_profiles bp ON bp.id = st.business_profile_id
@@ -346,12 +346,12 @@ class WorkerService {
     return {
       business: {
         name: target.business_name,
-        website: target.website,
-        description: target.description,
-        address: target.address,
+        website: target.website_url,
+        description: target.business_description,
+        address: target.address_line1,
         city: target.city,
         state: target.state,
-        zip: target.zip,
+        zip: target.postal_code,
         phone: target.phone,
         email: target.email
       },
