@@ -1717,137 +1717,132 @@ async function performCompetitorScan(url) {
  */
 function transformV5ToSubfactors(v5Categories) {
   // Helper to convert raw scores to tri-state format
-  const toTriState = (rawScore, name, multiplier = 1) => {
+  // V5RubricEngine returns scores on 0-100 scale, no multiplier needed
+  const toTriState = (rawScore, name) => {
     if (rawScore === undefined || rawScore === null) {
       return notMeasured(`${name} not measured`);
     }
     // Already tri-state format
     if (rawScore.state) return rawScore;
-    // Convert numeric score
-    return measured(Math.round(rawScore * multiplier));
+    // Convert numeric score (already 0-100 from V5RubricEngine)
+    return measured(Math.round(rawScore));
   };
 
   const subfactors = {};
 
-  // AI Readability - Scale from 0-2/0-10 to 0-100 and rename keys
+  // AI Readability - V5 engine returns subfactors directly on 0-100 scale
   if (v5Categories.aiReadability) {
     const ar = v5Categories.aiReadability;
+    const subs = ar.subfactors || {};
     subfactors.aiReadability = {
-      altTextScore: toTriState(ar.altText, 'altText', 50),  // 0-2 scale → 0-100
-      captionsTranscriptsScore: toTriState(ar.transcription, 'captions', 10),  // 0-10 scale → 0-100
-      interactiveAccessScore: toTriState(ar.interactive, 'interactive', 50),  // 0-2 scale → 0-100
-      crossMediaScore: toTriState(ar.crossMedia, 'crossMedia', 50)  // 0-2 scale → 0-100
+      altTextScore: toTriState(subs.altTextScore, 'altText'),
+      captionsTranscriptsScore: toTriState(subs.captionsTranscriptsScore, 'captions'),
+      interactiveAccessScore: toTriState(subs.interactiveAccessScore, 'interactive'),
+      crossMediaScore: toTriState(subs.crossMediaScore, 'crossMedia')
     };
   }
 
-  // AI Search Readiness - Extract from nested structure and scale
+  // AI Search Readiness - V5 engine returns subfactors directly on 0-100 scale
   if (v5Categories.aiSearchReadiness) {
     const asr = v5Categories.aiSearchReadiness;
-    const directAnswer = asr.subfactors?.directAnswerStructure || {};  // CRITICAL FIX: Added .subfactors
-    const topical = asr.subfactors?.topicalAuthority || {};  // CRITICAL FIX: Added .subfactors
-
+    const subs = asr.subfactors || {};
     subfactors.aiSearchReadiness = {
-      questionHeadingsScore: toTriState(directAnswer.factors?.questionDensity, 'questionHeadings', 50),
-      scannabilityScore: toTriState(directAnswer.factors?.scannability, 'scannability', 50),
-      readabilityScore: toTriState(directAnswer.factors?.readability, 'readability', 50),
-      faqSchemaScore: toTriState(directAnswer.factors?.faqSchema, 'faqSchema', 50),
-      faqContentScore: toTriState(directAnswer.factors?.faqContent, 'faqContent', 50),
-      snippetEligibleScore: toTriState(directAnswer.factors?.answerCompleteness, 'snippetEligible', 50),
-      pillarPagesScore: toTriState(topical.factors?.pillarPages, 'pillarPages', 50),
-      linkedSubpagesScore: toTriState(topical.factors?.semanticLinking, 'linkedSubpages', 50),
-      painPointsScore: toTriState(topical.factors?.contentDepth, 'painPoints', 50),
-      geoContentScore: notMeasured('geoContent requires external data')  // RULEBOOK v1.2: Use not_measured, not 50
+      questionHeadingsScore: toTriState(subs.questionHeadingsScore, 'questionHeadings'),
+      scannabilityScore: toTriState(subs.scannabilityScore, 'scannability'),
+      readabilityScore: toTriState(subs.readabilityScore, 'readability'),
+      // V5 engine uses faqScore, issue detector expects faqSchemaScore and faqContentScore
+      faqSchemaScore: toTriState(subs.faqScore, 'faqSchema'),
+      faqContentScore: toTriState(subs.faqScore, 'faqContent'),
+      snippetEligibleScore: toTriState(subs.snippetEligibleScore, 'snippetEligible'),
+      pillarPagesScore: toTriState(subs.pillarPagesScore, 'pillarPages'),
+      linkedSubpagesScore: toTriState(subs.linkedSubpagesScore, 'linkedSubpages'),
+      painPointsScore: toTriState(subs.painPointsScore, 'painPoints'),
+      geoContentScore: toTriState(subs.geoContentScore, 'geoContent')
     };
   }
 
-  // Content Freshness - Scale from 0-2 to 0-100
+  // Content Freshness - V5 engine returns subfactors directly on 0-100 scale
   if (v5Categories.contentFreshness) {
     const cf = v5Categories.contentFreshness;
+    const subs = cf.subfactors || {};
     subfactors.contentFreshness = {
-      lastUpdatedScore: toTriState(cf.lastModified, 'lastUpdated', 50),
-      versioningScore: toTriState(cf.versioning, 'versioning', 50),
-      timeSensitiveScore: toTriState(cf.timeSensitive, 'timeSensitive', 50),
-      auditProcessScore: toTriState(cf.auditProcess, 'auditProcess', 50),
-      liveDataScore: toTriState(cf.realTimeInfo, 'liveData', 50),
-      httpFreshnessScore: notMeasured('httpFreshness not in V5 structure'),
-      editorialCalendarScore: notMeasured('editorialCalendar not in V5 structure')
+      lastUpdatedScore: toTriState(subs.lastUpdatedScore, 'lastUpdated'),
+      versioningScore: toTriState(subs.versioningScore, 'versioning'),
+      timeSensitiveScore: toTriState(subs.timeSensitiveScore, 'timeSensitive'),
+      auditProcessScore: toTriState(subs.auditProcessScore, 'auditProcess'),
+      liveDataScore: toTriState(subs.liveDataScore, 'liveData'),
+      httpFreshnessScore: toTriState(subs.httpFreshnessScore, 'httpFreshness'),
+      editorialCalendarScore: toTriState(subs.editorialCalendarScore, 'editorialCalendar')
     };
   }
 
-  // Content Structure - Extract from nested structure and scale
+  // Content Structure - V5 engine returns subfactors directly on 0-100 scale
   if (v5Categories.contentStructure) {
     const cs = v5Categories.contentStructure;
-    const semantic = cs.subfactors?.semanticHTML || {};  // CRITICAL FIX: Added .subfactors
-    const entity = cs.subfactors?.entityRecognition || {};  // CRITICAL FIX: Added .subfactors
-
+    const subs = cs.subfactors || {};
     subfactors.contentStructure = {
-      headingHierarchyScore: toTriState(semantic.factors?.headingHierarchy, 'headingHierarchy', 66.7),
-      navigationScore: toTriState(semantic.factors?.contentSectioning, 'navigation', 66.7),
-      entityCuesScore: toTriState(entity.factors?.namedEntities, 'entityCues', 66.7),
-      accessibilityScore: toTriState(semantic.factors?.accessibility, 'accessibility', 66.7),
-      geoMetaScore: toTriState(entity.factors?.geoEntities, 'geoMeta', 66.7)
+      headingHierarchyScore: toTriState(subs.headingHierarchyScore, 'headingHierarchy'),
+      navigationScore: toTriState(subs.navigationScore, 'navigation'),
+      entityCuesScore: toTriState(subs.entityCuesScore, 'entityCues'),
+      accessibilityScore: toTriState(subs.accessibilityScore, 'accessibility'),
+      geoMetaScore: toTriState(subs.geoMetaScore, 'geoMeta')
     };
   }
 
-  // Speed & UX - Scale from 0-1 to 0-100
+  // Speed & UX - V5 engine returns subfactors directly on 0-100 scale
   if (v5Categories.speedUX) {
     const su = v5Categories.speedUX;
+    const subs = su.subfactors || {};
     subfactors.speedUX = {
-      lcpScore: toTriState(su.lcp, 'lcp', 100),
-      clsScore: toTriState(su.cls, 'cls', 100),
-      inpScore: toTriState(su.inp, 'inp', 100),
-      mobileScore: toTriState(su.mobile, 'mobile', 100),
-      crawlerResponseScore: toTriState(su.crawlerResponse, 'crawlerResponse', 100)
+      lcpScore: toTriState(subs.lcpScore, 'lcp'),
+      clsScore: toTriState(subs.clsScore, 'cls'),
+      inpScore: toTriState(subs.inpScore, 'inp'),
+      mobileScore: toTriState(subs.mobileScore, 'mobile'),
+      crawlerResponseScore: toTriState(subs.crawlerResponseScore, 'crawlerResponse')
     };
   }
 
-  // Technical Setup - Extract from nested structure and scale
+  // Technical Setup - V5 engine returns subfactors directly on 0-100 scale
   if (v5Categories.technicalSetup) {
     const ts = v5Categories.technicalSetup;
-    const crawler = ts.subfactors?.crawlerAccess || {};  // CRITICAL FIX: Added .subfactors
-    const structured = ts.subfactors?.structuredData || {};  // CRITICAL FIX: Added .subfactors
-
+    const subs = ts.subfactors || {};
     subfactors.technicalSetup = {
-      crawlerAccessScore: toTriState(crawler.factors?.robotsTxt, 'crawlerAccess', 55.6),
-      structuredDataScore: toTriState(structured.factors?.schemaMarkup, 'structuredData', 55.6),
-      canonicalHreflangScore: notMeasured('canonical/hreflang not in V5 structure'),
-      openGraphScore: notMeasured('openGraph not in V5 structure'),
-      sitemapScore: toTriState(crawler.factors?.sitemap, 'sitemap', 55.6),
-      indexNowScore: notMeasured('indexNow requires key verification'),  // Will be measured in Step 14
-      rssFeedScore: notMeasured('rssFeed not in V5 structure')
+      crawlerAccessScore: toTriState(subs.crawlerAccessScore, 'crawlerAccess'),
+      structuredDataScore: toTriState(subs.structuredDataScore, 'structuredData'),
+      canonicalHreflangScore: toTriState(subs.canonicalHreflangScore, 'canonicalHreflang'),
+      openGraphScore: toTriState(subs.openGraphScore, 'openGraph'),
+      sitemapScore: toTriState(subs.sitemapScore, 'sitemap'),
+      indexNowScore: toTriState(subs.indexNowScore, 'indexNow'),
+      rssFeedScore: toTriState(subs.rssFeedScore, 'rssFeed')
     };
   }
 
-  // Trust & Authority - Extract from nested structure and scale
+  // Trust & Authority - V5 engine returns subfactors directly on 0-100 scale
   if (v5Categories.trustAuthority) {
     const ta = v5Categories.trustAuthority;
-    const eeat = ta.subfactors?.eeat || {};  // CRITICAL FIX: Added .subfactors
-    const authority = ta.subfactors?.authorityNetwork || {};  // CRITICAL FIX: Added .subfactors
-
+    const subs = ta.subfactors || {};
     subfactors.trustAuthority = {
-      authorBiosScore: toTriState(eeat.factors?.authorProfiles, 'authorBios', 50),
-      certificationsScore: toTriState(eeat.factors?.credentials, 'certifications', 50),
-      professionalCertifications: toTriState(eeat.factors?.professionalCertifications, 'professionalCerts', 83.3),
-      teamCredentials: toTriState(eeat.factors?.teamCredentials, 'teamCreds', 83.3),
-      industryMemberships: toTriState(authority.factors?.industryMemberships, 'industryMemberships', 83.3),
-      domainAuthorityScore: notMeasured('domainAuthority requires external API'),  // RULEBOOK v1.2: not_measured
-      thoughtLeadershipScore: toTriState(authority.factors?.thoughtLeadership, 'thoughtLeadership', 33),
-      thirdPartyProfilesScore: toTriState(authority.factors?.socialAuthority, 'thirdPartyProfiles', 50)
+      authorBiosScore: toTriState(subs.authorBiosScore, 'authorBios'),
+      certificationsScore: toTriState(subs.certificationsScore, 'certifications'),
+      professionalCertifications: toTriState(subs.professionalCertifications, 'professionalCerts'),
+      teamCredentials: toTriState(subs.teamCredentials, 'teamCreds'),
+      industryMemberships: toTriState(subs.industryMemberships, 'industryMemberships'),
+      domainAuthorityScore: toTriState(subs.domainAuthorityScore, 'domainAuthority'),
+      thoughtLeadershipScore: toTriState(subs.thoughtLeadershipScore, 'thoughtLeadership'),
+      thirdPartyProfilesScore: toTriState(subs.thirdPartyProfilesScore, 'thirdPartyProfiles')
     };
   }
 
-  // Voice Optimization - Extract from nested structure and scale
+  // Voice Optimization - V5 engine returns subfactors directly on 0-100 scale
   if (v5Categories.voiceOptimization) {
     const vo = v5Categories.voiceOptimization;
-    const conversational = vo.subfactors?.conversationalKeywords || {};  // CRITICAL FIX: Added .subfactors
-    const voice = vo.subfactors?.voiceSearch || {};  // CRITICAL FIX: Added .subfactors
-
+    const subs = vo.subfactors || {};
     subfactors.voiceOptimization = {
-      longTailScore: toTriState(conversational.factors?.longTail, 'longTail', 83),
-      localIntentScore: toTriState(conversational.factors?.localIntent, 'localIntent', 83),
-      conversationalTermsScore: toTriState(voice.factors?.conversationalFlow, 'conversationalTerms', 83),
-      snippetFormatScore: toTriState(conversational.factors?.snippetOptimization, 'snippetFormat', 83),
-      multiTurnScore: toTriState(conversational.factors?.followUpQuestions, 'multiTurn', 83)
+      longTailScore: toTriState(subs.longTailScore, 'longTail'),
+      localIntentScore: toTriState(subs.localIntentScore, 'localIntent'),
+      conversationalTermsScore: toTriState(subs.conversationalTermsScore, 'conversationalTerms'),
+      snippetFormatScore: toTriState(subs.snippetFormatScore, 'snippetFormat'),
+      multiTurnScore: toTriState(subs.multiTurnScore, 'multiTurn')
     };
   }
 
