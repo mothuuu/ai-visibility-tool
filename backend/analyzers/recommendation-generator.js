@@ -111,9 +111,21 @@ async function generateCompleteRecommendations(scanResults, tier = 'free', indus
       // Merge back the detected_profile and other enrichments
       finalScanEvidence = {
         ...finalScanEvidence,
-        ...enrichedScanEvidence,
-        v5Scores
+        ...enrichedScanEvidence
       };
+    }
+
+    // CRITICAL: Always merge v5Scores into finalScanEvidence for issue detection
+    // This must happen regardless of contractVersion status
+    finalScanEvidence = {
+      ...finalScanEvidence,
+      v5Scores
+    };
+
+    // Debug: Log v5Scores being passed to issue detector
+    console.log('[Recommendations] v5Scores categories:', v5Scores ? Object.keys(v5Scores) : 'undefined');
+    if (v5Scores?.trustAuthority) {
+      console.log('[Recommendations] trustAuthority subfactors:', Object.keys(v5Scores.trustAuthority));
     }
 
     // Single entry point - detectIssues handles site-wide vs page-level internally
