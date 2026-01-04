@@ -9,9 +9,73 @@
  * - Failed scans are not counted
  * - Consistent handling across all scan endpoints
  * - Separates competitor scans from primary scans
+ *
+ * Phase 2C: Dual-write to usage_events table when USAGE_V2_DUAL_WRITE_ENABLED=true
  */
 
 const db = require('../db/database');
+const { USAGE_EVENT_TYPES, getScanEventType } = require('../constants/usageEventTypes');
+
+/**
+ * Check if v2 usage dual-write is enabled
+ * @returns {boolean}
+ */
+function isUsageV2Enabled() {
+  return process.env.USAGE_V2_DUAL_WRITE_ENABLED === 'true';
+}
+
+/**
+ * Track a usage event in the v2 usage_events table.
+ * This is NON-BLOCKING - errors are logged but don't fail the request.
+ *
+ * @param {Object} params
+ * @param {string} params.eventType - Event type (from USAGE_EVENT_TYPES)
+ * @param {number} params.userId - User ID (required, guests are skipped)
+ * @param {number} params.organizationId - Organization ID (optional but recommended)
+ * @param {number} params.scanId - Scan ID (optional)
+ * @param {Object} params.metadata - Additional metadata (optional)
+ * @returns {Promise<{success: boolean, eventId?: number}>}
+ */
+async function trackUsageEvent({ eventType, userId, organizationId, scanId, metadata = {} }) {
+  // Skip if feature flag is disabled
+  if (!isUsageV2Enabled()) {
+    return { success: true, skipped: 'feature_disabled' };
+  }
+
+  // Skip guests (no userId)
+  if (!userId) {
+    return { success: true, skipped: 'guest_user' };
+  }
+
+  // Skip if no organization (required for usage_events)
+  if (!organizationId) {
+    return { success: true, skipped: 'no_organization' };
+  }
+
+  try {
+    // Use the DB function that handles period creation automatically
+    const result = await db.query(
+      `SELECT * FROM record_usage_event($1, $2, $3, $4, $5)`,
+      [
+        organizationId,
+        eventType,
+        userId,
+        scanId || null,
+        JSON.stringify(metadata)
+      ]
+    );
+
+    if (result.rows.length > 0) {
+      return { success: true, eventId: result.rows[0].id };
+    }
+
+    return { success: true };
+  } catch (error) {
+    // Log one-line error (no secrets) and continue - don't fail the request
+    console.error(`⚠️ Usage v2 dual-write failed: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+}
 
 class UsageTrackerService {
   /**
@@ -192,4 +256,9 @@ class UsageTrackerService {
   }
 }
 
+// Export the class and the standalone functions for Phase 2C dual-write
 module.exports = UsageTrackerService;
+module.exports.trackUsageEvent = trackUsageEvent;
+module.exports.isUsageV2Enabled = isUsageV2Enabled;
+module.exports.USAGE_EVENT_TYPES = USAGE_EVENT_TYPES;
+module.exports.getScanEventType = getScanEventType;
