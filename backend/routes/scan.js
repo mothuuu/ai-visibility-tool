@@ -11,7 +11,12 @@ const RecommendationContextService = require('../services/recommendation-context
 const RefreshCycleService = require('../services/refresh-cycle-service');
 const GuestScanCacheService = require('../services/guest-scan-cache-service');
 const { createGuestRateLimiter } = require('../middleware/guestRateLimit');
-const { loadOrgContext } = require('../middleware/orgContext');
+const {
+  loadOrgContext,
+  isOrgScopingEnabled,
+  getOrgScope,
+  requireOrgScope
+} = require('../middleware/orgContext');
 
 // Initialize guest services
 const guestScanCache = new GuestScanCacheService(db);
@@ -273,6 +278,15 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
     const { url: userInputUrl, pages } = req.body;
     const userId = req.userId;
 
+    // Phase 2B: Require org context when org scoping is enabled
+    if (isOrgScopingEnabled() && getOrgScope(req) == null) {
+      return res.status(403).json({
+        error: 'Organization context required',
+        code: 'NO_ORG_CONTEXT',
+        message: 'Your account is not associated with an organization.'
+      });
+    }
+
     if (!userInputUrl) {
       return res.status(400).json({ error: 'URL is required' });
     }
@@ -447,10 +461,12 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
     let shouldReuseRecommendations = Boolean(contextScanId);
 
     // Create scan record with status 'processing'
+    // Phase 2B: Include organization_id when org scoping is enabled
+    const orgId = isOrgScopingEnabled() ? getOrgScope(req) : null;
     const scanRecord = await db.query(
       `INSERT INTO scans (
-        user_id, url, status, page_count, rubric_version, domain_type, extracted_domain, domain, pages_analyzed, recommendations
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        user_id, url, status, page_count, rubric_version, domain_type, extracted_domain, domain, pages_analyzed, recommendations, organization_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING id, url, status, created_at`,
       [
         userId,
@@ -462,7 +478,8 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
         scanDomain,
         scanDomain,
         JSON.stringify({ pages: normalizedPages, page_set_hash: pageSetHash }),
-        contextScanId ? JSON.stringify({ context_scan_id: contextScanId, page_set_hash: pageSetHash }) : null
+        contextScanId ? JSON.stringify({ context_scan_id: contextScanId, page_set_hash: pageSetHash }) : null,
+        orgId
       ]
     );
 
@@ -955,8 +972,8 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
     const scanId = req.params.id;
     const userId = req.userId;
 
-    const result = await db.query(
-      `SELECT
+    // Phase 2B: Add org scoping when enabled
+    let query = `SELECT
         id, user_id, url, status, total_score, rubric_version,
         ai_readability_score, ai_search_readiness_score,
         content_freshness_score, content_structure_score,
@@ -964,11 +981,17 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
         trust_authority_score, voice_optimization_score,
         industry, page_count, pages_analyzed, recommendations,
         detailed_analysis, faq_schema, created_at, completed_at,
-        domain, extracted_domain, domain_type
+        domain, extracted_domain, domain_type, organization_id
        FROM scans
-       WHERE id = $1 AND user_id = $2`,
-      [scanId, userId]
-    );
+       WHERE id = $1 AND user_id = $2`;
+    let params = [scanId, userId];
+
+    if (isOrgScopingEnabled() && getOrgScope(req) != null) {
+      query += ` AND organization_id = $3`;
+      params.push(getOrgScope(req));
+    }
+
+    const result = await db.query(query, params);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Scan not found' });
@@ -1379,9 +1402,17 @@ router.get('/list/recent', authenticateToken, loadOrgContext, async (req, res) =
     const limit = parseInt(req.query.limit) || 10;
     const offset = parseInt(req.query.offset) || 0;
 
+    // Phase 2B: Build org scope clause when enabled
+    const orgScopeEnabled = isOrgScopingEnabled() && getOrgScope(req) != null;
+    const orgScopeClause = orgScopeEnabled ? ' AND organization_id = $4' : '';
+    const orgScopeClauseCount = orgScopeEnabled ? ' AND organization_id = $2' : '';
+
     // Try full query first, fall back to basic query if columns don't exist
     let result;
     try {
+      const baseParams = [userId, limit, offset];
+      const params = orgScopeEnabled ? [...baseParams, getOrgScope(req)] : baseParams;
+
       result = await db.query(
         `SELECT
           id, url, status, total_score, rubric_version,
@@ -1390,24 +1421,27 @@ router.get('/list/recent', authenticateToken, loadOrgContext, async (req, res) =
           content_freshness_score, content_structure_score,
           speed_ux_score, technical_setup_score,
           trust_authority_score, voice_optimization_score,
-          created_at, completed_at
+          created_at, completed_at, organization_id
          FROM scans
-         WHERE user_id = $1
+         WHERE user_id = $1${orgScopeClause}
          ORDER BY created_at DESC
          LIMIT $2 OFFSET $3`,
-        [userId, limit, offset]
+        params
       );
     } catch (dbError) {
       if (dbError.code === '42703') { // column does not exist
         console.log('Some scan columns missing, using basic query');
+        const baseParams = [userId, limit, offset];
+        const params = orgScopeEnabled ? [...baseParams, getOrgScope(req)] : baseParams;
+
         result = await db.query(
           `SELECT
             id, url, score as total_score, industry, page_count, created_at
            FROM scans
-           WHERE user_id = $1
+           WHERE user_id = $1${orgScopeClause}
            ORDER BY created_at DESC
            LIMIT $2 OFFSET $3`,
-          [userId, limit, offset]
+          params
         );
         // Add default values for missing columns
         result.rows = result.rows.map(row => ({
@@ -1421,9 +1455,10 @@ router.get('/list/recent', authenticateToken, loadOrgContext, async (req, res) =
       }
     }
 
+    const countParams = orgScopeEnabled ? [userId, getOrgScope(req)] : [userId];
     const countResult = await db.query(
-      'SELECT COUNT(*) as total FROM scans WHERE user_id = $1',
-      [userId]
+      `SELECT COUNT(*) as total FROM scans WHERE user_id = $1${orgScopeClauseCount}`,
+      countParams
     );
 
     res.json({
@@ -1446,17 +1481,22 @@ router.get('/list/recent', authenticateToken, loadOrgContext, async (req, res) =
 // POST /api/scan/:id/recommendation/:recId/feedback
 // Learning Loop: Track user actions
 // ============================================
-router.post('/:id/recommendation/:recId/feedback', authenticateToken, async (req, res) => {
+router.post('/:id/recommendation/:recId/feedback', authenticateToken, loadOrgContext, async (req, res) => {
   try {
     const { id: scanId, recId } = req.params;
     const userId = req.userId;
     const { status, feedback, rating } = req.body;
 
-    // Verify scan belongs to user
-    const scanCheck = await db.query(
-      'SELECT id FROM scans WHERE id = $1 AND user_id = $2',
-      [scanId, userId]
-    );
+    // Verify scan belongs to user (Phase 2B: with org scoping when enabled)
+    let scanCheckQuery = 'SELECT id FROM scans WHERE id = $1 AND user_id = $2';
+    let scanCheckParams = [scanId, userId];
+
+    if (isOrgScopingEnabled() && getOrgScope(req) != null) {
+      scanCheckQuery += ' AND organization_id = $3';
+      scanCheckParams.push(getOrgScope(req));
+    }
+
+    const scanCheck = await db.query(scanCheckQuery, scanCheckParams);
 
     if (scanCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Scan not found' });
@@ -1526,17 +1566,22 @@ router.post('/:id/recommendation/:recId/feedback', authenticateToken, async (req
 // POST /api/scan/:id/recommendation/:recId/skip
 // Skip a recommendation (available after 5 days)
 // ============================================
-router.post('/:id/recommendation/:recId/skip', authenticateToken, async (req, res) => {
+router.post('/:id/recommendation/:recId/skip', authenticateToken, loadOrgContext, async (req, res) => {
   try {
     const { id: scanId, recId } = req.params;
     const userId = req.userId;
     const { skipData } = req.body;
 
-    // Verify scan belongs to user
-    const scanCheck = await db.query(
-      'SELECT id FROM scans WHERE id = $1 AND user_id = $2',
-      [scanId, userId]
-    );
+    // Verify scan belongs to user (Phase 2B: with org scoping when enabled)
+    let scanCheckQuery = 'SELECT id FROM scans WHERE id = $1 AND user_id = $2';
+    let scanCheckParams = [scanId, userId];
+
+    if (isOrgScopingEnabled() && getOrgScope(req) != null) {
+      scanCheckQuery += ' AND organization_id = $3';
+      scanCheckParams.push(getOrgScope(req));
+    }
+
+    const scanCheck = await db.query(scanCheckQuery, scanCheckParams);
 
     if (scanCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Scan not found' });
@@ -1620,15 +1665,23 @@ router.post('/:id/recommendation/:recId/skip', authenticateToken, async (req, re
 // ============================================
 // DELETE /api/scan/:id - Delete a scan
 // ============================================
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', authenticateToken, loadOrgContext, async (req, res) => {
   try {
     const scanId = req.params.id;
     const userId = req.userId;
 
-    const result = await db.query(
-      'DELETE FROM scans WHERE id = $1 AND user_id = $2 RETURNING id',
-      [scanId, userId]
-    );
+    // Phase 2B: Add org scoping when enabled
+    let query = 'DELETE FROM scans WHERE id = $1 AND user_id = $2';
+    let params = [scanId, userId];
+
+    if (isOrgScopingEnabled() && getOrgScope(req) != null) {
+      query += ' AND organization_id = $3';
+      params.push(getOrgScope(req));
+    }
+
+    query += ' RETURNING id';
+
+    const result = await db.query(query, params);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Scan not found' });

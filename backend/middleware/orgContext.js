@@ -134,7 +134,80 @@ function requireOrgContext(req, res, next) {
   next();
 }
 
+// ============================================================================
+// Phase 2B: Organization Scoping Helpers
+// ============================================================================
+
+/**
+ * Check if organization scoping is enabled.
+ * @returns {boolean}
+ */
+function isOrgScopingEnabled() {
+  return process.env.ORG_SCOPING_ENABLED === 'true';
+}
+
+/**
+ * Get the organization ID from the request for scoping purposes.
+ * Returns req.orgId (number) or null if not available.
+ * @param {Object} req - Express request object
+ * @returns {number|null}
+ */
+function getOrgScope(req) {
+  return req.orgId ?? null;
+}
+
+/**
+ * Middleware to require organization scope for data access.
+ * Returns 403 if scoping is enabled but no org context is available.
+ * Use on authenticated routes that access org-scoped data.
+ */
+function requireOrgScope(req, res, next) {
+  // Skip enforcement if org scoping flag is disabled
+  if (!isOrgScopingEnabled()) {
+    return next();
+  }
+
+  // Check for org context (null/undefined only, allow 0)
+  if (req.orgId == null) {
+    console.error('🚨 requireOrgScope failed - no org context for scoped route');
+    return res.status(403).json({
+      error: 'Organization context required',
+      code: 'NO_ORG_CONTEXT',
+      message: 'Your account is not associated with an organization.'
+    });
+  }
+
+  next();
+}
+
+/**
+ * Build SQL WHERE clause additions for org scoping.
+ * Returns { clause: string, params: array, paramOffset: number }
+ *
+ * @param {Object} req - Express request object
+ * @param {string} tableAlias - SQL table alias (e.g., 's' for scans)
+ * @param {number} startParamIndex - Starting $N index for parameters
+ * @returns {{ clause: string, params: any[], nextParamIndex: number }}
+ */
+function buildOrgScopeClause(req, tableAlias = '', startParamIndex = 1) {
+  if (!isOrgScopingEnabled() || req.orgId == null) {
+    return { clause: '', params: [], nextParamIndex: startParamIndex };
+  }
+
+  const prefix = tableAlias ? `${tableAlias}.` : '';
+  return {
+    clause: ` AND ${prefix}organization_id = $${startParamIndex}`,
+    params: [req.orgId],
+    nextParamIndex: startParamIndex + 1
+  };
+}
+
 module.exports = {
   loadOrgContext,
-  requireOrgContext
+  requireOrgContext,
+  // Phase 2B exports
+  isOrgScopingEnabled,
+  getOrgScope,
+  requireOrgScope,
+  buildOrgScopeClause
 };
