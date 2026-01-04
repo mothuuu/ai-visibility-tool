@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const db = require('../db/database');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/email');
 const { authenticateToken } = require('../middleware/auth');
+const { loadOrgContext } = require('../middleware/orgContext');
 const router = express.Router();
 
 // POST /api/auth/signup - Create account
@@ -114,14 +115,19 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password required' });
     }
     
-    // Get user
+    // Get user with organization data
     const result = await db.query(
-      `SELECT id, email, password_hash, name, plan, email_verified,
-              scans_used_this_month, competitor_scans_used_this_month,
-              primary_domain, primary_domain_changed_at,
-              industry, industry_custom
-       FROM users WHERE email = $1`,
-      [email]
+      `SELECT
+        u.id, u.email, u.password_hash, u.name, u.plan, u.email_verified,
+        u.scans_used_this_month, u.competitor_scans_used_this_month,
+        u.primary_domain, u.primary_domain_changed_at,
+        u.industry, u.industry_custom, u.organization_id,
+        o.id as org_id, o.name as org_name, o.slug as org_slug,
+        o.org_type, o.plan as org_plan, o.settings as org_settings
+      FROM users u
+      LEFT JOIN organizations o ON u.organization_id = o.id
+      WHERE u.email = $1`,
+      [email.toLowerCase().trim()]
     );
     
     if (result.rows.length === 0) {
@@ -141,24 +147,40 @@ router.post('/login', async (req, res) => {
     
     // Generate JWT
     const accessToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-    
-    res.json({
+
+    // Build response object
+    const response = {
       success: true,
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        plan: user.plan,
+        plan: user.plan,  // Keep as user.plan (NOT org_plan) - no behavior change
         email_verified: user.email_verified,
         scans_used_this_month: user.scans_used_this_month || 0,
         competitor_scans_used_this_month: user.competitor_scans_used_this_month || 0,
         primary_domain: user.primary_domain,
         primary_domain_changed_at: user.primary_domain_changed_at,
         industry: user.industry,
-        industry_custom: user.industry_custom
+        industry_custom: user.industry_custom,
+        organization_id: user.organization_id  // Always include (safe addition)
       },
       accessToken
-    });
+    };
+
+    // Add organization object ONLY when feature flag enabled
+    if (process.env.ORG_CONTEXT_ENABLED === 'true' && user.org_id) {
+      response.organization = {
+        id: user.org_id,
+        name: user.org_name,
+        slug: user.org_slug,
+        type: user.org_type,
+        plan: user.org_plan,
+        settings: user.org_settings || {}
+      };
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });
@@ -173,11 +195,60 @@ router.post('/logout', authenticateToken, async (req, res) => {
 });
 
 // GET /api/auth/me - Get current user
-router.get('/me', authenticateToken, async (req, res) => {
+router.get('/me', authenticateToken, loadOrgContext, async (req, res) => {
   try {
-    // authenticateToken middleware already fetches user data and sets req.user
-    // No need for another database query - just return the user data
-    res.json({ success: true, user: req.user });
+    // Query includes org data directly for backwards compatibility
+    // (does not rely on req.org from middleware)
+    const result = await db.query(`
+      SELECT
+        u.id, u.email, u.name, u.plan, u.email_verified,
+        u.scans_used_this_month, u.competitor_scans_used_this_month,
+        u.primary_domain, u.primary_domain_changed_at,
+        u.industry, u.industry_custom, u.organization_id,
+        o.id as org_id, o.name as org_name, o.slug as org_slug,
+        o.org_type, o.plan as org_plan, o.settings as org_settings
+      FROM users u
+      LEFT JOIN organizations o ON u.organization_id = o.id
+      WHERE u.id = $1
+    `, [req.user.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const row = result.rows[0];
+
+    const response = {
+      success: true,
+      user: {
+        id: row.id,
+        email: row.email,
+        name: row.name,
+        plan: row.plan,
+        email_verified: row.email_verified,
+        scans_used_this_month: row.scans_used_this_month || 0,
+        competitor_scans_used_this_month: row.competitor_scans_used_this_month || 0,
+        primary_domain: row.primary_domain,
+        primary_domain_changed_at: row.primary_domain_changed_at,
+        industry: row.industry,
+        industry_custom: row.industry_custom,
+        organization_id: row.organization_id
+      }
+    };
+
+    // Add organization ONLY when feature flag enabled
+    if (process.env.ORG_CONTEXT_ENABLED === 'true' && row.org_id) {
+      response.organization = {
+        id: row.org_id,
+        name: row.org_name,
+        slug: row.org_slug,
+        type: row.org_type,
+        plan: row.org_plan,
+        settings: row.org_settings || {}
+      };
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user' });
