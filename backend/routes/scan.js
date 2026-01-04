@@ -7,6 +7,7 @@ const { extractRootDomain, isPrimaryDomain } = require('../utils/domain-extracto
 const { calculateScanComparison, getHistoricalTimeline } = require('../utils/scan-comparison');
 const { computePageSetHash } = require('../utils/page-context');
 const UsageTrackerService = require('../services/usage-tracker-service');
+const { trackUsageEvent, getScanEventType, USAGE_EVENT_TYPES } = require('../services/usage-tracker-service');
 const RecommendationContextService = require('../services/recommendation-context-service');
 const RefreshCycleService = require('../services/refresh-cycle-service');
 const GuestScanCacheService = require('../services/guest-scan-cache-service');
@@ -696,6 +697,19 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
     const scanType = isCompetitorScan ? 'competitor' : 'primary';
     await UsageTrackerService.incrementScanUsage(userId, scanType);
 
+    // Phase 2C: Dual-write to usage_events (non-blocking)
+    trackUsageEvent({
+      eventType: getScanEventType(scanType, 'completed'),
+      userId,
+      organizationId: getOrgScope(req),
+      scanId: scan.id,
+      metadata: {
+        scan_type: scanType,
+        domain: scanDomain,
+        rubric_version: 'V5'
+      }
+    });
+
     // Update scan record with results
     // NOTE: Round scores to integers since DB columns are INTEGER type
     await db.query(
@@ -955,6 +969,17 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
         `UPDATE scans SET status = $1, completed_at = CURRENT_TIMESTAMP WHERE id = $2`,
         ['failed', scan.id]
       );
+
+      // Phase 2C: Dual-write failed scan to usage_events (non-blocking)
+      trackUsageEvent({
+        eventType: USAGE_EVENT_TYPES.SCAN_FAILED,
+        userId: req.userId,
+        organizationId: getOrgScope(req),
+        scanId: scan.id,
+        metadata: {
+          reason: error.message?.substring(0, 200) // Truncate for safety
+        }
+      });
     }
 
     res.status(500).json({
