@@ -1,0 +1,146 @@
+{
+  "$schema": "https://visible2ai.com/schemas/pillar-display-map.v1.json",
+  "version": "1.1.0",
+  "lastUpdated": "2026-01-03",
+  "description": "Marketing-first pillar display names. Internal IDs and canonical names remain unchanged.",
+  
+  "scoring": {
+    "totalMax": 1000,
+    "pillarMax": 125,
+    "pillarCount": 8,
+    "note": "8 pillars × 125 points = 1000 max total"
+  },
+
+  "displayConfig": {
+    "showCanonicalName": true,
+    "canonicalNameStyle": "subheading",
+    "phaseOutDate": null
+  },
+
+  "taxonomy": {
+    "note": "Three layers: internal ID (never changes) → canonical name (PR/reports) → marketing headline (UI)",
+    "internalIds": "Used in database, scoring engine, API. NEVER change these.",
+    "canonicalNames": "Used in PR, reports, exports. These are our established pillar terms.",
+    "marketingHeadlines": "Used in UI display. Can evolve without breaking anything."
+  },
+
+  "pillars": [
+    {
+      "id": "content_structure",
+      "canonicalName": "Content Structure",
+      "marketingHeadline": "Content AI Can Use",
+      "oneLiner": "Structure your content so AI can easily extract and cite it.",
+      "icon": "layout",
+      "color": "#14B8A6",
+      "colorToken": "pillar.content_structure",
+      "maxScore": 125,
+      "displayOrder": 1,
+      "aliases": ["content format", "headings", "organization", "readability"]
+    },
+    {
+      "id": "trust_authority",
+      "canonicalName": "Trust & Authority",
+      "marketingHeadline": "Be Trusted",
+      "oneLiner": "Build credibility signals that make AI comfortable recommending you.",
+      "icon": "shield-check",
+      "color": "#F59E0B",
+      "colorToken": "pillar.trust_authority",
+      "maxScore": 125,
+      "displayOrder": 2,
+      "aliases": ["credibility", "reputation", "E-E-A-T", "authority"]
+    },
+    {
+      "id": "entity_recognition",
+      "canonicalName": "Entity Recognition",
+      "marketingHeadline": "Be Found",
+      "oneLiner": "Make your brand unmistakable when AI identifies companies in your category.",
+      "icon": "search",
+      "color": "#EC4899",
+      "colorToken": "pillar.entity_recognition",
+      "maxScore": 125,
+      "displayOrder": 3,
+      "aliases": ["brand recognition", "named entities", "knowledge graph", "discoverability"]
+    },
+    {
+      "id": "schema_markup",
+      "canonicalName": "Schema Markup",
+      "marketingHeadline": "Speak AI's Language",
+      "oneLiner": "Help AI assistants understand exactly what your business does.",
+      "icon": "message-square",
+      "color": "#6366F1",
+      "colorToken": "pillar.schema_markup",
+      "maxScore": 125,
+      "displayOrder": 4,
+      "aliases": ["structured data", "JSON-LD", "markup", "schema"]
+    },
+    {
+      "id": "technical_setup",
+      "canonicalName": "Technical Setup",
+      "marketingHeadline": "Solid Foundation",
+      "oneLiner": "Remove technical blockers that prevent indexing, parsing, and rendering.",
+      "icon": "settings",
+      "color": "#64748B",
+      "colorToken": "pillar.technical_setup",
+      "maxScore": 125,
+      "displayOrder": 5,
+      "aliases": ["technical SEO", "crawlability", "indexing", "infrastructure"]
+    },
+    {
+      "id": "speed_ux",
+      "canonicalName": "Speed & UX",
+      "marketingHeadline": "Be Fast & Frictionless",
+      "oneLiner": "Improve performance and experience—signals that influence visibility and trust.",
+      "icon": "zap",
+      "color": "#22C55E",
+      "colorToken": "pillar.speed_ux",
+      "maxScore": 125,
+      "displayOrder": 6,
+      "aliases": ["performance", "user experience", "page speed", "core web vitals"]
+    },
+    {
+      "id": "voice_optimization",
+      "canonicalName": "Voice Optimization",
+      "marketingHeadline": "Own the Conversation",
+      "oneLiner": "Get recommended when customers ask AI out loud.",
+      "icon": "mic",
+      "color": "#EF4444",
+      "colorToken": "pillar.voice_optimization",
+      "maxScore": 125,
+      "displayOrder": 7,
+      "aliases": ["voice search", "conversational", "spoken queries", "FAQ"]
+    },
+    {
+      "id": "citation_worthiness",
+      "canonicalName": "Citation Worthiness",
+      "marketingHeadline": "Be Worth Quoting",
+      "oneLiner": "Give AI reasons to cite you as the authoritative source.",
+      "icon": "quote",
+      "color": "#8B5CF6",
+      "colorToken": "pillar.citation_worthiness",
+      "maxScore": 125,
+      "displayOrder": 8,
+      "aliases": ["citations", "references", "sources", "proof", "evidence"]
+    }
+  ],
+
+  "uiPatterns": {
+    "iconSet": {
+      "library": "lucide-react",
+      "note": "Future: add enum validation for icon values",
+      "validIcons": ["layout", "shield-check", "search", "message-square", "settings", "zap", "mic", "quote"]
+    },
+    "scoreBreakdown": {
+      "primary": "marketingHeadline",
+      "secondary": "canonicalName",
+      "showOneLiner": true
+    },
+    "recommendations": {
+      "groupBy": "pillar",
+      "showPillarBadge": true
+    },
+    "exports": {
+      "useCanonicalNames": true,
+      "includeAliases": false
+    }
+  }
+}

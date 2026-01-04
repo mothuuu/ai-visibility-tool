@@ -1,0 +1,1349 @@
+openapi: 3.0.3
+info:
+  title: Visible2AI API
+  description: |
+    API for AI Visibility Score platform.
+    
+    ## Authentication
+    All authenticated endpoints require a Bearer token in the Authorization header.
+    Tokens are obtained via `/auth/login` or `/auth/signup`.
+    
+    ## Response Format
+    ALL responses follow this envelope structure:
+    ```json
+    {
+      "success": true|false,
+      "data": { ... },           // Present on success
+      "error": { "code": "...", "message": "...", "details": {...} },  // Present on failure
+      "meta": { "request_id": "...", "timestamp": "..." }
+    }
+    ```
+    
+    ## Rate Limits
+    Rate limits are enforced per minute (via middleware) and per day (via usage tracking):
+    - Free: 10 req/min, 100 req/day
+    - DIY: 30 req/min, 500 req/day
+    - Pro: 60 req/min, 1000 req/day
+    - Enterprise: 120 req/min, 5000 req/day
+    - Agency: 200 req/min, 10000 req/day
+    
+    Rate limit headers are included in all responses:
+    - `X-RateLimit-Limit`: Requests allowed per minute
+    - `X-RateLimit-Remaining`: Requests remaining this minute
+    - `X-RateLimit-Reset`: Unix timestamp when limit resets
+    
+    ## Naming Convention
+    All API responses use snake_case for field names (e.g., `total_score`, `created_at`).
+    
+  version: 2.2.0
+  contact:
+    name: Visible2AI Support
+    email: support@visible2ai.com
+
+servers:
+  - url: https://api.visible2ai.com/v1
+    description: Production
+  - url: https://api.staging.visible2ai.com/v1
+    description: Staging
+
+tags:
+  - name: Auth
+    description: Authentication endpoints
+  - name: Organizations
+    description: Organization management (org-centric model)
+  - name: Domains
+    description: Domain management and verification
+  - name: Scans
+    description: Website scanning
+  - name: Recommendations
+    description: Actionable recommendations
+  - name: Usage
+    description: Usage tracking and quotas (all event types)
+  - name: Health
+    description: System health
+
+paths:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # AUTH ENDPOINTS
+  # ═══════════════════════════════════════════════════════════════════════════
+  
+  /auth/signup:
+    post:
+      tags: [Auth]
+      summary: Create new account
+      description: |
+        Creates a new user account and personal organization.
+        Sends verification email with 6-digit code.
+        Returns access token (usable for /auth/verify-email before full access).
+      operationId: signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  minLength: 8
+                  example: "securePassword123"
+      responses:
+        '201':
+          description: Account created (unverified)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with credentials
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Email not verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /auth/verify-email:
+    post:
+      tags: [Auth]
+      summary: Verify email with code
+      description: |
+        Verifies email address using 6-digit code sent during signup.
+        Can be called with either:
+        - Bearer token (from signup response)
+        - Or email + code in body (no auth required)
+      operationId: verifyEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: Required if no Bearer token provided
+                code:
+                  type: string
+                  pattern: '^\d{6}$'
+                  example: "123456"
+      responses:
+        '200':
+          description: Email verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '410':
+          description: Code expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      description: Uses HttpOnly refresh token cookie to obtain new access token
+      operationId: refreshToken
+      responses:
+        '200':
+          description: New access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout current session
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # ORGANIZATION ENDPOINTS (ORG-CENTRIC MODEL)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /orgs/me:
+    get:
+      tags: [Organizations]
+      summary: Get current organization
+      description: Returns the organization context for the authenticated user
+      operationId: getCurrentOrg
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current organization
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /orgs/{org_id}/members:
+    get:
+      tags: [Organizations]
+      summary: List organization members
+      operationId: listOrgMembers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of members
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /orgs/{org_id}/invites:
+    post:
+      tags: [Organizations]
+      summary: Invite member to organization
+      operationId: inviteOrgMember
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role]
+              properties:
+                email:
+                  type: string
+                  format: email
+                role:
+                  type: string
+                  enum: [admin, member, viewer]
+      responses:
+        '201':
+          description: Invite sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '402':
+          $ref: '#/components/responses/QuotaExceededError'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # DOMAIN ENDPOINTS (VERIFICATION FLOW)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /domains:
+    get:
+      tags: [Domains]
+      summary: List domains for organization
+      operationId: listDomains
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of domains
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Domain'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    post:
+      tags: [Domains]
+      summary: Add a domain to organization
+      description: |
+        Adds a domain and returns verification instructions.
+        Domain must be verified before certain features are available.
+      operationId: addDomain
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain]
+              properties:
+                domain:
+                  type: string
+                  example: "example.com"
+      responses:
+        '201':
+          description: Domain added (pending verification)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DomainWithVerification'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '402':
+          $ref: '#/components/responses/QuotaExceededError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+
+  /domains/{domain_id}:
+    get:
+      tags: [Domains]
+      summary: Get domain details
+      operationId: getDomain
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: domain_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Domain details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DomainWithVerification'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      tags: [Domains]
+      summary: Remove domain from organization
+      operationId: deleteDomain
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: domain_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Domain removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /domains/{domain_id}/verify:
+    post:
+      tags: [Domains]
+      summary: Initiate or check domain verification
+      description: |
+        Initiates verification or checks if verification is complete.
+        Supports three methods: dns_txt, meta_tag, html_file.
+      operationId: verifyDomain
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: domain_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [method]
+              properties:
+                method:
+                  type: string
+                  enum: [dns_txt, meta_tag, html_file]
+                action:
+                  type: string
+                  enum: [initiate, check]
+                  default: check
+      responses:
+        '200':
+          description: Verification status
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          verified:
+                            type: boolean
+                          method:
+                            type: string
+                          instructions:
+                            type: string
+                          token:
+                            type: string
+                            description: Token to use for verification
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # SCAN ENDPOINTS
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /scans:
+    post:
+      tags: [Scans]
+      summary: Start a new scan
+      description: |
+        Queues a new scan for the given URL.
+        
+        **Scope options:**
+        - `site`: Crawls multiple pages (up to plan's crawlPagesPerDomain limit)
+        - `page`: Single page analysis (requires Pro+ plan, returns 402 if not entitled)
+        
+        **Domain verification:**
+        - Free/DIY/Pro: Can scan without verified domain
+        - Enterprise/Agency: Requires verified domain (returns 403 if unverified)
+      operationId: createScan
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: "https://example.com"
+                scope:
+                  type: string
+                  enum: [site, page]
+                  default: site
+                  description: "page scope requires Pro+ (returns 402 if not entitled)"
+      responses:
+        '202':
+          description: Scan queued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          scan_id:
+                            type: integer
+                          job_id:
+                            type: integer
+                          status:
+                            type: string
+                            enum: [queued]
+                          poll_url:
+                            type: string
+                            description: URL to poll for status
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '402':
+          $ref: '#/components/responses/QuotaExceededError'
+        '403':
+          description: Domain not verified (Enterprise/Agency plans)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+    get:
+      tags: [Scans]
+      summary: List user's scans
+      operationId: listScans
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [queued, crawling, scoring, complete, failed]
+        - name: domain_id
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of scans
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ScanSummary'
+                      meta:
+                        type: object
+                        properties:
+                          total:
+                            type: integer
+                          limit:
+                            type: integer
+                          offset:
+                            type: integer
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /scans/{id}:
+    get:
+      tags: [Scans]
+      summary: Get scan details
+      description: |
+        Returns scan status, scores, and results.
+        Poll this endpoint while status is 'queued' or 'crawling' (recommended: 2s interval).
+      operationId: getScan
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Scan details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Scan'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # RECOMMENDATION ENDPOINTS
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /scans/{scan_id}/recommendations:
+    get:
+      tags: [Recommendations]
+      summary: Get recommendations for a scan
+      description: |
+        Returns ALL recommendations for a scan (Never Zero Contract).
+        
+        **API Contract:**
+        - API always returns all recommendations (never filters to empty)
+        - Locked recommendations are included with `is_locked: true`
+        - If no issues detected, returns positive-framing locked recs
+        
+        **UI Defaults:**
+        - `recommendations_default_visible` from plan determines initial display count
+        - This is a UI cap only, not an API filter
+      operationId: getRecommendations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: scan_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: view
+          in: query
+          description: Audience view for copy
+          schema:
+            type: string
+            enum: [marketing, technical, exec]
+            default: marketing
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, implemented, skipped, dismissed]
+      responses:
+        '200':
+          description: Recommendations (never empty)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Recommendation'
+                        minItems: 1
+                        description: "Always contains at least 1 recommendation"
+                      meta:
+                        type: object
+                        properties:
+                          total_count:
+                            type: integer
+                          unlocked_count:
+                            type: integer
+                          locked_count:
+                            type: integer
+                          default_visible:
+                            type: integer
+                            description: Plan's recommendationsDefaultVisible value
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /recommendations/{id}:
+    patch:
+      tags: [Recommendations]
+      summary: Update recommendation status
+      operationId: updateRecommendation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [active, implemented, skipped, dismissed]
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # USAGE ENDPOINTS (GENERALIZED FOR ALL EVENT TYPES)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /usage:
+    get:
+      tags: [Usage]
+      summary: Get current usage status
+      description: |
+        Returns usage for ALL tracked event types in current billing period.
+        
+        Event types tracked:
+        - scans: Site/page scans
+        - competitor_scans: Competitor analysis scans
+        - ai_test_queries: BVI AI test queries
+        - page_optimizations: Content Studio runs
+        - content_credits: Content generation credits
+        - api_calls: API calls (daily limit)
+      operationId: getUsage
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Usage status for all event types
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UsageResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # HEALTH ENDPOINTS
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /health:
+    get:
+      tags: [Health]
+      summary: System health check
+      description: |
+        Returns health status of all system components.
+        Includes database, cache, payment provider, AI provider, and job queue.
+      operationId: getHealth
+      responses:
+        '200':
+          description: System healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: System unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+# ═══════════════════════════════════════════════════════════════════════════
+# COMPONENTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # REUSABLE RESPONSES
+  # ─────────────────────────────────────────────────────────────────────────
+  responses:
+    UnauthorizedError:
+      description: Authentication required or token invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "UNAUTHORIZED"
+              message: "Authentication required"
+            meta:
+              request_id: "req_abc123"
+              timestamp: "2026-01-03T12:00:00Z"
+
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "FORBIDDEN"
+              message: "You don't have permission to access this resource"
+            meta:
+              request_id: "req_abc123"
+              timestamp: "2026-01-03T12:00:00Z"
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "NOT_FOUND"
+              message: "Resource not found"
+            meta:
+              request_id: "req_abc123"
+              timestamp: "2026-01-03T12:00:00Z"
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Invalid input"
+              details:
+                email: "Invalid email format"
+            meta:
+              request_id: "req_abc123"
+              timestamp: "2026-01-03T12:00:00Z"
+
+    ConflictError:
+      description: Resource already exists
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "CONFLICT"
+              message: "Email already registered"
+            meta:
+              request_id: "req_abc123"
+              timestamp: "2026-01-03T12:00:00Z"
+
+    QuotaExceededError:
+      description: Quota or plan limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/QuotaExceededErrorSchema'
+          example:
+            success: false
+            error:
+              code: "QUOTA_EXCEEDED"
+              message: "You've used all 2 scans this month"
+              details:
+                event_type: "scan_created"
+                used: 2
+                limit: 2
+                resets_at: "2026-02-01T00:00:00Z"
+                upgrade_plan: "diy"
+            meta:
+              request_id: "req_abc123"
+              timestamp: "2026-01-03T12:00:00Z"
+
+    RateLimitError:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "RATE_LIMITED"
+              message: "Too many requests. Please wait before retrying."
+              details:
+                limit: 10
+                window: "1 minute"
+                retry_after: 45
+            meta:
+              request_id: "req_abc123"
+              timestamp: "2026-01-03T12:00:00Z"
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying
+          schema:
+            type: integer
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # SCHEMAS
+  # ─────────────────────────────────────────────────────────────────────────
+  schemas:
+    # Base response envelope
+    ApiResponse:
+      type: object
+      required: [success, meta]
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+
+    ResponseMeta:
+      type: object
+      properties:
+        request_id:
+          type: string
+          example: "req_abc123"
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      required: [success, error, meta]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              example: "Invalid input"
+            details:
+              type: object
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+
+    QuotaExceededErrorSchema:
+      type: object
+      required: [success, error, meta]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "QUOTA_EXCEEDED"
+            message:
+              type: string
+            details:
+              type: object
+              properties:
+                event_type:
+                  type: string
+                  description: Which usage event type exceeded
+                used:
+                  type: integer
+                limit:
+                  type: integer
+                resets_at:
+                  type: string
+                  format: date-time
+                upgrade_plan:
+                  type: string
+                  description: Suggested plan to upgrade to
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Organizations
+    # ─────────────────────────────────────────────────────────────────────────
+    Organization:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        plan:
+          type: string
+          enum: [free, diy, pro, enterprise, agency]
+        owner_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Domains
+    # ─────────────────────────────────────────────────────────────────────────
+    Domain:
+      type: object
+      properties:
+        id:
+          type: integer
+        domain:
+          type: string
+          example: "example.com"
+        status:
+          type: string
+          enum: [pending, verified, failed]
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    DomainWithVerification:
+      allOf:
+        - $ref: '#/components/schemas/Domain'
+        - type: object
+          properties:
+            verification:
+              type: object
+              properties:
+                method:
+                  type: string
+                  enum: [dns_txt, meta_tag, html_file]
+                token:
+                  type: string
+                  description: Token to use for verification
+                instructions:
+                  type: string
+                  description: Human-readable verification instructions
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Scans
+    # ─────────────────────────────────────────────────────────────────────────
+    ScanSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        url:
+          type: string
+        domain:
+          type: string
+        status:
+          type: string
+          enum: [queued, crawling, scoring, complete, failed]
+        total_score:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 1000
+        created_at:
+          type: string
+          format: date-time
+
+    Scan:
+      type: object
+      properties:
+        id:
+          type: integer
+        url:
+          type: string
+        domain:
+          type: string
+        scope:
+          type: string
+          enum: [site, page]
+        status:
+          type: string
+          enum: [queued, crawling, scoring, complete, failed]
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        results:
+          $ref: '#/components/schemas/ScanResults'
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ScanResults:
+      type: object
+      description: Present when status is 'complete'
+      properties:
+        total_score:
+          type: integer
+          minimum: 0
+          maximum: 1000
+          description: "0-1000 scale (Critical Contract)"
+        pillar_scores:
+          type: object
+          description: "Each pillar 0-125 (8 pillars × 125 = 1000 max)"
+          properties:
+            ai_readability:
+              type: integer
+              minimum: 0
+              maximum: 125
+            search_readiness:
+              type: integer
+              minimum: 0
+              maximum: 125
+            content_freshness:
+              type: integer
+              minimum: 0
+              maximum: 125
+            content_structure:
+              type: integer
+              minimum: 0
+              maximum: 125
+            speed_ux:
+              type: integer
+              minimum: 0
+              maximum: 125
+            technical_setup:
+              type: integer
+              minimum: 0
+              maximum: 125
+            trust_authority:
+              type: integer
+              minimum: 0
+              maximum: 125
+            voice_optimization:
+              type: integer
+              minimum: 0
+              maximum: 125
+        engine_version:
+          type: string
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Recommendations
+    # ─────────────────────────────────────────────────────────────────────────
+    Recommendation:
+      type: object
+      properties:
+        id:
+          type: integer
+        category:
+          type: string
+        issue_type:
+          type: string
+        title:
+          type: string
+        copy:
+          type: object
+          description: Copy based on requested view
+          properties:
+            headline:
+              type: string
+            body:
+              type: string
+            steps:
+              type: array
+              items:
+                type: string
+        code_snippet:
+          type: string
+          nullable: true
+        impact:
+          type: string
+          enum: [high, medium, low]
+        effort:
+          type: string
+          enum: [quick, moderate, significant]
+        impacted_pillars:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [active, implemented, skipped, dismissed]
+        is_locked:
+          type: boolean
+        required_plan:
+          type: string
+          nullable: true
+        display_order:
+          type: integer
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Usage (Generalized)
+    # ─────────────────────────────────────────────────────────────────────────
+    UsageResponse:
+      type: object
+      properties:
+        plan:
+          type: string
+          enum: [free, diy, pro, enterprise, agency]
+        period:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [calendar_month, billing_cycle]
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+            resets_at:
+              type: string
+              format: date-time
+        usage:
+          type: object
+          description: "Usage by event type (null limit = unlimited)"
+          properties:
+            scans:
+              $ref: '#/components/schemas/UsageItem'
+            competitor_scans:
+              $ref: '#/components/schemas/UsageItem'
+            ai_test_queries:
+              $ref: '#/components/schemas/UsageItem'
+            page_optimizations:
+              $ref: '#/components/schemas/UsageItem'
+            content_credits:
+              $ref: '#/components/schemas/UsageItem'
+            api_calls_daily:
+              $ref: '#/components/schemas/UsageItem'
+
+    UsageItem:
+      type: object
+      properties:
+        used:
+          type: integer
+        limit:
+          type: integer
+          nullable: true
+          description: "null or -1 = unlimited"
+        remaining:
+          type: integer
+          nullable: true
+          description: "null = unlimited"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Health
+    # ─────────────────────────────────────────────────────────────────────────
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        checks:
+          type: object
+          properties:
+            database:
+              $ref: '#/components/schemas/HealthCheck'
+            redis:
+              $ref: '#/components/schemas/HealthCheck'
+            stripe:
+              $ref: '#/components/schemas/HealthCheck'
+            ai_provider:
+              $ref: '#/components/schemas/HealthCheck'
+            job_queue:
+              $ref: '#/components/schemas/HealthCheck'
+        version:
+          type: string
+
+    HealthCheck:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [up, down]
+        latency_ms:
+          type: integer
