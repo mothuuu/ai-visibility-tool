@@ -11,6 +11,7 @@ const RecommendationContextService = require('../services/recommendation-context
 const RefreshCycleService = require('../services/refresh-cycle-service');
 const GuestScanCacheService = require('../services/guest-scan-cache-service');
 const { createGuestRateLimiter } = require('../middleware/guestRateLimit');
+const { loadOrgContext } = require('../middleware/orgContext');
 
 // Initialize guest services
 const guestScanCache = new GuestScanCacheService(db);
@@ -265,7 +266,7 @@ router.post('/guest', guestRateLimiter.middleware(), async (req, res) => {
 // ============================================
 // POST /api/scan/analyze - Authenticated scan
 // ============================================
-router.post('/analyze', authenticateToken, async (req, res) => {
+router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
   let scan = null; // Define outside try block for error handling
 
   try {
@@ -949,7 +950,7 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
 // ============================================
 // GET /api/scan/:id - Get scan results
 // ============================================
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
   try {
     const scanId = req.params.id;
     const userId = req.userId;
@@ -1372,7 +1373,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // ============================================
 // GET /api/scan/list/recent - List recent scans
 // ============================================
-router.get('/list/recent', authenticateToken, async (req, res) => {
+router.get('/list/recent', authenticateToken, loadOrgContext, async (req, res) => {
   try {
     const userId = req.userId;
     const limit = parseInt(req.query.limit) || 10;
