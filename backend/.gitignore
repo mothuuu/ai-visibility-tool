@@ -14,3 +14,8 @@ node_modules/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Database backups contain production data (emails, Stripe IDs)
+# NEVER commit these files
+db/backups/
+db/snapshots/
