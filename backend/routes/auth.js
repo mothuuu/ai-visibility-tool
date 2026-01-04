@@ -6,7 +6,6 @@ const db = require('../db/database');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/email');
 const { authenticateToken } = require('../middleware/auth');
 const { loadOrgContext } = require('../middleware/orgContext');
-const { getQuotaBundleForRequest } = require('../services/entitlements-v2-service');
 const router = express.Router();
 
 // POST /api/auth/signup - Create account
@@ -118,16 +117,15 @@ router.post('/login', async (req, res) => {
     
     // Get user with organization data
     const result = await db.query(
-      `SELECT
-        u.id, u.email, u.password_hash, u.name, u.plan, u.email_verified,
-        u.scans_used_this_month, u.competitor_scans_used_this_month,
-        u.primary_domain, u.primary_domain_changed_at,
-        u.industry, u.industry_custom, u.organization_id,
-        o.id as org_id, o.name as org_name, o.slug as org_slug,
-        o.org_type, o.plan as org_plan, o.settings as org_settings
-      FROM users u
-      LEFT JOIN organizations o ON u.organization_id = o.id
-      WHERE u.email = $1`,
+      `SELECT u.id, u.email, u.password_hash, u.name, u.plan, u.email_verified,
+              u.scans_used_this_month, u.competitor_scans_used_this_month,
+              u.primary_domain, u.primary_domain_changed_at,
+              u.industry, u.industry_custom, u.organization_id,
+              o.id as org_id, o.name as org_name, o.slug as org_slug,
+              o.org_type, o.plan as org_plan, o.settings as org_settings
+       FROM users u
+       LEFT JOIN organizations o ON u.organization_id = o.id
+       WHERE u.email = $1`,
       [email.toLowerCase().trim()]
     );
     
@@ -179,17 +177,6 @@ router.post('/login', async (req, res) => {
         plan: user.org_plan,
         settings: user.org_settings || {}
       };
-    }
-
-    // Phase 2D: ALWAYS add quota (v2 or legacy based on flags)
-    const quotaResult = await getQuotaBundleForRequest({
-      req: null,
-      user,
-      orgId: user.org_id
-    });
-    response.quota = quotaResult.quota;
-    if (quotaResult.quotaLegacy) {
-      response.quotaLegacy = quotaResult.quotaLegacy;
     }
 
     res.json(response);
@@ -258,17 +245,6 @@ router.get('/me', authenticateToken, loadOrgContext, async (req, res) => {
         plan: row.org_plan,
         settings: row.org_settings || {}
       };
-    }
-
-    // Phase 2D: ALWAYS add quota (v2 or legacy based on flags)
-    const quotaResult = await getQuotaBundleForRequest({
-      req,
-      user: row,
-      orgId: row.org_id
-    });
-    response.quota = quotaResult.quota;
-    if (quotaResult.quotaLegacy) {
-      response.quotaLegacy = quotaResult.quotaLegacy;
     }
 
     res.json(response);

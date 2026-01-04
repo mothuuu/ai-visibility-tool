@@ -7,23 +7,11 @@ const { extractRootDomain, isPrimaryDomain } = require('../utils/domain-extracto
 const { calculateScanComparison, getHistoricalTimeline } = require('../utils/scan-comparison');
 const { computePageSetHash } = require('../utils/page-context');
 const UsageTrackerService = require('../services/usage-tracker-service');
-const { trackUsageEvent, getScanEventType, USAGE_EVENT_TYPES } = require('../services/usage-tracker-service');
 const RecommendationContextService = require('../services/recommendation-context-service');
 const RefreshCycleService = require('../services/refresh-cycle-service');
 const GuestScanCacheService = require('../services/guest-scan-cache-service');
 const { createGuestRateLimiter } = require('../middleware/guestRateLimit');
-const {
-  loadOrgContext,
-  isOrgScopingEnabled,
-  getOrgScope,
-  requireOrgScope
-} = require('../middleware/orgContext');
-const {
-  isV2ModeSafelyEnabled,
-  resolveQuotaMode,
-  checkScanLimitV2,
-  getQuotaBundleForRequest
-} = require('../services/entitlements-v2-service');
+const { loadOrgContext } = require('../middleware/orgContext');
 
 // Initialize guest services
 const guestScanCache = new GuestScanCacheService(db);
@@ -285,15 +273,6 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
     const { url: userInputUrl, pages } = req.body;
     const userId = req.userId;
 
-    // Phase 2B: Require org context when org scoping is enabled
-    if (isOrgScopingEnabled() && getOrgScope(req) == null) {
-      return res.status(403).json({
-        error: 'Organization context required',
-        code: 'NO_ORG_CONTEXT',
-        message: 'Your account is not associated with an organization.'
-      });
-    }
-
     if (!userInputUrl) {
       return res.status(400).json({ error: 'URL is required' });
     }
@@ -411,35 +390,16 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
       console.log(`🔍 Competitor scan detected: ${scanDomain} (primary: ${user.primary_domain})`);
 
       // Check competitor scan quota
-      // Phase 2D: Use v2 entitlements when SAFELY enabled (both read AND dual-write on)
-      const { mode: quotaMode, orgId: orgIdForQuota } = resolveQuotaMode(req);
-      let competitorQuotaExceeded = false;
-      let competitorQuotaUsed = 0;
-      let competitorQuotaLimit = planLimits.competitorScans;
-
-      if (quotaMode === 'v2' && orgIdForQuota) {
-        const v2Check = await checkScanLimitV2(orgIdForQuota, 'competitor');
-        competitorQuotaExceeded = !v2Check.allowed;
-        competitorQuotaUsed = v2Check.used;
-        competitorQuotaLimit = v2Check.limit === -1 ? Infinity : v2Check.limit;
-      } else {
-        // Legacy check (includes legacy_fallback mode)
-        competitorQuotaUsed = user.competitor_scans_used_this_month || 0;
-        competitorQuotaExceeded = competitorQuotaUsed >= planLimits.competitorScans;
-      }
-
-      if (competitorQuotaExceeded) {
-        // Build quota response using centralized helper
-        const { quota, quotaLegacy } = await getQuotaBundleForRequest({
-          req,
-          user,
-          options: { pendingPrimaryScan: false, pendingCompetitorScan: false }
-        });
-
-        const response = {
+      const competitorScansUsed = user.competitor_scans_used_this_month || 0;
+      if (competitorScansUsed >= planLimits.competitorScans) {
+        return res.status(403).json({
           error: 'Competitor scan quota exceeded',
-          message: `Your ${user.plan} plan allows ${competitorQuotaLimit} competitor scans per month. You've used ${competitorQuotaUsed}.`,
-          quota,
+          message: `Your ${user.plan} plan allows ${planLimits.competitorScans} competitor scans per month. You've used ${competitorScansUsed}.`,
+          quota: {
+            type: 'competitor',
+            used: competitorScansUsed,
+            limit: planLimits.competitorScans
+          },
           primaryDomain: user.primary_domain,
           upgrade: user.plan === 'free' ? {
             message: 'Upgrade to DIY to scan 2 competitors per month',
@@ -450,54 +410,20 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
             cta: 'Upgrade to Pro - $99/month',
             ctaUrl: '/checkout.html?plan=pro'
           } : null
-        };
-
-        if (quotaLegacy) {
-          response.quotaLegacy = quotaLegacy;
-        }
-
-        return res.status(403).json(response);
+        });
       }
     }
 
     // Check primary scan quota (only for primary domain scans)
-    // Phase 2D: Use v2 entitlements when SAFELY enabled (both read AND dual-write on)
-    if (!isCompetitorScan) {
-      const { mode: quotaMode, orgId: orgIdForQuota } = resolveQuotaMode(req);
-      let primaryQuotaExceeded = false;
-      let primaryQuotaUsed = 0;
-      let primaryQuotaLimit = planLimits.scansPerMonth;
-
-      if (quotaMode === 'v2' && orgIdForQuota) {
-        const v2Check = await checkScanLimitV2(orgIdForQuota, 'primary');
-        primaryQuotaExceeded = !v2Check.allowed;
-        primaryQuotaUsed = v2Check.used;
-        primaryQuotaLimit = v2Check.limit === -1 ? Infinity : v2Check.limit;
-      } else {
-        // Legacy check (includes legacy_fallback mode)
-        primaryQuotaUsed = user.scans_used_this_month || 0;
-        primaryQuotaExceeded = primaryQuotaUsed >= planLimits.scansPerMonth;
-      }
-
-      if (primaryQuotaExceeded) {
-        // Build quota response using centralized helper
-        const { quota, quotaLegacy } = await getQuotaBundleForRequest({
-          req,
-          user,
-          options: { pendingPrimaryScan: false, pendingCompetitorScan: false }
-        });
-
-        const response = {
-          error: 'Scan quota exceeded',
-          quota
-        };
-
-        if (quotaLegacy) {
-          response.quotaLegacy = quotaLegacy;
+    if (!isCompetitorScan && user.scans_used_this_month >= planLimits.scansPerMonth) {
+      return res.status(403).json({
+        error: 'Scan quota exceeded',
+        quota: {
+          type: 'primary',
+          used: user.scans_used_this_month,
+          limit: planLimits.scansPerMonth
         }
-
-        return res.status(403).json(response);
-      }
+      });
     }
 
     // Validate page count for plan
@@ -521,13 +447,11 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
     let shouldReuseRecommendations = Boolean(contextScanId);
 
     // Create scan record with status 'processing'
-    // Phase 2B: Include organization_id when org scoping is enabled
-    const orgId = isOrgScopingEnabled() ? getOrgScope(req) : null;
     const scanRecord = await db.query(
       `INSERT INTO scans (
-        user_id, url, status, page_count, rubric_version, domain_type, extracted_domain, domain, pages_analyzed, recommendations, organization_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      RETURNING id, url, status, created_at, domain_type`,
+        user_id, url, status, page_count, rubric_version, domain_type, extracted_domain, domain, pages_analyzed, recommendations
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id, url, status, created_at`,
       [
         userId,
         scanTarget,  // Use canonical URL for database storage
@@ -538,8 +462,7 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
         scanDomain,
         scanDomain,
         JSON.stringify({ pages: normalizedPages, page_set_hash: pageSetHash }),
-        contextScanId ? JSON.stringify({ context_scan_id: contextScanId, page_set_hash: pageSetHash }) : null,
-        orgId
+        contextScanId ? JSON.stringify({ context_scan_id: contextScanId, page_set_hash: pageSetHash }) : null
       ]
     );
 
@@ -753,23 +676,8 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
 
     // Increment appropriate scan count AFTER successful scan
     // Using central UsageTrackerService to prevent double-counting
-    // Use scan.domain_type as source of truth (stored in DB) rather than isCompetitorScan variable
-    const scanType = scan.domain_type === 'competitor' ? 'competitor' : 'primary';
+    const scanType = isCompetitorScan ? 'competitor' : 'primary';
     await UsageTrackerService.incrementScanUsage(userId, scanType);
-
-    // Phase 2C: Dual-write to usage_events (non-blocking)
-    // Event type derived from scan.domain_type to ensure consistency with DB record
-    trackUsageEvent({
-      eventType: getScanEventType(scanType, 'completed'),
-      userId,
-      organizationId: getOrgScope(req),
-      scanId: scan.id,
-      metadata: {
-        scan_type: scanType,
-        domain: scanDomain,
-        rubric_version: 'V5'
-      }
-    });
 
     // Update scan record with results
     // NOTE: Round scores to integers since DB columns are INTEGER type
@@ -971,24 +879,6 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
       }
     }
 
-    // Phase 4A: Generate content-aware recommendations (best-effort, non-fatal)
-    // Competitor scans are identified by domain_type='competitor'
-    if (process.env.RECOMMENDATIONS_PIPELINE_V1 === '1' && scan?.domain_type !== 'competitor') {
-      try {
-        const { generateAndPersistRecommendations } = require('../services/recommendation-orchestrator');
-        const recResult = await generateAndPersistRecommendations(scan.id);
-
-        if (recResult.success) {
-          console.log(`[Phase4A] ✅ Generated ${recResult.recommendations_count} recommendations for scan ${scan.id}`);
-        } else {
-          console.error(`[Phase4A] ⚠️ Recommendation generation failed for scan ${scan.id}:`, recResult.error);
-        }
-      } catch (recError) {
-        console.error(`[Phase4A] ❌ Unexpected error generating recommendations for scan ${scan.id}:`, recError.message);
-        // Continue - don't fail the scan
-      }
-    }
-
     // Log usage
     await db.query(
       'INSERT INTO usage_logs (user_id, action, metadata) VALUES ($1, $2, $3)',
@@ -997,19 +887,8 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
 
     console.log(`✅ Scan ${scan.id} completed with score: ${scanResult.totalScore}`);
 
-    // Build quota response using centralized helper
-    // This ensures consistency with /me and /login quota responses
-    const { quota, quotaLegacy } = await getQuotaBundleForRequest({
-      req,
-      user,
-      options: {
-        pendingPrimaryScan: !isCompetitorScan,
-        pendingCompetitorScan: isCompetitorScan
-      }
-    });
-
     // Return results
-    const response = {
+    res.json({
       success: true,
       scan: {
         id: scan.id,
@@ -1031,21 +910,23 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
         created_at: scan.created_at,
         is_competitor: isCompetitorScan
       },
-      quota,
+      quota: {
+        primary: {
+          used: user.scans_used_this_month + (isCompetitorScan ? 0 : 1),
+          limit: planLimits.scansPerMonth
+        },
+        competitor: {
+          used: (user.competitor_scans_used_this_month || 0) + (isCompetitorScan ? 1 : 0),
+          limit: planLimits.competitorScans
+        }
+      },
       mode: !isCompetitorScan ? modeInfo : null, // Mode information for primary domain scans
       refreshCycle,
       progress: progressInfo,
       message: isCompetitorScan
         ? `Competitor scan complete. Scores only - recommendations not available for competitor domains.`
         : null
-    };
-
-    // Include legacy quota for backwards compatibility when in v2 mode
-    if (quotaLegacy) {
-      response.quotaLegacy = quotaLegacy;
-    }
-
-    res.json(response);
+    });
 
   } catch (error) {
     console.error('❌ Authenticated scan error:', error);
@@ -1057,17 +938,6 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
         `UPDATE scans SET status = $1, completed_at = CURRENT_TIMESTAMP WHERE id = $2`,
         ['failed', scan.id]
       );
-
-      // Phase 2C: Dual-write failed scan to usage_events (non-blocking)
-      trackUsageEvent({
-        eventType: USAGE_EVENT_TYPES.SCAN_FAILED,
-        userId: req.userId,
-        organizationId: getOrgScope(req),
-        scanId: scan.id,
-        metadata: {
-          reason: error.message?.substring(0, 200) // Truncate for safety
-        }
-      });
     }
 
     res.status(500).json({
@@ -1085,8 +955,8 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
     const scanId = req.params.id;
     const userId = req.userId;
 
-    // Phase 2B: Add org scoping when enabled
-    let query = `SELECT
+    const result = await db.query(
+      `SELECT
         id, user_id, url, status, total_score, rubric_version,
         ai_readability_score, ai_search_readiness_score,
         content_freshness_score, content_structure_score,
@@ -1094,17 +964,11 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
         trust_authority_score, voice_optimization_score,
         industry, page_count, pages_analyzed, recommendations,
         detailed_analysis, faq_schema, created_at, completed_at,
-        domain, extracted_domain, domain_type, organization_id
+        domain, extracted_domain, domain_type
        FROM scans
-       WHERE id = $1 AND user_id = $2`;
-    let params = [scanId, userId];
-
-    if (isOrgScopingEnabled() && getOrgScope(req) != null) {
-      query += ` AND organization_id = $3`;
-      params.push(getOrgScope(req));
-    }
-
-    const result = await db.query(query, params);
+       WHERE id = $1 AND user_id = $2`,
+      [scanId, userId]
+    );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Scan not found' });
@@ -1146,7 +1010,7 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
       }
     }
 
-    // Get recommendations (includes v2 fields from Phase 4A recommendation engine)
+    // Get recommendations
     const recResult = await db.query(
       `SELECT
         id, category, recommendation_text, priority,
@@ -1155,20 +1019,10 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
         impact_description,
         customized_implementation, ready_to_use_content,
         implementation_notes, quick_wins, validation_checklist,
-        user_rating, user_feedback, implemented_at,
-        -- Phase 4A v2 recommendation engine fields
-        pillar, rec_key, subfactor_key, gap, why_it_matters,
-        confidence, evidence_quality, evidence_json, evidence_summary,
-        automation_level, generated_assets, examples, target_level, target_url,
-        engine_version
+        user_rating, user_feedback, implemented_at
        FROM scan_recommendations
        WHERE scan_id = $1
-       ORDER BY
-        CASE WHEN priority IN ('P0', 'high') THEN 1
-             WHEN priority IN ('P1', 'medium') THEN 2
-             ELSE 3 END,
-        confidence DESC NULLS LAST,
-        estimated_impact DESC`,
+       ORDER BY priority DESC, estimated_impact DESC`,
       [contextScanId]
     );
 
@@ -1283,7 +1137,7 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
       }
     }
 
-    // Get updated recommendations after potential unlock (with new delivery system fields + v2 fields)
+    // Get updated recommendations after potential unlock (with new delivery system fields)
     const updatedRecResult = await db.query(
       `SELECT
         id, category, recommendation_text, priority,
@@ -1302,22 +1156,10 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
         refresh_cycle_number, implementation_progress, previous_findings,
         is_partial_implementation, validation_status, validation_errors,
         last_validated_at, affected_pages, pages_implemented,
-        auto_detected_at, archived_at, archived_reason, skip_enabled_at,
-        -- Phase 4A v2 recommendation engine fields
-        pillar, rec_key, subfactor_key, gap, why_it_matters,
-        confidence, evidence_quality, evidence_json, evidence_summary,
-        automation_level, generated_assets, examples, target_level, target_url,
-        engine_version
+        auto_detected_at, archived_at, archived_reason, skip_enabled_at
        FROM scan_recommendations
        WHERE scan_id = $1
-       ORDER BY
-        batch_number,
-        CASE WHEN priority IN ('P0', 'high') THEN 1
-             WHEN priority IN ('P1', 'medium') THEN 2
-             ELSE 3 END,
-        confidence DESC NULLS LAST,
-        impact_score DESC NULLS LAST,
-        estimated_impact DESC`,
+       ORDER BY batch_number, priority DESC, impact_score DESC NULLS LAST, estimated_impact DESC`,
       [contextScanId]
     );
 
@@ -1537,17 +1379,9 @@ router.get('/list/recent', authenticateToken, loadOrgContext, async (req, res) =
     const limit = parseInt(req.query.limit) || 10;
     const offset = parseInt(req.query.offset) || 0;
 
-    // Phase 2B: Build org scope clause when enabled
-    const orgScopeEnabled = isOrgScopingEnabled() && getOrgScope(req) != null;
-    const orgScopeClause = orgScopeEnabled ? ' AND organization_id = $4' : '';
-    const orgScopeClauseCount = orgScopeEnabled ? ' AND organization_id = $2' : '';
-
     // Try full query first, fall back to basic query if columns don't exist
     let result;
     try {
-      const baseParams = [userId, limit, offset];
-      const params = orgScopeEnabled ? [...baseParams, getOrgScope(req)] : baseParams;
-
       result = await db.query(
         `SELECT
           id, url, status, total_score, rubric_version,
@@ -1556,27 +1390,24 @@ router.get('/list/recent', authenticateToken, loadOrgContext, async (req, res) =
           content_freshness_score, content_structure_score,
           speed_ux_score, technical_setup_score,
           trust_authority_score, voice_optimization_score,
-          created_at, completed_at, organization_id
+          created_at, completed_at
          FROM scans
-         WHERE user_id = $1${orgScopeClause}
+         WHERE user_id = $1
          ORDER BY created_at DESC
          LIMIT $2 OFFSET $3`,
-        params
+        [userId, limit, offset]
       );
     } catch (dbError) {
       if (dbError.code === '42703') { // column does not exist
         console.log('Some scan columns missing, using basic query');
-        const baseParams = [userId, limit, offset];
-        const params = orgScopeEnabled ? [...baseParams, getOrgScope(req)] : baseParams;
-
         result = await db.query(
           `SELECT
             id, url, score as total_score, industry, page_count, created_at
            FROM scans
-           WHERE user_id = $1${orgScopeClause}
+           WHERE user_id = $1
            ORDER BY created_at DESC
            LIMIT $2 OFFSET $3`,
-          params
+          [userId, limit, offset]
         );
         // Add default values for missing columns
         result.rows = result.rows.map(row => ({
@@ -1590,10 +1421,9 @@ router.get('/list/recent', authenticateToken, loadOrgContext, async (req, res) =
       }
     }
 
-    const countParams = orgScopeEnabled ? [userId, getOrgScope(req)] : [userId];
     const countResult = await db.query(
-      `SELECT COUNT(*) as total FROM scans WHERE user_id = $1${orgScopeClauseCount}`,
-      countParams
+      'SELECT COUNT(*) as total FROM scans WHERE user_id = $1',
+      [userId]
     );
 
     res.json({
@@ -1616,22 +1446,17 @@ router.get('/list/recent', authenticateToken, loadOrgContext, async (req, res) =
 // POST /api/scan/:id/recommendation/:recId/feedback
 // Learning Loop: Track user actions
 // ============================================
-router.post('/:id/recommendation/:recId/feedback', authenticateToken, loadOrgContext, async (req, res) => {
+router.post('/:id/recommendation/:recId/feedback', authenticateToken, async (req, res) => {
   try {
     const { id: scanId, recId } = req.params;
     const userId = req.userId;
     const { status, feedback, rating } = req.body;
 
-    // Verify scan belongs to user (Phase 2B: with org scoping when enabled)
-    let scanCheckQuery = 'SELECT id FROM scans WHERE id = $1 AND user_id = $2';
-    let scanCheckParams = [scanId, userId];
-
-    if (isOrgScopingEnabled() && getOrgScope(req) != null) {
-      scanCheckQuery += ' AND organization_id = $3';
-      scanCheckParams.push(getOrgScope(req));
-    }
-
-    const scanCheck = await db.query(scanCheckQuery, scanCheckParams);
+    // Verify scan belongs to user
+    const scanCheck = await db.query(
+      'SELECT id FROM scans WHERE id = $1 AND user_id = $2',
+      [scanId, userId]
+    );
 
     if (scanCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Scan not found' });
@@ -1701,22 +1526,17 @@ router.post('/:id/recommendation/:recId/feedback', authenticateToken, loadOrgCon
 // POST /api/scan/:id/recommendation/:recId/skip
 // Skip a recommendation (available after 5 days)
 // ============================================
-router.post('/:id/recommendation/:recId/skip', authenticateToken, loadOrgContext, async (req, res) => {
+router.post('/:id/recommendation/:recId/skip', authenticateToken, async (req, res) => {
   try {
     const { id: scanId, recId } = req.params;
     const userId = req.userId;
     const { skipData } = req.body;
 
-    // Verify scan belongs to user (Phase 2B: with org scoping when enabled)
-    let scanCheckQuery = 'SELECT id FROM scans WHERE id = $1 AND user_id = $2';
-    let scanCheckParams = [scanId, userId];
-
-    if (isOrgScopingEnabled() && getOrgScope(req) != null) {
-      scanCheckQuery += ' AND organization_id = $3';
-      scanCheckParams.push(getOrgScope(req));
-    }
-
-    const scanCheck = await db.query(scanCheckQuery, scanCheckParams);
+    // Verify scan belongs to user
+    const scanCheck = await db.query(
+      'SELECT id FROM scans WHERE id = $1 AND user_id = $2',
+      [scanId, userId]
+    );
 
     if (scanCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Scan not found' });
@@ -1800,23 +1620,15 @@ router.post('/:id/recommendation/:recId/skip', authenticateToken, loadOrgContext
 // ============================================
 // DELETE /api/scan/:id - Delete a scan
 // ============================================
-router.delete('/:id', authenticateToken, loadOrgContext, async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const scanId = req.params.id;
     const userId = req.userId;
 
-    // Phase 2B: Add org scoping when enabled
-    let query = 'DELETE FROM scans WHERE id = $1 AND user_id = $2';
-    let params = [scanId, userId];
-
-    if (isOrgScopingEnabled() && getOrgScope(req) != null) {
-      query += ' AND organization_id = $3';
-      params.push(getOrgScope(req));
-    }
-
-    query += ' RETURNING id';
-
-    const result = await db.query(query, params);
+    const result = await db.query(
+      'DELETE FROM scans WHERE id = $1 AND user_id = $2 RETURNING id',
+      [scanId, userId]
+    );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Scan not found' });
