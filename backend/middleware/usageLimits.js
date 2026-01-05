@@ -56,7 +56,7 @@ const PLAN_LIMITS = {
   diy: {
     scansPerMonth: 25, // Reasonable limit for DIY users
     pagesPerScan: 5, // Homepage + 4 additional pages
-    competitorScans: 2,
+    competitorScans: 1,
     multiPageScan: true,
     pageSelection: true, // KEY FEATURE: User chooses which pages
     competitorAnalysis: false,
@@ -69,7 +69,7 @@ const PLAN_LIMITS = {
   pro: {
     scansPerMonth: 50,
     pagesPerScan: 25,
-    competitorScans: 10,
+    competitorScans: 3,
     multiPageScan: true,
     pageSelection: true,
     competitorAnalysis: true,
@@ -79,6 +79,34 @@ const PLAN_LIMITS = {
     pageTodoLists: true,
     brandVisibilityIndex: true, // AI visibility across engines
     outsideInCrawl: true // PR, reviews, social mentions
+  },
+  agency: {
+    scansPerMonth: -1, // Unlimited
+    pagesPerScan: -1,
+    competitorScans: 10,
+    multiPageScan: true,
+    pageSelection: true,
+    competitorAnalysis: true,
+    pdfExport: true,
+    jsonLdExport: true,
+    progressTracking: true,
+    pageTodoLists: true,
+    brandVisibilityIndex: true,
+    outsideInCrawl: true
+  },
+  enterprise: {
+    scansPerMonth: -1, // Unlimited
+    pagesPerScan: -1,
+    competitorScans: 10,
+    multiPageScan: true,
+    pageSelection: true,
+    competitorAnalysis: true,
+    pdfExport: true,
+    jsonLdExport: true,
+    progressTracking: true,
+    pageTodoLists: true,
+    brandVisibilityIndex: true,
+    outsideInCrawl: true
   }
 };
 
