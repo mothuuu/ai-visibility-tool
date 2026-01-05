@@ -18,7 +18,9 @@
 const PLAN_LIMITS = {
   free: { scansPerMonth: 2, competitorScans: 0 },
   diy: { scansPerMonth: 25, competitorScans: 2 },
-  pro: { scansPerMonth: 50, competitorScans: 10 }
+  pro: { scansPerMonth: 50, competitorScans: 3 },
+  agency: { scansPerMonth: -1, competitorScans: 0 },
+  enterprise: { scansPerMonth: -1, competitorScans: 10 }
 };
 
 function isUsageV2ReadEnabled() {
@@ -143,7 +145,9 @@ console.log('╚═════════════════════�
 const planTests = [
   { plan: 'free', expectedScans: 2, expectedCompetitor: 0 },
   { plan: 'diy', expectedScans: 25, expectedCompetitor: 2 },
-  { plan: 'pro', expectedScans: 50, expectedCompetitor: 10 },
+  { plan: 'pro', expectedScans: 50, expectedCompetitor: 3 },
+  { plan: 'agency', expectedScans: -1, expectedCompetitor: 0 },
+  { plan: 'enterprise', expectedScans: -1, expectedCompetitor: 10 },
 ];
 
 for (const pt of planTests) {

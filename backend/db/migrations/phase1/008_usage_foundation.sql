@@ -57,10 +57,10 @@ BEGIN
 
     v_limits := CASE p_plan
         WHEN 'free' THEN '{"scans": 2, "competitor_scans": 0, "pages_per_scan": 1}'
-        WHEN 'diy' THEN '{"scans": -1, "competitor_scans": 0, "pages_per_scan": 5}'
-        WHEN 'pro' THEN '{"scans": -1, "competitor_scans": 5, "pages_per_scan": 25}'
-        WHEN 'enterprise' THEN '{"scans": -1, "competitor_scans": -1, "pages_per_scan": -1}'
-        WHEN 'agency' THEN '{"scans": -1, "competitor_scans": -1, "pages_per_scan": -1}'
+        WHEN 'diy' THEN '{"scans": 25, "competitor_scans": 2, "pages_per_scan": 5}'
+        WHEN 'pro' THEN '{"scans": 50, "competitor_scans": 3, "pages_per_scan": 25}'
+        WHEN 'agency' THEN '{"scans": -1, "competitor_scans": 0, "pages_per_scan": -1}'
+        WHEN 'enterprise' THEN '{"scans": -1, "competitor_scans": 10, "pages_per_scan": -1}'
         ELSE '{"scans": 2, "competitor_scans": 0, "pages_per_scan": 1}'
     END::JSONB;
 

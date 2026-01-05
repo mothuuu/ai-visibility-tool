@@ -527,7 +527,7 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
       `INSERT INTO scans (
         user_id, url, status, page_count, rubric_version, domain_type, extracted_domain, domain, pages_analyzed, recommendations, organization_id
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      RETURNING id, url, status, created_at`,
+      RETURNING id, url, status, created_at, domain_type`,
       [
         userId,
         scanTarget,  // Use canonical URL for database storage
@@ -753,10 +753,12 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
 
     // Increment appropriate scan count AFTER successful scan
     // Using central UsageTrackerService to prevent double-counting
-    const scanType = isCompetitorScan ? 'competitor' : 'primary';
+    // Use scan.domain_type as source of truth (stored in DB) rather than isCompetitorScan variable
+    const scanType = scan.domain_type === 'competitor' ? 'competitor' : 'primary';
     await UsageTrackerService.incrementScanUsage(userId, scanType);
 
     // Phase 2C: Dual-write to usage_events (non-blocking)
+    // Event type derived from scan.domain_type to ensure consistency with DB record
     trackUsageEvent({
       eventType: getScanEventType(scanType, 'completed'),
       userId,
