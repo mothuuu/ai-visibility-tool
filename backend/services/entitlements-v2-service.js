@@ -58,27 +58,42 @@ function isV2ModeSafelyEnabled() {
 }
 
 /**
- * Resolve the quota mode for a request.
+ * Resolve the quota mode based on flags and org context.
  * Returns the mode and orgId to use for quota operations.
  *
- * @param {object} req - Express request object
+ * Mode resolution:
+ * - READ=false (any DUAL)     => 'legacy'
+ * - READ=true, DUAL=false     => 'legacy_fallback'
+ * - READ=true, DUAL=true      => 'v2' (only if orgId present)
+ *
+ * @param {object} req - Express request object (optional, can pass null)
+ * @param {number|null} orgIdOverride - Optional orgId override (for auth endpoints)
  * @returns {{ mode: 'v2' | 'legacy' | 'legacy_fallback', orgId: number | null }}
  */
-function resolveQuotaMode(req) {
-  const orgId = req.orgId ?? req.org?.id ?? null;
+function resolveQuotaMode(req, orgIdOverride = null) {
+  const orgId = orgIdOverride ?? req?.orgId ?? req?.org?.id ?? null;
 
-  // v2 mode requires:
-  // 1. Both read AND dual-write enabled (safe config)
-  // 2. An organization context
-  if (isV2ModeSafelyEnabled() && orgId) {
-    return { mode: 'v2', orgId };
+  // First check: is READ even enabled?
+  if (!isUsageV2ReadEnabled()) {
+    // READ=false => always legacy mode (regardless of DUAL_WRITE)
+    return { mode: 'legacy', orgId };
   }
 
-  // If read is enabled but dual-write is not, use legacy_fallback
-  if (isUsageV2ReadEnabled() && !isUsageV2DualWriteEnabled()) {
+  // READ=true from here on
+  // Check if DUAL_WRITE is also enabled
+  if (!isUsageV2DualWriteEnabled()) {
+    // READ=true, DUAL=false => legacy_fallback (warn once about misconfiguration)
+    isV2ModeSafelyEnabled(); // This triggers the warning if not already warned
     return { mode: 'legacy_fallback', orgId };
   }
 
+  // READ=true, DUAL=true
+  // v2 mode requires an organization context
+  if (orgId) {
+    return { mode: 'v2', orgId };
+  }
+
+  // READ=true, DUAL=true, but no org => fall back to legacy
   return { mode: 'legacy', orgId };
 }
 
@@ -236,27 +251,87 @@ async function getQuotaResponse(orgId) {
 }
 
 /**
+ * Get the current usage period (month boundaries).
+ * @returns {{ start: string, end: string }}
+ */
+function getCurrentUsagePeriod() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return {
+    start: start.toISOString(),
+    end: end.toISOString()
+  };
+}
+
+/**
  * Build a legacy quota response object.
  * Used when v2 is not enabled or as a fallback.
  *
  * @param {object} user - User object with scans_used_this_month, competitor_scans_used_this_month
- * @param {object} planLimits - Plan limits object with scansPerMonth, competitorScans
+ * @param {object} planLimits - Plan limits object with scansPerMonth, competitorScans (optional)
  * @param {object} options - Options like { pendingPrimaryScan, pendingCompetitorScan }
  * @param {string} source - 'legacy' or 'legacy_fallback'
  * @returns {object}
  */
 function buildLegacyQuotaResponse(user, planLimits, options = {}, source = 'legacy') {
   const { pendingPrimaryScan = false, pendingCompetitorScan = false } = options;
+  const period = getCurrentUsagePeriod();
 
   return {
     scansUsed: (user.scans_used_this_month || 0) + (pendingPrimaryScan ? 1 : 0),
     scansLimit: planLimits?.scansPerMonth ?? null,
     competitorScansUsed: (user.competitor_scans_used_this_month || 0) + (pendingCompetitorScan ? 1 : 0),
     competitorScansLimit: planLimits?.competitorScans ?? null,
-    periodStart: null,
-    periodEnd: null,
+    periodStart: period.start,
+    periodEnd: period.end,
     plan: user.plan,
     source
+  };
+}
+
+/**
+ * Build quota response for auth endpoints (/login, /me).
+ * ALWAYS returns a quota object, regardless of flag settings.
+ *
+ * @param {object} user - User object from DB query (must have scans_used_this_month, competitor_scans_used_this_month, plan)
+ * @param {number|null} orgId - Organization ID (if user belongs to an org)
+ * @returns {Promise<{ quota: object, quotaLegacy: object|null, mode: string }>}
+ */
+async function buildAuthQuotaResponse(user, orgId) {
+  const { mode } = resolveQuotaMode(null, orgId);
+
+  if (mode === 'v2' && orgId) {
+    // Get v2 quota from usage_events
+    const v2Quota = await getQuotaResponse(orgId);
+
+    // Build legacy for backwards compat
+    const legacyQuota = buildLegacyQuotaResponse(user, null, {}, 'legacy');
+
+    return {
+      quota: v2Quota,
+      quotaLegacy: {
+        primary: {
+          used: legacyQuota.scansUsed,
+          limit: legacyQuota.scansLimit
+        },
+        competitor: {
+          used: legacyQuota.competitorScansUsed,
+          limit: legacyQuota.competitorScansLimit
+        }
+      },
+      mode
+    };
+  }
+
+  // Legacy or legacy_fallback mode
+  const source = mode === 'legacy_fallback' ? 'legacy_fallback' : 'legacy';
+  const legacyQuota = buildLegacyQuotaResponse(user, null, {}, source);
+
+  return {
+    quota: legacyQuota,
+    quotaLegacy: null,
+    mode
   };
 }
 
@@ -320,7 +395,9 @@ module.exports = {
   getOrgQuota,
   checkScanLimitV2,
   getQuotaResponse,
+  getCurrentUsagePeriod,
   buildLegacyQuotaResponse,
+  buildAuthQuotaResponse,
   buildScanQuotaResponse,
   USAGE_EVENT_TYPES
 };
