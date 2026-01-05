@@ -6,7 +6,7 @@ const db = require('../db/database');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/email');
 const { authenticateToken } = require('../middleware/auth');
 const { loadOrgContext } = require('../middleware/orgContext');
-const { isV2ModeSafelyEnabled, getQuotaResponse } = require('../services/entitlements-v2-service');
+const { buildAuthQuotaResponse } = require('../services/entitlements-v2-service');
 const router = express.Router();
 
 // POST /api/auth/signup - Create account
@@ -181,9 +181,11 @@ router.post('/login', async (req, res) => {
       };
     }
 
-    // Phase 2D: Add v2 quota info when enabled
-    if (isV2ModeSafelyEnabled() && user.org_id) {
-      response.quota = await getQuotaResponse(user.org_id);
+    // Phase 2D: ALWAYS add quota (v2 or legacy based on flags)
+    const quotaResult = await buildAuthQuotaResponse(user, user.org_id);
+    response.quota = quotaResult.quota;
+    if (quotaResult.quotaLegacy) {
+      response.quotaLegacy = quotaResult.quotaLegacy;
     }
 
     res.json(response);
@@ -254,9 +256,11 @@ router.get('/me', authenticateToken, loadOrgContext, async (req, res) => {
       };
     }
 
-    // Phase 2D: Add v2 quota info when enabled
-    if (isV2ModeSafelyEnabled() && row.org_id) {
-      response.quota = await getQuotaResponse(row.org_id);
+    // Phase 2D: ALWAYS add quota (v2 or legacy based on flags)
+    const quotaResult = await buildAuthQuotaResponse(row, row.org_id);
+    response.quota = quotaResult.quota;
+    if (quotaResult.quotaLegacy) {
+      response.quotaLegacy = quotaResult.quotaLegacy;
     }
 
     res.json(response);
