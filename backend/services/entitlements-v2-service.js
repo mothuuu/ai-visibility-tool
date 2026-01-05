@@ -17,6 +17,7 @@
 
 const db = require('../db/database');
 const { USAGE_EVENT_TYPES } = require('../constants/usageEventTypes');
+const { PLAN_LIMITS } = require('../middleware/usageLimits');
 
 // Module-level flag to prevent spamming the guardrail warning
 let _warnedAboutMismatchedFlags = false;
@@ -265,24 +266,41 @@ function getCurrentUsagePeriod() {
 }
 
 /**
+ * Resolve plan limits for a given plan.
+ * @param {string} plan - Plan name (free, diy, pro)
+ * @returns {{ scansPerMonth: number, competitorScans: number }}
+ */
+function resolvePlanLimits(plan) {
+  const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+  return {
+    scansPerMonth: limits.scansPerMonth,
+    competitorScans: limits.competitorScans
+  };
+}
+
+/**
  * Build a legacy quota response object.
  * Used when v2 is not enabled or as a fallback.
+ * ALWAYS resolves plan limits - never returns null limits.
  *
- * @param {object} user - User object with scans_used_this_month, competitor_scans_used_this_month
- * @param {object} planLimits - Plan limits object with scansPerMonth, competitorScans (optional)
+ * @param {object} user - User object with scans_used_this_month, competitor_scans_used_this_month, plan
+ * @param {object} planLimitsOverride - Optional plan limits override (if null, resolves from user.plan)
  * @param {object} options - Options like { pendingPrimaryScan, pendingCompetitorScan }
  * @param {string} source - 'legacy' or 'legacy_fallback'
  * @returns {object}
  */
-function buildLegacyQuotaResponse(user, planLimits, options = {}, source = 'legacy') {
+function buildLegacyQuotaResponse(user, planLimitsOverride, options = {}, source = 'legacy') {
   const { pendingPrimaryScan = false, pendingCompetitorScan = false } = options;
   const period = getCurrentUsagePeriod();
 
+  // Always resolve plan limits - never return null
+  const planLimits = planLimitsOverride || resolvePlanLimits(user.plan);
+
   return {
     scansUsed: (user.scans_used_this_month || 0) + (pendingPrimaryScan ? 1 : 0),
-    scansLimit: planLimits?.scansPerMonth ?? null,
+    scansLimit: planLimits.scansPerMonth,
     competitorScansUsed: (user.competitor_scans_used_this_month || 0) + (pendingCompetitorScan ? 1 : 0),
-    competitorScansLimit: planLimits?.competitorScans ?? null,
+    competitorScansLimit: planLimits.competitorScans,
     periodStart: period.start,
     periodEnd: period.end,
     plan: user.plan,
@@ -386,11 +404,70 @@ async function buildScanQuotaResponse(req, user, planLimits, options = {}) {
   };
 }
 
+/**
+ * Unified quota bundle builder for ALL endpoints.
+ * This is the single source of truth for quota responses.
+ *
+ * @param {object} params
+ * @param {object} params.req - Express request object (optional, can be null)
+ * @param {object} params.user - User object (must have scans_used_this_month, competitor_scans_used_this_month, plan)
+ * @param {number|null} params.orgId - Organization ID override
+ * @param {object} params.options - { pendingPrimaryScan, pendingCompetitorScan }
+ * @returns {Promise<{ quota: object, quotaLegacy: object|null, mode: string }>}
+ */
+async function getQuotaBundleForRequest({ req = null, user, orgId = null, options = {} }) {
+  const resolvedOrgId = orgId ?? req?.orgId ?? req?.org?.id ?? null;
+  const { mode } = resolveQuotaMode(req, resolvedOrgId);
+  const { pendingPrimaryScan = false, pendingCompetitorScan = false } = options;
+
+  // Determine the correct source based on mode
+  const legacySource = mode === 'legacy_fallback' ? 'legacy_fallback' : 'legacy';
+
+  // Always build legacy quota with proper limits
+  const legacyQuota = buildLegacyQuotaResponse(user, null, options, legacySource);
+
+  if (mode === 'v2' && resolvedOrgId) {
+    // Get v2 quota from usage_events
+    const v2Quota = await getQuotaResponse(resolvedOrgId);
+
+    // Adjust for pending scan (not yet written to DB)
+    if (pendingPrimaryScan) {
+      v2Quota.scansUsed = (v2Quota.scansUsed || 0) + 1;
+    }
+    if (pendingCompetitorScan) {
+      v2Quota.competitorScansUsed = (v2Quota.competitorScansUsed || 0) + 1;
+    }
+
+    return {
+      quota: v2Quota,
+      quotaLegacy: {
+        primary: {
+          used: legacyQuota.scansUsed,
+          limit: legacyQuota.scansLimit
+        },
+        competitor: {
+          used: legacyQuota.competitorScansUsed,
+          limit: legacyQuota.competitorScansLimit
+        }
+      },
+      mode
+    };
+  }
+
+  // Legacy or legacy_fallback mode
+  return {
+    quota: legacyQuota,
+    quotaLegacy: null,
+    mode
+  };
+}
+
 module.exports = {
   isUsageV2ReadEnabled,
   isUsageV2DualWriteEnabled,
   isV2ModeSafelyEnabled,
   resolveQuotaMode,
+  resolvePlanLimits,
   checkOrgLimit,
   getOrgQuota,
   checkScanLimitV2,
@@ -399,5 +476,6 @@ module.exports = {
   buildLegacyQuotaResponse,
   buildAuthQuotaResponse,
   buildScanQuotaResponse,
+  getQuotaBundleForRequest,
   USAGE_EVENT_TYPES
 };

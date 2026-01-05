@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 /**
- * Verify quota mode resolution across all flag combinations.
+ * Verify quota mode resolution and plan limits across all flag combinations.
  *
- * This script tests the mode resolution logic to ensure correct
- * mode/source assignment for all flag combinations:
- *
+ * Mode resolution:
  * | READ  | DUAL  | Expected Mode      |
  * |-------|-------|-------------------|
  * | false | false | legacy            |
@@ -14,17 +12,14 @@
  *
  * Usage:
  *   node backend/scripts/verify_quota_modes.js
- *
- * For curl-based verification against running server:
- *   # Set flags, restart server, then:
- *   curl -s http://localhost:3000/api/auth/login -X POST \
- *     -H "Content-Type: application/json" \
- *     -d '{"email":"test@example.com","password":"test123"}' \
- *     | jq '.quota.source'
  */
 
-// Inline implementation of the mode resolution logic for testing
-// (avoids loading the full module which requires database)
+// Inline PLAN_LIMITS for testing (mirrors middleware/usageLimits.js)
+const PLAN_LIMITS = {
+  free: { scansPerMonth: 2, competitorScans: 0 },
+  diy: { scansPerMonth: 25, competitorScans: 2 },
+  pro: { scansPerMonth: 50, competitorScans: 10 }
+};
 
 function isUsageV2ReadEnabled() {
   return process.env.USAGE_V2_READ_ENABLED === 'true';
@@ -37,48 +32,46 @@ function isUsageV2DualWriteEnabled() {
 function resolveQuotaMode(req, orgIdOverride = null) {
   const orgId = orgIdOverride ?? req?.orgId ?? req?.org?.id ?? null;
 
-  // First check: is READ even enabled?
   if (!isUsageV2ReadEnabled()) {
-    // READ=false => always legacy mode (regardless of DUAL_WRITE)
     return { mode: 'legacy', orgId };
   }
 
-  // READ=true from here on
-  // Check if DUAL_WRITE is also enabled
   if (!isUsageV2DualWriteEnabled()) {
-    // READ=true, DUAL=false => legacy_fallback
     return { mode: 'legacy_fallback', orgId };
   }
 
-  // READ=true, DUAL=true
-  // v2 mode requires an organization context
   if (orgId) {
     return { mode: 'v2', orgId };
   }
 
-  // READ=true, DUAL=true, but no org => fall back to legacy
   return { mode: 'legacy', orgId };
+}
+
+function resolvePlanLimits(plan) {
+  const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+  return {
+    scansPerMonth: limits.scansPerMonth,
+    competitorScans: limits.competitorScans
+  };
 }
 
 function getCurrentUsagePeriod() {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return {
-    start: start.toISOString(),
-    end: end.toISOString()
-  };
+  return { start: start.toISOString(), end: end.toISOString() };
 }
 
-function buildLegacyQuotaResponse(user, planLimits, options = {}, source = 'legacy') {
+function buildLegacyQuotaResponse(user, planLimitsOverride, options = {}, source = 'legacy') {
   const { pendingPrimaryScan = false, pendingCompetitorScan = false } = options;
   const period = getCurrentUsagePeriod();
+  const planLimits = planLimitsOverride || resolvePlanLimits(user.plan);
 
   return {
     scansUsed: (user.scans_used_this_month || 0) + (pendingPrimaryScan ? 1 : 0),
-    scansLimit: planLimits?.scansPerMonth ?? null,
+    scansLimit: planLimits.scansPerMonth,
     competitorScansUsed: (user.competitor_scans_used_this_month || 0) + (pendingCompetitorScan ? 1 : 0),
-    competitorScansLimit: planLimits?.competitorScans ?? null,
+    competitorScansLimit: planLimits.competitorScans,
     periodStart: period.start,
     periodEnd: period.end,
     plan: user.plan,
@@ -86,7 +79,7 @@ function buildLegacyQuotaResponse(user, planLimits, options = {}, source = 'lega
   };
 }
 
-// Mock user for testing
+// Mock user
 const mockUser = {
   scans_used_this_month: 5,
   competitor_scans_used_this_month: 2,
@@ -94,91 +87,85 @@ const mockUser = {
 };
 
 const testCases = [
-  { read: 'false', dual: 'false', expectedMode: 'legacy', orgId: 37, desc: 'Both flags off' },
-  { read: 'false', dual: 'true',  expectedMode: 'legacy', orgId: 37, desc: 'READ off, DUAL on' },
-  { read: 'true',  dual: 'false', expectedMode: 'legacy_fallback', orgId: 37, desc: 'READ on, DUAL off (unsafe config)' },
-  { read: 'true',  dual: 'true',  expectedMode: 'v2', orgId: 37, desc: 'Both flags on with org' },
-  { read: 'true',  dual: 'true',  expectedMode: 'legacy', orgId: null, desc: 'Both flags on but no org' },
+  { read: 'false', dual: 'false', expectedMode: 'legacy', expectedSource: 'legacy', orgId: 37 },
+  { read: 'false', dual: 'true',  expectedMode: 'legacy', expectedSource: 'legacy', orgId: 37 },
+  { read: 'true',  dual: 'false', expectedMode: 'legacy_fallback', expectedSource: 'legacy_fallback', orgId: 37 },
+  { read: 'true',  dual: 'true',  expectedMode: 'v2', expectedSource: 'v2', orgId: 37 },
+  { read: 'true',  dual: 'true',  expectedMode: 'legacy', expectedSource: 'legacy', orgId: null },
 ];
 
 console.log('╔══════════════════════════════════════════════════════════════╗');
-console.log('║           Quota Mode Resolution Verification                 ║');
+console.log('║           Quota Mode & Limits Verification                   ║');
 console.log('╚══════════════════════════════════════════════════════════════╝\n');
 
-let allPassed = true;
 let passCount = 0;
 let failCount = 0;
 
 for (const tc of testCases) {
-  // Set environment variables
   process.env.USAGE_V2_READ_ENABLED = tc.read;
   process.env.USAGE_V2_DUAL_WRITE_ENABLED = tc.dual;
 
-  const result = resolveQuotaMode(null, tc.orgId);
-  const passed = result.mode === tc.expectedMode;
+  const { mode } = resolveQuotaMode(null, tc.orgId);
+  const modeCorrect = mode === tc.expectedMode;
 
-  if (passed) {
-    passCount++;
+  // For non-v2 modes, test the legacy quota builder
+  let sourceCorrect = true;
+  let limitsPopulated = true;
+  let quota = null;
+
+  if (mode !== 'v2') {
+    const source = mode === 'legacy_fallback' ? 'legacy_fallback' : 'legacy';
+    quota = buildLegacyQuotaResponse(mockUser, null, {}, source);
+    sourceCorrect = quota.source === tc.expectedSource;
+    limitsPopulated = quota.scansLimit !== null && quota.competitorScansLimit !== null;
   } else {
-    failCount++;
-    allPassed = false;
+    // v2 mode - would need DB, skip detailed check
+    sourceCorrect = true;
+    limitsPopulated = true;
   }
 
-  console.log(`Test: ${tc.desc}`);
-  console.log(`  Config: READ=${tc.read}, DUAL=${tc.dual}, orgId=${tc.orgId ?? 'null'}`);
-  console.log(`  Expected mode: ${tc.expectedMode}`);
-  console.log(`  Actual mode:   ${result.mode}`);
+  const passed = modeCorrect && sourceCorrect && limitsPopulated;
+  if (passed) passCount++; else failCount++;
+
+  console.log(`Test: READ=${tc.read}, DUAL=${tc.dual}, orgId=${tc.orgId ?? 'null'}`);
+  console.log(`  Expected mode: ${tc.expectedMode}, source: ${tc.expectedSource}`);
+  console.log(`  Actual mode:   ${mode}${quota ? ', source: ' + quota.source : ''}`);
+  if (quota) {
+    console.log(`  Limits: scans=${quota.scansLimit}, competitor=${quota.competitorScansLimit}`);
+  }
   console.log(`  ${passed ? '✅ PASS' : '❌ FAIL'}\n`);
 }
 
 console.log('╔══════════════════════════════════════════════════════════════╗');
-console.log('║           Legacy Quota Source Verification                   ║');
+console.log('║           Plan Limits Resolution Test                        ║');
 console.log('╚══════════════════════════════════════════════════════════════╝\n');
 
-const sourceTests = [
-  { read: 'false', dual: 'false', expectedSource: 'legacy' },
-  { read: 'true',  dual: 'false', expectedSource: 'legacy_fallback' },
+const planTests = [
+  { plan: 'free', expectedScans: 2, expectedCompetitor: 0 },
+  { plan: 'diy', expectedScans: 25, expectedCompetitor: 2 },
+  { plan: 'pro', expectedScans: 50, expectedCompetitor: 10 },
 ];
 
-for (const tc of sourceTests) {
-  process.env.USAGE_V2_READ_ENABLED = tc.read;
-  process.env.USAGE_V2_DUAL_WRITE_ENABLED = tc.dual;
+for (const pt of planTests) {
+  const limits = resolvePlanLimits(pt.plan);
+  const passed = limits.scansPerMonth === pt.expectedScans && limits.competitorScans === pt.expectedCompetitor;
+  if (passed) passCount++; else failCount++;
 
-  const { mode } = resolveQuotaMode(null, 37);
-  const source = mode === 'legacy_fallback' ? 'legacy_fallback' : 'legacy';
-  const legacyQuota = buildLegacyQuotaResponse(mockUser, null, {}, source);
-
-  const correctSource = legacyQuota.source === tc.expectedSource;
-  const hasPeriod = !!legacyQuota.periodStart && !!legacyQuota.periodEnd;
-
-  if (correctSource && hasPeriod) {
-    passCount++;
-  } else {
-    failCount++;
-    allPassed = false;
-  }
-
-  console.log(`Test: Legacy quota with READ=${tc.read}, DUAL=${tc.dual}`);
-  console.log(`  Expected source: ${tc.expectedSource}`);
-  console.log(`  Actual source:   ${legacyQuota.source}`);
-  console.log(`  Has period dates: ${hasPeriod ? 'yes' : 'no'}`);
-  console.log(`  ${correctSource && hasPeriod ? '✅ PASS' : '❌ FAIL'}\n`);
+  console.log(`Plan: ${pt.plan}`);
+  console.log(`  Expected: scans=${pt.expectedScans}, competitor=${pt.expectedCompetitor}`);
+  console.log(`  Actual:   scans=${limits.scansPerMonth}, competitor=${limits.competitorScans}`);
+  console.log(`  ${passed ? '✅ PASS' : '❌ FAIL'}\n`);
 }
 
 console.log('═══════════════════════════════════════════════════════════════');
 console.log(`Summary: ${passCount} passed, ${failCount} failed`);
-console.log(allPassed ? '✅ All tests passed!' : '❌ Some tests failed!');
+console.log(failCount === 0 ? '✅ All tests passed!' : '❌ Some tests failed!');
 console.log('═══════════════════════════════════════════════════════════════\n');
 
-console.log('Manual verification with curl:');
-console.log('  1. Set flags in .env and restart server');
-console.log('  2. Login and check quota.source:');
-console.log('     curl -s $API/auth/login -X POST \\');
-console.log('       -H "Content-Type: application/json" \\');
-console.log('       -d \'{"email":"...","password":"..."}\' | jq \'.quota.source\'');
-console.log('  3. Expected sources:');
-console.log('     - READ=false, DUAL=false → "legacy"');
-console.log('     - READ=true,  DUAL=false → "legacy_fallback"');
-console.log('     - READ=true,  DUAL=true  → "v2"\n');
+console.log('Manual curl verification:');
+console.log('  export API=https://your-api.onrender.com/api');
+console.log('  curl -s $API/auth/login -X POST -H "Content-Type: application/json" \\');
+console.log('    -d \'{"email":"...","password":"..."}\' | jq \'.quota\'');
+console.log('');
 
-process.exit(allPassed ? 0 : 1);
+process.exit(failCount === 0 ? 0 : 1);

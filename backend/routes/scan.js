@@ -22,8 +22,7 @@ const {
   isV2ModeSafelyEnabled,
   resolveQuotaMode,
   checkScanLimitV2,
-  buildScanQuotaResponse,
-  buildLegacyQuotaResponse
+  getQuotaBundleForRequest
 } = require('../services/entitlements-v2-service');
 
 // Initialize guest services
@@ -431,9 +430,10 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
 
       if (competitorQuotaExceeded) {
         // Build quota response using centralized helper
-        const { quota, quotaLegacy } = await buildScanQuotaResponse(req, user, planLimits, {
-          pendingPrimaryScan: false,
-          pendingCompetitorScan: false
+        const { quota, quotaLegacy } = await getQuotaBundleForRequest({
+          req,
+          user,
+          options: { pendingPrimaryScan: false, pendingCompetitorScan: false }
         });
 
         const response = {
@@ -481,9 +481,10 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
 
       if (primaryQuotaExceeded) {
         // Build quota response using centralized helper
-        const { quota, quotaLegacy } = await buildScanQuotaResponse(req, user, planLimits, {
-          pendingPrimaryScan: false,
-          pendingCompetitorScan: false
+        const { quota, quotaLegacy } = await getQuotaBundleForRequest({
+          req,
+          user,
+          options: { pendingPrimaryScan: false, pendingCompetitorScan: false }
         });
 
         const response = {
@@ -978,9 +979,13 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
 
     // Build quota response using centralized helper
     // This ensures consistency with /me and /login quota responses
-    const { quota, quotaLegacy } = await buildScanQuotaResponse(req, user, planLimits, {
-      pendingPrimaryScan: !isCompetitorScan,
-      pendingCompetitorScan: isCompetitorScan
+    const { quota, quotaLegacy } = await getQuotaBundleForRequest({
+      req,
+      user,
+      options: {
+        pendingPrimaryScan: !isCompetitorScan,
+        pendingCompetitorScan: isCompetitorScan
+      }
     });
 
     // Return results
