@@ -6,7 +6,7 @@ const db = require('../db/database');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/email');
 const { authenticateToken } = require('../middleware/auth');
 const { loadOrgContext } = require('../middleware/orgContext');
-const { buildAuthQuotaResponse } = require('../services/entitlements-v2-service');
+const { getQuotaBundleForRequest } = require('../services/entitlements-v2-service');
 const router = express.Router();
 
 // POST /api/auth/signup - Create account
@@ -182,7 +182,11 @@ router.post('/login', async (req, res) => {
     }
 
     // Phase 2D: ALWAYS add quota (v2 or legacy based on flags)
-    const quotaResult = await buildAuthQuotaResponse(user, user.org_id);
+    const quotaResult = await getQuotaBundleForRequest({
+      req: null,
+      user,
+      orgId: user.org_id
+    });
     response.quota = quotaResult.quota;
     if (quotaResult.quotaLegacy) {
       response.quotaLegacy = quotaResult.quotaLegacy;
@@ -257,7 +261,11 @@ router.get('/me', authenticateToken, loadOrgContext, async (req, res) => {
     }
 
     // Phase 2D: ALWAYS add quota (v2 or legacy based on flags)
-    const quotaResult = await buildAuthQuotaResponse(row, row.org_id);
+    const quotaResult = await getQuotaBundleForRequest({
+      req,
+      user: row,
+      orgId: row.org_id
+    });
     response.quota = quotaResult.quota;
     if (quotaResult.quotaLegacy) {
       response.quotaLegacy = quotaResult.quotaLegacy;
