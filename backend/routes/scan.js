@@ -18,6 +18,10 @@ const {
   getOrgScope,
   requireOrgScope
 } = require('../middleware/orgContext');
+const {
+  isUsageV2ReadEnabled,
+  checkScanLimitV2
+} = require('../services/entitlements-v2-service');
 
 // Initialize guest services
 const guestScanCache = new GuestScanCacheService(db);
@@ -405,15 +409,32 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
       console.log(`🔍 Competitor scan detected: ${scanDomain} (primary: ${user.primary_domain})`);
 
       // Check competitor scan quota
-      const competitorScansUsed = user.competitor_scans_used_this_month || 0;
-      if (competitorScansUsed >= planLimits.competitorScans) {
+      // Phase 2D: Use v2 entitlements when enabled
+      const orgIdForQuota = getOrgScope(req);
+      let competitorQuotaExceeded = false;
+      let competitorQuotaUsed = 0;
+      let competitorQuotaLimit = planLimits.competitorScans;
+
+      if (isUsageV2ReadEnabled() && orgIdForQuota) {
+        const v2Check = await checkScanLimitV2(orgIdForQuota, 'competitor');
+        competitorQuotaExceeded = !v2Check.allowed;
+        competitorQuotaUsed = v2Check.used;
+        competitorQuotaLimit = v2Check.limit === -1 ? Infinity : v2Check.limit;
+      } else {
+        // Legacy check
+        competitorQuotaUsed = user.competitor_scans_used_this_month || 0;
+        competitorQuotaExceeded = competitorQuotaUsed >= planLimits.competitorScans;
+      }
+
+      if (competitorQuotaExceeded) {
         return res.status(403).json({
           error: 'Competitor scan quota exceeded',
-          message: `Your ${user.plan} plan allows ${planLimits.competitorScans} competitor scans per month. You've used ${competitorScansUsed}.`,
+          message: `Your ${user.plan} plan allows ${competitorQuotaLimit} competitor scans per month. You've used ${competitorQuotaUsed}.`,
           quota: {
             type: 'competitor',
-            used: competitorScansUsed,
-            limit: planLimits.competitorScans
+            used: competitorQuotaUsed,
+            limit: competitorQuotaLimit,
+            source: isUsageV2ReadEnabled() && orgIdForQuota ? 'v2' : 'legacy'
           },
           primaryDomain: user.primary_domain,
           upgrade: user.plan === 'free' ? {
@@ -430,15 +451,35 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
     }
 
     // Check primary scan quota (only for primary domain scans)
-    if (!isCompetitorScan && user.scans_used_this_month >= planLimits.scansPerMonth) {
-      return res.status(403).json({
-        error: 'Scan quota exceeded',
-        quota: {
-          type: 'primary',
-          used: user.scans_used_this_month,
-          limit: planLimits.scansPerMonth
-        }
-      });
+    // Phase 2D: Use v2 entitlements when enabled
+    if (!isCompetitorScan) {
+      const orgIdForQuota = getOrgScope(req);
+      let primaryQuotaExceeded = false;
+      let primaryQuotaUsed = 0;
+      let primaryQuotaLimit = planLimits.scansPerMonth;
+
+      if (isUsageV2ReadEnabled() && orgIdForQuota) {
+        const v2Check = await checkScanLimitV2(orgIdForQuota, 'primary');
+        primaryQuotaExceeded = !v2Check.allowed;
+        primaryQuotaUsed = v2Check.used;
+        primaryQuotaLimit = v2Check.limit === -1 ? Infinity : v2Check.limit;
+      } else {
+        // Legacy check
+        primaryQuotaUsed = user.scans_used_this_month || 0;
+        primaryQuotaExceeded = primaryQuotaUsed >= planLimits.scansPerMonth;
+      }
+
+      if (primaryQuotaExceeded) {
+        return res.status(403).json({
+          error: 'Scan quota exceeded',
+          quota: {
+            type: 'primary',
+            used: primaryQuotaUsed,
+            limit: primaryQuotaLimit,
+            source: isUsageV2ReadEnabled() && orgIdForQuota ? 'v2' : 'legacy'
+          }
+        });
+      }
     }
 
     // Validate page count for plan

@@ -6,6 +6,7 @@ const db = require('../db/database');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/email');
 const { authenticateToken } = require('../middleware/auth');
 const { loadOrgContext } = require('../middleware/orgContext');
+const { isUsageV2ReadEnabled, getQuotaResponse } = require('../services/entitlements-v2-service');
 const router = express.Router();
 
 // POST /api/auth/signup - Create account
@@ -180,6 +181,11 @@ router.post('/login', async (req, res) => {
       };
     }
 
+    // Phase 2D: Add v2 quota info when enabled
+    if (isUsageV2ReadEnabled() && user.org_id) {
+      response.quota = await getQuotaResponse(user.org_id);
+    }
+
     res.json(response);
   } catch (error) {
     console.error('Login error:', error);
@@ -246,6 +252,11 @@ router.get('/me', authenticateToken, loadOrgContext, async (req, res) => {
         plan: row.org_plan,
         settings: row.org_settings || {}
       };
+    }
+
+    // Phase 2D: Add v2 quota info when enabled
+    if (isUsageV2ReadEnabled() && row.org_id) {
+      response.quota = await getQuotaResponse(row.org_id);
     }
 
     res.json(response);
