@@ -6,7 +6,7 @@ const db = require('../db/database');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/email');
 const { authenticateToken } = require('../middleware/auth');
 const { loadOrgContext } = require('../middleware/orgContext');
-const { isUsageV2ReadEnabled, getQuotaResponse } = require('../services/entitlements-v2-service');
+const { isV2ModeSafelyEnabled, getQuotaResponse } = require('../services/entitlements-v2-service');
 const router = express.Router();
 
 // POST /api/auth/signup - Create account
@@ -182,7 +182,7 @@ router.post('/login', async (req, res) => {
     }
 
     // Phase 2D: Add v2 quota info when enabled
-    if (isUsageV2ReadEnabled() && user.org_id) {
+    if (isV2ModeSafelyEnabled() && user.org_id) {
       response.quota = await getQuotaResponse(user.org_id);
     }
 
@@ -255,7 +255,7 @@ router.get('/me', authenticateToken, loadOrgContext, async (req, res) => {
     }
 
     // Phase 2D: Add v2 quota info when enabled
-    if (isUsageV2ReadEnabled() && row.org_id) {
+    if (isV2ModeSafelyEnabled() && row.org_id) {
       response.quota = await getQuotaResponse(row.org_id);
     }
 

@@ -19,8 +19,11 @@ const {
   requireOrgScope
 } = require('../middleware/orgContext');
 const {
-  isUsageV2ReadEnabled,
-  checkScanLimitV2
+  isV2ModeSafelyEnabled,
+  resolveQuotaMode,
+  checkScanLimitV2,
+  buildScanQuotaResponse,
+  buildLegacyQuotaResponse
 } = require('../services/entitlements-v2-service');
 
 // Initialize guest services
@@ -409,33 +412,34 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
       console.log(`🔍 Competitor scan detected: ${scanDomain} (primary: ${user.primary_domain})`);
 
       // Check competitor scan quota
-      // Phase 2D: Use v2 entitlements when enabled
-      const orgIdForQuota = getOrgScope(req);
+      // Phase 2D: Use v2 entitlements when SAFELY enabled (both read AND dual-write on)
+      const { mode: quotaMode, orgId: orgIdForQuota } = resolveQuotaMode(req);
       let competitorQuotaExceeded = false;
       let competitorQuotaUsed = 0;
       let competitorQuotaLimit = planLimits.competitorScans;
 
-      if (isUsageV2ReadEnabled() && orgIdForQuota) {
+      if (quotaMode === 'v2' && orgIdForQuota) {
         const v2Check = await checkScanLimitV2(orgIdForQuota, 'competitor');
         competitorQuotaExceeded = !v2Check.allowed;
         competitorQuotaUsed = v2Check.used;
         competitorQuotaLimit = v2Check.limit === -1 ? Infinity : v2Check.limit;
       } else {
-        // Legacy check
+        // Legacy check (includes legacy_fallback mode)
         competitorQuotaUsed = user.competitor_scans_used_this_month || 0;
         competitorQuotaExceeded = competitorQuotaUsed >= planLimits.competitorScans;
       }
 
       if (competitorQuotaExceeded) {
-        return res.status(403).json({
+        // Build quota response using centralized helper
+        const { quota, quotaLegacy } = await buildScanQuotaResponse(req, user, planLimits, {
+          pendingPrimaryScan: false,
+          pendingCompetitorScan: false
+        });
+
+        const response = {
           error: 'Competitor scan quota exceeded',
           message: `Your ${user.plan} plan allows ${competitorQuotaLimit} competitor scans per month. You've used ${competitorQuotaUsed}.`,
-          quota: {
-            type: 'competitor',
-            used: competitorQuotaUsed,
-            limit: competitorQuotaLimit,
-            source: isUsageV2ReadEnabled() && orgIdForQuota ? 'v2' : 'legacy'
-          },
+          quota,
           primaryDomain: user.primary_domain,
           upgrade: user.plan === 'free' ? {
             message: 'Upgrade to DIY to scan 2 competitors per month',
@@ -446,39 +450,52 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
             cta: 'Upgrade to Pro - $99/month',
             ctaUrl: '/checkout.html?plan=pro'
           } : null
-        });
+        };
+
+        if (quotaLegacy) {
+          response.quotaLegacy = quotaLegacy;
+        }
+
+        return res.status(403).json(response);
       }
     }
 
     // Check primary scan quota (only for primary domain scans)
-    // Phase 2D: Use v2 entitlements when enabled
+    // Phase 2D: Use v2 entitlements when SAFELY enabled (both read AND dual-write on)
     if (!isCompetitorScan) {
-      const orgIdForQuota = getOrgScope(req);
+      const { mode: quotaMode, orgId: orgIdForQuota } = resolveQuotaMode(req);
       let primaryQuotaExceeded = false;
       let primaryQuotaUsed = 0;
       let primaryQuotaLimit = planLimits.scansPerMonth;
 
-      if (isUsageV2ReadEnabled() && orgIdForQuota) {
+      if (quotaMode === 'v2' && orgIdForQuota) {
         const v2Check = await checkScanLimitV2(orgIdForQuota, 'primary');
         primaryQuotaExceeded = !v2Check.allowed;
         primaryQuotaUsed = v2Check.used;
         primaryQuotaLimit = v2Check.limit === -1 ? Infinity : v2Check.limit;
       } else {
-        // Legacy check
+        // Legacy check (includes legacy_fallback mode)
         primaryQuotaUsed = user.scans_used_this_month || 0;
         primaryQuotaExceeded = primaryQuotaUsed >= planLimits.scansPerMonth;
       }
 
       if (primaryQuotaExceeded) {
-        return res.status(403).json({
-          error: 'Scan quota exceeded',
-          quota: {
-            type: 'primary',
-            used: primaryQuotaUsed,
-            limit: primaryQuotaLimit,
-            source: isUsageV2ReadEnabled() && orgIdForQuota ? 'v2' : 'legacy'
-          }
+        // Build quota response using centralized helper
+        const { quota, quotaLegacy } = await buildScanQuotaResponse(req, user, planLimits, {
+          pendingPrimaryScan: false,
+          pendingCompetitorScan: false
         });
+
+        const response = {
+          error: 'Scan quota exceeded',
+          quota
+        };
+
+        if (quotaLegacy) {
+          response.quotaLegacy = quotaLegacy;
+        }
+
+        return res.status(403).json(response);
       }
     }
 
@@ -959,8 +976,15 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
 
     console.log(`✅ Scan ${scan.id} completed with score: ${scanResult.totalScore}`);
 
+    // Build quota response using centralized helper
+    // This ensures consistency with /me and /login quota responses
+    const { quota, quotaLegacy } = await buildScanQuotaResponse(req, user, planLimits, {
+      pendingPrimaryScan: !isCompetitorScan,
+      pendingCompetitorScan: isCompetitorScan
+    });
+
     // Return results
-    res.json({
+    const response = {
       success: true,
       scan: {
         id: scan.id,
@@ -982,23 +1006,21 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
         created_at: scan.created_at,
         is_competitor: isCompetitorScan
       },
-      quota: {
-        primary: {
-          used: user.scans_used_this_month + (isCompetitorScan ? 0 : 1),
-          limit: planLimits.scansPerMonth
-        },
-        competitor: {
-          used: (user.competitor_scans_used_this_month || 0) + (isCompetitorScan ? 1 : 0),
-          limit: planLimits.competitorScans
-        }
-      },
+      quota,
       mode: !isCompetitorScan ? modeInfo : null, // Mode information for primary domain scans
       refreshCycle,
       progress: progressInfo,
       message: isCompetitorScan
         ? `Competitor scan complete. Scores only - recommendations not available for competitor domains.`
         : null
-    });
+    };
+
+    // Include legacy quota for backwards compatibility when in v2 mode
+    if (quotaLegacy) {
+      response.quotaLegacy = quotaLegacy;
+    }
+
+    res.json(response);
 
   } catch (error) {
     console.error('❌ Authenticated scan error:', error);
