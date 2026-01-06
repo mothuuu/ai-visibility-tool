@@ -116,6 +116,19 @@ loginForm.addEventListener('submit', async (e) => {
       localStorage.setItem('authToken', data.accessToken);
       localStorage.setItem('user', JSON.stringify(data.user));
 
+      // Store organization data if present (Phase 3A)
+      if (data.organization) {
+        localStorage.setItem('organization', JSON.stringify(data.organization));
+      }
+
+      // Store quota data if present (Phase 3A - v2 mode)
+      if (data.quota) {
+        localStorage.setItem('quota', JSON.stringify(data.quota));
+      }
+      if (data.quotaLegacy) {
+        localStorage.setItem('quotaLegacy', JSON.stringify(data.quotaLegacy));
+      }
+
       // Track login event
       if (window.Analytics) {
         window.Analytics.trackLogin('email');
@@ -242,6 +255,19 @@ signupForm.addEventListener('submit', async (e) => {
       // Store token in localStorage
       localStorage.setItem('authToken', data.accessToken);
       localStorage.setItem('user', JSON.stringify(data.user));
+
+      // Store organization data if present (Phase 3A)
+      if (data.organization) {
+        localStorage.setItem('organization', JSON.stringify(data.organization));
+      }
+
+      // Store quota data if present (Phase 3A - v2 mode)
+      if (data.quota) {
+        localStorage.setItem('quota', JSON.stringify(data.quota));
+      }
+      if (data.quotaLegacy) {
+        localStorage.setItem('quotaLegacy', JSON.stringify(data.quotaLegacy));
+      }
 
       // Track signup completed
       if (window.Analytics) {
@@ -371,6 +397,9 @@ window.addEventListener('DOMContentLoaded', () => {
       // Token is invalid, clear it
       localStorage.removeItem('authToken');
       localStorage.removeItem('user');
+      localStorage.removeItem('organization');
+      localStorage.removeItem('quota');
+      localStorage.removeItem('quotaLegacy');
     });
   }
 });

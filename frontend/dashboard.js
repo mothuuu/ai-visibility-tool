@@ -223,6 +223,9 @@ function handleLogout() {
     localStorage.removeItem('authToken');
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('organization');
+    localStorage.removeItem('quota');
+    localStorage.removeItem('quotaLegacy');
     lastKnownUserId = null;
     console.log('[Auth] Logged out, cleared all user data');
     // Redirect to login
@@ -245,7 +248,10 @@ function getDisplayScore(backendScore) {
 
 // Global state
 let user = null;
-let quota = { used: 0, limit: 2 };
+let organization = null;  // Phase 3A: Organization data
+let quotaData = null;     // Phase 3A: v2 quota object
+let quotaLegacy = null;   // Phase 3A: Legacy quota fallback
+let quota = { used: 0, limit: 2 };  // Backwards compatible quota
 let currentSection = 'dashboard-home';
 let selectedScanType = 'single-page'; // Track selected scan type (single-page or multi-page)
 
@@ -278,6 +284,11 @@ async function initDashboard() {
         user = data.user;
         console.log('Dashboard: User loaded, email_verified:', user.email_verified);
 
+        // Phase 3A: Store organization and quota data
+        organization = data.organization || null;
+        quotaData = data.quota || null;
+        quotaLegacy = data.quotaLegacy || null;
+
         // Check email verification
         if (!user.email_verified) {
             console.log('Dashboard: Email not verified, redirecting to verify.html');
@@ -285,11 +296,21 @@ async function initDashboard() {
             return;
         }
 
-        // Store user
+        // Store user and org data in localStorage
         localStorage.setItem('user', JSON.stringify(user));
+        if (organization) {
+            localStorage.setItem('organization', JSON.stringify(organization));
+        }
+        if (quotaData) {
+            localStorage.setItem('quota', JSON.stringify(quotaData));
+        }
+        if (quotaLegacy) {
+            localStorage.setItem('quotaLegacy', JSON.stringify(quotaLegacy));
+        }
 
         // Update UI
         updateUserInfo();
+        updateOrgInfo();  // Phase 3A: Update org display
         updateQuota();
         await loadDashboardData();
 
@@ -315,6 +336,9 @@ async function initDashboard() {
         console.log('Dashboard: Clearing auth and redirecting to auth.html');
         localStorage.removeItem('authToken');
         localStorage.removeItem('user');
+        localStorage.removeItem('organization');
+        localStorage.removeItem('quota');
+        localStorage.removeItem('quotaLegacy');
         window.location.href = 'auth.html';
     }
 }
@@ -505,33 +529,103 @@ function updateFeatureLocking() {
     if (testAiDiscoverability) testAiDiscoverability.disabled = !isPro;
 }
 
+// Phase 3A: Update organization info in header and settings
+function updateOrgInfo() {
+    // Update org name in header (if element exists)
+    const orgNameHeader = document.getElementById('orgNameHeader');
+    if (orgNameHeader) {
+        if (organization && organization.name) {
+            orgNameHeader.textContent = organization.name;
+            orgNameHeader.style.display = 'block';
+        } else {
+            orgNameHeader.style.display = 'none';
+        }
+    }
+
+    // Update org info in settings section
+    const orgNameSettings = document.getElementById('orgNameSettings');
+    const orgIdSettings = document.getElementById('orgIdSettings');
+    const orgPlanSettings = document.getElementById('orgPlanSettings');
+    const orgSection = document.getElementById('organizationSection');
+
+    if (orgSection) {
+        if (organization) {
+            orgSection.style.display = 'block';
+            if (orgNameSettings) orgNameSettings.textContent = organization.name || 'N/A';
+            if (orgIdSettings) orgIdSettings.textContent = organization.id || 'N/A';
+            if (orgPlanSettings) orgPlanSettings.textContent = organization.plan || user.plan || 'free';
+        } else {
+            // Hide org section when no organization data
+            orgSection.style.display = 'none';
+        }
+    }
+}
+
 // Update quota display
+// Phase 3A: Use QuotaUtils helper for unified quota handling
 function updateQuota() {
     const planLimits = {
         free: { primary: 2, competitor: 0, pages: 1 },
         diy: { primary: 25, competitor: 2, pages: 5 },
         pro: { primary: 50, competitor: 3, pages: 25 },
-        enterprise: { primary: 200, competitor: 10, pages: 100 }
+        agency: { primary: -1, competitor: 0, pages: -1 },
+        enterprise: { primary: -1, competitor: 10, pages: -1 }
     };
 
     const limits = planLimits[user.plan] || planLimits.free;
 
-    // Primary scan quota
-    quota = {
-        used: user.scans_used_this_month || 0,
-        limit: limits.primary
-    };
+    // Phase 3A: Try to use normalized quota from QuotaUtils
+    let normalizedQuota = null;
+    if (window.QuotaUtils) {
+        normalizedQuota = window.QuotaUtils.getQuotaDisplay(quotaData, quotaLegacy);
+        if (!normalizedQuota) {
+            normalizedQuota = window.QuotaUtils.getQuotaFromUser(user);
+        }
+    }
+
+    // Primary scan quota (use normalized if available, fallback to legacy)
+    if (normalizedQuota) {
+        quota = {
+            used: normalizedQuota.primary.used,
+            limit: normalizedQuota.primary.limit === -1 ? Infinity : normalizedQuota.primary.limit
+        };
+    } else {
+        quota = {
+            used: user.scans_used_this_month || 0,
+            limit: limits.primary === -1 ? Infinity : limits.primary
+        };
+    }
 
     // Update dashboard stats
-    const scansUsed = `${quota.used}/${quota.limit}`;
-    const scansPercent = quota.limit > 0 ? Math.round((quota.used / quota.limit) * 100) : 0;
+    const scansUsedText = quota.limit === Infinity
+        ? `${quota.used} (Unlimited)`
+        : `${quota.used}/${quota.limit}`;
+    const scansPercent = quota.limit === Infinity
+        ? 0
+        : (quota.limit > 0 ? Math.round((quota.used / quota.limit) * 100) : 0);
 
-    document.getElementById('dashboardScansUsed').textContent = scansUsed;
-    document.getElementById('dashboardScansPercent').textContent = `${scansPercent}% used`;
+    const dashboardScansUsed = document.getElementById('dashboardScansUsed');
+    const dashboardScansPercent = document.getElementById('dashboardScansPercent');
+    if (dashboardScansUsed) dashboardScansUsed.textContent = scansUsedText;
+    if (dashboardScansPercent) dashboardScansPercent.textContent = `${scansPercent}% used`;
 
     // Update page selector limits
     const pageSelectorLimit = document.getElementById('pageSelectorLimit');
-    if (pageSelectorLimit) pageSelectorLimit.textContent = limits.pages;
+    if (pageSelectorLimit) {
+        pageSelectorLimit.textContent = limits.pages === -1 ? 'Unlimited' : limits.pages;
+    }
+
+    // Phase 3A: Update competitor quota display if elements exist
+    if (normalizedQuota) {
+        const competitorQuotaEl = document.getElementById('competitorQuotaDisplay');
+        if (competitorQuotaEl) {
+            const cLimit = normalizedQuota.competitor.limit;
+            const cUsed = normalizedQuota.competitor.used;
+            competitorQuotaEl.textContent = cLimit === -1
+                ? `${cUsed} (Unlimited)`
+                : `${cUsed}/${cLimit}`;
+        }
+    }
 }
 
 // Setup navigation
@@ -1102,6 +1196,9 @@ function closeLogoutModal() {
 function confirmLogout() {
     localStorage.removeItem('authToken');
     localStorage.removeItem('user');
+    localStorage.removeItem('organization');
+    localStorage.removeItem('quota');
+    localStorage.removeItem('quotaLegacy');
     window.location.href = 'index.html';
 }
 

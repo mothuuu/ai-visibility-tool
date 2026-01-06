@@ -2986,6 +2986,7 @@
             </div>
             <div class="user-section">
                 <div class="user-info">
+                    <div class="org-name" id="orgNameHeader" style="display: none; font-size: 0.75rem; color: var(--gray-500); margin-bottom: 2px;"></div>
                     <div class="user-name" id="userName">User</div>
                 </div>
                 <button class="upgrade-btn" id="upgradeBtn" onclick="window.location.href='https://www.visible2ai.com/checkout.html'" title="Upgrade your plan">
@@ -4790,6 +4791,27 @@
                     <p class="section-subtitle">Manage your subscription and billing</p>
                 </div>
 
+                <!-- Phase 3A: Organization Section (read-only) -->
+                <div class="card" id="organizationSection" style="display: none; margin-bottom: 1.5rem;">
+                    <div class="card-header">
+                        <h2 class="card-title"><i class="fas fa-building" style="margin-right: 0.5rem; color: var(--brand-purple);"></i>Organization</h2>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;">
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Organization Name</div>
+                            <div style="font-size: 1rem; font-weight: 600; color: var(--gray-900);" id="orgNameSettings">-</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Organization ID</div>
+                            <div style="font-size: 1rem; font-weight: 600; color: var(--gray-700); font-family: monospace;" id="orgIdSettings">-</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Plan</div>
+                            <div style="font-size: 1rem; font-weight: 600; color: var(--brand-cyan); text-transform: capitalize;" id="orgPlanSettings">-</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Two Column Layout for Plan & Usage -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <!-- 1. Current Plan Details Section -->
@@ -5181,6 +5203,7 @@
         </div>
     </div>
 
+    <script src="utils/quota.js"></script>
     <script src="dashboard.js" defer></script>
     <script src="support-chat.js"></script>
 </body>
