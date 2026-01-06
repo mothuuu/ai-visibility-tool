@@ -2,9 +2,9 @@
 --
 -- Updates the limits JSONB to match the corrected plan limits:
 -- - free: 0 competitor scans (unchanged)
--- - diy: 2 competitor scans (was 0)
+-- - diy: 1 competitor scan (was 0)
 -- - pro: 3 competitor scans (was 5)
--- - agency: 0 competitor scans (was unlimited/-1)
+-- - agency: 10 competitor scans (was unlimited/-1)
 -- - enterprise: 10 competitor scans (was unlimited/-1)
 --
 -- Also updates the get_or_create_usage_period function with correct limits.
@@ -13,7 +13,7 @@
 UPDATE usage_periods
 SET limits = jsonb_set(
     jsonb_set(limits, '{scans}', '25'),
-    '{competitor_scans}', '2'
+    '{competitor_scans}', '1'
 )
 WHERE plan = 'diy';
 
@@ -25,7 +25,7 @@ SET limits = jsonb_set(
 WHERE plan = 'pro';
 
 UPDATE usage_periods
-SET limits = jsonb_set(limits, '{competitor_scans}', '0')
+SET limits = jsonb_set(limits, '{competitor_scans}', '10')
 WHERE plan = 'agency';
 
 UPDATE usage_periods
@@ -56,9 +56,9 @@ BEGIN
 
     v_limits := CASE p_plan
         WHEN 'free' THEN '{"scans": 2, "competitor_scans": 0, "pages_per_scan": 1}'
-        WHEN 'diy' THEN '{"scans": 25, "competitor_scans": 2, "pages_per_scan": 5}'
+        WHEN 'diy' THEN '{"scans": 25, "competitor_scans": 1, "pages_per_scan": 5}'
         WHEN 'pro' THEN '{"scans": 50, "competitor_scans": 3, "pages_per_scan": 25}'
-        WHEN 'agency' THEN '{"scans": -1, "competitor_scans": 0, "pages_per_scan": -1}'
+        WHEN 'agency' THEN '{"scans": -1, "competitor_scans": 10, "pages_per_scan": -1}'
         WHEN 'enterprise' THEN '{"scans": -1, "competitor_scans": 10, "pages_per_scan": -1}'
         ELSE '{"scans": 2, "competitor_scans": 0, "pages_per_scan": 1}'
     END::JSONB;

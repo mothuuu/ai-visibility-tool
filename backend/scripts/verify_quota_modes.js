@@ -17,9 +17,9 @@
 // Inline PLAN_LIMITS for testing (mirrors middleware/usageLimits.js)
 const PLAN_LIMITS = {
   free: { scansPerMonth: 2, competitorScans: 0 },
-  diy: { scansPerMonth: 25, competitorScans: 2 },
+  diy: { scansPerMonth: 25, competitorScans: 1 },
   pro: { scansPerMonth: 50, competitorScans: 3 },
-  agency: { scansPerMonth: -1, competitorScans: 0 },
+  agency: { scansPerMonth: -1, competitorScans: 10 },
   enterprise: { scansPerMonth: -1, competitorScans: 10 }
 };
 
@@ -144,9 +144,9 @@ console.log('╚═════════════════════�
 
 const planTests = [
   { plan: 'free', expectedScans: 2, expectedCompetitor: 0 },
-  { plan: 'diy', expectedScans: 25, expectedCompetitor: 2 },
+  { plan: 'diy', expectedScans: 25, expectedCompetitor: 1 },
   { plan: 'pro', expectedScans: 50, expectedCompetitor: 3 },
-  { plan: 'agency', expectedScans: -1, expectedCompetitor: 0 },
+  { plan: 'agency', expectedScans: -1, expectedCompetitor: 10 },
   { plan: 'enterprise', expectedScans: -1, expectedCompetitor: 10 },
 ];
 

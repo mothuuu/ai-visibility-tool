@@ -56,7 +56,7 @@ const PLAN_LIMITS = {
   diy: {
     scansPerMonth: 25, // Reasonable limit for DIY users
     pagesPerScan: 5, // Homepage + 4 additional pages
-    competitorScans: 2,
+    competitorScans: 1,
     multiPageScan: true,
     pageSelection: true, // KEY FEATURE: User chooses which pages
     competitorAnalysis: false,
@@ -83,7 +83,7 @@ const PLAN_LIMITS = {
   agency: {
     scansPerMonth: -1, // Unlimited
     pagesPerScan: -1,
-    competitorScans: 0,
+    competitorScans: 10,
     multiPageScan: true,
     pageSelection: true,
     competitorAnalysis: true,
