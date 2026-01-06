@@ -1339,11 +1339,12 @@ async function openStripePortal() {
 }
 
 // Load subscription data
+// Phase 3A: Use QuotaUtils for consistent limit display
 async function loadSubscriptionData() {
     if (!user) return;
 
     try {
-        // Set plan-based information
+        // Set plan-based information (features for display)
         const planInfo = {
             free: {
                 name: 'Free Plan',
@@ -1353,10 +1354,7 @@ async function loadSubscriptionData() {
                     'Track 1 page',
                     'Basic visibility score',
                     'Community support'
-                ],
-                scansLimit: 2,
-                pagesLimit: 1,
-                competitorsLimit: 0
+                ]
             },
             diy: {
                 name: 'DIY Plan',
@@ -1366,11 +1364,8 @@ async function loadSubscriptionData() {
                     'Up to 5 pages of the same domain',
                     'Website Visibility Index (full)',
                     'Copy-paste code snippets',
-                    'Competitor scanning'
-                ],
-                scansLimit: 25,
-                pagesLimit: 5,
-                competitorsLimit: 2
+                    '2 competitor scans'
+                ]
             },
             pro: {
                 name: 'Pro Plan',
@@ -1381,25 +1376,30 @@ async function loadSubscriptionData() {
                     'Website Visibility Index (full) & Brand Visibility Index (Lite)',
                     'Copy-paste code snippets',
                     '3 competitor analyses'
-                ],
-                scansLimit: 50,
-                pagesLimit: 25,
-                competitorsLimit: 3
+                ]
+            },
+            agency: {
+                name: 'Agency Plan',
+                price: '$299/month',
+                features: [
+                    'Unlimited scans',
+                    'Unlimited pages per domain',
+                    'Website Visibility Index (full) & Brand Visibility Index (Full)',
+                    'White-label reports',
+                    'Priority support'
+                ]
             },
             enterprise: {
                 name: 'Enterprise Plan',
                 price: '$499/month',
                 features: [
-                    '200 scans per month',
-                    'Up to 100 pages of the same domain',
+                    'Unlimited scans',
+                    'Unlimited pages per domain',
                     'Website Visibility Index (full) & Brand Visibility Index (Full)',
                     '10 competitor analyses',
                     'Advanced AI monitoring (50+ queries)',
                     'Media & social tracking'
-                ],
-                scansLimit: 200,
-                pagesLimit: 100,
-                competitorsLimit: 10
+                ]
             }
         };
 
@@ -1420,35 +1420,48 @@ async function loadSubscriptionData() {
         renewalDate.setDate(renewalDate.getDate() + 30);
         document.getElementById('billingRenewalDate').textContent = `Renews ${renewalDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
-        // Update usage statistics
-        const scansUsed = user.scans_used_this_month || 0;
-        const scansLimit = currentPlan.scansLimit;
-        const scansPercent = scansLimit > 0 ? Math.round((scansUsed / scansLimit) * 100) : 0;
-        const scansRemaining = scansLimit - scansUsed;
+        // Phase 3A: Use normalized quota for usage statistics
+        let normalizedQuota = null;
+        if (window.QuotaUtils) {
+            normalizedQuota = window.QuotaUtils.getQuotaDisplay(quotaData, quotaLegacy);
+            if (!normalizedQuota) {
+                normalizedQuota = window.QuotaUtils.getQuotaFromUser(user);
+            }
+        }
 
-        document.getElementById('billingScansUsed').textContent = `${scansUsed}/${scansLimit}`;
-        document.getElementById('billingScansProgress').style.width = `${scansPercent}%`;
-        document.getElementById('billingScansRemaining').textContent = scansRemaining > 0 ? `${scansRemaining} scans remaining` : 'At limit';
+        // Scans usage
+        const scansUsed = normalizedQuota ? normalizedQuota.primary.used : (user.scans_used_this_month || 0);
+        const scansLimit = normalizedQuota ? normalizedQuota.primary.limit : 2;
+        const scansLimitDisplay = scansLimit === -1 ? '∞' : scansLimit;
+        const scansPercent = scansLimit === -1 ? 0 : (scansLimit > 0 ? Math.round((scansUsed / scansLimit) * 100) : 0);
+        const scansRemaining = scansLimit === -1 ? -1 : Math.max(0, scansLimit - scansUsed);
+
+        document.getElementById('billingScansUsed').textContent = scansLimit === -1 ? `${scansUsed} (Unlimited)` : `${scansUsed}/${scansLimit}`;
+        document.getElementById('billingScansProgress').style.width = `${Math.min(100, scansPercent)}%`;
+        document.getElementById('billingScansRemaining').textContent = scansRemaining === -1 ? 'Unlimited' : (scansRemaining > 0 ? `${scansRemaining} scans remaining` : 'At limit');
 
         // Pages tracked (placeholder - would come from backend)
+        const planPageLimits = { free: 1, diy: 5, pro: 25, agency: -1, enterprise: -1 };
+        const pagesLimit = planPageLimits[user.plan] || 1;
         const pagesUsed = 0; // TODO: Get from backend
-        const pagesLimit = currentPlan.pagesLimit;
-        const pagesPercent = pagesLimit > 0 ? Math.round((pagesUsed / pagesLimit) * 100) : 0;
-        const pagesRemaining = pagesLimit - pagesUsed;
+        const pagesLimitDisplay = pagesLimit === -1 ? '∞' : pagesLimit;
+        const pagesPercent = pagesLimit === -1 ? 0 : (pagesLimit > 0 ? Math.round((pagesUsed / pagesLimit) * 100) : 0);
+        const pagesRemaining = pagesLimit === -1 ? -1 : Math.max(0, pagesLimit - pagesUsed);
 
-        document.getElementById('billingPagesTracked').textContent = `${pagesUsed}/${pagesLimit}`;
-        document.getElementById('billingPagesProgress').style.width = `${pagesPercent}%`;
-        document.getElementById('billingPagesRemaining').textContent = pagesRemaining > 0 ? `${pagesRemaining} pages remaining` : 'At limit - upgrade for more';
+        document.getElementById('billingPagesTracked').textContent = pagesLimit === -1 ? `${pagesUsed} (Unlimited)` : `${pagesUsed}/${pagesLimit}`;
+        document.getElementById('billingPagesProgress').style.width = `${Math.min(100, pagesPercent)}%`;
+        document.getElementById('billingPagesRemaining').textContent = pagesRemaining === -1 ? 'Unlimited' : (pagesRemaining > 0 ? `${pagesRemaining} pages remaining` : 'At limit - upgrade for more');
 
-        // Competitors (placeholder - would come from backend)
-        const competitorsUsed = 0; // TODO: Get from backend
-        const competitorsLimit = currentPlan.competitorsLimit;
-        const competitorsPercent = competitorsLimit > 0 ? Math.round((competitorsUsed / competitorsLimit) * 100) : 0;
-        const competitorsRemaining = competitorsLimit - competitorsUsed;
+        // Competitors usage - use normalized quota
+        const competitorsUsed = normalizedQuota ? normalizedQuota.competitor.used : (user.competitor_scans_used_this_month || 0);
+        const competitorsLimit = normalizedQuota ? normalizedQuota.competitor.limit : 0;
+        const competitorsLimitDisplay = competitorsLimit === -1 ? '∞' : competitorsLimit;
+        const competitorsPercent = competitorsLimit === -1 ? 0 : (competitorsLimit > 0 ? Math.round((competitorsUsed / competitorsLimit) * 100) : 0);
+        const competitorsRemaining = competitorsLimit === -1 ? -1 : Math.max(0, competitorsLimit - competitorsUsed);
 
-        document.getElementById('billingCompetitors').textContent = `${competitorsUsed}/${competitorsLimit}`;
-        document.getElementById('billingCompetitorsProgress').style.width = `${competitorsPercent}%`;
-        document.getElementById('billingCompetitorsRemaining').textContent = competitorsRemaining > 0 ? `${competitorsRemaining} remaining` : 'At limit';
+        document.getElementById('billingCompetitors').textContent = competitorsLimit === -1 ? `${competitorsUsed} (Unlimited)` : `${competitorsUsed}/${competitorsLimit}`;
+        document.getElementById('billingCompetitorsProgress').style.width = `${Math.min(100, competitorsPercent)}%`;
+        document.getElementById('billingCompetitorsRemaining').textContent = competitorsRemaining === -1 ? 'Unlimited' : (competitorsRemaining > 0 ? `${competitorsRemaining} remaining` : (competitorsLimit === 0 ? 'Not available' : 'At limit'));
 
         // Calculate quota reset date
         const resetDate = new Date();
