@@ -111,6 +111,83 @@ function getQuotaFromUser(user) {
 }
 
 /**
+ * Determine the source of quota data
+ * @param {Object|null} quota - v2 quota object
+ * @param {Object|null} quotaLegacy - Legacy quota object
+ * @param {Object|null} user - User object for fallback
+ * @returns {string} - 'v2_quota' | 'legacy_mapped' | 'user_fallback' | 'none'
+ */
+function getQuotaSource(quota, quotaLegacy, user) {
+  if (quota && quota.primary && quota.competitor) {
+    return 'v2_quota';
+  }
+  if (quotaLegacy) {
+    return 'legacy_mapped';
+  }
+  if (user) {
+    return 'user_fallback';
+  }
+  return 'none';
+}
+
+/**
+ * Get display label for competitor scan availability
+ * @param {Object} q - Normalized quota object from getQuotaDisplay()
+ * @returns {string} - Display label for competitor availability
+ */
+function getCompetitorAvailabilityLabel(q) {
+  if (!q || !q.competitor) {
+    return 'Unknown';
+  }
+
+  const { limit, remaining } = q.competitor;
+
+  // Not included in plan (limit is 0)
+  if (limit === 0) {
+    return 'Not included in your plan';
+  }
+
+  // Unlimited
+  if (limit === -1) {
+    return 'Unlimited';
+  }
+
+  // Has remaining scans
+  if (remaining > 0) {
+    return `${remaining} remaining`;
+  }
+
+  // At limit (used all available)
+  return 'At limit';
+}
+
+/**
+ * Get display label for primary scan availability
+ * @param {Object} q - Normalized quota object from getQuotaDisplay()
+ * @returns {string} - Display label for primary scan availability
+ */
+function getPrimaryAvailabilityLabel(q) {
+  if (!q || !q.primary) {
+    return 'Unknown';
+  }
+
+  const { limit, remaining } = q.primary;
+
+  // Unlimited
+  if (limit === -1) {
+    return 'Unlimited';
+  }
+
+  // Has remaining scans
+  if (remaining > 0) {
+    return `${remaining} remaining`;
+  }
+
+  // At limit
+  return 'At limit';
+}
+
+/**
  * Format quota for display (e.g., "23/50" or "Unlimited")
  * @param {number} used
  * @param {number} limit
@@ -138,6 +215,9 @@ if (typeof window !== 'undefined') {
   window.QuotaUtils = {
     getQuotaDisplay,
     getQuotaFromUser,
+    getQuotaSource,
+    getCompetitorAvailabilityLabel,
+    getPrimaryAvailabilityLabel,
     formatQuota,
     getQuotaPercent,
     toInt,

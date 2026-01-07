@@ -312,6 +312,17 @@ async function initDashboard() {
         updateUserInfo();
         updateOrgInfo();  // Phase 3A: Update org display
         updateQuota();
+
+        // Phase 3A.1: Quota source telemetry (log once per page load)
+        if (window.QuotaUtils) {
+            const quotaSource = window.QuotaUtils.getQuotaSource(quotaData, quotaLegacy, user);
+            console.log(`[Quota] Source: ${quotaSource}`, {
+                hasV2Quota: !!(quotaData && quotaData.primary && quotaData.competitor),
+                hasLegacy: !!quotaLegacy,
+                plan: user?.plan || 'unknown'
+            });
+        }
+
         await loadDashboardData();
 
         // Setup navigation
@@ -1461,7 +1472,7 @@ async function loadSubscriptionData() {
 
         document.getElementById('billingCompetitors').textContent = competitorsLimit === -1 ? `${competitorsUsed} (Unlimited)` : `${competitorsUsed}/${competitorsLimit}`;
         document.getElementById('billingCompetitorsProgress').style.width = `${Math.min(100, competitorsPercent)}%`;
-        document.getElementById('billingCompetitorsRemaining').textContent = competitorsRemaining === -1 ? 'Unlimited' : (competitorsRemaining > 0 ? `${competitorsRemaining} remaining` : (competitorsLimit === 0 ? 'Not available' : 'At limit'));
+        document.getElementById('billingCompetitorsRemaining').textContent = window.QuotaUtils ? window.QuotaUtils.getCompetitorAvailabilityLabel(normalizedQuota) : (competitorsLimit === 0 ? 'Not included in your plan' : `${competitorsRemaining} remaining`);
 
         // Calculate quota reset date
         const resetDate = new Date();
@@ -1829,14 +1840,20 @@ async function loadBillingData() {
         document.getElementById('billingPagesRemaining').textContent =
             pagesRemaining > 0 ? `${pagesRemaining} pages available` : 'At limit - upgrade for more';
 
-        // Competitors (demo data)
-        const competitorsUsed = 3;
+        // Competitors - use QuotaUtils for consistent display
+        const competitorsUsed = user.competitor_scans_used_this_month || 0;
         const competitorsLimit = currentPlan.competitorsLimit;
         const competitorsPercent = competitorsLimit > 0 ? Math.round((competitorsUsed / competitorsLimit) * 100) : 0;
+        const competitorsRemaining = competitorsLimit === -1 ? -1 : Math.max(0, competitorsLimit - competitorsUsed);
 
-        document.getElementById('billingCompetitors').textContent = `${competitorsUsed}/${competitorsLimit}`;
-        document.getElementById('billingCompetitorsProgress').style.width = `${competitorsPercent}%`;
-        document.getElementById('billingCompetitorsRemaining').textContent = 'At limit';
+        // Build temporary quota object for label helper
+        const tempQuota = {
+            competitor: { used: competitorsUsed, limit: competitorsLimit, remaining: competitorsRemaining }
+        };
+
+        document.getElementById('billingCompetitors').textContent = competitorsLimit === -1 ? `${competitorsUsed} (Unlimited)` : `${competitorsUsed}/${competitorsLimit}`;
+        document.getElementById('billingCompetitorsProgress').style.width = `${Math.min(100, competitorsPercent)}%`;
+        document.getElementById('billingCompetitorsRemaining').textContent = window.QuotaUtils ? window.QuotaUtils.getCompetitorAvailabilityLabel(tempQuota) : (competitorsLimit === 0 ? 'Not included in your plan' : `${competitorsRemaining} remaining`);
 
         // Quota reset date
         const resetDate = new Date();
