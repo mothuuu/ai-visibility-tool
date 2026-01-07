@@ -570,6 +570,382 @@ function updateOrgInfo() {
             orgSection.style.display = 'none';
         }
     }
+
+    // Phase 3B: Update team section visibility
+    updateTeamSection();
+}
+
+// ============================================================================
+// Phase 3B: Team Management Functions
+// ============================================================================
+
+let orgRole = null;  // User's role in the organization (owner/admin/member)
+
+/**
+ * Update team section visibility and load team data
+ */
+async function updateTeamSection() {
+    const teamSection = document.getElementById('teamSection');
+    const teamInviteForm = document.getElementById('teamInviteForm');
+    const pendingInvitesSection = document.getElementById('pendingInvitesSection');
+
+    if (!teamSection) return;
+
+    // Only show team section if user has organization
+    if (!organization) {
+        teamSection.style.display = 'none';
+        return;
+    }
+
+    teamSection.style.display = 'block';
+
+    // Determine user's role - for now, assume owner for org owners
+    // In production, this would come from the backend
+    orgRole = localStorage.getItem('orgRole') || 'owner';
+
+    // Show invite form and pending invites for owner/admin
+    const canManageTeam = orgRole === 'owner' || orgRole === 'admin';
+    if (teamInviteForm) {
+        teamInviteForm.style.display = canManageTeam ? 'block' : 'none';
+    }
+    if (pendingInvitesSection) {
+        pendingInvitesSection.style.display = canManageTeam ? 'block' : 'none';
+    }
+
+    // Admin can only invite members, not admins
+    const roleSelect = document.getElementById('inviteRoleSelect');
+    if (roleSelect && orgRole === 'admin') {
+        // Remove admin option for admins
+        const adminOption = roleSelect.querySelector('option[value="admin"]');
+        if (adminOption) adminOption.remove();
+    }
+
+    // Load team data
+    await Promise.all([
+        loadTeamMembers(),
+        canManageTeam ? loadPendingInvites() : Promise.resolve()
+    ]);
+
+    // Phase 3B.2: Update team CTAs based on plan
+    updateTeamCtas();
+}
+
+/**
+ * Load team members from API
+ */
+async function loadTeamMembers() {
+    const membersList = document.getElementById('teamMembersList');
+    const noMembers = document.getElementById('noTeamMembers');
+    const memberCount = document.getElementById('teamMemberCount');
+
+    if (!membersList) return;
+
+    try {
+        const authToken = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE_URL}/org/members`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (!response.ok) {
+            console.error('Failed to load team members:', response.status);
+            return;
+        }
+
+        const data = await response.json();
+        const members = data.members || [];
+
+        // Update member count
+        if (memberCount) {
+            memberCount.textContent = `${members.length} member${members.length !== 1 ? 's' : ''}`;
+        }
+
+        // Render members
+        if (members.length === 0) {
+            membersList.innerHTML = '';
+            if (noMembers) noMembers.style.display = 'block';
+        } else {
+            if (noMembers) noMembers.style.display = 'none';
+            membersList.innerHTML = members.map(member => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--gray-50); border-radius: 6px;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <div style="width: 36px; height: 36px; background: linear-gradient(135deg, var(--brand-cyan), var(--brand-purple)); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.875rem;">
+                            ${(member.name || member.email)[0].toUpperCase()}
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; color: var(--gray-900); font-size: 0.875rem;">${member.name || 'User'}</div>
+                            <div style="font-size: 0.75rem; color: var(--gray-500);">${member.email}</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="padding: 0.25rem 0.5rem; background: ${member.isOwner ? 'linear-gradient(135deg, var(--brand-cyan), var(--brand-purple))' : 'var(--gray-200)'}; color: ${member.isOwner ? 'white' : 'var(--gray-700)'}; border-radius: 4px; font-size: 0.625rem; font-weight: 600; text-transform: uppercase;">
+                            ${member.isOwner ? 'Owner' : member.role}
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Error loading team members:', error);
+    }
+}
+
+/**
+ * Load pending invites from API
+ */
+async function loadPendingInvites() {
+    const invitesList = document.getElementById('pendingInvitesList');
+    const noInvites = document.getElementById('noPendingInvites');
+
+    if (!invitesList) return;
+
+    try {
+        const authToken = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE_URL}/org/invites`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (!response.ok) {
+            console.error('Failed to load invites:', response.status);
+            return;
+        }
+
+        const data = await response.json();
+        const invites = data.invites || [];
+
+        // Render invites
+        if (invites.length === 0) {
+            invitesList.innerHTML = '';
+            if (noInvites) noInvites.style.display = 'block';
+        } else {
+            if (noInvites) noInvites.style.display = 'none';
+            invitesList.innerHTML = invites.map(invite => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: #fffbe6; border: 1px solid #ffe066; border-radius: 6px;">
+                    <div>
+                        <div style="font-weight: 600; color: var(--gray-900); font-size: 0.875rem;">${invite.email}</div>
+                        <div style="font-size: 0.75rem; color: var(--gray-500);">
+                            Invited as ${invite.role} • ${new Date(invite.createdAt).toLocaleDateString()}
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <button onclick="copyInviteLink('${invite.inviteLink}')" class="btn btn-secondary" style="padding: 0.375rem 0.625rem; font-size: 0.75rem;" title="Copy invite link">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                        <button onclick="revokeInvite(${invite.id})" class="btn btn-secondary" style="padding: 0.375rem 0.625rem; font-size: 0.75rem; color: var(--danger-red);" title="Revoke invite">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Error loading pending invites:', error);
+    }
+}
+
+/**
+ * Send team invite
+ */
+async function sendTeamInvite() {
+    const emailInput = document.getElementById('inviteEmailInput');
+    const roleSelect = document.getElementById('inviteRoleSelect');
+    const errorDiv = document.getElementById('inviteError');
+    const successDiv = document.getElementById('inviteSuccess');
+
+    if (!emailInput) return;
+
+    const email = emailInput.value.trim();
+    const role = roleSelect?.value || 'member';
+
+    // Validate email
+    if (!email) {
+        showInviteError('Please enter an email address');
+        return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        showInviteError('Please enter a valid email address');
+        return;
+    }
+
+    try {
+        const authToken = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE_URL}/org/invites`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email, role })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            showInviteError(data.error || 'Failed to send invite');
+            return;
+        }
+
+        // Show success message
+        if (data.alreadyMember) {
+            showInviteSuccess('User is already a member of this organization');
+        } else if (data.existingInvite) {
+            showInviteSuccess('Invite already exists. Link copied to clipboard!');
+            await copyInviteLink(data.inviteLink);
+        } else {
+            showInviteSuccess('Invite sent! Link copied to clipboard.');
+            await copyInviteLink(data.inviteLink);
+        }
+
+        // Clear input and reload invites
+        emailInput.value = '';
+        await loadPendingInvites();
+
+    } catch (error) {
+        console.error('Error sending invite:', error);
+        showInviteError('Failed to send invite. Please try again.');
+    }
+}
+
+/**
+ * Revoke an invite
+ */
+async function revokeInvite(inviteId) {
+    if (!confirm('Are you sure you want to revoke this invite?')) {
+        return;
+    }
+
+    try {
+        const authToken = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE_URL}/org/invites/revoke`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ inviteId })
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            alert(data.error || 'Failed to revoke invite');
+            return;
+        }
+
+        // Reload invites
+        await loadPendingInvites();
+
+    } catch (error) {
+        console.error('Error revoking invite:', error);
+        alert('Failed to revoke invite. Please try again.');
+    }
+}
+
+/**
+ * Copy invite link to clipboard
+ */
+async function copyInviteLink(link) {
+    try {
+        await navigator.clipboard.writeText(link);
+        console.log('Invite link copied to clipboard');
+    } catch (error) {
+        console.error('Failed to copy to clipboard:', error);
+        // Fallback: show the link
+        prompt('Copy this invite link:', link);
+    }
+}
+
+/**
+ * Show invite error message
+ */
+function showInviteError(message) {
+    const errorDiv = document.getElementById('inviteError');
+    const successDiv = document.getElementById('inviteSuccess');
+
+    if (successDiv) successDiv.style.display = 'none';
+    if (errorDiv) {
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        setTimeout(() => { errorDiv.style.display = 'none'; }, 5000);
+    }
+}
+
+/**
+ * Show invite success message
+ */
+function showInviteSuccess(message) {
+    const errorDiv = document.getElementById('inviteError');
+    const successDiv = document.getElementById('inviteSuccess');
+
+    if (errorDiv) errorDiv.style.display = 'none';
+    if (successDiv) {
+        successDiv.textContent = message;
+        successDiv.style.display = 'block';
+        setTimeout(() => { successDiv.style.display = 'none'; }, 5000);
+    }
+}
+
+/**
+ * Phase 3B.2: Update team CTAs based on plan and role
+ */
+function updateTeamCtas() {
+    const teamCtaSection = document.getElementById('teamCtaSection');
+    const upgradeTeamCta = document.getElementById('upgradeTeamCta');
+    const addSeatsCta = document.getElementById('addSeatsCta');
+    const enterpriseUpsellCta = document.getElementById('enterpriseUpsellCta');
+
+    if (!teamCtaSection) return;
+
+    // Only show for org owners/admins
+    const canManageTeam = orgRole === 'owner' || orgRole === 'admin';
+    if (!canManageTeam || !organization) {
+        teamCtaSection.style.display = 'none';
+        return;
+    }
+
+    teamCtaSection.style.display = 'block';
+
+    const plan = (organization?.plan || user?.plan || 'free').toLowerCase();
+
+    // Free/DIY: Show upgrade CTA
+    if (plan === 'free' || plan === 'diy') {
+        if (upgradeTeamCta) upgradeTeamCta.style.display = 'block';
+        if (addSeatsCta) addSeatsCta.style.display = 'none';
+        if (enterpriseUpsellCta) enterpriseUpsellCta.style.display = 'none';
+    }
+    // Pro: Show add seats + enterprise upsell
+    else if (plan === 'pro') {
+        if (upgradeTeamCta) upgradeTeamCta.style.display = 'none';
+        if (addSeatsCta) addSeatsCta.style.display = 'block';
+        if (enterpriseUpsellCta) enterpriseUpsellCta.style.display = 'block';
+    }
+    // Enterprise: Show add seats only
+    else if (plan === 'enterprise') {
+        if (upgradeTeamCta) upgradeTeamCta.style.display = 'none';
+        if (addSeatsCta) addSeatsCta.style.display = 'block';
+        if (enterpriseUpsellCta) enterpriseUpsellCta.style.display = 'none';
+    }
+    // Agency: Show add seats (agency has unlimited primary scans)
+    else if (plan === 'agency') {
+        if (upgradeTeamCta) upgradeTeamCta.style.display = 'none';
+        if (addSeatsCta) addSeatsCta.style.display = 'block';
+        if (enterpriseUpsellCta) enterpriseUpsellCta.style.display = 'none';
+    }
+}
+
+/**
+ * Show add seats modal (placeholder - connects to Stripe or contact form)
+ */
+function showAddSeatsModal() {
+    // TODO: Implement proper seat purchasing via Stripe
+    // For now, show a contact modal or redirect to billing portal
+    const message = `To add more team seats, please contact our sales team or manage your subscription in the Stripe billing portal.
+
+Current plan: ${organization?.plan || user?.plan || 'Free'}
+
+For enterprise pricing with unlimited seats, contact sales@visible2ai.com`;
+
+    showXeoAlert('Add Team Seats', message);
 }
 
 // Update quota display

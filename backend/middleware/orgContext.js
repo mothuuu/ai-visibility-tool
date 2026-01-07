@@ -202,6 +202,51 @@ function buildOrgScopeClause(req, tableAlias = '', startParamIndex = 1) {
   };
 }
 
+// ============================================================================
+// Phase 3B: Role-based Access Control
+// ============================================================================
+
+/**
+ * Require specific organization role(s) for access.
+ * REQUIRES: loadOrgContext to have run first (sets req.orgRole).
+ *
+ * @param {string[]} allowedRoles - Array of allowed role names (e.g., ['owner', 'admin'])
+ * @returns {Function} Express middleware
+ *
+ * Usage:
+ *   router.post('/invites', authenticateToken, loadOrgContext, requireOrgContext, requireOrgRole(['owner', 'admin']), handler);
+ */
+function requireOrgRole(allowedRoles) {
+  return (req, res, next) => {
+    // Skip enforcement if org context feature flag disabled
+    if (process.env.ORG_CONTEXT_ENABLED !== 'true') {
+      return next();
+    }
+
+    // Check if user has org role set
+    if (!req.orgRole) {
+      console.error('🚨 requireOrgRole failed - no org role on request');
+      return res.status(403).json({
+        error: 'Organization role required',
+        code: 'NO_ORG_ROLE',
+        message: 'Your role in the organization could not be determined.'
+      });
+    }
+
+    // Check if user's role is in allowed list
+    if (!allowedRoles.includes(req.orgRole)) {
+      console.log(`⛔ Role check failed: user has '${req.orgRole}', needs one of: ${allowedRoles.join(', ')}`);
+      return res.status(403).json({
+        error: 'Insufficient permissions',
+        code: 'ROLE_NOT_ALLOWED',
+        message: `This action requires one of these roles: ${allowedRoles.join(', ')}`
+      });
+    }
+
+    next();
+  };
+}
+
 module.exports = {
   loadOrgContext,
   requireOrgContext,
@@ -209,5 +254,7 @@ module.exports = {
   isOrgScopingEnabled,
   getOrgScope,
   requireOrgScope,
-  buildOrgScopeClause
+  buildOrgScopeClause,
+  // Phase 3B exports
+  requireOrgRole
 };

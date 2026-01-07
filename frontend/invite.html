@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accept Invite - Visible2AI</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+    <link rel="shortcut icon" href="/favicon.ico?v=2">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .invite-container {
+            max-width: 500px;
+            margin: 80px auto;
+            padding: 40px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .invite-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #00B9DA 0%, #7030A0 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 30px;
+            font-size: 36px;
+            color: white;
+        }
+
+        .invite-title {
+            font-size: 1.75rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .invite-subtitle {
+            font-size: 1rem;
+            color: #666;
+            margin-bottom: 25px;
+        }
+
+        .org-name {
+            background: linear-gradient(135deg, #e6f7fb 0%, #f0e6ff 100%);
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-weight: 700;
+            font-size: 1.25rem;
+            color: #7030A0;
+        }
+
+        .invite-email {
+            background: #f5f5f5;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-size: 0.875rem;
+            color: #666;
+        }
+
+        .invite-email strong {
+            color: #333;
+        }
+
+        .invite-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 25px;
+        }
+
+        .btn-accept {
+            padding: 14px 30px;
+            background: linear-gradient(135deg, #00B9DA 0%, #7030A0 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .btn-accept:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(112, 48, 160, 0.3);
+        }
+
+        .btn-accept:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            padding: 12px 30px;
+            background: #f5f5f5;
+            color: #333;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.875rem;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-secondary:hover {
+            border-color: #00B9DA;
+            color: #00B9DA;
+        }
+
+        .error-box {
+            background: #fee;
+            border: 2px solid #fcc;
+            color: #c33;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .error-box i {
+            margin-right: 8px;
+        }
+
+        .success-box {
+            background: #efe;
+            border: 2px solid #cfc;
+            color: #393;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .success-box i {
+            margin-right: 8px;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 15px 20px;
+            margin: 20px 0;
+            text-align: left;
+            border-radius: 5px;
+            color: #1565C0;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: #666;
+        }
+
+        .loading i {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .logo-container {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo-container img {
+            height: 40px;
+        }
+    </style>
+</head>
+<body style="background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%); min-height: 100vh; padding: 20px;">
+
+    <div class="logo-container">
+        <a href="/">
+            <img src="logo.svg" alt="Visible2AI">
+        </a>
+    </div>
+
+    <div class="invite-container">
+        <!-- Loading State -->
+        <div id="loadingState">
+            <div class="invite-icon">
+                <i class="fas fa-envelope-open-text"></i>
+            </div>
+            <div class="loading">
+                <i class="fas fa-spinner"></i>
+                <span>Validating invite...</span>
+            </div>
+        </div>
+
+        <!-- Needs Auth State -->
+        <div id="needsAuthState" style="display: none;">
+            <div class="invite-icon">
+                <i class="fas fa-user-plus"></i>
+            </div>
+            <h1 class="invite-title">You're Invited!</h1>
+            <p class="invite-subtitle">You've been invited to join</p>
+            <div class="org-name" id="orgName">Organization</div>
+
+            <div class="info-box">
+                <i class="fas fa-info-circle"></i>
+                Please log in or create an account with the email below to accept this invite.
+            </div>
+
+            <div class="invite-email">
+                Invited as: <strong id="inviteEmail">email@example.com</strong>
+            </div>
+
+            <div class="invite-actions">
+                <a href="#" id="loginLink" class="btn-accept">
+                    <i class="fas fa-sign-in-alt"></i> Log In to Accept
+                </a>
+                <a href="#" id="signupLink" class="btn-secondary">
+                    <i class="fas fa-user-plus"></i> Create Account
+                </a>
+            </div>
+        </div>
+
+        <!-- Logged In - Ready to Accept -->
+        <div id="acceptState" style="display: none;">
+            <div class="invite-icon">
+                <i class="fas fa-handshake"></i>
+            </div>
+            <h1 class="invite-title">Join Team</h1>
+            <p class="invite-subtitle">You've been invited to join</p>
+            <div class="org-name" id="orgNameAccept">Organization</div>
+
+            <div class="invite-email">
+                Joining as: <strong id="userEmail">email@example.com</strong>
+            </div>
+
+            <div class="invite-actions">
+                <button id="acceptBtn" class="btn-accept" onclick="acceptInvite()">
+                    <i class="fas fa-check"></i> Accept Invite
+                </button>
+                <a href="/dashboard.html" class="btn-secondary">
+                    Cancel
+                </a>
+            </div>
+        </div>
+
+        <!-- Success State -->
+        <div id="successState" style="display: none;">
+            <div class="invite-icon" style="background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);">
+                <i class="fas fa-check"></i>
+            </div>
+            <h1 class="invite-title">Welcome to the Team!</h1>
+            <div class="success-box">
+                <i class="fas fa-check-circle"></i>
+                You've successfully joined <strong id="joinedOrgName">the organization</strong>.
+            </div>
+            <p class="invite-subtitle" id="roleMessage">You have member access.</p>
+            <div class="invite-actions">
+                <a href="/dashboard.html" class="btn-accept">
+                    <i class="fas fa-arrow-right"></i> Go to Dashboard
+                </a>
+            </div>
+        </div>
+
+        <!-- Error State -->
+        <div id="errorState" style="display: none;">
+            <div class="invite-icon" style="background: linear-gradient(135deg, #f44336 0%, #c62828 100%);">
+                <i class="fas fa-times"></i>
+            </div>
+            <h1 class="invite-title">Invite Error</h1>
+            <div class="error-box">
+                <i class="fas fa-exclamation-circle"></i>
+                <span id="errorMessage">Something went wrong.</span>
+            </div>
+            <div class="invite-actions">
+                <a href="/dashboard.html" class="btn-secondary">
+                    Go to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.hostname === 'localhost'
+            ? 'http://localhost:3001/api'
+            : 'https://ai-visibility-tool.onrender.com/api';
+
+        let inviteToken = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Get token from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            inviteToken = urlParams.get('token');
+
+            if (!inviteToken) {
+                showError('No invite token provided. Please check your invite link.');
+                return;
+            }
+
+            // Try to accept the invite
+            validateInvite();
+        });
+
+        async function validateInvite() {
+            try {
+                const authToken = localStorage.getItem('authToken');
+                const headers = { 'Content-Type': 'application/json' };
+
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+
+                const response = await fetch(`${API_BASE_URL}/org/invites/accept`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ token: inviteToken })
+                });
+
+                const data = await response.json();
+
+                if (data.needsAuth) {
+                    // User needs to log in
+                    showNeedsAuth(data);
+                } else if (data.success) {
+                    // Successfully accepted
+                    showSuccess(data);
+                } else if (response.status === 403 && data.code === 'EMAIL_MISMATCH') {
+                    // Wrong email
+                    showError(`This invite was sent to ${data.invitedEmail}. Please log in with that email address.`);
+                } else {
+                    // Other error
+                    showError(data.error || data.message || 'Failed to accept invite');
+                }
+            } catch (error) {
+                console.error('Invite validation error:', error);
+                showError('Failed to validate invite. Please try again.');
+            }
+        }
+
+        function showNeedsAuth(data) {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('needsAuthState').style.display = 'block';
+
+            document.getElementById('orgName').textContent = data.organizationName || 'Organization';
+            document.getElementById('inviteEmail').textContent = data.email;
+
+            // Build login/signup links with redirect
+            const redirectUrl = encodeURIComponent(window.location.href);
+            document.getElementById('loginLink').href = `/auth.html?mode=login&next=${redirectUrl}`;
+            document.getElementById('signupLink').href = `/auth.html?mode=signup&email=${encodeURIComponent(data.email)}&next=${redirectUrl}`;
+        }
+
+        function showAcceptReady(data) {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('acceptState').style.display = 'block';
+
+            document.getElementById('orgNameAccept').textContent = data.organizationName || 'Organization';
+
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            document.getElementById('userEmail').textContent = user.email || 'your email';
+        }
+
+        async function acceptInvite() {
+            const acceptBtn = document.getElementById('acceptBtn');
+            acceptBtn.disabled = true;
+            acceptBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accepting...';
+
+            try {
+                const authToken = localStorage.getItem('authToken');
+                const response = await fetch(`${API_BASE_URL}/org/invites/accept`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ token: inviteToken })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Update local storage with new org data
+                    if (data.organization) {
+                        localStorage.setItem('organization', JSON.stringify(data.organization));
+                    }
+                    if (data.role) {
+                        localStorage.setItem('orgRole', data.role);
+                    }
+
+                    showSuccess(data);
+                } else {
+                    showError(data.error || data.message || 'Failed to accept invite');
+                }
+            } catch (error) {
+                console.error('Accept invite error:', error);
+                showError('Failed to accept invite. Please try again.');
+            }
+        }
+
+        function showSuccess(data) {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('needsAuthState').style.display = 'none';
+            document.getElementById('acceptState').style.display = 'none';
+            document.getElementById('successState').style.display = 'block';
+
+            document.getElementById('joinedOrgName').textContent = data.organization?.name || 'the organization';
+            document.getElementById('roleMessage').textContent = `You have ${data.role || 'member'} access.`;
+
+            // Update local storage
+            if (data.organization) {
+                localStorage.setItem('organization', JSON.stringify(data.organization));
+            }
+            if (data.role) {
+                localStorage.setItem('orgRole', data.role);
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('needsAuthState').style.display = 'none';
+            document.getElementById('acceptState').style.display = 'none';
+            document.getElementById('successState').style.display = 'none';
+            document.getElementById('errorState').style.display = 'block';
+
+            document.getElementById('errorMessage').textContent = message;
+        }
+    </script>
+</body>
+</html>
