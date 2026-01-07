@@ -17,6 +17,7 @@ const supportChatRoutes = require('./routes/support-chat');
 const waitlistRoutes = require('./routes/waitlist');
 const adminRoutes = require('./routes/admin');
 const citationNetworkRoutes = require('./routes/citationNetwork');
+const organizationRoutes = require('./routes/organization');
 
 // Stripe webhook handler - imported directly for raw body mounting
 // P0: Export as function, not object
@@ -112,6 +113,7 @@ app.use('/api/support-chat', supportChatRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/admin', adminRoutes); // Admin routes
 app.use('/api/citation-network', citationNetworkRoutes); // AI Citation Network
+app.use('/api/org', organizationRoutes); // Phase 3B: Organization/Team management
 app.use('/api/test', require('./routes/test-routes'));
 
 // Health check

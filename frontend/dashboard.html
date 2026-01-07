@@ -4812,6 +4812,63 @@
                     </div>
                 </div>
 
+                <!-- Phase 3B: Team Section -->
+                <div class="card" id="teamSection" style="display: none; margin-bottom: 1.5rem;">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <h2 class="card-title"><i class="fas fa-users" style="margin-right: 0.5rem; color: var(--brand-cyan);"></i>Team</h2>
+                        <span class="badge" id="teamMemberCount" style="background: var(--gray-100); color: var(--gray-700); padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem;">0 members</span>
+                    </div>
+
+                    <!-- Invite Form (owner/admin only) -->
+                    <div id="teamInviteForm" style="display: none; margin-bottom: 1.5rem; padding: 1rem; background: var(--gray-50); border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--gray-700); margin-bottom: 0.75rem; font-size: 0.875rem;">
+                            <i class="fas fa-user-plus" style="margin-right: 0.5rem; color: var(--brand-purple);"></i>Invite Team Member
+                        </div>
+                        <div style="display: flex; gap: 0.75rem; align-items: flex-end;">
+                            <div style="flex: 1;">
+                                <input type="email" id="inviteEmailInput" placeholder="email@example.com" style="width: 100%; padding: 0.625rem 0.875rem; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 0.875rem;" />
+                            </div>
+                            <div style="width: 120px;">
+                                <select id="inviteRoleSelect" style="width: 100%; padding: 0.625rem 0.875rem; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 0.875rem; background: white;">
+                                    <option value="member">Member</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary" onclick="sendTeamInvite()" style="white-space: nowrap;">
+                                <i class="fas fa-paper-plane"></i> Send Invite
+                            </button>
+                        </div>
+                        <div id="inviteError" style="display: none; margin-top: 0.5rem; padding: 0.5rem; background: #fee; color: #c33; border-radius: 4px; font-size: 0.75rem;"></div>
+                        <div id="inviteSuccess" style="display: none; margin-top: 0.5rem; padding: 0.5rem; background: #efe; color: #393; border-radius: 4px; font-size: 0.75rem;"></div>
+                    </div>
+
+                    <!-- Pending Invites (owner/admin only) -->
+                    <div id="pendingInvitesSection" style="display: none; margin-bottom: 1.5rem;">
+                        <div style="font-weight: 600; color: var(--gray-700); margin-bottom: 0.75rem; font-size: 0.875rem;">
+                            <i class="fas fa-clock" style="margin-right: 0.5rem; color: var(--warning-yellow);"></i>Pending Invites
+                        </div>
+                        <div id="pendingInvitesList" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <!-- Pending invites will be populated here -->
+                        </div>
+                        <div id="noPendingInvites" style="padding: 1rem; text-align: center; color: var(--gray-500); font-size: 0.875rem;">
+                            No pending invites
+                        </div>
+                    </div>
+
+                    <!-- Team Members List -->
+                    <div>
+                        <div style="font-weight: 600; color: var(--gray-700); margin-bottom: 0.75rem; font-size: 0.875rem;">
+                            <i class="fas fa-user-friends" style="margin-right: 0.5rem; color: var(--brand-cyan);"></i>Team Members
+                        </div>
+                        <div id="teamMembersList" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <!-- Team members will be populated here -->
+                        </div>
+                        <div id="noTeamMembers" style="padding: 1rem; text-align: center; color: var(--gray-500); font-size: 0.875rem;">
+                            No team members yet
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Two Column Layout for Plan & Usage -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <!-- 1. Current Plan Details Section -->
@@ -4871,6 +4928,40 @@
                                 <i class="fas fa-times-circle"></i>
                                 Cancel Subscription
                             </button>
+                        </div>
+
+                        <!-- Phase 3B.2: Team CTAs (shown for org owners/admins) -->
+                        <div id="teamCtaSection" style="display: none; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--gray-200);">
+                            <div style="font-weight: 600; color: var(--gray-700); margin-bottom: 0.75rem; font-size: 0.875rem;">
+                                <i class="fas fa-users" style="margin-right: 0.5rem; color: var(--brand-cyan);"></i>Team Collaboration
+                            </div>
+                            <!-- Free/DIY: Upgrade CTA -->
+                            <div id="upgradeTeamCta" style="display: none;">
+                                <p style="font-size: 0.75rem; color: var(--gray-500); margin-bottom: 0.75rem;">
+                                    Upgrade to Pro or Enterprise to invite team members and share scan history.
+                                </p>
+                                <button class="btn btn-primary" onclick="openChangePlanModal()" style="width: 100%;">
+                                    <i class="fas fa-rocket"></i>
+                                    Upgrade for Team Features
+                                </button>
+                            </div>
+                            <!-- Pro+: Add Seats CTA -->
+                            <div id="addSeatsCta" style="display: none;">
+                                <p style="font-size: 0.75rem; color: var(--gray-500); margin-bottom: 0.75rem;">
+                                    Add more team members to your organization.
+                                </p>
+                                <button class="btn btn-secondary" onclick="showAddSeatsModal()" style="width: 100%;">
+                                    <i class="fas fa-user-plus"></i>
+                                    Add Team Seats
+                                </button>
+                            </div>
+                            <!-- Enterprise Upsell -->
+                            <div id="enterpriseUpsellCta" style="display: none; margin-top: 0.75rem;">
+                                <a href="mailto:sales@visible2ai.com?subject=Enterprise%20Inquiry" style="font-size: 0.75rem; color: var(--brand-purple); text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
+                                    <i class="fas fa-building"></i>
+                                    Need unlimited seats? Contact us for Enterprise
+                                </a>
+                            </div>
                         </div>
                     </div>
 
