@@ -4819,6 +4819,28 @@
                         <span class="badge" id="teamMemberCount" style="background: var(--gray-100); color: var(--gray-700); padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem;">0 members</span>
                     </div>
 
+                    <!-- Phase 3B.2A: Seat Usage Row -->
+                    <div id="seatUsageRow" style="display: none; margin-bottom: 1.5rem; padding: 1rem; background: linear-gradient(135deg, rgba(0,212,255,0.05) 0%, rgba(255,0,128,0.05) 100%); border-radius: 8px; border: 1px solid var(--gray-200);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-weight: 600; color: var(--gray-700); font-size: 0.875rem; margin-bottom: 0.25rem;">
+                                    <i class="fas fa-chair" style="margin-right: 0.5rem; color: var(--brand-purple);"></i>Seats
+                                </div>
+                                <div style="font-size: 1.25rem; font-weight: 700; color: var(--gray-900);" id="seatUsagePrimary">
+                                    Seats used: <span id="seatsUsedValue">0</span> / <span id="seatLimitValue">1</span>
+                                </div>
+                                <div style="font-size: 0.75rem; color: var(--gray-500); margin-top: 0.25rem;">
+                                    Active members: <span id="seatActiveMembersValue">0</span> • Pending invites: <span id="seatPendingInvitesValue">0</span>
+                                </div>
+                            </div>
+                            <div id="seatUpgradeHint" style="display: none;">
+                                <span style="font-size: 0.75rem; color: var(--brand-purple); font-weight: 500;">
+                                    <i class="fas fa-arrow-up"></i> Upgrade for more
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Invite Form (owner/admin only) -->
                     <div id="teamInviteForm" style="display: none; margin-bottom: 1.5rem; padding: 1rem; background: var(--gray-50); border-radius: 8px;">
                         <div style="font-weight: 600; color: var(--gray-700); margin-bottom: 0.75rem; font-size: 0.875rem;">
@@ -4940,7 +4962,7 @@
                                 <p style="font-size: 0.75rem; color: var(--gray-500); margin-bottom: 0.75rem;">
                                     Upgrade to Pro or Enterprise to invite team members and share scan history.
                                 </p>
-                                <button class="btn btn-primary" onclick="openChangePlanModal()" style="width: 100%;">
+                                <button id="upgradeCtaButton" class="btn btn-primary" onclick="openChangePlanModal()" style="width: 100%;">
                                     <i class="fas fa-rocket"></i>
                                     Upgrade for Team Features
                                 </button>
@@ -4950,7 +4972,7 @@
                                 <p style="font-size: 0.75rem; color: var(--gray-500); margin-bottom: 0.75rem;">
                                     Add more team members to your organization.
                                 </p>
-                                <button class="btn btn-secondary" onclick="showAddSeatsModal()" style="width: 100%;">
+                                <button id="addSeatsCtaButton" class="btn btn-secondary" onclick="showAddSeatsModal()" style="width: 100%;">
                                     <i class="fas fa-user-plus"></i>
                                     Add Team Seats
                                 </button>

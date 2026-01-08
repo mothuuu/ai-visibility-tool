@@ -1990,6 +1990,22 @@ body {
     background: var(--gray-50);
     border-color: var(--gray-400);
 }
+
+/* Phase 3B.2A: CTA emphasis animation for seat limit reached */
+.cta-emphasis {
+    animation: cta-pulse 1s ease-in-out infinite;
+    box-shadow: 0 0 0 3px rgba(125, 65, 165, 0.3) !important;
+}
+
+@keyframes cta-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 3px rgba(125, 65, 165, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(125, 65, 165, 0.15), 0 4px 12px rgba(125, 65, 165, 0.4);
+    }
+}
+
 /* ===== CERTIFICATION DISPLAY ENHANCEMENTS ===== */
 
 /* Certification list styling in recommendations */

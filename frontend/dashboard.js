@@ -623,7 +623,8 @@ async function updateTeamSection() {
     // Load team data
     await Promise.all([
         loadTeamMembers(),
-        canManageTeam ? loadPendingInvites() : Promise.resolve()
+        canManageTeam ? loadPendingInvites() : Promise.resolve(),
+        canManageTeam ? loadSeatUsage() : Promise.resolve()
     ]);
 
     // Phase 3B.2: Update team CTAs based on plan
@@ -743,6 +744,68 @@ async function loadPendingInvites() {
 }
 
 /**
+ * Phase 3B.2A: Load seat usage from API
+ */
+async function loadSeatUsage() {
+    const seatUsageRow = document.getElementById('seatUsageRow');
+    const seatsUsedValue = document.getElementById('seatsUsedValue');
+    const seatLimitValue = document.getElementById('seatLimitValue');
+    const seatActiveMembersValue = document.getElementById('seatActiveMembersValue');
+    const seatPendingInvitesValue = document.getElementById('seatPendingInvitesValue');
+    const seatUsagePrimary = document.getElementById('seatUsagePrimary');
+    const seatUpgradeHint = document.getElementById('seatUpgradeHint');
+
+    if (!seatUsageRow) return;
+
+    try {
+        const authToken = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE_URL}/org/seats`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (!response.ok) {
+            // Hide seat row on error (401/403/500)
+            seatUsageRow.style.display = 'none';
+            return;
+        }
+
+        const data = await response.json();
+
+        if (data.seatLimit === null || data.seatLimit === undefined) {
+            // Seat limit not available
+            if (seatUsagePrimary) {
+                seatUsagePrimary.innerHTML = '<i class="fas fa-chair" style="margin-right: 0.5rem; color: var(--brand-purple);"></i>Seats: Not available';
+            }
+            if (seatActiveMembersValue) seatActiveMembersValue.textContent = '—';
+            if (seatPendingInvitesValue) seatPendingInvitesValue.textContent = '—';
+            seatUsageRow.style.display = 'block';
+            return;
+        }
+
+        // Render seat usage
+        if (seatsUsedValue) seatsUsedValue.textContent = data.seatsUsed;
+        if (seatLimitValue) seatLimitValue.textContent = data.seatLimit;
+        if (seatActiveMembersValue) seatActiveMembersValue.textContent = data.activeMembers;
+        if (seatPendingInvitesValue) seatPendingInvitesValue.textContent = data.pendingInvites;
+
+        // Show upgrade hint if at or near capacity (>= 80%)
+        if (seatUpgradeHint) {
+            const usagePercent = (data.seatsUsed / data.seatLimit) * 100;
+            seatUpgradeHint.style.display = usagePercent >= 80 ? 'block' : 'none';
+        }
+
+        // Store seat data for use in invite error handling
+        window.currentSeatData = data;
+
+        seatUsageRow.style.display = 'block';
+
+    } catch (error) {
+        console.error('Error loading seat usage:', error);
+        seatUsageRow.style.display = 'none';
+    }
+}
+
+/**
  * Send team invite
  */
 async function sendTeamInvite() {
@@ -782,6 +845,15 @@ async function sendTeamInvite() {
         const data = await response.json();
 
         if (!response.ok) {
+            // Phase 3B.2A: Handle seat limit reached
+            if (response.status === 409 && data.error === 'SEAT_LIMIT_REACHED') {
+                showXeoAlert('Seat Limit Reached', 'Seat limit reached — Upgrade to add teammates');
+                emphasizeUpgradeCta();
+                // Refresh seat usage display
+                await loadSeatUsage();
+                // Don't clear input - user might upgrade and retry
+                return;
+            }
             showInviteError(data.error || 'Failed to send invite');
             return;
         }
@@ -797,9 +869,9 @@ async function sendTeamInvite() {
             await copyInviteLink(data.inviteLink);
         }
 
-        // Clear input and reload invites
+        // Clear input and reload invites + seat usage
         emailInput.value = '';
-        await loadPendingInvites();
+        await Promise.all([loadPendingInvites(), loadSeatUsage()]);
 
     } catch (error) {
         console.error('Error sending invite:', error);
@@ -883,6 +955,31 @@ function showInviteSuccess(message) {
         successDiv.style.display = 'block';
         setTimeout(() => { successDiv.style.display = 'none'; }, 5000);
     }
+}
+
+/**
+ * Phase 3B.2A: Emphasize upgrade CTA buttons when seat limit reached
+ */
+function emphasizeUpgradeCta() {
+    const upgradeBtn = document.getElementById('upgradeCtaButton');
+    const addSeatsBtn = document.getElementById('addSeatsCtaButton');
+
+    const buttons = [upgradeBtn, addSeatsBtn].filter(btn => btn !== null);
+
+    buttons.forEach(btn => {
+        // Add emphasis class
+        btn.classList.add('cta-emphasis');
+
+        // Scroll into view smoothly if below fold
+        btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    // Remove emphasis after 8 seconds to avoid permanent state
+    setTimeout(() => {
+        buttons.forEach(btn => {
+            btn.classList.remove('cta-emphasis');
+        });
+    }, 8000);
 }
 
 /**
