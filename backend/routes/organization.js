@@ -15,6 +15,7 @@ const router = express.Router();
 const db = require('../db/database');
 const { authenticateToken, authenticateTokenOptional } = require('../middleware/auth');
 const { loadOrgContext, requireOrgContext, requireOrgRole } = require('../middleware/orgContext');
+const { rateLimitInviteCreate, rateLimitInviteAccept } = require('../middleware/inviteRateLimit');
 
 // Invite token expiry (7 days)
 const INVITE_EXPIRY_DAYS = 7;
@@ -50,7 +51,7 @@ async function getRoleIdByName(roleName) {
 // ============================================================================
 // POST /api/org/invites - Create invite (owner/admin only)
 // ============================================================================
-router.post('/invites', authenticateToken, loadOrgContext, requireOrgContext, requireOrgRole(['owner', 'admin']), async (req, res) => {
+router.post('/invites', authenticateToken, loadOrgContext, requireOrgContext, requireOrgRole(['owner', 'admin']), rateLimitInviteCreate, async (req, res) => {
   try {
     const { email, role = 'member' } = req.body;
     const orgId = req.orgId;
@@ -104,6 +105,7 @@ router.post('/invites', authenticateToken, loadOrgContext, requireOrgContext, re
     }
 
     // Check for existing pending invite (idempotent)
+    // Must be: same org, same email, pending status, not expired, not revoked, not accepted
     const existingInvite = await db.query(
       `SELECT id, invitation_token, invited_email, status, role_id
        FROM organization_members
@@ -111,7 +113,8 @@ router.post('/invites', authenticateToken, loadOrgContext, requireOrgContext, re
          AND invited_email = $2
          AND status = 'pending'
          AND (invitation_expires_at IS NULL OR invitation_expires_at > NOW())
-         AND revoked_at IS NULL`,
+         AND revoked_at IS NULL
+         AND accepted_at IS NULL`,
       [orgId, normalizedEmail]
     );
 
@@ -224,7 +227,7 @@ router.get('/invites', authenticateToken, loadOrgContext, requireOrgContext, req
 // ============================================================================
 // POST /api/org/invites/accept - Accept invite (auth optional)
 // ============================================================================
-router.post('/invites/accept', authenticateTokenOptional, async (req, res) => {
+router.post('/invites/accept', rateLimitInviteAccept, authenticateTokenOptional, async (req, res) => {
   try {
     const { token } = req.body;
 
@@ -254,17 +257,26 @@ router.post('/invites/accept', authenticateTokenOptional, async (req, res) => {
 
     // Check if already accepted
     if (invite.accepted_at) {
-      return res.status(400).json({ error: 'Invite has already been accepted' });
+      return res.status(400).json({
+        error: 'Invite has already been accepted',
+        code: 'ALREADY_ACCEPTED'
+      });
     }
 
     // Check if revoked
     if (invite.revoked_at || invite.status === 'removed') {
-      return res.status(400).json({ error: 'Invite has been revoked' });
+      return res.status(400).json({
+        error: 'Invite has been revoked',
+        code: 'REVOKED'
+      });
     }
 
     // Check if expired
     if (invite.invitation_expires_at && new Date(invite.invitation_expires_at) < new Date()) {
-      return res.status(400).json({ error: 'Invite has expired' });
+      return res.status(400).json({
+        error: 'Invite has expired',
+        code: 'EXPIRED'
+      });
     }
 
     // Check if status is pending
@@ -273,12 +285,11 @@ router.post('/invites/accept', authenticateTokenOptional, async (req, res) => {
     }
 
     // If user not authenticated, return needsAuth
+    // SECURITY: Do NOT leak org name/id when unauthenticated
     if (!req.user) {
       return res.status(200).json({
         needsAuth: true,
-        email: invite.invited_email,
-        organizationName: invite.org_name,
-        message: `Please log in or sign up as ${invite.invited_email} to accept this invite`
+        email: invite.invited_email
       });
     }
 
@@ -374,7 +385,25 @@ router.post('/invites/revoke', authenticateToken, loadOrgContext, requireOrgCont
 
     const invite = inviteResult.rows[0];
 
-    // Already revoked or not pending - idempotent success
+    // Check if already accepted - cannot revoke accepted invites
+    if (invite.status === 'active') {
+      return res.status(409).json({
+        error: 'Cannot revoke an accepted invite',
+        code: 'ALREADY_ACCEPTED',
+        alreadyAccepted: true
+      });
+    }
+
+    // Already revoked - idempotent success
+    if (invite.status === 'removed') {
+      return res.status(200).json({
+        success: true,
+        message: 'Invite was already revoked',
+        alreadyRevoked: true
+      });
+    }
+
+    // Not pending - some other state
     if (invite.status !== 'pending') {
       return res.status(200).json({
         success: true,
