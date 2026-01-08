@@ -15,7 +15,7 @@
  * Seat usage = active members + pending invites (prevents invite spam)
  */
 
-const db = require('../db');
+const db = require('../db/database');
 
 // Default seat limits by plan (when seat_limit column is NULL)
 const PLAN_SEAT_LIMITS = {
