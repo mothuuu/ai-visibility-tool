@@ -7,6 +7,7 @@
  *   POST /api/org/invites/accept  - Accept invite (auth optional)
  *   POST /api/org/invites/revoke  - Revoke invite (owner/admin)
  *   GET  /api/org/members         - List org members (any member)
+ *   GET  /api/org/seats           - Get seat usage info (owner/admin)
  */
 
 const express = require('express');
@@ -16,6 +17,7 @@ const db = require('../db/database');
 const { authenticateToken, authenticateTokenOptional } = require('../middleware/auth');
 const { loadOrgContext, requireOrgContext, requireOrgRole } = require('../middleware/orgContext');
 const { rateLimitInviteCreate, rateLimitInviteAccept } = require('../middleware/inviteRateLimit');
+const { getSeatInfo, canAddSeat } = require('../services/seat-service');
 
 // Invite token expiry (7 days)
 const INVITE_EXPIRY_DAYS = 7;
@@ -57,13 +59,7 @@ router.post('/invites', authenticateToken, loadOrgContext, requireOrgContext, re
     const orgId = req.orgId;
     const invitedBy = req.user.id;
 
-    // TODO: Phase 3B.2 - Seat enforcement
-    // When seat_limit is set on organizations table, check:
-    // SELECT can_invite FROM organization_seat_usage WHERE organization_id = $1
-    // If false, return: { error: 'Seat limit reached', code: 'SEAT_LIMIT_REACHED' }
-    // This requires Stripe webhook to set seat_limit on subscription changes
-
-    // Validate email
+    // Validate email first (before checking seats - fast fail)
     if (!email || typeof email !== 'string') {
       return res.status(400).json({ error: 'Email is required' });
     }
@@ -76,18 +72,7 @@ router.post('/invites', authenticateToken, loadOrgContext, requireOrgContext, re
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
-    // Validate role - only owner can create admin, admin can only create member
-    const allowedRoles = ['member', 'admin'];
-    if (!allowedRoles.includes(role)) {
-      return res.status(400).json({ error: 'Invalid role. Allowed: member, admin' });
-    }
-
-    // Admin can only invite members, not other admins
-    if (req.orgRole === 'admin' && role === 'admin') {
-      return res.status(403).json({ error: 'Admins can only invite members' });
-    }
-
-    // Check if user already a member
+    // Check if user already a member (fast path - no seat consumed)
     const existingMember = await db.query(
       `SELECT om.id, om.status, u.email
        FROM organization_members om
@@ -104,8 +89,7 @@ router.post('/invites', authenticateToken, loadOrgContext, requireOrgContext, re
       });
     }
 
-    // Check for existing pending invite (idempotent)
-    // Must be: same org, same email, pending status, not expired, not revoked, not accepted
+    // Check for existing pending invite (idempotent - returns existing, no new seat)
     const existingInvite = await db.query(
       `SELECT id, invitation_token, invited_email, status, role_id
        FROM organization_members
@@ -130,6 +114,29 @@ router.post('/invites', authenticateToken, loadOrgContext, requireOrgContext, re
         inviteLink,
         existingInvite: true
       });
+    }
+
+    // Phase 3B.2A: Seat limit enforcement
+    // Only check when creating a NEW invite (idempotent path above bypasses this)
+    const seatCheck = await canAddSeat(orgId);
+    if (!seatCheck.canInvite) {
+      return res.status(409).json({
+        error: 'SEAT_LIMIT_REACHED',
+        message: 'Seat limit reached. Upgrade to add more teammates.',
+        seatLimit: seatCheck.seatLimit,
+        seatsUsed: seatCheck.seatsUsed
+      });
+    }
+
+    // Validate role - only owner can create admin, admin can only create member
+    const allowedRoles = ['member', 'admin'];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Allowed: member, admin' });
+    }
+
+    // Admin can only invite members, not other admins
+    if (req.orgRole === 'admin' && role === 'admin') {
+      return res.status(403).json({ error: 'Admins can only invite members' });
     }
 
     // Get role ID
@@ -477,6 +484,29 @@ router.get('/members', authenticateToken, loadOrgContext, requireOrgContext, asy
   } catch (error) {
     console.error('❌ List members error:', error);
     res.status(500).json({ error: 'Failed to list members' });
+  }
+});
+
+// ============================================================================
+// GET /api/org/seats - Get seat usage info (owner/admin only)
+// ============================================================================
+router.get('/seats', authenticateToken, loadOrgContext, requireOrgContext, requireOrgRole(['owner', 'admin']), async (req, res) => {
+  try {
+    const orgId = req.orgId;
+    const seatInfo = await getSeatInfo(orgId);
+
+    res.json({
+      success: true,
+      seatLimit: seatInfo.seatLimit,
+      activeMembers: seatInfo.activeMembers,
+      pendingInvites: seatInfo.pendingInvites,
+      seatsUsed: seatInfo.seatsUsed,
+      canInvite: seatInfo.canInvite
+    });
+
+  } catch (error) {
+    console.error('❌ Get seats error:', error);
+    res.status(500).json({ error: 'Failed to get seat info' });
   }
 });
 
