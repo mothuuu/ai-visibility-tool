@@ -745,6 +745,7 @@ async function loadPendingInvites() {
 
 /**
  * Phase 3B.2A: Load seat usage from API
+ * Gracefully optional - hides if endpoint unavailable or data invalid
  */
 async function loadSeatUsage() {
     const seatUsageRow = document.getElementById('seatUsageRow');
@@ -752,10 +753,12 @@ async function loadSeatUsage() {
     const seatLimitValue = document.getElementById('seatLimitValue');
     const seatActiveMembersValue = document.getElementById('seatActiveMembersValue');
     const seatPendingInvitesValue = document.getElementById('seatPendingInvitesValue');
-    const seatUsagePrimary = document.getElementById('seatUsagePrimary');
     const seatUpgradeHint = document.getElementById('seatUpgradeHint');
 
     if (!seatUsageRow) return;
+
+    // Keep hidden by default - only show on valid data
+    seatUsageRow.style.display = 'none';
 
     try {
         const authToken = localStorage.getItem('authToken');
@@ -763,45 +766,39 @@ async function loadSeatUsage() {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
 
+        // Exit silently on non-200 (endpoint may not exist)
         if (!response.ok) {
-            // Hide seat row on error (401/403/500)
-            seatUsageRow.style.display = 'none';
             return;
         }
 
         const data = await response.json();
 
-        if (data.seatLimit === null || data.seatLimit === undefined) {
-            // Seat limit not available
-            if (seatUsagePrimary) {
-                seatUsagePrimary.innerHTML = '<i class="fas fa-chair" style="margin-right: 0.5rem; color: var(--brand-purple);"></i>Seats: Not available';
-            }
-            if (seatActiveMembersValue) seatActiveMembersValue.textContent = '—';
-            if (seatPendingInvitesValue) seatPendingInvitesValue.textContent = '—';
-            seatUsageRow.style.display = 'block';
+        // Only show when seatLimit is a valid finite number (including 0)
+        if (typeof data.seatLimit !== 'number' || !Number.isFinite(data.seatLimit)) {
             return;
         }
 
         // Render seat usage
-        if (seatsUsedValue) seatsUsedValue.textContent = data.seatsUsed;
+        if (seatsUsedValue) seatsUsedValue.textContent = data.seatsUsed ?? 0;
         if (seatLimitValue) seatLimitValue.textContent = data.seatLimit;
-        if (seatActiveMembersValue) seatActiveMembersValue.textContent = data.activeMembers;
-        if (seatPendingInvitesValue) seatPendingInvitesValue.textContent = data.pendingInvites;
+        if (seatActiveMembersValue) seatActiveMembersValue.textContent = data.activeMembers ?? 0;
+        if (seatPendingInvitesValue) seatPendingInvitesValue.textContent = data.pendingInvites ?? 0;
 
         // Show upgrade hint if at or near capacity (>= 80%)
-        if (seatUpgradeHint) {
-            const usagePercent = (data.seatsUsed / data.seatLimit) * 100;
+        if (seatUpgradeHint && data.seatLimit > 0) {
+            const usagePercent = ((data.seatsUsed ?? 0) / data.seatLimit) * 100;
             seatUpgradeHint.style.display = usagePercent >= 80 ? 'block' : 'none';
         }
 
         // Store seat data for use in invite error handling
         window.currentSeatData = data;
 
+        // Only now show the row
         seatUsageRow.style.display = 'block';
 
     } catch (error) {
-        console.error('Error loading seat usage:', error);
-        seatUsageRow.style.display = 'none';
+        // Exit silently - endpoint may not exist yet
+        return;
     }
 }
 
