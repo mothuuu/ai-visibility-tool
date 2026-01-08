@@ -137,9 +137,17 @@ loginForm.addEventListener('submit', async (e) => {
       // Show success message
       showSuccess('Login successful! Redirecting...');
 
-      // Redirect to dashboard after 1 second
+      // Check for redirect URL in query string (used by invite flow)
+      const urlParams = new URLSearchParams(window.location.search);
+      const nextUrl = urlParams.get('next');
+
+      // Redirect after 1 second
       setTimeout(() => {
-        window.location.href = 'dashboard.html';
+        if (nextUrl && isValidRedirectUrl(nextUrl)) {
+          window.location.href = nextUrl;
+        } else {
+          window.location.href = 'dashboard.html';
+        }
       }, 1000);
     } else {
       throw new Error('Invalid response from server');
@@ -277,9 +285,17 @@ signupForm.addEventListener('submit', async (e) => {
       // Show success message
       showSuccess('Account created! Please check your email to verify your account. Redirecting...');
 
-      // Redirect to dashboard after 2 seconds
+      // Check for redirect URL in query string (used by invite flow)
+      const urlParams = new URLSearchParams(window.location.search);
+      const nextUrl = urlParams.get('next');
+
+      // Redirect after 2 seconds
       setTimeout(() => {
-        window.location.href = 'dashboard.html';
+        if (nextUrl && isValidRedirectUrl(nextUrl)) {
+          window.location.href = nextUrl;
+        } else {
+          window.location.href = 'dashboard.html';
+        }
       }, 2000);
     } else {
       throw new Error('Invalid response from server');
@@ -403,3 +419,29 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+/**
+ * Validate redirect URL to prevent open redirect attacks
+ * Only allows relative URLs or same-origin URLs
+ * @param {string} url - The URL to validate
+ * @returns {boolean} - True if URL is safe to redirect to
+ */
+function isValidRedirectUrl(url) {
+  if (!url) return false;
+
+  try {
+    // Decode URL in case it's encoded
+    const decodedUrl = decodeURIComponent(url);
+
+    // Allow relative URLs starting with /
+    if (decodedUrl.startsWith('/') && !decodedUrl.startsWith('//')) {
+      return true;
+    }
+
+    // Allow same-origin absolute URLs
+    const urlObj = new URL(decodedUrl, window.location.origin);
+    return urlObj.origin === window.location.origin;
+  } catch (e) {
+    return false;
+  }
+}
