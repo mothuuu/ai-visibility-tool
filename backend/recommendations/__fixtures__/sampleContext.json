@@ -1,0 +1,30 @@
+{
+  "detected_industry": "saas",
+  "icp_roles": ["CTO", "VP Engineering", "IT Director"],
+  "product_name": "AcmeCorp Platform",
+  "company_name": "AcmeCorp",
+  "site_url": "https://acmecorp.example.com",
+  "region": "North America",
+
+  "pain_points": "integration complexity and legacy system migration",
+  "value_prop": "seamless enterprise integration and modern architecture",
+  "tech_approach": "cloud-native microservices and API-first design",
+  "key_benefit": "faster time-to-value and reduced operational overhead",
+  "differentiators": "our deep integration expertise and 24/7 support",
+  "unique_value": "a partner who understands enterprise complexity",
+
+  "implementation_time": "4-6 weeks",
+  "integrations": "Salesforce, HubSpot, Slack, Microsoft Teams",
+  "trial_period": "14-day",
+  "product_type": "enterprise platform",
+  "pricing_start": "$499/month",
+
+  "certifications": "SOC 2 Type II, ISO 27001",
+  "uptime": "99.99",
+  "response_time": "1-hour",
+
+  "topic": "enterprise software integration",
+  "author_name": "Jane Smith",
+  "author_title": "CTO",
+  "years": "15"
+}

@@ -1,0 +1,122 @@
+{
+  "url": "https://acmecorp.example.com",
+  "totalScore": 52,
+  "industry": "technology",
+
+  "categories": {
+    "aiReadability": {
+      "score": 45,
+      "weight": 0.10,
+      "subfactors": {
+        "altTextScore": 33,
+        "captionsTranscriptsScore": 100,
+        "interactiveAccessScore": 50,
+        "crossMediaScore": 40
+      },
+      "details": {
+        "altCoveragePercent": 33,
+        "videosWithCaptions": 0,
+        "totalVideos": 0
+      }
+    },
+
+    "aiSearchReadiness": {
+      "score": 48,
+      "weight": 0.20,
+      "subfactors": {
+        "questionHeadingsScore": 30,
+        "scannabilityScore": 55,
+        "readabilityScore": 65,
+        "faqScore": 0,
+        "snippetEligibleScore": 45,
+        "pillarPagesScore": 40,
+        "linkedSubpagesScore": 60,
+        "painPointsScore": 50,
+        "geoContentScore": 20
+      }
+    },
+
+    "contentFreshness": {
+      "score": 35,
+      "weight": 0.08,
+      "subfactors": {
+        "lastUpdatedScore": 25,
+        "versioningScore": 30,
+        "timeSensitiveScore": 40,
+        "auditProcessScore": 35,
+        "liveDataScore": 50,
+        "httpFreshnessScore": 30,
+        "editorialCalendarScore": 40
+      }
+    },
+
+    "contentStructure": {
+      "score": 62,
+      "weight": 0.15,
+      "subfactors": {
+        "headingHierarchyScore": 75,
+        "navigationScore": 60,
+        "entityCuesScore": 55,
+        "accessibilityScore": 58,
+        "geoMetaScore": 35
+      }
+    },
+
+    "speedUX": {
+      "score": 55,
+      "weight": 0.05,
+      "subfactors": {
+        "lcpScore": 50,
+        "clsScore": 70,
+        "inpScore": 55,
+        "mobileScore": 60,
+        "crawlerResponseScore": 45
+      }
+    },
+
+    "technicalSetup": {
+      "score": 38,
+      "weight": 0.18,
+      "subfactors": {
+        "crawlerAccessScore": 70,
+        "structuredDataScore": 0,
+        "canonicalHreflangScore": 75,
+        "openGraphScore": 35,
+        "sitemapScore": 0,
+        "indexNowScore": 0,
+        "rssFeedScore": 0
+      }
+    },
+
+    "trustAuthority": {
+      "score": 42,
+      "weight": 0.12,
+      "subfactors": {
+        "authorBiosScore": 25,
+        "certificationsScore": 30,
+        "domainAuthorityScore": null,
+        "thoughtLeadershipScore": 45,
+        "thirdPartyProfilesScore": 40
+      }
+    },
+
+    "voiceOptimization": {
+      "score": 48,
+      "weight": 0.12,
+      "subfactors": {
+        "longTailScore": 50,
+        "localIntentScore": 35,
+        "conversationalTermsScore": 45,
+        "snippetFormatScore": 55,
+        "multiTurnScore": 50
+      }
+    }
+  },
+
+  "metadata": {
+    "wordCount": 350,
+    "imageCount": 3,
+    "pageTitle": "AcmeCorp - Enterprise Solutions",
+    "analyzedAt": "2026-01-10T12:00:00Z"
+  }
+}
