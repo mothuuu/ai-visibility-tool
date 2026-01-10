@@ -44,7 +44,8 @@ const {
   resolvePlaceholders,
   validateNoUnresolvedPlaceholders,
   RECOMMENDATION_SCORE_THRESHOLD,
-  EVIDENCE_QUALITY
+  EVIDENCE_QUALITY,
+  TARGET_LEVEL
 } = require('../../recommendations/renderer');
 
 const {
@@ -57,6 +58,13 @@ const {
   getVerificationActionItems,
   CONFIDENCE_THRESHOLDS
 } = require('../../recommendations/evidenceGating');
+
+const {
+  getTargetLevel,
+  isSiteLevel,
+  isPageLevel,
+  getSubfactorsByTargetLevel
+} = require('../../recommendations/targeting');
 
 // Load fixtures
 const sampleScanEvidence = require('../../recommendations/__fixtures__/sampleScanEvidence.json');
@@ -1110,6 +1118,194 @@ describe('EvidenceGating', () => {
         if (rec.evidence_quality === EVIDENCE_QUALITY.WEAK) {
           assert.ok(rec.automation_level !== 'generate' || rec.generated_assets.length === 0,
             `Weak evidence should downgrade or not generate assets`);
+        }
+      }
+    });
+  });
+});
+
+// ========================================
+// TARGETING TESTS (Phase 4A.1.5)
+// ========================================
+
+describe('Targeting', () => {
+
+  describe('Target Level Constants', () => {
+
+    it('TARGET_LEVEL has required values', () => {
+      assert.strictEqual(TARGET_LEVEL.SITE, 'site');
+      assert.strictEqual(TARGET_LEVEL.PAGE, 'page');
+      assert.strictEqual(TARGET_LEVEL.BOTH, 'both');
+    });
+  });
+
+  describe('getTargetLevel', () => {
+
+    it('returns site for sitemap_indexing', () => {
+      const level = getTargetLevel('technical_setup.sitemap_indexing');
+      assert.strictEqual(level, 'site');
+    });
+
+    it('returns site for organization_schema', () => {
+      const level = getTargetLevel('technical_setup.organization_schema');
+      assert.strictEqual(level, 'site');
+    });
+
+    it('returns site for crawler_access', () => {
+      const level = getTargetLevel('technical_setup.crawler_access');
+      assert.strictEqual(level, 'site');
+    });
+
+    it('returns page for alt_text_coverage', () => {
+      const level = getTargetLevel('ai_readability.alt_text_coverage');
+      assert.strictEqual(level, 'page');
+    });
+
+    it('returns page for social_meta_tags', () => {
+      const level = getTargetLevel('technical_setup.social_meta_tags');
+      assert.strictEqual(level, 'page');
+    });
+
+    it('returns page for semantic_heading_structure', () => {
+      const level = getTargetLevel('content_structure.semantic_heading_structure');
+      assert.strictEqual(level, 'page');
+    });
+
+    it('returns both for structured_data_coverage', () => {
+      const level = getTargetLevel('technical_setup.structured_data_coverage');
+      assert.strictEqual(level, 'both');
+    });
+
+    it('returns both for icp_faqs', () => {
+      const level = getTargetLevel('ai_search_readiness.icp_faqs');
+      assert.strictEqual(level, 'both');
+    });
+
+    it('falls back to category default for unknown subfactor', () => {
+      // trust_authority defaults to 'site'
+      const level = getTargetLevel('trust_authority.unknown_subfactor');
+      assert.strictEqual(level, 'site');
+    });
+
+    it('returns page for completely unknown key', () => {
+      const level = getTargetLevel('unknown.unknown');
+      assert.strictEqual(level, 'page');
+    });
+  });
+
+  describe('isSiteLevel and isPageLevel', () => {
+
+    it('isSiteLevel returns true for site-level subfactors', () => {
+      assert.ok(isSiteLevel('technical_setup.sitemap_indexing'));
+      assert.ok(isSiteLevel('technical_setup.organization_schema'));
+    });
+
+    it('isSiteLevel returns true for both-level subfactors', () => {
+      assert.ok(isSiteLevel('technical_setup.structured_data_coverage'));
+    });
+
+    it('isSiteLevel returns false for page-only subfactors', () => {
+      assert.ok(!isSiteLevel('ai_readability.alt_text_coverage'));
+    });
+
+    it('isPageLevel returns true for page-level subfactors', () => {
+      assert.ok(isPageLevel('ai_readability.alt_text_coverage'));
+      assert.ok(isPageLevel('content_structure.semantic_heading_structure'));
+    });
+
+    it('isPageLevel returns true for both-level subfactors', () => {
+      assert.ok(isPageLevel('ai_search_readiness.icp_faqs'));
+    });
+
+    it('isPageLevel returns false for site-only subfactors', () => {
+      assert.ok(!isPageLevel('technical_setup.sitemap_indexing'));
+    });
+  });
+
+  describe('getSubfactorsByTargetLevel', () => {
+
+    it('returns site-level subfactors', () => {
+      const siteSubfactors = getSubfactorsByTargetLevel('site');
+      assert.ok(Array.isArray(siteSubfactors));
+      assert.ok(siteSubfactors.includes('technical_setup.sitemap_indexing'));
+      assert.ok(siteSubfactors.includes('technical_setup.organization_schema'));
+    });
+
+    it('returns page-level subfactors', () => {
+      const pageSubfactors = getSubfactorsByTargetLevel('page');
+      assert.ok(Array.isArray(pageSubfactors));
+      assert.ok(pageSubfactors.includes('ai_readability.alt_text_coverage'));
+    });
+
+    it('returns both-level subfactors', () => {
+      const bothSubfactors = getSubfactorsByTargetLevel('both');
+      assert.ok(Array.isArray(bothSubfactors));
+      assert.ok(bothSubfactors.includes('ai_search_readiness.icp_faqs'));
+    });
+  });
+
+  describe('Renderer target_level Integration', () => {
+
+    it('recommendations include target_level field', async () => {
+      const scan = { id: 'test-scan-targeting' };
+
+      const recommendations = await renderRecommendations({
+        scan,
+        rubricResult: sampleRubricResult,
+        scanEvidence: sampleScanEvidence,
+        context: sampleContext
+      });
+
+      for (const rec of recommendations) {
+        assert.ok(rec.target_level,
+          `Recommendation ${rec.subfactor_key} should have target_level`);
+        assert.ok(['site', 'page', 'both'].includes(rec.target_level),
+          `target_level should be valid enum, got ${rec.target_level}`);
+      }
+    });
+
+    it('target_level matches expected for representative subfactors', async () => {
+      const scan = { id: 'test-scan-targeting' };
+
+      // Create rubric that triggers specific subfactors
+      const rubricForTargeting = {
+        categories: {
+          technicalSetup: {
+            score: 30,
+            subfactors: {
+              structuredDataScore: 20,  // should be 'both'
+              sitemapScore: 15          // should be 'site'
+            }
+          },
+          aiReadability: {
+            score: 40,
+            subfactors: {
+              altTextScore: 25          // should be 'page'
+            }
+          }
+        }
+      };
+
+      const recommendations = await renderRecommendations({
+        scan,
+        rubricResult: rubricForTargeting,
+        scanEvidence: sampleScanEvidence,
+        context: sampleContext
+      });
+
+      // Check specific target levels if those subfactors produced recommendations
+      for (const rec of recommendations) {
+        if (rec.subfactor_key.includes('sitemap')) {
+          assert.strictEqual(rec.target_level, 'site',
+            'Sitemap should be site-level');
+        }
+        if (rec.subfactor_key.includes('alt_text')) {
+          assert.strictEqual(rec.target_level, 'page',
+            'Alt text should be page-level');
+        }
+        if (rec.subfactor_key.includes('structured_data')) {
+          assert.strictEqual(rec.target_level, 'both',
+            'Structured data coverage should be both');
         }
       }
     });

@@ -38,6 +38,12 @@ const {
   getVerificationActionItems
 } = require('./evidenceGating');
 
+const {
+  TARGET_LEVEL,
+  getTargetLevel,
+  getTargetLevelDescription
+} = require('./targeting');
+
 // ========================================
 // CONFIGURATION
 // ========================================
@@ -448,10 +454,11 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
 
     if (!entry) {
       // No playbook entry - create minimal recommendation with weak evidence
+      const fallbackSubfactorKey = normalizeKey(`${failing.category}.${failing.subfactor}`);
       recommendations.push({
         rec_key: generateRecKey(failing.subfactor, scanId),
         pillar: PILLAR_DISPLAY_NAMES[failing.category] || failing.category,
-        subfactor_key: normalizeKey(`${failing.category}.${failing.subfactor}`),
+        subfactor_key: fallbackSubfactorKey,
         gap: `Improve ${failing.subfactor.replace(/Score$/, '')}`,
         why_it_matters: `This subfactor scored ${failing.score}/100, below the ${failing.threshold} threshold.`,
         action_items: ['Review and improve this area based on best practices'],
@@ -466,7 +473,9 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
         // Evidence gating fields
         confidence: 0.3,
         evidence_quality: EVIDENCE_QUALITY.WEAK,
-        evidence_summary: 'No playbook entry - limited guidance available'
+        evidence_summary: 'No playbook entry - limited guidance available',
+        // Target level (site vs page)
+        target_level: getTargetLevel(fallbackSubfactorKey)
       });
       continue;
     }
@@ -514,6 +523,9 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
     evidenceJson.threshold = failing.threshold;
     evidenceJson.gap = failing.gap;
 
+    // Determine target level (site vs page)
+    const targetLevel = getTargetLevel(entry.canonical_key);
+
     // Build recommendation object
     const recommendation = {
       rec_key: generateRecKey(entry.canonical_key, scanId),
@@ -529,7 +541,9 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
       // Evidence gating fields
       confidence,
       evidence_quality: evidenceQuality,
-      evidence_summary: evidenceSummary
+      evidence_summary: evidenceSummary,
+      // Target level (site vs page)
+      target_level: targetLevel
     };
 
     // Step 10: Call generation hook if applicable AND evidence is sufficient
@@ -629,6 +643,9 @@ module.exports = {
 
   // Evidence quality constants (re-exported for convenience)
   EVIDENCE_QUALITY,
+
+  // Target level constants (re-exported for convenience)
+  TARGET_LEVEL,
 
   // Utilities (exported for testing)
   extractFailingSubfactors,
