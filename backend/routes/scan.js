@@ -971,6 +971,24 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
       }
     }
 
+    // Phase 4A: Generate content-aware recommendations (best-effort, non-fatal)
+    // Competitor scans are identified by domain_type='competitor'
+    if (process.env.RECOMMENDATIONS_PIPELINE_V1 === '1' && scan?.domain_type !== 'competitor') {
+      try {
+        const { generateAndPersistRecommendations } = require('../services/recommendation-orchestrator');
+        const recResult = await generateAndPersistRecommendations(scan.id);
+
+        if (recResult.success) {
+          console.log(`[Phase4A] ✅ Generated ${recResult.recommendations_count} recommendations for scan ${scan.id}`);
+        } else {
+          console.error(`[Phase4A] ⚠️ Recommendation generation failed for scan ${scan.id}:`, recResult.error);
+        }
+      } catch (recError) {
+        console.error(`[Phase4A] ❌ Unexpected error generating recommendations for scan ${scan.id}:`, recError.message);
+        // Continue - don't fail the scan
+      }
+    }
+
     // Log usage
     await db.query(
       'INSERT INTO usage_logs (user_id, action, metadata) VALUES ($1, $2, $3)',
@@ -1128,7 +1146,7 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
       }
     }
 
-    // Get recommendations
+    // Get recommendations (includes v2 fields from Phase 4A recommendation engine)
     const recResult = await db.query(
       `SELECT
         id, category, recommendation_text, priority,
@@ -1137,10 +1155,20 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
         impact_description,
         customized_implementation, ready_to_use_content,
         implementation_notes, quick_wins, validation_checklist,
-        user_rating, user_feedback, implemented_at
+        user_rating, user_feedback, implemented_at,
+        -- Phase 4A v2 recommendation engine fields
+        pillar, rec_key, subfactor_key, gap, why_it_matters,
+        confidence, evidence_quality, evidence_json, evidence_summary,
+        automation_level, generated_assets, examples, target_level, target_url,
+        engine_version
        FROM scan_recommendations
        WHERE scan_id = $1
-       ORDER BY priority DESC, estimated_impact DESC`,
+       ORDER BY
+        CASE WHEN priority IN ('P0', 'high') THEN 1
+             WHEN priority IN ('P1', 'medium') THEN 2
+             ELSE 3 END,
+        confidence DESC NULLS LAST,
+        estimated_impact DESC`,
       [contextScanId]
     );
 
@@ -1255,7 +1283,7 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
       }
     }
 
-    // Get updated recommendations after potential unlock (with new delivery system fields)
+    // Get updated recommendations after potential unlock (with new delivery system fields + v2 fields)
     const updatedRecResult = await db.query(
       `SELECT
         id, category, recommendation_text, priority,
@@ -1274,10 +1302,22 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
         refresh_cycle_number, implementation_progress, previous_findings,
         is_partial_implementation, validation_status, validation_errors,
         last_validated_at, affected_pages, pages_implemented,
-        auto_detected_at, archived_at, archived_reason, skip_enabled_at
+        auto_detected_at, archived_at, archived_reason, skip_enabled_at,
+        -- Phase 4A v2 recommendation engine fields
+        pillar, rec_key, subfactor_key, gap, why_it_matters,
+        confidence, evidence_quality, evidence_json, evidence_summary,
+        automation_level, generated_assets, examples, target_level, target_url,
+        engine_version
        FROM scan_recommendations
        WHERE scan_id = $1
-       ORDER BY batch_number, priority DESC, impact_score DESC NULLS LAST, estimated_impact DESC`,
+       ORDER BY
+        batch_number,
+        CASE WHEN priority IN ('P0', 'high') THEN 1
+             WHEN priority IN ('P1', 'medium') THEN 2
+             ELSE 3 END,
+        confidence DESC NULLS LAST,
+        impact_score DESC NULLS LAST,
+        estimated_impact DESC`,
       [contextScanId]
     );
 
