@@ -1,0 +1,122 @@
+{
+  "url": "https://welloptimized.example.com",
+  "totalScore": 85,
+  "industry": "technology",
+
+  "categories": {
+    "aiReadability": {
+      "score": 88,
+      "weight": 0.10,
+      "subfactors": {
+        "altTextScore": 92,
+        "captionsTranscriptsScore": 100,
+        "interactiveAccessScore": 80,
+        "crossMediaScore": 75
+      },
+      "details": {
+        "altCoveragePercent": 95,
+        "videosWithCaptions": 2,
+        "totalVideos": 2
+      }
+    },
+
+    "aiSearchReadiness": {
+      "score": 82,
+      "weight": 0.20,
+      "subfactors": {
+        "questionHeadingsScore": 85,
+        "scannabilityScore": 78,
+        "readabilityScore": 80,
+        "faqScore": 90,
+        "snippetEligibleScore": 75,
+        "pillarPagesScore": 80,
+        "linkedSubpagesScore": 85,
+        "painPointsScore": 78,
+        "geoContentScore": 72
+      }
+    },
+
+    "contentFreshness": {
+      "score": 78,
+      "weight": 0.08,
+      "subfactors": {
+        "lastUpdatedScore": 85,
+        "versioningScore": 70,
+        "timeSensitiveScore": 75,
+        "auditProcessScore": 80,
+        "liveDataScore": 72,
+        "httpFreshnessScore": 78,
+        "editorialCalendarScore": 75
+      }
+    },
+
+    "contentStructure": {
+      "score": 86,
+      "weight": 0.15,
+      "subfactors": {
+        "headingHierarchyScore": 90,
+        "navigationScore": 85,
+        "entityCuesScore": 80,
+        "accessibilityScore": 88,
+        "geoMetaScore": 75
+      }
+    },
+
+    "speedUX": {
+      "score": 82,
+      "weight": 0.05,
+      "subfactors": {
+        "lcpScore": 85,
+        "clsScore": 90,
+        "inpScore": 78,
+        "mobileScore": 80,
+        "crawlerResponseScore": 75
+      }
+    },
+
+    "technicalSetup": {
+      "score": 88,
+      "weight": 0.18,
+      "subfactors": {
+        "crawlerAccessScore": 95,
+        "structuredDataScore": 85,
+        "canonicalHreflangScore": 90,
+        "openGraphScore": 88,
+        "sitemapScore": 100,
+        "indexNowScore": 75,
+        "rssFeedScore": 80
+      }
+    },
+
+    "trustAuthority": {
+      "score": 80,
+      "weight": 0.12,
+      "subfactors": {
+        "authorBiosScore": 82,
+        "certificationsScore": 78,
+        "domainAuthorityScore": null,
+        "thoughtLeadershipScore": 85,
+        "thirdPartyProfilesScore": 75
+      }
+    },
+
+    "voiceOptimization": {
+      "score": 79,
+      "weight": 0.12,
+      "subfactors": {
+        "longTailScore": 80,
+        "localIntentScore": 75,
+        "conversationalTermsScore": 78,
+        "snippetFormatScore": 82,
+        "multiTurnScore": 76
+      }
+    }
+  },
+
+  "metadata": {
+    "wordCount": 2500,
+    "imageCount": 12,
+    "pageTitle": "Well Optimized Site - Enterprise Solutions",
+    "analyzedAt": "2026-01-10T12:00:00Z"
+  }
+}

@@ -1,0 +1,223 @@
+{
+  "contractVersion": "2.0.0",
+  "url": "https://acmecorp.example.com",
+  "timestamp": "2026-01-10T12:00:00Z",
+
+  "metadata": {
+    "title": "AcmeCorp - Enterprise Solutions",
+    "description": "AcmeCorp provides enterprise software solutions for modern businesses.",
+    "keywords": "enterprise software, business solutions, SaaS",
+    "author": "",
+    "canonical": "https://acmecorp.example.com",
+    "robots": "index, follow",
+    "ogTitle": "AcmeCorp | Enterprise Solutions",
+    "ogDescription": "Transform your business with AcmeCorp's enterprise solutions.",
+    "ogImage": "",
+    "ogType": "website",
+    "ogUrl": "https://acmecorp.example.com",
+    "twitterCard": "",
+    "twitterTitle": "",
+    "twitterDescription": "",
+    "lastModified": "",
+    "publishedTime": "",
+    "language": "en",
+    "geoRegion": "",
+    "geoPlacename": ""
+  },
+
+  "content": {
+    "headings": {
+      "h1": ["AcmeCorp Enterprise Solutions"],
+      "h2": ["Our Products", "Why Choose Us", "Contact Us"],
+      "h3": ["Product A", "Product B"],
+      "h4": [],
+      "h5": [],
+      "h6": []
+    },
+    "paragraphs": [
+      "AcmeCorp delivers cutting-edge enterprise solutions that help businesses scale.",
+      "Our platform integrates seamlessly with your existing workflow.",
+      "Join thousands of companies who trust AcmeCorp."
+    ],
+    "bodyText": "AcmeCorp delivers cutting-edge enterprise solutions that help businesses scale. Our platform integrates seamlessly with your existing workflow. Join thousands of companies who trust AcmeCorp.",
+    "wordCount": 350,
+    "textLength": 2100,
+    "lists": [
+      { "type": "ul", "items": ["Feature 1", "Feature 2", "Feature 3"], "itemCount": 3 }
+    ],
+    "tables": [],
+    "faqs": []
+  },
+
+  "structure": {
+    "hasMain": true,
+    "hasArticle": false,
+    "hasSection": true,
+    "hasAside": false,
+    "hasNav": true,
+    "hasHeader": true,
+    "hasFooter": true,
+    "landmarks": 3,
+    "headingCount": { "h1": 1, "h2": 3, "h3": 2, "h4": 0, "h5": 0, "h6": 0 },
+    "headingHierarchy": [
+      { "level": 1, "text": "AcmeCorp Enterprise Solutions", "index": 0 },
+      { "level": 2, "text": "Our Products", "index": 1 },
+      { "level": 3, "text": "Product A", "index": 2 },
+      { "level": 3, "text": "Product B", "index": 3 },
+      { "level": 2, "text": "Why Choose Us", "index": 4 },
+      { "level": 2, "text": "Contact Us", "index": 5 }
+    ],
+    "internalLinks": 8,
+    "externalLinks": 2,
+    "elementsWithIds": 5,
+    "anchorLinks": 2,
+    "hasTOC": false,
+    "hasBreadcrumbs": false
+  },
+
+  "navigation": {
+    "keyPages": {
+      "about": "/about",
+      "contact": "/contact",
+      "services": "/services"
+    },
+    "allNavLinks": ["/about", "/services", "/contact", "/pricing"],
+    "hasSemanticNav": true,
+    "headerLinks": [
+      { "text": "Home", "href": "/" },
+      { "text": "About", "href": "/about" },
+      { "text": "Services", "href": "/services" }
+    ],
+    "navLinks": [
+      { "text": "About", "href": "/about" },
+      { "text": "Services", "href": "/services" },
+      { "text": "Pricing", "href": "/pricing" },
+      { "text": "Contact", "href": "/contact" }
+    ],
+    "footerLinks": [
+      { "text": "Privacy Policy", "href": "/privacy" },
+      { "text": "Terms", "href": "/terms" }
+    ],
+    "hasBlogLink": false,
+    "hasFAQLink": false
+  },
+
+  "media": {
+    "images": [
+      { "src": "/images/hero.jpg", "alt": "", "hasAlt": false, "title": "", "loading": "lazy" },
+      { "src": "/images/product.png", "alt": "", "hasAlt": false, "title": "", "loading": "lazy" },
+      { "src": "/images/team.jpg", "alt": "Our team", "hasAlt": true, "title": "", "loading": "lazy" }
+    ],
+    "imageCount": 3,
+    "imagesWithAlt": 1,
+    "imagesWithoutAlt": 2,
+    "videos": [],
+    "videoCount": 0,
+    "audio": [],
+    "audioCount": 0
+  },
+
+  "technical": {
+    "structuredData": [],
+    "hasOrganizationSchema": false,
+    "hasLocalBusinessSchema": false,
+    "hasFAQSchema": false,
+    "hasArticleSchema": false,
+    "hasBreadcrumbSchema": false,
+    "isJSRendered": false,
+    "hreflangTags": 0,
+    "hreflangLanguages": [],
+    "hasCanonical": true,
+    "canonicalUrl": "https://acmecorp.example.com",
+    "hasSitemapLink": false,
+    "hasRSSFeed": false,
+    "hasViewport": true,
+    "viewport": "width=device-width, initial-scale=1",
+    "charset": "UTF-8",
+    "robotsMeta": "index, follow",
+    "cacheControl": "",
+    "lastModified": "",
+    "etag": ""
+  },
+
+  "performance": {
+    "ttfb": 450,
+    "responseTime": 450,
+    "serverTiming": "",
+    "contentLength": 25000,
+    "contentType": "text/html; charset=utf-8",
+    "error": null
+  },
+
+  "accessibility": {
+    "ariaLabels": 2,
+    "ariaDescribed": 0,
+    "ariaLabelledBy": 0,
+    "ariaHidden": 0,
+    "ariaLive": 0,
+    "formsWithLabels": 0,
+    "imagesWithAlt": 1,
+    "imagesTotal": 3,
+    "hasLangAttribute": true,
+    "hasSkipLink": false,
+    "tabindex": 0,
+    "hasInlineStyles": 0,
+    "semanticButtons": 3,
+    "divClickHandlers": 0
+  },
+
+  "entities": {
+    "entities": {
+      "people": [],
+      "organizations": [{ "name": "AcmeCorp" }],
+      "places": [],
+      "products": ["Product A", "Product B"],
+      "events": [],
+      "professionalCredentials": [],
+      "relationships": []
+    },
+    "metrics": {
+      "totalEntities": 3,
+      "entitiesByType": { "organizations": 1, "products": 2 },
+      "relationships": 0,
+      "verifiedEntities": 0,
+      "knowledgeGraphConnections": 0,
+      "geoPrecision": 0,
+      "professionalVerification": false
+    },
+    "knowledgeGraph": { "nodes": [], "edges": [] }
+  },
+
+  "crawler": {
+    "discoveredSections": {
+      "hasBlogUrl": false,
+      "hasFaqUrl": false,
+      "hasAboutUrl": true,
+      "hasContactUrl": true
+    },
+    "totalDiscoveredUrls": 12,
+    "crawledPageCount": 5,
+    "robotsTxt": {},
+    "sitemap": {
+      "detected": false,
+      "location": null,
+      "urls": [],
+      "blogUrls": [],
+      "faqUrls": [],
+      "aboutUrls": ["/about"],
+      "contactUrls": ["/contact"],
+      "pricingUrls": ["/pricing"],
+      "hasBlogUrls": false,
+      "hasFaqUrls": false
+    }
+  },
+
+  "siteMetrics": {
+    "totalDiscoveredUrls": 12,
+    "sitemap": {
+      "detected": false,
+      "hasBlogUrls": false,
+      "hasFaqUrls": false
+    }
+  }
+}
