@@ -29,6 +29,21 @@ const {
   extractDomain
 } = require('./generationHooks');
 
+const {
+  EVIDENCE_QUALITY,
+  assessEvidenceQuality,
+  canRunGenerationHook,
+  adjustAutomationLevel,
+  shouldSkipRecommendation,
+  getVerificationActionItems
+} = require('./evidenceGating');
+
+const {
+  TARGET_LEVEL,
+  getTargetLevel,
+  getTargetLevelDescription
+} = require('./targeting');
+
 // ========================================
 // CONFIGURATION
 // ========================================
@@ -438,11 +453,12 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
     const entry = playbookEntries.get(failing.subfactor);
 
     if (!entry) {
-      // No playbook entry - create minimal recommendation
+      // No playbook entry - create minimal recommendation with weak evidence
+      const fallbackSubfactorKey = normalizeKey(`${failing.category}.${failing.subfactor}`);
       recommendations.push({
         rec_key: generateRecKey(failing.subfactor, scanId),
         pillar: PILLAR_DISPLAY_NAMES[failing.category] || failing.category,
-        subfactor_key: normalizeKey(`${failing.category}.${failing.subfactor}`),
+        subfactor_key: fallbackSubfactorKey,
         gap: `Improve ${failing.subfactor.replace(/Score$/, '')}`,
         why_it_matters: `This subfactor scored ${failing.score}/100, below the ${failing.threshold} threshold.`,
         action_items: ['Review and improve this area based on best practices'],
@@ -453,21 +469,62 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
           threshold: failing.threshold
         },
         automation_level: 'manual',
-        generated_assets: []
+        generated_assets: [],
+        // Evidence gating fields
+        confidence: 0.3,
+        evidence_quality: EVIDENCE_QUALITY.WEAK,
+        evidence_summary: 'No playbook entry - limited guidance available',
+        // Target level (site vs page)
+        target_level: getTargetLevel(fallbackSubfactorKey)
       });
       continue;
     }
 
+    // Step 6: Assess evidence quality
+    const evidenceAssessment = assessEvidenceQuality(scanEvidence, entry, context);
+    let { quality: evidenceQuality, confidence, summary: evidenceSummary, details: evidenceDetails } = evidenceAssessment;
+
+    // Step 7: Check if recommendation should be skipped (noise filtering)
+    const skipCheck = shouldSkipRecommendation({
+      evidenceQuality,
+      automationLevel: entry.automation_level,
+      score: failing.score,
+      threshold: failing.threshold
+    });
+
+    if (skipCheck.shouldSkip) {
+      console.log(`[Renderer] Skipping recommendation ${entry.canonical_key}: ${skipCheck.reason}`);
+      continue;
+    }
+
+    // Step 8: Adjust automation level based on evidence quality
+    let adjustedAutomationLevel = adjustAutomationLevel(entry.automation_level, evidenceQuality);
+
     // Resolve templates
     const whyItMatters = resolvePlaceholders(entry.why_it_matters_template, placeholderContext);
-    const actionItems = resolvePlaceholdersInArray(entry.action_items_template, placeholderContext);
+    let actionItems = resolvePlaceholdersInArray(entry.action_items_template, placeholderContext);
     const examples = resolvePlaceholdersInArray(entry.examples_template, placeholderContext);
+
+    // Step 9: Add verification action items for weak/ambiguous evidence
+    if (evidenceQuality === EVIDENCE_QUALITY.WEAK || evidenceQuality === EVIDENCE_QUALITY.AMBIGUOUS) {
+      const verificationItems = getVerificationActionItems(
+        entry.canonical_key,
+        evidenceQuality,
+        evidenceDetails
+      );
+      if (verificationItems.length > 0) {
+        actionItems = [...verificationItems, ...actionItems];
+      }
+    }
 
     // Build evidence JSON
     const evidenceJson = buildEvidenceJson(scanEvidence, entry, entry.canonical_key);
     evidenceJson.score = failing.score;
     evidenceJson.threshold = failing.threshold;
     evidenceJson.gap = failing.gap;
+
+    // Determine target level (site vs page)
+    const targetLevel = getTargetLevel(entry.canonical_key);
 
     // Build recommendation object
     const recommendation = {
@@ -479,33 +536,57 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
       action_items: actionItems,
       examples: examples,
       evidence_json: evidenceJson,
-      automation_level: entry.automation_level,
-      generated_assets: []
+      automation_level: adjustedAutomationLevel,
+      generated_assets: [],
+      // Evidence gating fields
+      confidence,
+      evidence_quality: evidenceQuality,
+      evidence_summary: evidenceSummary,
+      // Target level (site vs page)
+      target_level: targetLevel
     };
 
-    // Step 6: Call generation hook if applicable
+    // Step 10: Call generation hook if applicable AND evidence is sufficient
     if (entry.automation_level === 'generate' && entry.generator_hook_key) {
-      console.log(`[Renderer] Calling generation hook: ${entry.generator_hook_key}`);
+      // Gate hook based on evidence quality
+      const canGenerate = evidenceQuality === EVIDENCE_QUALITY.STRONG ||
+                          evidenceQuality === EVIDENCE_QUALITY.MEDIUM;
 
-      try {
-        const generatedAsset = await executeHook(
-          entry.generator_hook_key,
-          scanEvidence,
-          context
-        );
+      if (!canGenerate) {
+        console.log(`[Renderer] Skipping generation hook due to ${evidenceQuality} evidence: ${entry.generator_hook_key}`);
+        // Already downgraded automation_level via adjustAutomationLevel
+      } else {
+        // Additional hook-specific checks
+        const hookCheck = canRunGenerationHook(entry.generator_hook_key, scanEvidence, context);
 
-        if (generatedAsset) {
-          recommendation.generated_assets.push(generatedAsset);
-          console.log(`[Renderer] Generated asset: ${generatedAsset.asset_type}`);
+        if (!hookCheck.canGenerate) {
+          console.log(`[Renderer] Hook blocked: ${hookCheck.reason}`);
+          recommendation.automation_level = adjustAutomationLevel('generate', EVIDENCE_QUALITY.WEAK);
+          recommendation.evidence_summary += `. ${hookCheck.reason}`;
         } else {
-          // Hook failed - downgrade to draft
-          console.warn(`[Renderer] Hook returned null, downgrading to draft: ${entry.generator_hook_key}`);
-          recommendation.automation_level = 'draft';
+          console.log(`[Renderer] Calling generation hook: ${entry.generator_hook_key}`);
+
+          try {
+            const generatedAsset = await executeHook(
+              entry.generator_hook_key,
+              scanEvidence,
+              context
+            );
+
+            if (generatedAsset) {
+              recommendation.generated_assets.push(generatedAsset);
+              console.log(`[Renderer] Generated asset: ${generatedAsset.asset_type}`);
+            } else {
+              // Hook failed - downgrade to draft
+              console.warn(`[Renderer] Hook returned null, downgrading to draft: ${entry.generator_hook_key}`);
+              recommendation.automation_level = 'draft';
+            }
+          } catch (error) {
+            // Hook threw error - log and downgrade
+            console.error(`[Renderer] Hook error (${entry.generator_hook_key}):`, error.message);
+            recommendation.automation_level = 'draft';
+          }
         }
-      } catch (error) {
-        // Hook threw error - log and downgrade
-        console.error(`[Renderer] Hook error (${entry.generator_hook_key}):`, error.message);
-        recommendation.automation_level = 'draft';
       }
     }
 
@@ -559,6 +640,12 @@ module.exports = {
   // Configuration (exported for testing/customization)
   RECOMMENDATION_SCORE_THRESHOLD,
   MAX_RECOMMENDATIONS_PER_SCAN,
+
+  // Evidence quality constants (re-exported for convenience)
+  EVIDENCE_QUALITY,
+
+  // Target level constants (re-exported for convenience)
+  TARGET_LEVEL,
 
   // Utilities (exported for testing)
   extractFailingSubfactors,

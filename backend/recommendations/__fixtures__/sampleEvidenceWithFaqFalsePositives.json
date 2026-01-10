@@ -1,0 +1,44 @@
+{
+  "url": "https://acmecorp.example.com",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "metadata": {
+    "title": "AcmeCorp - SaaS Solution",
+    "description": "Leading enterprise software solution.",
+    "ogTitle": "AcmeCorp Home",
+    "ogDescription": "Enterprise SaaS platform."
+  },
+  "content": {
+    "headings": {
+      "h1": ["Welcome to AcmeCorp"],
+      "h2": ["Features", "About Us"],
+      "h3": []
+    },
+    "faqs": [
+      { "question": "Open Products Menu", "answer": "Click to expand" },
+      { "question": "Close Navigation", "answer": "Click to close" },
+      { "question": "About Us Menu Toggle", "answer": "Expand menu" },
+      { "question": "Show more", "answer": "..." },
+      { "question": "Services Menu", "answer": "View services" },
+      { "question": "Hide", "answer": "Collapse" }
+    ],
+    "paragraphs": ["AcmeCorp provides enterprise solutions."]
+  },
+  "navigation": {
+    "keyPages": {},
+    "hasFAQLink": false
+  },
+  "technical": {
+    "structuredData": [],
+    "hasFAQSchema": false
+  },
+  "media": {
+    "imageCount": 5,
+    "imagesWithAlt": 2,
+    "imagesWithoutAlt": 3
+  },
+  "entities": {
+    "entities": {
+      "organizations": [{ "name": "AcmeCorp" }]
+    }
+  }
+}
