@@ -13,6 +13,50 @@
 
 const V5EnhancedRubricEngine = require('./analyzers/v5-enhanced-rubric-engine');
 
+// ========================================
+// SAFE FORMATTING HELPERS
+// ========================================
+
+/**
+ * Safely format a number with fixed decimal places.
+ * Returns "n/a" if the value is undefined, null, NaN, or Infinity.
+ * @param {*} num - The number to format
+ * @param {number} digits - Number of decimal places (default: 1)
+ * @returns {string} - Formatted number or "n/a"
+ */
+function fmt(num, digits = 1) {
+  if (num === undefined || num === null || !Number.isFinite(num)) {
+    return 'n/a';
+  }
+  return num.toFixed(digits);
+}
+
+/**
+ * Safely format a number as a percentage.
+ * Returns "n/a" if the value is undefined, null, NaN, or Infinity.
+ * @param {*} num - The decimal number to format (0-1 range)
+ * @returns {string} - Formatted percentage or "n/a"
+ */
+function pct(num) {
+  if (num === undefined || num === null || !Number.isFinite(num)) {
+    return 'n/a';
+  }
+  return Math.round(num * 100) + '%';
+}
+
+/**
+ * Safely round a number.
+ * Returns "n/a" if the value is undefined, null, NaN, or Infinity.
+ * @param {*} num - The number to round
+ * @returns {string|number} - Rounded number or "n/a"
+ */
+function safeRound(num) {
+  if (num === undefined || num === null || !Number.isFinite(num)) {
+    return 'n/a';
+  }
+  return Math.round(num);
+}
+
 async function testEnhancedRubric() {
   console.log('='.repeat(80));
   console.log('TESTING ENHANCED V5 RUBRIC ENGINE');
@@ -70,56 +114,91 @@ async function testEnhancedRubric() {
     ];
 
     for (const cat of categories) {
-      const score = results.categories[cat.key].score;
-      const weight = Math.round(results.categories[cat.key].weight * 100);
-      const weighted = Math.round(score * results.categories[cat.key].weight);
-      const bar = '█'.repeat(Math.round(score / 5)) + '░'.repeat(20 - Math.round(score / 5));
+      const categoryData = results.categories?.[cat.key];
+      if (!categoryData) {
+        console.log(`${cat.name.padEnd(25)} ${'░'.repeat(20)} n/a (missing category)`);
+        continue;
+      }
+      const score = categoryData.score ?? 0;
+      const weight = safeRound((categoryData.weight ?? 0) * 100);
+      const weighted = safeRound(score * (categoryData.weight ?? 0));
+      const barFilled = Number.isFinite(score) ? Math.round(score / 5) : 0;
+      const bar = '█'.repeat(barFilled) + '░'.repeat(20 - barFilled);
 
-      console.log(`${cat.name.padEnd(25)} ${bar} ${score}/100 (${weight}%) → ${weighted} points`);
+      console.log(`${cat.name.padEnd(25)} ${bar} ${safeRound(score)}/100 (${weight}%) → ${weighted} points`);
     }
 
     console.log('');
     console.log('Site-Wide Metrics:');
     console.log('-'.repeat(80));
 
-    const metrics = results.siteMetrics;
+    const metrics = results.siteMetrics || {};
 
-    console.log(`Question Headings:     ${Math.round(metrics.pagesWithQuestionHeadings * 100)}% of pages`);
-    console.log(`FAQ Schema:            ${Math.round(metrics.pagesWithFAQSchema * 100)}% of pages`);
-    console.log(`Good Alt Text:         ${Math.round(metrics.pagesWithGoodAltText * 100)}% of pages`);
-    console.log(`Schema Markup:         ${Math.round(metrics.pagesWithSchema * 100)}% of pages`);
-    console.log(`Proper H1:             ${Math.round(metrics.pagesWithProperH1 * 100)}% of pages`);
-    console.log(`Last Modified Date:    ${Math.round(metrics.pagesWithLastModified * 100)}% of pages`);
-    console.log(`Current Year Content:  ${Math.round(metrics.pagesWithCurrentYear * 100)}% of pages`);
+    console.log(`Question Headings:     ${pct(metrics.pagesWithQuestionHeadings)} of pages`);
+    console.log(`FAQ Schema:            ${pct(metrics.pagesWithFAQSchema)} of pages`);
+    console.log(`Good Alt Text:         ${pct(metrics.pagesWithGoodAltText)} of pages`);
+    console.log(`Schema Markup:         ${pct(metrics.pagesWithSchema)} of pages`);
+    console.log(`Proper H1:             ${pct(metrics.pagesWithProperH1)} of pages`);
+    console.log(`Last Modified Date:    ${pct(metrics.pagesWithLastModified)} of pages`);
+    console.log(`Current Year Content:  ${pct(metrics.pagesWithCurrentYear)} of pages`);
     console.log(``);
-    console.log(`Avg Word Count:        ${Math.round(metrics.avgWordCount)} words`);
-    console.log(`Avg Flesch Score:      ${Math.round(metrics.avgFleschScore)}`);
-    console.log(`Avg Sentence Length:   ${Math.round(metrics.avgSentenceLength)} words`);
-    console.log(`Avg Entities/Page:     ${Math.round(metrics.avgEntitiesPerPage)}`);
-    console.log(`Pillar Pages:          ${metrics.pillarPageCount}`);
-    console.log(`Topic Cluster Coverage: ${Math.round(metrics.topicClusterCoverage * 100)}%`);
+    console.log(`Avg Word Count:        ${safeRound(metrics.avgWordCount)} words`);
+    console.log(`Avg Flesch Score:      ${safeRound(metrics.avgFleschScore)}`);
+    console.log(`Avg Sentence Length:   ${safeRound(metrics.avgSentenceLength)} words`);
+    console.log(`Avg Entities/Page:     ${safeRound(metrics.avgEntitiesPerPage)}`);
+    console.log(`Pillar Pages:          ${metrics.pillarPageCount ?? 'n/a'}`);
+    console.log(`Topic Cluster Coverage: ${pct(metrics.topicClusterCoverage)}`);
 
     console.log('');
     console.log('Detailed Category Breakdown:');
     console.log('-'.repeat(80));
 
     // Show AI Search Readiness details
-    const aiSearch = results.categories.aiSearchReadiness;
+    const aiSearch = results.categories?.aiSearchReadiness;
     console.log('\nAI Search Readiness (20%):');
-    console.log(`  Direct Answer Structure: ${Math.round(aiSearch.subfactors.directAnswerStructure.score)}/100`);
-    console.log(`    - Question Density: ${aiSearch.subfactors.directAnswerStructure.factors.questionDensity.toFixed(1)}/2.0 points`);
-    console.log(`    - Scannability: ${aiSearch.subfactors.directAnswerStructure.factors.scannability.toFixed(1)}/2.0 points`);
-    console.log(`    - Readability: ${aiSearch.subfactors.directAnswerStructure.factors.readability.toFixed(1)}/2.0 points`);
-    console.log(`    - ICP Q&A: ${aiSearch.subfactors.directAnswerStructure.factors.icpQA.toFixed(1)}/2.0 points`);
-    console.log(`  Topical Authority: ${Math.round(aiSearch.subfactors.topicalAuthority.score)}/100`);
-    console.log(`    - Pillar Pages: ${aiSearch.subfactors.topicalAuthority.factors.pillarPages.toFixed(1)}/2.0 points`);
-    console.log(`    - Topic Clusters: ${aiSearch.subfactors.topicalAuthority.factors.topicClusters.toFixed(1)}/2.0 points`);
+    if (!aiSearch) {
+      console.log('  (category missing)');
+    } else {
+      const directAnswer = aiSearch.subfactors?.directAnswerStructure;
+      if (!directAnswer) {
+        console.log('  Direct Answer Structure: n/a (subfactor missing)');
+      } else {
+        console.log(`  Direct Answer Structure: ${safeRound(directAnswer.score)}/100`);
+        const factors = directAnswer.factors || {};
+        if (factors.questionDensity === undefined) console.log('    [Missing factor: questionDensity]');
+        console.log(`    - Question Density: ${fmt(factors.questionDensity)}/2.0 points`);
+        if (factors.scannability === undefined) console.log('    [Missing factor: scannability]');
+        console.log(`    - Scannability: ${fmt(factors.scannability)}/2.0 points`);
+        if (factors.readability === undefined) console.log('    [Missing factor: readability]');
+        console.log(`    - Readability: ${fmt(factors.readability)}/2.0 points`);
+        if (factors.icpQA === undefined) console.log('    [Missing factor: icpQA]');
+        console.log(`    - ICP Q&A: ${fmt(factors.icpQA)}/2.0 points`);
+      }
+
+      const topicalAuth = aiSearch.subfactors?.topicalAuthority;
+      if (!topicalAuth) {
+        console.log('  Topical Authority: n/a (subfactor missing)');
+      } else {
+        console.log(`  Topical Authority: ${safeRound(topicalAuth.score)}/100`);
+        const factors = topicalAuth.factors || {};
+        if (factors.pillarPages === undefined) console.log('    [Missing factor: pillarPages]');
+        console.log(`    - Pillar Pages: ${fmt(factors.pillarPages)}/2.0 points`);
+        if (factors.topicClusters === undefined) console.log('    [Missing factor: topicClusters]');
+        console.log(`    - Topic Clusters: ${fmt(factors.topicClusters)}/2.0 points`);
+      }
+    }
 
     // Show Content Structure details
-    const contentStruct = results.categories.contentStructure;
+    const contentStruct = results.categories?.contentStructure;
     console.log('\nContent Structure & Entity Recognition (15%):');
-    console.log(`  Semantic HTML: ${Math.round(contentStruct.subfactors.semanticHTML.score)}/100`);
-    console.log(`  Entity Recognition: ${Math.round(contentStruct.subfactors.entityRecognition.score)}/100`);
+    if (!contentStruct) {
+      console.log('  (category missing)');
+    } else {
+      const semanticHTML = contentStruct.subfactors?.semanticHTML;
+      const entityRecog = contentStruct.subfactors?.entityRecognition;
+      console.log(`  Semantic HTML: ${semanticHTML ? safeRound(semanticHTML.score) + '/100' : 'n/a (subfactor missing)'}`);
+      console.log(`  Entity Recognition: ${entityRecog ? safeRound(entityRecog.score) + '/100' : 'n/a (subfactor missing)'}`);
+    }
 
     // Grade assessment
     console.log('');
@@ -147,9 +226,12 @@ async function testEnhancedRubric() {
 
     console.log('');
     console.log('Critical Success Thresholds (from PDF Rubric):');
-    console.log(`  AI Search Readiness: ${aiSearch.score}/100 (need 70+ for effective AI citation)`);
-    console.log(`  Technical Setup: ${results.categories.technicalSetup.score}/100 (need 67+ for reliable crawler access)`);
-    console.log(`  Content Structure: ${contentStruct.score}/100 (need 67+ for AI comprehension)`);
+    const aiSearchScore = aiSearch?.score;
+    const techSetupScore = results.categories?.technicalSetup?.score;
+    const contentStructScore = contentStruct?.score;
+    console.log(`  AI Search Readiness: ${aiSearchScore !== undefined ? safeRound(aiSearchScore) : 'n/a'}/100 (need 70+ for effective AI citation)`);
+    console.log(`  Technical Setup: ${techSetupScore !== undefined ? safeRound(techSetupScore) : 'n/a'}/100 (need 67+ for reliable crawler access)`);
+    console.log(`  Content Structure: ${contentStructScore !== undefined ? safeRound(contentStructScore) : 'n/a'}/100 (need 67+ for AI comprehension)`);
 
     console.log('');
     console.log('='.repeat(80));
