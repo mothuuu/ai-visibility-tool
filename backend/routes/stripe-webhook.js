@@ -19,6 +19,9 @@ const db = require('../db/database');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { handleCitationNetworkWebhook } = require('../services/citationNetworkWebhookHandler');
 
+// Phase 2: Import planService for centralized plan management
+const { syncPlanFromWebhook, handleSubscriptionDeleted: handleSubDeleted } = require('../services/planService');
+
 /**
  * Main Stripe webhook handler
  * Exported as a function (not router) for direct mounting in server.js
@@ -149,6 +152,7 @@ async function handleStripeWebhook(req, res) {
 
 /**
  * Handle subscription deletion (user canceled)
+ * Phase 2: Uses planService for centralized handling
  */
 async function handleSubscriptionDeleted(subscription, client) {
   console.log(`🗑️  Subscription deleted: ${subscription.id}`);
@@ -169,12 +173,16 @@ async function handleSubscriptionDeleted(subscription, client) {
   const user = userResult.rows[0];
   const oldPlan = user.plan;
 
+  // Phase 2: Update all Stripe-related fields including period info
   await queryFn(`
     UPDATE users
     SET
       plan = 'free',
       stripe_subscription_id = NULL,
       stripe_subscription_status = 'canceled',
+      stripe_price_id = NULL,
+      stripe_current_period_start = NULL,
+      stripe_current_period_end = NULL,
       subscription_cancel_at = NOW(),
       updated_at = NOW()
     WHERE id = $1
@@ -185,12 +193,21 @@ async function handleSubscriptionDeleted(subscription, client) {
 
 /**
  * Handle subscription updates (plan change, payment update)
+ * Phase 2: Uses syncPlanFromWebhook for centralized plan resolution
  */
 async function handleSubscriptionUpdated(subscription, client) {
   console.log(`🔄 Subscription updated: ${subscription.id}`);
 
   const customerId = subscription.customer;
   const status = subscription.status;
+  const priceId = subscription.items?.data?.[0]?.price?.id || null;
+  const periodStart = subscription.current_period_start
+    ? new Date(subscription.current_period_start * 1000)
+    : null;
+  const periodEnd = subscription.current_period_end
+    ? new Date(subscription.current_period_end * 1000)
+    : null;
+
   const queryFn = client ? client.query.bind(client) : db.query.bind(db);
 
   const userResult = await queryFn(
@@ -205,15 +222,20 @@ async function handleSubscriptionUpdated(subscription, client) {
 
   const user = userResult.rows[0];
 
-  // Update stripe_subscription_status
+  // Phase 2: Update all Stripe fields including price ID and period
   await queryFn(`
     UPDATE users
-    SET stripe_subscription_status = $1, updated_at = NOW()
-    WHERE id = $2
-  `, [status, user.id]);
+    SET stripe_subscription_status = $1,
+        stripe_subscription_id = $2,
+        stripe_price_id = $3,
+        stripe_current_period_start = $4,
+        stripe_current_period_end = $5,
+        updated_at = NOW()
+    WHERE id = $6
+  `, [status, subscription.id, priceId, periodStart, periodEnd, user.id]);
 
   if (status === 'active' || status === 'trialing') {
-    console.log(`✅ Subscription active for ${user.email}`);
+    console.log(`✅ Subscription active for ${user.email} (price: ${priceId})`);
   } else if (status === 'past_due') {
     console.log(`⚠️  Payment past due for ${user.email}`);
   } else if (status === 'canceled' || status === 'unpaid') {
@@ -283,15 +305,24 @@ async function handlePaymentSucceeded(invoice, client) {
 
 /**
  * Handle new subscription created
+ * Phase 2: Stores all Stripe fields including price ID and period for usage tracking
  */
 async function handleSubscriptionCreated(subscription, client) {
   console.log(`🆕 Subscription created: ${subscription.id}`);
 
   const customerId = subscription.customer;
+  const priceId = subscription.items?.data?.[0]?.price?.id || null;
+  const periodStart = subscription.current_period_start
+    ? new Date(subscription.current_period_start * 1000)
+    : null;
+  const periodEnd = subscription.current_period_end
+    ? new Date(subscription.current_period_end * 1000)
+    : null;
+
   const queryFn = client ? client.query.bind(client) : db.query.bind(db);
 
   const userResult = await queryFn(
-    'SELECT id, email FROM users WHERE stripe_customer_id = $1',
+    'SELECT id, email, plan FROM users WHERE stripe_customer_id = $1',
     [customerId]
   );
 
@@ -301,13 +332,19 @@ async function handleSubscriptionCreated(subscription, client) {
   }
 
   const user = userResult.rows[0];
-  console.log(`✅ New subscription for ${user.email}`);
+  console.log(`✅ New subscription for ${user.email} (price: ${priceId})`);
 
+  // Phase 2: Store all Stripe fields for plan resolution and usage period
   await queryFn(`
     UPDATE users
-    SET stripe_subscription_id = $1, stripe_subscription_status = $2, updated_at = NOW()
-    WHERE id = $3
-  `, [subscription.id, subscription.status, user.id]);
+    SET stripe_subscription_id = $1,
+        stripe_subscription_status = $2,
+        stripe_price_id = $3,
+        stripe_current_period_start = $4,
+        stripe_current_period_end = $5,
+        updated_at = NOW()
+    WHERE id = $6
+  `, [subscription.id, subscription.status, priceId, periodStart, periodEnd, user.id]);
 }
 
 // Export as function (not object with named export)
