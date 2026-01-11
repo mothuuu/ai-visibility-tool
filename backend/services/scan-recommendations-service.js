@@ -9,10 +9,105 @@
  * - Page-level targeting support via target_url hash
  * - Legacy column population for backward compatibility
  * - Safe JSON serialization (TEXT for action_steps, JSONB for others)
+ * - Phase 4A.2.2: Plan-based unlock_state gating
  */
 
 const crypto = require('crypto');
 const db = require('../db/database');
+
+// ========================================
+// PLAN GATING (Phase 4A.2.2)
+// ========================================
+
+/**
+ * Normalize user plan to known values
+ * @param {string} plan - Raw plan value from database
+ * @returns {string} - Normalized plan: 'free'|'freemium'|'diy'|'pro'|'agency'|'enterprise'
+ */
+function normalizePlan(plan) {
+  if (!plan) return 'free';
+
+  const normalized = String(plan).toLowerCase().trim();
+
+  const knownPlans = ['free', 'freemium', 'diy', 'pro', 'agency', 'enterprise'];
+  if (knownPlans.includes(normalized)) {
+    return normalized;
+  }
+
+  // Handle common aliases
+  if (normalized === 'starter' || normalized === 'basic') return 'free';
+  if (normalized === 'business') return 'pro';
+
+  console.warn(`[ScanRecommendationsService] Unknown plan "${plan}", defaulting to free`);
+  return 'free';
+}
+
+/**
+ * Get unlock limit based on user plan
+ * - free/freemium: 3 recommendations unlocked
+ * - diy: 5 recommendations unlocked
+ * - pro/agency/enterprise: unlimited (all unlocked)
+ *
+ * @param {string} plan - Normalized plan value
+ * @returns {number} - Number of recommendations to unlock (Infinity for unlimited)
+ */
+function getUnlockLimit(plan) {
+  const limits = {
+    free: 3,
+    freemium: 3,
+    diy: 5,
+    pro: Infinity,
+    agency: Infinity,
+    enterprise: Infinity
+  };
+
+  return limits[plan] ?? 3;
+}
+
+/**
+ * Map priority string to numeric value for sorting
+ * Handles both P0/P1/P2 and high/medium/low formats
+ * @param {string} priority - Priority value
+ * @returns {number} - Numeric priority (lower = higher priority)
+ */
+function priorityToNumeric(priority) {
+  const map = {
+    P0: 1,
+    high: 1,
+    P1: 2,
+    medium: 2,
+    P2: 3,
+    low: 3
+  };
+  return map[priority] ?? 2; // Default to medium
+}
+
+/**
+ * Compare recommendations for sorting (matches GET /api/scan/:id ordering)
+ * Order: priority ASC (P0 first), confidence DESC, estimated_impact DESC
+ *
+ * @param {Object} a - First recommendation
+ * @param {Object} b - Second recommendation
+ * @returns {number} - Sort comparison result
+ */
+function compareRecommendations(a, b) {
+  // 1. Priority: P0/high first (lower numeric = higher priority)
+  const priorityA = priorityToNumeric(a.priority);
+  const priorityB = priorityToNumeric(b.priority);
+  if (priorityA !== priorityB) return priorityA - priorityB;
+
+  // 2. Confidence: higher first (nulls last)
+  const confA = a.confidence ?? -1;
+  const confB = b.confidence ?? -1;
+  if (confA !== confB) return confB - confA;
+
+  // 3. Estimated impact: higher first (nulls last)
+  const impactA = typeof a.estimated_impact === 'number' ? a.estimated_impact : mapImpact(a.impact);
+  const impactB = typeof b.estimated_impact === 'number' ? b.estimated_impact : mapImpact(b.impact);
+  if (impactA !== impactB) return impactB - impactA;
+
+  return 0;
+}
 
 // ========================================
 // KEY GENERATION
@@ -154,7 +249,7 @@ function mapRendererOutputToDb(rec, engineVersion) {
     estimated_impact: mapImpact(rec.impact),
     estimated_effort: rec.effort || 'M',
     status: 'pending',
-    unlock_state: 'unlocked',
+    // Note: unlock_state is set by persistence layer based on user plan + rank
     recommendation_mode: 'optimization'
   };
 }
@@ -166,13 +261,18 @@ function mapRendererOutputToDb(rec, engineVersion) {
 /**
  * Persist recommendations to scan_recommendations table with idempotent upsert.
  *
+ * Phase 4A.2.2: Applies plan-based unlock gating:
+ * - Sorts recommendations by priority, confidence, impact (matching GET endpoint)
+ * - Assigns unlock_state based on rank and plan limits
+ *
  * @param {Object} params
  * @param {string} params.scanId - Scan ID
  * @param {Object[]} params.recommendations - Array of recommendations from renderer
  * @param {string} params.engineVersion - Engine version (default 'v5.1')
+ * @param {string} params.userPlan - User's plan (free/diy/pro/etc.)
  * @returns {Promise<Object>} - Result with counts and status
  */
-async function persistScanRecommendations({ scanId, recommendations, engineVersion }) {
+async function persistScanRecommendations({ scanId, recommendations, engineVersion, userPlan }) {
   if (!scanId) {
     return { success: false, error: 'Missing scanId' };
   }
@@ -182,8 +282,27 @@ async function persistScanRecommendations({ scanId, recommendations, engineVersi
   let skippedCount = 0;
 
   try {
-    for (const rec of (recommendations || [])) {
+    // Phase 4A.2.2: Calculate unlock limit based on user plan
+    const plan = normalizePlan(userPlan);
+    const unlockLimit = getUnlockLimit(plan);
+
+    console.log(`[ScanRecommendationsService] Plan="${plan}", unlockLimit=${unlockLimit === Infinity ? 'unlimited' : unlockLimit}`);
+
+    // Phase 4A.2.2: Sort recommendations by priority, confidence, impact
+    // Create shallow copies to avoid mutating original objects
+    const sortedRecs = [...(recommendations || [])].map(rec => ({ ...rec }));
+    sortedRecs.sort(compareRecommendations);
+
+    // Assign unlock_state based on rank
+    sortedRecs.forEach((rec, index) => {
+      rec._unlock_state = index < unlockLimit ? 'unlocked' : 'locked';
+    });
+
+    for (const rec of sortedRecs) {
       const mapped = mapRendererOutputToDb(rec, engineVersion);
+
+      // Apply computed unlock_state
+      mapped.unlock_state = rec._unlock_state || 'locked';
 
       // Skip recommendations with missing key fields
       if (!mapped.rec_key || !mapped.pillar || !mapped.subfactor_key) {
@@ -233,6 +352,7 @@ async function persistScanRecommendations({ scanId, recommendations, engineVersi
           findings = EXCLUDED.findings,
           code_snippet = EXCLUDED.code_snippet,
           action_steps = EXCLUDED.action_steps,
+          unlock_state = EXCLUDED.unlock_state,
           updated_at = NOW()
         RETURNING (xmax = 0) AS inserted
       `, [
@@ -312,5 +432,10 @@ module.exports = {
   mapRendererOutputToDb,
   mapPriority,
   mapImpact,
-  extractFirstSnippet
+  extractFirstSnippet,
+  // Phase 4A.2.2 plan gating helpers (exported for testing)
+  normalizePlan,
+  getUnlockLimit,
+  priorityToNumeric,
+  compareRecommendations
 };
