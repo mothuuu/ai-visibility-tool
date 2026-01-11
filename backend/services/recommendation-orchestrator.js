@@ -8,6 +8,7 @@
  * - Load scan data and evidence from database
  * - Construct rubricResult in renderer-expected format
  * - Call renderRecommendations
+ * - Fetch user plan for unlock gating (Phase 4A.2.2)
  * - Persist results via scan-recommendations-service
  */
 
@@ -158,6 +159,52 @@ function extractScanEvidence(detailedAnalysis) {
 }
 
 // ========================================
+// USER PLAN LOOKUP (Phase 4A.2.2)
+// ========================================
+
+/**
+ * Fetch user plan from the users table
+ *
+ * @param {string} userId - User ID from scan
+ * @returns {Promise<string>} - User's plan (defaults to 'free' if not found)
+ */
+async function fetchUserPlan(userId) {
+  if (!userId) {
+    return 'free';
+  }
+
+  try {
+    // Try 'plan' column first (common naming)
+    const result = await db.query(`
+      SELECT plan, pricing_tier
+      FROM users
+      WHERE id = $1
+    `, [userId]);
+
+    if (result.rows.length === 0) {
+      console.warn(`[RecommendationOrchestrator] User ${userId} not found, defaulting to free plan`);
+      return 'free';
+    }
+
+    const user = result.rows[0];
+
+    // Try 'plan' column, fall back to 'pricing_tier'
+    const plan = user.plan || user.pricing_tier || 'free';
+
+    console.log(`[RecommendationOrchestrator] User ${userId} plan: ${plan}`);
+    return plan;
+  } catch (error) {
+    // Handle case where columns don't exist
+    if (error.message && error.message.includes('column')) {
+      console.warn(`[RecommendationOrchestrator] Plan column not found in users table, defaulting to free: ${error.message}`);
+    } else {
+      console.error(`[RecommendationOrchestrator] Error fetching user plan: ${error.message}`);
+    }
+    return 'free';
+  }
+}
+
+// ========================================
 // MAIN ORCHESTRATOR
 // ========================================
 
@@ -220,12 +267,16 @@ async function generateAndPersistRecommendations(scanId) {
 
     console.log(`[RecommendationOrchestrator] Generated ${recommendations.length} recommendations for scan ${scanId}`);
 
-    // Step 6: Persist recommendations
+    // Step 6: Fetch user plan for unlock gating (Phase 4A.2.2)
+    const userPlan = await fetchUserPlan(scan.user_id);
+
+    // Step 7: Persist recommendations with plan-based unlock gating
     const { persistScanRecommendations } = require('./scan-recommendations-service');
     const persistResult = await persistScanRecommendations({
       scanId,
       recommendations,
-      engineVersion: 'v5.1'
+      engineVersion: 'v5.1',
+      userPlan
     });
 
     return persistResult;
@@ -269,5 +320,6 @@ module.exports = {
   buildRubricResult,
   extractScanEvidence,
   normalizeScore,
+  fetchUserPlan,
   CATEGORY_SUBFACTORS
 };
