@@ -174,7 +174,7 @@ function buildPlaceholderContext(scanEvidence, context, scan) {
     page_title: evidence.metadata?.title || companyName,
     page_description: description,
     og_image_url: evidence.metadata?.ogImage || `${siteUrl}/og-image.jpg`,
-    logo_url: evidence.metadata?.ogImage || '',
+    logo_url: evidence.metadata?.ogImage || evidence.metadata?.favicon || `${siteUrl}/logo.png`,
 
     // Social placeholders
     linkedin_url: `https://linkedin.com/company/${domain.split('.')[0]}`,
@@ -596,7 +596,72 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
   const duration = Date.now() - startTime;
   console.log(`[Renderer] Generated ${recommendations.length} recommendations in ${duration}ms`);
 
-  return recommendations;
+  // Step 11: Normalize page-level targets before returning (Phase 4A.2.1)
+  const normalizedRecommendations = normalizeRecommendationTargets(
+    recommendations,
+    scanEvidence,
+    context
+  );
+
+  return normalizedRecommendations;
+}
+
+// ========================================
+// TARGET NORMALIZATION (Phase 4A.2.1)
+// ========================================
+
+/**
+ * Normalize page-level targets before persistence.
+ * Guarantees: If target_level='page', target_url must be non-empty.
+ *
+ * Rules:
+ * 1) If target_level='page' AND target_url missing:
+ *    a) Try evidence.url or context.site_url
+ *    b) Try page_url from evidence or context
+ *    c) If still missing -> DOWNGRADE to target_level='site'
+ *
+ * @param {Object[]} recommendations - Array of recommendation objects
+ * @param {Object} scanEvidence - Evidence contract object
+ * @param {Object} context - Context object
+ * @returns {Object[]} - Normalized recommendations
+ */
+function normalizeRecommendationTargets(recommendations, scanEvidence, context) {
+  const evidence = scanEvidence || {};
+  const ctx = context || {};
+
+  // Derive best available URL
+  const derivedUrl = evidence.url || ctx.site_url || ctx.page_url || null;
+
+  return recommendations.map(rec => {
+    // Only process page-level recommendations
+    if (rec.target_level !== TARGET_LEVEL.PAGE) {
+      return rec;
+    }
+
+    // Check if target_url is missing or empty
+    const hasTargetUrl = rec.target_url && rec.target_url.trim() !== '';
+
+    if (hasTargetUrl) {
+      return rec; // Already has valid target_url
+    }
+
+    // Try to derive target_url
+    if (derivedUrl) {
+      console.log(`[Renderer] Deriving target_url for page rec: ${rec.subfactor_key} -> ${derivedUrl}`);
+      return {
+        ...rec,
+        target_url: derivedUrl
+      };
+    }
+
+    // No URL available - DOWNGRADE to site level
+    console.warn(`[Renderer] Downgrading to site-level (no target_url): ${rec.subfactor_key}`);
+    return {
+      ...rec,
+      target_level: TARGET_LEVEL.SITE,
+      target_url: null
+    };
+  });
 }
 
 /**
@@ -655,6 +720,7 @@ module.exports = {
   extractEvidence,
   buildEvidenceJson,
   validateNoUnresolvedPlaceholders,
+  normalizeRecommendationTargets,
   getNumericScore,
   isBelowThreshold,
   generateRecKey
