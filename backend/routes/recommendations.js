@@ -7,6 +7,10 @@ const { authenticateToken } = require('../middleware/auth');
 const RefreshCycleService = require('../services/refresh-cycle-service');
 const NotificationService = require('../services/notification-service');
 
+// Import repositories for canonical field handling
+const recommendationRepo = require('../repositories/recommendationRepository');
+const progressRepo = require('../repositories/progressRepository');
+
 // ============================================
 // POST /api/recommendations/:id/mark-complete
 // Mark a recommendation as implemented (completed)
@@ -56,13 +60,14 @@ router.post('/:id/mark-complete', authenticateToken, async (req, res) => {
     }
 
     // Update recommendation to implemented
-    // NOTE: We set BOTH unlock_state AND status so the refresh cycle sees it
+    // NOTE: Write to CANONICAL columns only (implemented_at, not marked_complete_at)
+    // unlock_state = 'implemented' is the canonical state (not 'completed')
     await db.query(
       `UPDATE scan_recommendations
-       SET unlock_state = 'completed',
+       SET unlock_state = 'implemented',
            status = 'implemented',
-           marked_complete_at = CURRENT_TIMESTAMP,
-           implemented_at = CURRENT_TIMESTAMP
+           implemented_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
       [recId]
     );
@@ -191,12 +196,14 @@ router.post('/:id/implement', authenticateToken, async (req, res) => {
     const scoreImprovement = scoreAtCreation ? (latestScore - scoreAtCreation) : null;
 
     // Update recommendation to implemented
+    // NOTE: Write to CANONICAL columns only (implemented_at, not marked_complete_at)
+    // unlock_state = 'implemented' is the canonical state (not 'completed')
     await db.query(
       `UPDATE scan_recommendations
-       SET unlock_state = 'completed',
+       SET unlock_state = 'implemented',
            status = 'implemented',
-           marked_complete_at = CURRENT_TIMESTAMP,
-           implemented_at = CURRENT_TIMESTAMP
+           implemented_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
       [recId]
     );
@@ -307,12 +314,14 @@ router.get('/active', authenticateToken, async (req, res) => {
     const scanId = req.query.scan_id; // Optional: filter by specific scan
     
     let query = `
-      SELECT 
+      SELECT
         sr.id, sr.scan_id, sr.category, sr.recommendation_text,
         sr.priority, sr.estimated_impact, sr.estimated_effort,
         sr.action_steps, sr.findings, sr.code_snippet,
-        sr.unlock_state, sr.batch_number, sr.unlocked_at,
-        sr.marked_complete_at, sr.verified_at,
+        sr.unlock_state, sr.batch_number,
+        COALESCE(sr.surfaced_at, sr.unlocked_at) AS surfaced_at,
+        COALESCE(sr.implemented_at, sr.marked_complete_at) AS implemented_at,
+        sr.verified_at,
         s.url as scan_url, s.total_score
       FROM scan_recommendations sr
       JOIN scans s ON sr.scan_id = s.id
@@ -365,14 +374,17 @@ router.get('/scan/:scanId', authenticateToken, async (req, res) => {
     }
     
     // Get all recommendations for this scan
+    // Use COALESCE for canonical field names with legacy fallbacks
     const result = await db.query(
-      `SELECT 
+      `SELECT
         id, category, recommendation_text, priority,
         estimated_impact, estimated_effort, action_steps,
         findings, code_snippet, unlock_state, batch_number,
-        unlocked_at, marked_complete_at, verified_at
-       FROM scan_recommendations 
-       WHERE scan_id = $1 
+        COALESCE(surfaced_at, unlocked_at) AS surfaced_at,
+        COALESCE(implemented_at, marked_complete_at) AS implemented_at,
+        verified_at
+       FROM scan_recommendations
+       WHERE scan_id = $1
        ORDER BY batch_number, priority DESC`,
       [scanId]
     );
@@ -512,10 +524,13 @@ router.post('/unlock-next', authenticateToken, async (req, res) => {
     const recIds = nextRecsResult.rows.map(r => r.id);
     
     // Unlock the recommendations
+    // Write to CANONICAL columns only (surfaced_at, not unlocked_at)
     await db.query(
-      `UPDATE scan_recommendations 
+      `UPDATE scan_recommendations
        SET unlock_state = 'active',
-           unlocked_at = CURRENT_TIMESTAMP
+           surfaced_at = CURRENT_TIMESTAMP,
+           skip_available_at = CURRENT_TIMESTAMP + INTERVAL '120 hours',
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = ANY($1)`,
       [recIds]
     );
@@ -623,10 +638,14 @@ router.post('/:id/skip', authenticateToken, async (req, res) => {
     }
 
     // Update recommendation to skipped
+    // Write to CANONICAL columns (unlock_state, skipped_at, resurface_at)
     await db.query(
       `UPDATE scan_recommendations
-       SET status = 'skipped',
-           skipped_at = CURRENT_TIMESTAMP
+       SET unlock_state = 'skipped',
+           status = 'skipped',
+           skipped_at = CURRENT_TIMESTAMP,
+           resurface_at = CURRENT_TIMESTAMP + INTERVAL '30 days',
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
       [recId]
     );
@@ -710,10 +729,13 @@ router.post('/:id/implement', authenticateToken, async (req, res) => {
     }
 
     // Update recommendation to implemented
+    // Write to CANONICAL columns only (unlock_state = 'implemented', implemented_at)
     await db.query(
       `UPDATE scan_recommendations
-       SET status = 'implemented',
-           implemented_at = COALESCE(implemented_at, CURRENT_TIMESTAMP)
+       SET unlock_state = 'implemented',
+           status = 'implemented',
+           implemented_at = COALESCE(implemented_at, CURRENT_TIMESTAMP),
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
       [recId]
     );

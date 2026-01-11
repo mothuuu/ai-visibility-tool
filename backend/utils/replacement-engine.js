@@ -163,17 +163,19 @@ async function executeReplacement(userId, scanId, progress) {
   }
 
   // Unlock the selected recommendations
+  // Write to CANONICAL columns only (surfaced_at, skip_available_at)
   const recIds = lockedRecs.map(r => r.id);
   const now = new Date();
-  const skipEnabledAt = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000); // +5 days
+  const skipAvailableAt = new Date(now.getTime() + 120 * 60 * 60 * 1000); // +120 hours (5 days)
 
   await db.query(
     `UPDATE scan_recommendations
      SET unlock_state = 'active',
-         unlocked_at = $1,
-         skip_enabled_at = $2
+         surfaced_at = $1,
+         skip_available_at = $2,
+         updated_at = NOW()
      WHERE id = ANY($3)`,
-    [now, skipEnabledAt, recIds]
+    [now, skipAvailableAt, recIds]
   );
 
   // Update user progress
