@@ -1102,11 +1102,13 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
 
         if (toUnlock > 0) {
           // Unlock the next batch of recommendations
+          // Write to CANONICAL columns only (surfaced_at, skip_available_at)
           await db.query(
             `UPDATE scan_recommendations
              SET unlock_state = 'active',
-                 unlocked_at = NOW(),
-                 skip_enabled_at = NOW() + INTERVAL '5 days'
+                 surfaced_at = NOW(),
+                 skip_available_at = NOW() + INTERVAL '120 hours',
+                 updated_at = NOW()
              WHERE scan_id = $1
                AND unlock_state = 'locked'
                AND batch_number <= $2
@@ -1138,6 +1140,7 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
     }
 
     // Get updated recommendations after potential unlock (with new delivery system fields)
+    // Use COALESCE for canonical field names with legacy fallbacks
     const updatedRecResult = await db.query(
       `SELECT
         id, category, recommendation_text, priority,
@@ -1146,8 +1149,11 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
         impact_description,
         customized_implementation, ready_to_use_content,
         implementation_notes, quick_wins, validation_checklist,
-        user_rating, user_feedback, implemented_at,
-        unlock_state, batch_number, unlocked_at, skipped_at,
+        user_rating, user_feedback,
+        COALESCE(implemented_at, marked_complete_at) AS implemented_at,
+        unlock_state, batch_number,
+        COALESCE(surfaced_at, unlocked_at) AS surfaced_at,
+        skipped_at,
         recommendation_type, page_url,
         -- New delivery system fields
         recommendation_mode, elite_category, impact_score,
@@ -1156,7 +1162,8 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
         refresh_cycle_number, implementation_progress, previous_findings,
         is_partial_implementation, validation_status, validation_errors,
         last_validated_at, affected_pages, pages_implemented,
-        auto_detected_at, archived_at, archived_reason, skip_enabled_at
+        auto_detected_at, archived_at, archived_reason,
+        COALESCE(skip_available_at, skip_enabled_at) AS skip_available_at
        FROM scan_recommendations
        WHERE scan_id = $1
        ORDER BY batch_number, priority DESC, impact_score DESC NULLS LAST, estimated_impact DESC`,

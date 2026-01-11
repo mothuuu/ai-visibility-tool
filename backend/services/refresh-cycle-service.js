@@ -317,16 +317,19 @@ class RefreshCycleService {
       }
 
       // Activate new recommendations
+      // Write to CANONICAL columns only (surfaced_at, skip_available_at)
       const newRecIds = [];
       for (const newRec of newRecs) {
         await client.query(`
           UPDATE scan_recommendations
           SET
             unlock_state = 'active',
-            unlocked_at = CURRENT_TIMESTAMP,
+            surfaced_at = CURRENT_TIMESTAMP,
+            skip_available_at = CURRENT_TIMESTAMP + INTERVAL '120 hours',
             last_refresh_date = CURRENT_DATE,
             next_refresh_date = CURRENT_DATE + INTERVAL '5 days',
-            refresh_cycle_number = $1
+            refresh_cycle_number = $1,
+            updated_at = CURRENT_TIMESTAMP
           WHERE id = $2
         `, [currentCycle.cycle_number + 1, newRec.id]);
 
