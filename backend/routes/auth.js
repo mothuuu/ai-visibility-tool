@@ -6,6 +6,13 @@ const db = require('../db/database');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/email');
 const { authenticateToken } = require('../middleware/auth');
 const { loadOrgContext } = require('../middleware/orgContext');
+
+// Phase 2: Import core services for usage endpoints
+const { getUserPlan } = require('../services/planService');
+const { getEntitlements } = require('../services/scanEntitlementService');
+const { getUsageSummary, checkAndResetLegacyIfNeeded } = require('../services/usageService');
+const { getOrgContext } = require('../services/organizationService');
+
 const router = express.Router();
 
 // POST /api/auth/signup - Create account
@@ -251,6 +258,88 @@ router.get('/me', authenticateToken, loadOrgContext, async (req, res) => {
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user' });
+  }
+});
+
+// ============================================
+// GET /api/auth/me/usage - Get current user's usage summary
+// Phase 2: Dedicated endpoint for usage tracking verification
+// ============================================
+router.get('/me/usage', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get user row with all needed fields
+    const userResult = await db.query(`
+      SELECT id, email, plan, organization_id,
+             scans_used_this_month, competitor_scans_used_this_month,
+             stripe_current_period_start, stripe_current_period_end,
+             stripe_subscription_status, stripe_price_id
+      FROM users WHERE id = $1
+    `, [userId]);
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+
+    // Phase 2: CRITICAL - Check and reset if needed
+    await checkAndResetLegacyIfNeeded(userId);
+
+    // Re-fetch after potential reset
+    const refreshedResult = await db.query(
+      'SELECT scans_used_this_month, competitor_scans_used_this_month FROM users WHERE id = $1',
+      [userId]
+    );
+    const refreshedUser = refreshedResult.rows[0];
+
+    // Get plan resolution
+    const planInfo = await getUserPlan(userId);
+
+    // Get entitlements
+    const entitlements = getEntitlements(planInfo.plan);
+
+    // Get org context
+    const orgContext = await getOrgContext(userId);
+
+    // Get usage summary
+    const usageSummary = await getUsageSummary({
+      userId,
+      orgId: orgContext?.orgId || user.organization_id,
+      planId: planInfo.plan,
+      userRow: user
+    });
+
+    res.json({
+      success: true,
+      usage: usageSummary,
+      plan: {
+        current: planInfo.plan,
+        stored: planInfo.storedPlan,
+        corrected: planInfo.corrected,
+        source: planInfo.source,
+        subscriptionStatus: planInfo.subscriptionStatus
+      },
+      entitlements: {
+        scans_per_period: entitlements.scans_per_period,
+        pages_per_scan: entitlements.pages_per_scan,
+        competitor_scans: entitlements.competitor_scans,
+        recs_per_cycle: entitlements.recs_per_cycle,
+        cycle_days: entitlements.cycle_days
+      },
+      organization: orgContext ? {
+        id: orgContext.orgId,
+        domainCount: orgContext.domainCount
+      } : null,
+      legacyCounters: {
+        scansUsed: refreshedUser.scans_used_this_month || 0,
+        competitorScansUsed: refreshedUser.competitor_scans_used_this_month || 0
+      }
+    });
+  } catch (error) {
+    console.error('Get usage error:', error);
+    res.status(500).json({ error: 'Failed to get usage', details: error.message });
   }
 });
 

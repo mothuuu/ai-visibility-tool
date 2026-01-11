@@ -13,6 +13,13 @@ const GuestScanCacheService = require('../services/guest-scan-cache-service');
 const { createGuestRateLimiter } = require('../middleware/guestRateLimit');
 const { loadOrgContext } = require('../middleware/orgContext');
 
+// Phase 2: Core Services - Single source of truth for plan, entitlements, usage, org
+const { getUserPlan } = require('../services/planService');
+const { getEntitlements, canScan, canScanPages, getUpgradeSuggestion } = require('../services/scanEntitlementService');
+const { canPerformScan, incrementUsageEvent, getUsageSummary, checkAndResetLegacyIfNeeded } = require('../services/usageService');
+const { ensureScanHasOrgContext, getOrCreateOrgForUser } = require('../services/organizationService');
+const { USAGE_EVENT_TYPES } = require('../constants/usageEventTypes');
+
 // Initialize guest services
 const guestScanCache = new GuestScanCacheService(db);
 const guestRateLimiter = createGuestRateLimiter({ maxScansPerDay: 5, db });
@@ -327,7 +334,8 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
     // Get user info (including industry preference and primary domain)
     const userResult = await db.query(
       `SELECT plan, scans_used_this_month, industry, industry_custom,
-              primary_domain, competitor_scans_used_this_month, primary_domain_changed_at
+              primary_domain, competitor_scans_used_this_month, primary_domain_changed_at,
+              stripe_current_period_start, stripe_current_period_end, organization_id
        FROM users WHERE id = $1`,
       [userId]
     );
@@ -337,27 +345,38 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
     }
 
     const user = userResult.rows[0];
-    const planLimits = PLAN_LIMITS[user.plan];
 
-    // Defensive guard: Ensure plan is valid
-    if (!planLimits) {
-      console.error(`⚠️ CRITICAL: Invalid plan detected for user ${userId}: "${user.plan}"`);
+    // Phase 2: Use centralized entitlement service (single source of truth)
+    const entitlements = getEntitlements(user.plan);
+    const planLimits = {
+      scansPerMonth: entitlements.scans_per_period,
+      pagesPerScan: entitlements.pages_per_scan,
+      competitorScans: entitlements.competitor_scans
+    };
 
-      // Log to database for monitoring
-      await db.query(
-        'INSERT INTO usage_logs (user_id, action, metadata) VALUES ($1, $2, $3)',
-        [userId, 'invalid_plan_detected', JSON.stringify({
-          invalidPlan: user.plan,
-          timestamp: new Date().toISOString()
-        })]
-      );
+    // Phase 2: Get org context for usage tracking
+    let orgContext = null;
+    try {
+      orgContext = await getOrCreateOrgForUser(userId);
+    } catch (orgError) {
+      console.warn(`[Scan] Could not get org context: ${orgError.message}`);
+    }
 
-      // Return error instead of silently downgrading
-      return res.status(500).json({
-        error: 'Invalid plan configuration',
-        message: 'Your account has an invalid plan. Please contact support.',
-        supportEmail: 'support@yourapp.com'
-      });
+    // Plan is always valid via getEntitlements (normalizes unknown → freemium)
+    console.log(`[Scan] User ${userId}: plan=${entitlements.plan}, limits=${JSON.stringify(planLimits)}`);
+
+    // Phase 2: CRITICAL - Check and reset legacy usage counters if needed
+    // This fixes the "monthly reset broken" bug
+    await checkAndResetLegacyIfNeeded(userId);
+
+    // Re-fetch user after potential reset
+    const refreshedUserResult = await db.query(
+      `SELECT scans_used_this_month, competitor_scans_used_this_month FROM users WHERE id = $1`,
+      [userId]
+    );
+    if (refreshedUserResult.rows.length > 0) {
+      user.scans_used_this_month = refreshedUserResult.rows[0].scans_used_this_month;
+      user.competitor_scans_used_this_month = refreshedUserResult.rows[0].competitor_scans_used_this_month;
     }
 
     // Log user's industry preference if set
@@ -389,45 +408,60 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
       isCompetitorScan = true;
       console.log(`🔍 Competitor scan detected: ${scanDomain} (primary: ${user.primary_domain})`);
 
-      // Check competitor scan quota
-      const competitorScansUsed = user.competitor_scans_used_this_month || 0;
-      if (competitorScansUsed >= planLimits.competitorScans) {
+      // Phase 2: Check competitor scan quota using centralized canScan
+      const usageSummary = {
+        scansUsed: user.scans_used_this_month || 0,
+        competitorScansUsed: user.competitor_scans_used_this_month || 0
+      };
+      const competitorCheck = canScan(entitlements, usageSummary, true);
+
+      if (!competitorCheck.allowed) {
+        const upgradeSuggestion = getUpgradeSuggestion(entitlements.plan);
         return res.status(403).json({
           error: 'Competitor scan quota exceeded',
-          message: `Your ${user.plan} plan allows ${planLimits.competitorScans} competitor scans per month. You've used ${competitorScansUsed}.`,
+          message: competitorCheck.reason,
           quota: {
             type: 'competitor',
-            used: competitorScansUsed,
-            limit: planLimits.competitorScans
+            used: competitorCheck.used,
+            limit: competitorCheck.limit,
+            remaining: competitorCheck.remaining
           },
           primaryDomain: user.primary_domain,
-          upgrade: user.plan === 'free' ? {
-            message: 'Upgrade to DIY to scan 2 competitors per month',
-            cta: 'Upgrade to DIY - $29/month',
-            ctaUrl: '/checkout.html?plan=diy'
-          } : user.plan === 'diy' ? {
-            message: 'Upgrade to Pro for 10 competitor scans per month',
-            cta: 'Upgrade to Pro - $99/month',
-            ctaUrl: '/checkout.html?plan=pro'
-          } : null
+          upgrade: upgradeSuggestion
         });
       }
     }
 
-    // Check primary scan quota (only for primary domain scans)
-    if (!isCompetitorScan && user.scans_used_this_month >= planLimits.scansPerMonth) {
-      return res.status(403).json({
-        error: 'Scan quota exceeded',
-        quota: {
-          type: 'primary',
-          used: user.scans_used_this_month,
-          limit: planLimits.scansPerMonth
-        }
-      });
+    // Phase 2: Check primary scan quota using centralized canScan
+    if (!isCompetitorScan) {
+      const usageSummary = {
+        scansUsed: user.scans_used_this_month || 0,
+        competitorScansUsed: user.competitor_scans_used_this_month || 0
+      };
+      const primaryCheck = canScan(entitlements, usageSummary, false);
+
+      if (!primaryCheck.allowed) {
+        const upgradeSuggestion = getUpgradeSuggestion(entitlements.plan);
+        return res.status(403).json({
+          error: 'Scan quota exceeded',
+          message: primaryCheck.reason,
+          quota: {
+            type: 'primary',
+            used: primaryCheck.used,
+            limit: primaryCheck.limit,
+            remaining: primaryCheck.remaining
+          },
+          upgrade: upgradeSuggestion
+        });
+      }
     }
 
-    // Validate page count for plan
-    const pageCount = pages ? Math.min(pages.length, planLimits.pagesPerScan) : 1;
+    // Phase 2: Validate page count using centralized canScanPages
+    const requestedPageCount = pages ? pages.length : 1;
+    const pageCheck = canScanPages(entitlements, requestedPageCount);
+    const pageCount = pageCheck.maxPages === -1
+      ? requestedPageCount
+      : Math.min(requestedPageCount, pageCheck.maxPages);
 
     console.log(`🔍 Authenticated scan for user ${userId} (${user.plan}) - ${scanTarget} [${domainType}]`);
 
@@ -447,11 +481,12 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
     let shouldReuseRecommendations = Boolean(contextScanId);
 
     // Create scan record with status 'processing'
+    // Phase 2: Include organization_id and domain_id from org context
     const scanRecord = await db.query(
       `INSERT INTO scans (
-        user_id, url, status, page_count, rubric_version, domain_type, extracted_domain, domain, pages_analyzed, recommendations
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING id, url, status, created_at`,
+        user_id, url, status, page_count, rubric_version, domain_type, extracted_domain, domain, pages_analyzed, recommendations, organization_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING id, url, status, created_at, organization_id`,
       [
         userId,
         scanTarget,  // Use canonical URL for database storage
@@ -462,11 +497,22 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
         scanDomain,
         scanDomain,
         JSON.stringify({ pages: normalizedPages, page_set_hash: pageSetHash }),
-        contextScanId ? JSON.stringify({ context_scan_id: contextScanId, page_set_hash: pageSetHash }) : null
+        contextScanId ? JSON.stringify({ context_scan_id: contextScanId, page_set_hash: pageSetHash }) : null,
+        orgContext?.orgId || null
       ]
     );
 
     scan = scanRecord.rows[0];
+
+    // Phase 2: Ensure scan has org context (sets domain_id too)
+    try {
+      const orgContextResult = await ensureScanHasOrgContext(scan.id, userId, scanTarget);
+      scan.organization_id = orgContextResult.organizationId;
+      scan.domain_id = orgContextResult.domainId;
+      console.log(`[Scan] Org context set: org=${scan.organization_id}, domain=${scan.domain_id}`);
+    } catch (orgError) {
+      console.warn(`[Scan] Could not set org context: ${orgError.message}`);
+    }
 
     // Get existing user progress for this scan (if any) - only for primary domain scans
     let userProgress = null;
@@ -674,10 +720,18 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
 
     console.log('✅ Scan result validation passed');
 
-    // Increment appropriate scan count AFTER successful scan
-    // Using central UsageTrackerService to prevent double-counting
-    const scanType = isCompetitorScan ? 'competitor' : 'primary';
-    await UsageTrackerService.incrementScanUsage(userId, scanType);
+    // Phase 2: Increment scan usage using centralized usageService
+    // This handles legacy counters AND v2 events if dual-write enabled
+    const eventType = isCompetitorScan
+      ? USAGE_EVENT_TYPES.COMPETITOR_SCAN
+      : USAGE_EVENT_TYPES.SCAN_COMPLETED;
+
+    await incrementUsageEvent({
+      userId,
+      orgId: scan.organization_id,
+      eventType,
+      scanId: scan.id
+    });
 
     // Update scan record with results
     // NOTE: Round scores to integers since DB columns are INTEGER type
@@ -910,16 +964,22 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
         created_at: scan.created_at,
         is_competitor: isCompetitorScan
       },
+      // Phase 2: Return comprehensive usage summary
       quota: {
         primary: {
-          used: user.scans_used_this_month + (isCompetitorScan ? 0 : 1),
-          limit: planLimits.scansPerMonth
+          used: (user.scans_used_this_month || 0) + (isCompetitorScan ? 0 : 1),
+          limit: entitlements.scans_per_period,
+          remaining: entitlements.scans_per_period === -1 ? -1 : Math.max(0, entitlements.scans_per_period - (user.scans_used_this_month || 0) - (isCompetitorScan ? 0 : 1))
         },
         competitor: {
           used: (user.competitor_scans_used_this_month || 0) + (isCompetitorScan ? 1 : 0),
-          limit: planLimits.competitorScans
+          limit: entitlements.competitor_scans,
+          remaining: Math.max(0, entitlements.competitor_scans - (user.competitor_scans_used_this_month || 0) - (isCompetitorScan ? 1 : 0))
         }
       },
+      plan: entitlements.plan,
+      organization_id: scan.organization_id,
+      domain_id: scan.domain_id,
       mode: !isCompetitorScan ? modeInfo : null, // Mode information for primary domain scans
       refreshCycle,
       progress: progressInfo,
