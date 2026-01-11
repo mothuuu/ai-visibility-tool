@@ -1311,3 +1311,220 @@ describe('Targeting', () => {
     });
   });
 });
+
+// ========================================
+// TARGET NORMALIZATION TESTS (Phase 4A.2.1)
+// ========================================
+
+// Import normalizeRecommendationTargets for testing
+const { normalizeRecommendationTargets } = require('../../recommendations/renderer');
+
+describe('Target Normalization (Phase 4A.2.1)', () => {
+
+  describe('normalizeRecommendationTargets', () => {
+
+    it('passes through site-level recommendations unchanged', () => {
+      const recommendations = [
+        {
+          subfactor_key: 'technical_setup.sitemap',
+          target_level: 'site',
+          target_url: null
+        }
+      ];
+
+      const result = normalizeRecommendationTargets(recommendations, {}, {});
+
+      assert.strictEqual(result[0].target_level, 'site');
+      assert.strictEqual(result[0].target_url, null);
+    });
+
+    it('passes through page-level recommendations with valid target_url', () => {
+      const recommendations = [
+        {
+          subfactor_key: 'ai_readability.alt_text',
+          target_level: 'page',
+          target_url: 'https://example.com/about'
+        }
+      ];
+
+      const result = normalizeRecommendationTargets(recommendations, {}, {});
+
+      assert.strictEqual(result[0].target_level, 'page');
+      assert.strictEqual(result[0].target_url, 'https://example.com/about');
+    });
+
+    it('derives target_url from evidence when missing', () => {
+      const recommendations = [
+        {
+          subfactor_key: 'ai_readability.alt_text',
+          target_level: 'page',
+          target_url: null
+        }
+      ];
+
+      const evidence = { url: 'https://example.com/derived' };
+
+      const result = normalizeRecommendationTargets(recommendations, evidence, {});
+
+      assert.strictEqual(result[0].target_level, 'page');
+      assert.strictEqual(result[0].target_url, 'https://example.com/derived');
+    });
+
+    it('derives target_url from context.site_url when evidence.url missing', () => {
+      const recommendations = [
+        {
+          subfactor_key: 'ai_readability.alt_text',
+          target_level: 'page',
+          target_url: ''
+        }
+      ];
+
+      const context = { site_url: 'https://example.com/from-context' };
+
+      const result = normalizeRecommendationTargets(recommendations, {}, context);
+
+      assert.strictEqual(result[0].target_level, 'page');
+      assert.strictEqual(result[0].target_url, 'https://example.com/from-context');
+    });
+
+    it('downgrades to site-level when no URL derivable', () => {
+      const recommendations = [
+        {
+          subfactor_key: 'ai_readability.alt_text',
+          target_level: 'page',
+          target_url: null
+        }
+      ];
+
+      const result = normalizeRecommendationTargets(recommendations, {}, {});
+
+      assert.strictEqual(result[0].target_level, 'site');
+      assert.strictEqual(result[0].target_url, null);
+    });
+
+    it('handles empty string target_url as missing', () => {
+      const recommendations = [
+        {
+          subfactor_key: 'ai_readability.alt_text',
+          target_level: 'page',
+          target_url: '   '  // whitespace only
+        }
+      ];
+
+      const result = normalizeRecommendationTargets(recommendations, {}, {});
+
+      assert.strictEqual(result[0].target_level, 'site');
+      assert.strictEqual(result[0].target_url, null);
+    });
+
+    it('processes multiple recommendations correctly', () => {
+      const recommendations = [
+        {
+          subfactor_key: 'technical_setup.sitemap',
+          target_level: 'site',
+          target_url: null
+        },
+        {
+          subfactor_key: 'ai_readability.alt_text',
+          target_level: 'page',
+          target_url: 'https://example.com/page1'
+        },
+        {
+          subfactor_key: 'content_structure.heading_hierarchy',
+          target_level: 'page',
+          target_url: null  // will be downgraded
+        }
+      ];
+
+      const result = normalizeRecommendationTargets(recommendations, {}, {});
+
+      assert.strictEqual(result[0].target_level, 'site');
+      assert.strictEqual(result[1].target_level, 'page');
+      assert.strictEqual(result[1].target_url, 'https://example.com/page1');
+      assert.strictEqual(result[2].target_level, 'site');  // downgraded
+    });
+
+    it('does not modify both-level recommendations', () => {
+      const recommendations = [
+        {
+          subfactor_key: 'technical_setup.structured_data',
+          target_level: 'both',
+          target_url: null
+        }
+      ];
+
+      const result = normalizeRecommendationTargets(recommendations, {}, {});
+
+      assert.strictEqual(result[0].target_level, 'both');
+    });
+  });
+
+  describe('Integration with renderRecommendations', () => {
+
+    it('page-level recommendations get target_url from evidence', async () => {
+      // Create rubric that triggers page-level subfactor
+      const rubricForPageLevel = {
+        categories: {
+          aiReadability: {
+            score: 30,
+            subfactors: {
+              altTextScore: 20  // page-level
+            }
+          }
+        }
+      };
+
+      const scan = { id: 'test-normalization' };
+      const evidence = { url: 'https://example.com/test-page' };
+      const context = { detected_industry: 'technology' };
+
+      const recommendations = await renderRecommendations({
+        scan,
+        rubricResult: rubricForPageLevel,
+        scanEvidence: evidence,
+        context
+      });
+
+      const pageRec = recommendations.find(r =>
+        r.subfactor_key.includes('alt_text') && r.target_level === 'page'
+      );
+
+      if (pageRec) {
+        assert.ok(pageRec.target_url,
+          'Page-level recommendation should have target_url');
+        assert.strictEqual(pageRec.target_url, 'https://example.com/test-page');
+      }
+    });
+
+    it('page recommendations without URL source are downgraded', async () => {
+      const rubricForPageLevel = {
+        categories: {
+          aiReadability: {
+            score: 30,
+            subfactors: {
+              altTextScore: 20
+            }
+          }
+        }
+      };
+
+      const scan = { id: 'test-downgrade' };
+
+      // No URL in evidence or context
+      const recommendations = await renderRecommendations({
+        scan,
+        rubricResult: rubricForPageLevel,
+        scanEvidence: {},
+        context: {}
+      });
+
+      // All page-level recs should be downgraded to site
+      for (const rec of recommendations) {
+        if (rec.target_level === 'page') {
+          assert.ok(rec.target_url,
+            `Page-level rec ${rec.subfactor_key} must have target_url`);
+        }
+      }
+    });
+  });
+});

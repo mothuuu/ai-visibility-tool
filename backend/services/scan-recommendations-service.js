@@ -24,14 +24,29 @@ const db = require('../db/database');
  *
  * Format: {pillar}:{subfactor}:{target_level}:{target_hash}
  *
+ * Phase 4A.2.1 INVARIANT: If target_level='page', target_url MUST be non-empty.
+ * If this invariant is violated, we downgrade to target_level='site' to prevent
+ * inconsistent rec_keys that would cause silent overwrites.
+ *
  * @param {Object} rec - Recommendation object from renderer
  * @returns {string|null} - Stable key or null if missing required fields
  */
 function makeRecKey(rec) {
   if (!rec?.pillar || !rec?.subfactor_key) return null;
 
-  const targetLevel = rec.target_level || 'site';
-  const targetId = rec.target_url || rec.target?.url || rec.page_url || 'site';
+  let targetLevel = rec.target_level || 'site';
+  const targetUrl = rec.target_url || rec.target?.url || rec.page_url || null;
+
+  // Phase 4A.2.1: Enforce page-level invariant
+  // If target_level='page' but no target_url, downgrade to 'site'
+  if (targetLevel === 'page' && (!targetUrl || targetUrl.trim() === '')) {
+    console.warn(`[makeRecKey] Downgrading to site-level (no target_url): ${rec.subfactor_key}`);
+    targetLevel = 'site';
+  }
+
+  // For site-level, hash the literal 'site' string for consistent key
+  // For page-level, hash the actual URL
+  const targetId = targetLevel === 'site' ? 'site' : targetUrl;
 
   const targetHash = crypto.createHash('sha1')
     .update(String(targetId))
@@ -93,8 +108,16 @@ function extractFirstSnippet(assets) {
  */
 function mapRendererOutputToDb(rec, engineVersion) {
   const recKey = makeRecKey(rec);
-  const targetLevel = rec.target_level || 'site';
-  const targetUrl = rec.target_url || rec.target?.url || rec.page_url || null;
+
+  // Phase 4A.2.1: Apply same target normalization as makeRecKey
+  let targetLevel = rec.target_level || 'site';
+  let targetUrl = rec.target_url || rec.target?.url || rec.page_url || null;
+
+  // Enforce page-level invariant: page requires target_url
+  if (targetLevel === 'page' && (!targetUrl || targetUrl.trim() === '')) {
+    targetLevel = 'site';
+    targetUrl = null;
+  }
 
   return {
     // v2 fields
