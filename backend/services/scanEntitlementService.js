@@ -191,12 +191,19 @@ const PLAN_ALIASES = {
 /**
  * Normalize plan ID to canonical form
  * @param {string} planId - Raw plan ID
- * @returns {string} - Normalized plan ID (defaults to 'freemium' if unknown)
+ * @returns {string} - Normalized plan ID (defaults to 'free' if unknown)
+ *
+ * NOTE: 'freemium' is normalized to 'free' for consistency.
+ * The 'freemium' key still exists in SCAN_ENTITLEMENTS for backwards compatibility
+ * but should be treated as equivalent to 'free'.
  */
 function normalizePlan(planId) {
-  if (!planId) return 'freemium';
+  if (!planId) return 'free';
 
   const lowered = String(planId).toLowerCase().trim();
+
+  // Explicit freemium -> free normalization
+  if (lowered === 'freemium') return 'free';
 
   // Check aliases first
   if (PLAN_ALIASES[lowered]) {
@@ -208,9 +215,9 @@ function normalizePlan(planId) {
     return lowered;
   }
 
-  // Unknown plan → freemium
-  console.warn(`[ScanEntitlementService] Unknown plan '${planId}' normalized to 'freemium'`);
-  return 'freemium';
+  // Unknown plan → free
+  console.warn(`[ScanEntitlementService] Unknown plan '${planId}' normalized to 'free'`);
+  return 'free';
 }
 
 /**

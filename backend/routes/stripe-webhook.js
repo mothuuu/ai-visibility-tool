@@ -20,7 +20,13 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { handleCitationNetworkWebhook } = require('../services/citationNetworkWebhookHandler');
 
 // Phase 2: Import planService for centralized plan management
-const { syncPlanFromWebhook, handleSubscriptionDeleted: handleSubDeleted } = require('../services/planService');
+// Phase 2.1: Add org dual-write functions for subscription events
+const {
+  syncPlanFromWebhook,
+  handleSubscriptionDeleted: handleSubDeleted,
+  upsertOrgStripeFields,
+  clearOrgStripeFields
+} = require('../services/planService');
 
 /**
  * Main Stripe webhook handler
@@ -153,6 +159,7 @@ async function handleStripeWebhook(req, res) {
 /**
  * Handle subscription deletion (user canceled)
  * Phase 2: Uses planService for centralized handling
+ * Phase 2.1: Dual-write to organizations
  */
 async function handleSubscriptionDeleted(subscription, client) {
   console.log(`🗑️  Subscription deleted: ${subscription.id}`);
@@ -167,6 +174,8 @@ async function handleSubscriptionDeleted(subscription, client) {
 
   if (userResult.rows.length === 0) {
     console.log(`⚠️  No user found for customer ${customerId}`);
+    // Phase 2.1: Still try to update org even if user not found
+    await clearOrgStripeFields(customerId, client);
     return;
   }
 
@@ -189,11 +198,18 @@ async function handleSubscriptionDeleted(subscription, client) {
   `, [user.id]);
 
   console.log(`✅ User ${user.email} downgraded from ${oldPlan} to free`);
+
+  // Phase 2.1: Dual-write to organizations
+  const orgResult = await clearOrgStripeFields(customerId, client);
+  if (orgResult.success) {
+    console.log(`✅ Org ${orgResult.orgId} Stripe fields cleared (subscription deleted)`);
+  }
 }
 
 /**
  * Handle subscription updates (plan change, payment update)
  * Phase 2: Uses syncPlanFromWebhook for centralized plan resolution
+ * Phase 2.1: Dual-write to organizations
  */
 async function handleSubscriptionUpdated(subscription, client) {
   console.log(`🔄 Subscription updated: ${subscription.id}`);
@@ -217,6 +233,8 @@ async function handleSubscriptionUpdated(subscription, client) {
 
   if (userResult.rows.length === 0) {
     console.log(`⚠️  No user found for customer ${customerId}`);
+    // Phase 2.1: Still try to update org even if user not found
+    await upsertOrgStripeFields(customerId, subscription, client);
     return;
   }
 
@@ -245,6 +263,12 @@ async function handleSubscriptionUpdated(subscription, client) {
       WHERE id = $1
     `, [user.id]);
     console.log(`❌ User ${user.email} downgraded due to status: ${status}`);
+  }
+
+  // Phase 2.1: Dual-write to organizations
+  const orgResult = await upsertOrgStripeFields(customerId, subscription, client);
+  if (orgResult.success) {
+    console.log(`✅ Org ${orgResult.orgId} Stripe fields updated (status: ${status}, price: ${priceId})`);
   }
 }
 
@@ -306,6 +330,7 @@ async function handlePaymentSucceeded(invoice, client) {
 /**
  * Handle new subscription created
  * Phase 2: Stores all Stripe fields including price ID and period for usage tracking
+ * Phase 2.1: Dual-write to organizations
  */
 async function handleSubscriptionCreated(subscription, client) {
   console.log(`🆕 Subscription created: ${subscription.id}`);
@@ -328,6 +353,8 @@ async function handleSubscriptionCreated(subscription, client) {
 
   if (userResult.rows.length === 0) {
     console.log(`⚠️  No user found for customer ${customerId}`);
+    // Phase 2.1: Still try to update org even if user not found
+    await upsertOrgStripeFields(customerId, subscription, client);
     return;
   }
 
@@ -345,6 +372,12 @@ async function handleSubscriptionCreated(subscription, client) {
         updated_at = NOW()
     WHERE id = $6
   `, [subscription.id, subscription.status, priceId, periodStart, periodEnd, user.id]);
+
+  // Phase 2.1: Dual-write to organizations
+  const orgResult = await upsertOrgStripeFields(customerId, subscription, client);
+  if (orgResult.success) {
+    console.log(`✅ Org ${orgResult.orgId} Stripe fields updated (new subscription, status: ${subscription.status})`);
+  }
 }
 
 // Export as function (not object with named export)

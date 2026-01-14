@@ -8,7 +8,8 @@ const { authenticateToken } = require('../middleware/auth');
 const { loadOrgContext } = require('../middleware/orgContext');
 
 // Phase 2: Import core services for usage endpoints
-const { getUserPlan } = require('../services/planService');
+// Phase 2.1: Use resolvePlanForRequest for org-first resolution
+const { resolvePlanForRequest } = require('../services/planService');
 const { getEntitlements } = require('../services/scanEntitlementService');
 const { getUsageSummary, checkAndResetLegacyIfNeeded } = require('../services/usageService');
 const { getOrgContext } = require('../services/organizationService');
@@ -264,6 +265,7 @@ router.get('/me', authenticateToken, loadOrgContext, async (req, res) => {
 // ============================================
 // GET /api/auth/me/usage - Get current user's usage summary
 // Phase 2: Dedicated endpoint for usage tracking verification
+// Phase 2.1: Updated to use org-first plan resolution
 // ============================================
 router.get('/me/usage', authenticateToken, async (req, res) => {
   try {
@@ -294,20 +296,25 @@ router.get('/me/usage', authenticateToken, async (req, res) => {
     );
     const refreshedUser = refreshedResult.rows[0];
 
-    // Get plan resolution
-    const planInfo = await getUserPlan(userId);
-
-    // Get entitlements
-    const entitlements = getEntitlements(planInfo.plan);
-
     // Get org context
     const orgContext = await getOrgContext(userId);
+
+    // Phase 2.1: Use org-first plan resolution (Option A)
+    // Precedence: manual_override > stripe > org.plan fallback > user.plan
+    const orgId = orgContext?.orgId || user.organization_id || null;
+    const planResolution = await resolvePlanForRequest({ userId, orgId });
+
+    // Log plan resolution for debugging
+    console.log(`[/me/usage] User ${userId} Org ${orgId}: plan=${planResolution.plan} source=${planResolution.source}`);
+
+    // Get entitlements based on resolved plan
+    const entitlements = getEntitlements(planResolution.plan);
 
     // Get usage summary
     const usageSummary = await getUsageSummary({
       userId,
-      orgId: orgContext?.orgId || user.organization_id,
-      planId: planInfo.plan,
+      orgId,
+      planId: planResolution.plan,
       userRow: user
     });
 
@@ -315,11 +322,12 @@ router.get('/me/usage', authenticateToken, async (req, res) => {
       success: true,
       usage: usageSummary,
       plan: {
-        current: planInfo.plan,
-        stored: planInfo.storedPlan,
-        corrected: planInfo.corrected,
-        source: planInfo.source,
-        subscriptionStatus: planInfo.subscriptionStatus
+        current: planResolution.plan,
+        source: planResolution.source,
+        // Include org stripe period info if available
+        stripePeriodStart: planResolution.orgRow?.stripePeriodStart || null,
+        stripePeriodEnd: planResolution.orgRow?.stripePeriodEnd || null,
+        stripeSubscriptionStatus: planResolution.orgRow?.stripeSubscriptionStatus || null
       },
       entitlements: {
         scans_per_period: entitlements.scans_per_period,
@@ -331,7 +339,7 @@ router.get('/me/usage', authenticateToken, async (req, res) => {
       organization: orgContext ? {
         id: orgContext.orgId,
         domainCount: orgContext.domainCount
-      } : null,
+      } : (orgId ? { id: orgId } : null),
       legacyCounters: {
         scansUsed: refreshedUser.scans_used_this_month || 0,
         competitorScansUsed: refreshedUser.competitor_scans_used_this_month || 0

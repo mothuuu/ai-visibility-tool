@@ -14,7 +14,8 @@ const { createGuestRateLimiter } = require('../middleware/guestRateLimit');
 const { loadOrgContext } = require('../middleware/orgContext');
 
 // Phase 2: Core Services - Single source of truth for plan, entitlements, usage, org
-const { getUserPlan } = require('../services/planService');
+// Phase 2.1: Use resolvePlanForRequest for org-first plan resolution
+const { resolvePlanForRequest } = require('../services/planService');
 const { getEntitlements, canScan, canScanPages, getUpgradeSuggestion } = require('../services/scanEntitlementService');
 const { canPerformScan, incrementUsageEvent, getUsageSummary, checkAndResetLegacyIfNeeded } = require('../services/usageService');
 const { ensureScanHasOrgContext, getOrCreateOrgForUser } = require('../services/organizationService');
@@ -347,14 +348,6 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
 
     const user = userResult.rows[0];
 
-    // Phase 2: Use centralized entitlement service (single source of truth)
-    const entitlements = getEntitlements(user.plan);
-    const planLimits = {
-      scansPerMonth: entitlements.scans_per_period,
-      pagesPerScan: entitlements.pages_per_scan,
-      competitorScans: entitlements.competitor_scans
-    };
-
     // Phase 2: Get org context for usage tracking
     let orgContext = null;
     try {
@@ -363,8 +356,21 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
       console.warn(`[Scan] Could not get org context: ${orgError.message}`);
     }
 
-    // Plan is always valid via getEntitlements (normalizes unknown → freemium)
-    console.log(`[Scan] User ${userId}: plan=${entitlements.plan}, limits=${JSON.stringify(planLimits)}`);
+    // Phase 2.1: Use org-first plan resolution (Option A)
+    // Precedence: manual_override > stripe > org.plan fallback > user.plan
+    const orgId = orgContext?.orgId || user.organization_id || null;
+    const planResolution = await resolvePlanForRequest({ userId, orgId });
+
+    // Get entitlements based on resolved plan
+    const entitlements = getEntitlements(planResolution.plan);
+    const planLimits = {
+      scansPerMonth: entitlements.scans_per_period,
+      pagesPerScan: entitlements.pages_per_scan,
+      competitorScans: entitlements.competitor_scans
+    };
+
+    // Phase 2.1: Log plan resolution with source for debugging
+    console.log(`[Scan] User ${userId} Org ${orgId}: plan=${planResolution.plan} source=${planResolution.source} limits=${JSON.stringify(planLimits)}`);
 
     // Phase 2: CRITICAL - Check and reset legacy usage counters if needed
     // This fixes the "monthly reset broken" bug
@@ -464,12 +470,13 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
       ? requestedPageCount
       : Math.min(requestedPageCount, pageCheck.maxPages);
 
-    console.log(`🔍 Authenticated scan for user ${userId} (${user.plan}) - ${scanTarget} [${domainType}]`);
+    console.log(`🔍 Authenticated scan for user ${userId} (${planResolution.plan} via ${planResolution.source}) - ${scanTarget} [${domainType}]`);
 
     const { pageSetHash, normalizedPages } = computePageSetHash(scanTarget, pages || []);
 
     // Free users get 30-day context window, paid users get 5-day
-    const contextWindowDays = user.plan === 'free' ? 30 : 5;
+    // Phase 2.1: Use resolved plan instead of user.plan
+    const contextWindowDays = planResolution.plan === 'free' ? 30 : 5;
 
     const reusableContext = await findReusableScanContext({
       userId,
@@ -574,7 +581,8 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
       // Scan with REUSED recommendations (within 5-day window)
       // Perform scoring only, then fetch existing recommendations
       console.log(`🔄 Performing scan with reused recommendations (5-day context active)`);
-      scanResult = await performV5Scan(scanTarget, user.plan, pages, userProgress, user.industry, currentMode, true);
+      // Phase 2.1: Use resolved plan
+      scanResult = await performV5Scan(scanTarget, planResolution.plan, pages, userProgress, user.industry, currentMode, true);
 
       // Fetch existing recommendations from primary scan
       const existingRecs = await db.query(`
@@ -605,7 +613,8 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
       let domainFrozen = false;
       let existingDomainRecs = null;
 
-      if (user.plan === 'free') {
+      // Phase 2.1: Use resolved plan for free user check
+      if (planResolution.plan === 'free') {
         // Get the start of current month for queries
         const now = new Date();
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -657,7 +666,8 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
 
       // Full V5 rubric scan with NEW recommendations (mode-aware)
       // For Free users who hit their limit, skip recommendation generation
-      scanResult = await performV5Scan(scanTarget, user.plan, pages, userProgress, user.industry, currentMode, skipRecsForFreeUser);
+      // Phase 2.1: Use resolved plan
+      scanResult = await performV5Scan(scanTarget, planResolution.plan, pages, userProgress, user.industry, currentMode, skipRecsForFreeUser);
 
       // MONTHLY FREEZE: For Free users, attach frozen recommendations
       if (skipRecsForFreeUser) {
@@ -783,19 +793,21 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
     : [{ url: scanTarget, priority: 1 }]; // Just main URL if no pages specified
 
   // Save with hybrid system (pass score for tracking)
+  // Phase 2.1: Use resolved plan
   progressInfo = await saveHybridRecommendations(
     scan.id,
     userId,
     scanTarget,
     selectedPages,
     scanResult.recommendations,
-    user.plan,
+    planResolution.plan,
     Math.round(scanResult.totalScore),  // Score at creation for tracking
     null  // Context ID will be set after context creation
   );
 
   // Initialize refresh cycle for paid users only (Free users don't need refresh cycles)
-  if (user.plan !== 'free') {
+  // Phase 2.1: Use resolved plan
+  if (planResolution.plan !== 'free') {
     try {
       await refreshService.initializeRefreshCycle(userId, scan.id);
       console.log(`🔄 Refresh cycle initialized for scan ${scan.id}`);
@@ -831,7 +843,8 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
         // Create new context for this scan (it has the primary recommendations)
         // Pass the initial score for "improved by X points" tracking
         // Pass user plan for plan-specific context duration (Free=30 days, DIY/Pro=5 days)
-        await contextService.createContext(userId, scan.id, scanDomain, pages || [], Math.round(scanResult.totalScore), user.plan);
+        // Phase 2.1: Use resolved plan
+        await contextService.createContext(userId, scan.id, scanDomain, pages || [], Math.round(scanResult.totalScore), planResolution.plan);
         console.log(`📎 New recommendation context created for scan ${scan.id}`);
       }
     }
@@ -869,7 +882,8 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
     if (!isCompetitorScan) {
       try {
         const { checkAndUpdateMode } = require('../utils/mode-manager');
-        modeInfo = await checkAndUpdateMode(userId, scan.id, scanResult.totalScore, user.plan);
+        // Phase 2.1: Use resolved plan
+        modeInfo = await checkAndUpdateMode(userId, scan.id, scanResult.totalScore, planResolution.plan);
 
         if (modeInfo.modeChanged) {
           console.log(`🎯 Mode changed: ${modeInfo.previousMode} → ${modeInfo.currentMode} (score: ${modeInfo.currentScore})`);
