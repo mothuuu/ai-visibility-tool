@@ -332,10 +332,11 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
     });
 
     // Get user info (including industry preference and primary domain)
+    // Note: stripe_current_period_* columns may not exist - usageService handles this gracefully
     const userResult = await db.query(
       `SELECT plan, scans_used_this_month, industry, industry_custom,
               primary_domain, competitor_scans_used_this_month, primary_domain_changed_at,
-              stripe_current_period_start, stripe_current_period_end, organization_id
+              organization_id, quota_reset_date
        FROM users WHERE id = $1`,
       [userId]
     );

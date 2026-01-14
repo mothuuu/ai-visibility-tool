@@ -270,11 +270,11 @@ router.get('/me/usage', authenticateToken, async (req, res) => {
     const userId = req.user.id;
 
     // Get user row with all needed fields
+    // Note: stripe_current_period_* columns may not exist yet - handle gracefully
     const userResult = await db.query(`
       SELECT id, email, plan, organization_id,
              scans_used_this_month, competitor_scans_used_this_month,
-             stripe_current_period_start, stripe_current_period_end,
-             stripe_subscription_status, stripe_price_id
+             quota_reset_date
       FROM users WHERE id = $1
     `, [userId]);
 
