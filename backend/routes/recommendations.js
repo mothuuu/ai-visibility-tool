@@ -11,6 +11,10 @@ const NotificationService = require('../services/notification-service');
 const recommendationRepo = require('../repositories/recommendationRepository');
 const progressRepo = require('../repositories/progressRepository');
 
+// Phase 2: Entitlement services for recommendation visibility cap
+const { resolvePlanForRequest } = require('../services/planService');
+const { getRecommendationVisibleLimit } = require('../services/scanEntitlementService');
+
 // ============================================
 // POST /api/recommendations/:id/mark-complete
 // Mark a recommendation as implemented (completed)
@@ -358,21 +362,27 @@ router.get('/scan/:scanId', authenticateToken, async (req, res) => {
   try {
     const scanId = req.params.scanId;
     const userId = req.user.id;
-    
+
     // Verify scan belongs to user
     const scanCheck = await db.query(
       'SELECT user_id FROM scans WHERE id = $1',
       [scanId]
     );
-    
+
     if (scanCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Scan not found' });
     }
-    
+
     if (scanCheck.rows[0].user_id !== userId) {
       return res.status(403).json({ error: 'Not authorized' });
     }
-    
+
+    // ============================================
+    // ENTITLEMENT CAP: Resolve user's plan for recommendation limit
+    // ============================================
+    const planResolution = await resolvePlanForRequest({ userId, orgId: null });
+    const recommendationVisibleLimit = getRecommendationVisibleLimit(planResolution.plan);
+
     // Get all recommendations for this scan
     // Use COALESCE for canonical field names with legacy fallbacks
     const result = await db.query(
@@ -388,24 +398,31 @@ router.get('/scan/:scanId', authenticateToken, async (req, res) => {
        ORDER BY batch_number, priority DESC`,
       [scanId]
     );
-    
+
+    // Apply entitlement cap to recommendations
+    let cappedRecommendations = result.rows;
+    if (recommendationVisibleLimit !== -1 && cappedRecommendations.length > recommendationVisibleLimit) {
+      console.log(`🔒 [Recs Endpoint] Capping recommendations: ${cappedRecommendations.length} → ${recommendationVisibleLimit} (plan: ${planResolution.plan})`);
+      cappedRecommendations = cappedRecommendations.slice(0, recommendationVisibleLimit);
+    }
+
     // Get progress
     const progressResult = await db.query(
-      `SELECT 
+      `SELECT
         total_recommendations, active_recommendations,
         completed_recommendations, verified_recommendations,
         current_batch, unlocks_today
-       FROM user_progress 
+       FROM user_progress
        WHERE scan_id = $1`,
       [scanId]
     );
-    
+
     res.json({
       success: true,
-      recommendations: result.rows,
+      recommendations: cappedRecommendations,
       progress: progressResult.rows[0] || null
     });
-    
+
   } catch (error) {
     console.error('❌ Get scan recommendations error:', error);
     res.status(500).json({ error: 'Failed to get recommendations' });

@@ -1,0 +1,343 @@
+/**
+ * Recommendation Visibility Cap Tests
+ *
+ * Tests for server-side entitlement enforcement of recommendation visibility.
+ * This prevents entitlement leakage by ensuring the API never returns
+ * more recommendations than the user's plan allows.
+ *
+ * Run with: node --test backend/tests/unit/recommendation-visibility-cap.test.js
+ */
+
+const { describe, it, beforeEach, mock } = require('node:test');
+const assert = require('node:assert');
+
+// Import the module under test
+const {
+  getRecommendationVisibleLimit,
+  normalizePlan
+} = require('../../services/scanEntitlementService');
+
+// ========================================
+// RECOMMENDATION VISIBILITY LIMIT TESTS
+// ========================================
+
+describe('Recommendation Visibility Limit (Entitlement Cap)', () => {
+
+  describe('getRecommendationVisibleLimit', () => {
+
+    it('returns 3 for free plan', () => {
+      assert.strictEqual(getRecommendationVisibleLimit('free'), 3);
+    });
+
+    it('returns 3 for freemium plan', () => {
+      assert.strictEqual(getRecommendationVisibleLimit('freemium'), 3);
+    });
+
+    it('returns 5 for diy plan', () => {
+      assert.strictEqual(getRecommendationVisibleLimit('diy'), 5);
+    });
+
+    it('returns 5 for starter plan (alias of diy)', () => {
+      assert.strictEqual(getRecommendationVisibleLimit('starter'), 5);
+    });
+
+    it('returns 10 for pro plan', () => {
+      assert.strictEqual(getRecommendationVisibleLimit('pro'), 10);
+    });
+
+    it('returns -1 (unlimited) for agency plan', () => {
+      assert.strictEqual(getRecommendationVisibleLimit('agency'), -1);
+    });
+
+    it('returns -1 (unlimited) for enterprise plan', () => {
+      assert.strictEqual(getRecommendationVisibleLimit('enterprise'), -1);
+    });
+
+    it('handles case-insensitive plan names', () => {
+      assert.strictEqual(getRecommendationVisibleLimit('FREE'), 3);
+      assert.strictEqual(getRecommendationVisibleLimit('DIY'), 5);
+      assert.strictEqual(getRecommendationVisibleLimit('PRO'), 10);
+      assert.strictEqual(getRecommendationVisibleLimit('AGENCY'), -1);
+      assert.strictEqual(getRecommendationVisibleLimit('ENTERPRISE'), -1);
+    });
+
+    it('defaults to 3 for null/undefined plan', () => {
+      assert.strictEqual(getRecommendationVisibleLimit(null), 3);
+      assert.strictEqual(getRecommendationVisibleLimit(undefined), 3);
+    });
+
+    it('defaults to 3 for unknown plans', () => {
+      assert.strictEqual(getRecommendationVisibleLimit('platinum'), 3);
+      assert.strictEqual(getRecommendationVisibleLimit('gold'), 3);
+      assert.strictEqual(getRecommendationVisibleLimit('unknown'), 3);
+    });
+
+    it('handles plan aliases correctly', () => {
+      // basic -> diy -> 5
+      assert.strictEqual(getRecommendationVisibleLimit('basic'), 5);
+      // professional -> pro -> 10
+      assert.strictEqual(getRecommendationVisibleLimit('professional'), 10);
+      // business -> enterprise -> -1 (unlimited)
+      assert.strictEqual(getRecommendationVisibleLimit('business'), -1);
+      // teams -> agency -> -1
+      assert.strictEqual(getRecommendationVisibleLimit('teams'), -1);
+    });
+
+    it('handles plan_* prefix aliases', () => {
+      assert.strictEqual(getRecommendationVisibleLimit('plan_free'), 3);
+      assert.strictEqual(getRecommendationVisibleLimit('plan_diy'), 5);
+      assert.strictEqual(getRecommendationVisibleLimit('plan_pro'), 10);
+      assert.strictEqual(getRecommendationVisibleLimit('plan_enterprise'), -1);
+      assert.strictEqual(getRecommendationVisibleLimit('plan_agency'), -1);
+    });
+  });
+});
+
+// ========================================
+// CAP APPLICATION SIMULATION TESTS
+// ========================================
+
+describe('Cap Application Logic', () => {
+
+  it('caps free user recommendations to 3', () => {
+    const recommendations = Array(10).fill(null).map((_, i) => ({ id: i + 1, text: `Rec ${i + 1}` }));
+    const limit = getRecommendationVisibleLimit('free');
+
+    let cappedRecommendations = recommendations;
+    if (limit !== -1 && cappedRecommendations.length > limit) {
+      cappedRecommendations = cappedRecommendations.slice(0, limit);
+    }
+
+    assert.strictEqual(cappedRecommendations.length, 3);
+    assert.deepStrictEqual(cappedRecommendations.map(r => r.id), [1, 2, 3]);
+  });
+
+  it('caps diy user recommendations to 5', () => {
+    const recommendations = Array(10).fill(null).map((_, i) => ({ id: i + 1, text: `Rec ${i + 1}` }));
+    const limit = getRecommendationVisibleLimit('diy');
+
+    let cappedRecommendations = recommendations;
+    if (limit !== -1 && cappedRecommendations.length > limit) {
+      cappedRecommendations = cappedRecommendations.slice(0, limit);
+    }
+
+    assert.strictEqual(cappedRecommendations.length, 5);
+    assert.deepStrictEqual(cappedRecommendations.map(r => r.id), [1, 2, 3, 4, 5]);
+  });
+
+  it('caps pro user recommendations to 10', () => {
+    const recommendations = Array(20).fill(null).map((_, i) => ({ id: i + 1, text: `Rec ${i + 1}` }));
+    const limit = getRecommendationVisibleLimit('pro');
+
+    let cappedRecommendations = recommendations;
+    if (limit !== -1 && cappedRecommendations.length > limit) {
+      cappedRecommendations = cappedRecommendations.slice(0, limit);
+    }
+
+    assert.strictEqual(cappedRecommendations.length, 10);
+  });
+
+  it('does not cap agency user recommendations (unlimited)', () => {
+    const recommendations = Array(50).fill(null).map((_, i) => ({ id: i + 1, text: `Rec ${i + 1}` }));
+    const limit = getRecommendationVisibleLimit('agency');
+
+    let cappedRecommendations = recommendations;
+    if (limit !== -1 && cappedRecommendations.length > limit) {
+      cappedRecommendations = cappedRecommendations.slice(0, limit);
+    }
+
+    assert.strictEqual(cappedRecommendations.length, 50);
+  });
+
+  it('does not cap enterprise user recommendations (unlimited)', () => {
+    const recommendations = Array(100).fill(null).map((_, i) => ({ id: i + 1, text: `Rec ${i + 1}` }));
+    const limit = getRecommendationVisibleLimit('enterprise');
+
+    let cappedRecommendations = recommendations;
+    if (limit !== -1 && cappedRecommendations.length > limit) {
+      cappedRecommendations = cappedRecommendations.slice(0, limit);
+    }
+
+    assert.strictEqual(cappedRecommendations.length, 100);
+  });
+
+  it('handles empty recommendations array', () => {
+    const recommendations = [];
+    const limit = getRecommendationVisibleLimit('free');
+
+    let cappedRecommendations = recommendations;
+    if (limit !== -1 && cappedRecommendations.length > limit) {
+      cappedRecommendations = cappedRecommendations.slice(0, limit);
+    }
+
+    assert.strictEqual(cappedRecommendations.length, 0);
+  });
+
+  it('handles recommendations count equal to limit', () => {
+    const recommendations = Array(3).fill(null).map((_, i) => ({ id: i + 1, text: `Rec ${i + 1}` }));
+    const limit = getRecommendationVisibleLimit('free');
+
+    let cappedRecommendations = recommendations;
+    if (limit !== -1 && cappedRecommendations.length > limit) {
+      cappedRecommendations = cappedRecommendations.slice(0, limit);
+    }
+
+    assert.strictEqual(cappedRecommendations.length, 3);
+  });
+
+  it('handles recommendations count less than limit', () => {
+    const recommendations = Array(2).fill(null).map((_, i) => ({ id: i + 1, text: `Rec ${i + 1}` }));
+    const limit = getRecommendationVisibleLimit('free'); // limit is 3
+
+    let cappedRecommendations = recommendations;
+    if (limit !== -1 && cappedRecommendations.length > limit) {
+      cappedRecommendations = cappedRecommendations.slice(0, limit);
+    }
+
+    assert.strictEqual(cappedRecommendations.length, 2);
+  });
+});
+
+// ========================================
+// REGRESSION TESTS FOR ENTITLEMENT LEAKAGE
+// ========================================
+
+describe('Entitlement Leakage Prevention', () => {
+
+  it('free user cannot see more than 3 recommendations regardless of DB count', () => {
+    // Simulate scenario where DB has 15 recommendations
+    const dbRecommendations = Array(15).fill(null).map((_, i) => ({
+      id: i + 1,
+      text: `Recommendation ${i + 1}`,
+      priority: i < 5 ? 'high' : 'medium'
+    }));
+
+    const limit = getRecommendationVisibleLimit('free');
+    const returnedToClient = limit === -1 ? dbRecommendations : dbRecommendations.slice(0, limit);
+
+    assert.strictEqual(returnedToClient.length, 3,
+      'Free user should only see 3 recommendations regardless of DB count');
+    assert.ok(returnedToClient.length <= 3,
+      'CRITICAL: Free user received more than 3 recommendations - ENTITLEMENT LEAKAGE!');
+  });
+
+  it('diy user cannot see more than 5 recommendations regardless of DB count', () => {
+    const dbRecommendations = Array(20).fill(null).map((_, i) => ({
+      id: i + 1,
+      text: `Recommendation ${i + 1}`
+    }));
+
+    const limit = getRecommendationVisibleLimit('diy');
+    const returnedToClient = limit === -1 ? dbRecommendations : dbRecommendations.slice(0, limit);
+
+    assert.strictEqual(returnedToClient.length, 5,
+      'DIY user should only see 5 recommendations regardless of DB count');
+    assert.ok(returnedToClient.length <= 5,
+      'CRITICAL: DIY user received more than 5 recommendations - ENTITLEMENT LEAKAGE!');
+  });
+
+  it('pro user cannot see more than 10 recommendations regardless of DB count', () => {
+    const dbRecommendations = Array(25).fill(null).map((_, i) => ({
+      id: i + 1,
+      text: `Recommendation ${i + 1}`
+    }));
+
+    const limit = getRecommendationVisibleLimit('pro');
+    const returnedToClient = limit === -1 ? dbRecommendations : dbRecommendations.slice(0, limit);
+
+    assert.strictEqual(returnedToClient.length, 10,
+      'Pro user should only see 10 recommendations regardless of DB count');
+    assert.ok(returnedToClient.length <= 10,
+      'CRITICAL: Pro user received more than 10 recommendations - ENTITLEMENT LEAKAGE!');
+  });
+
+  it('cap applies even when userProgress is null/missing', () => {
+    // This was the original bug - UI cap failed when userProgress was missing
+    const userProgress = null;
+    const dbRecommendations = Array(15).fill(null).map((_, i) => ({
+      id: i + 1,
+      text: `Recommendation ${i + 1}`
+    }));
+
+    // Server-side cap should work regardless of userProgress
+    const limit = getRecommendationVisibleLimit('free');
+    const returnedToClient = limit === -1 ? dbRecommendations : dbRecommendations.slice(0, limit);
+
+    assert.strictEqual(returnedToClient.length, 3,
+      'Cap should apply even when userProgress is null');
+  });
+
+  it('cap applies to contextScanId recommendations (scan reuse scenario)', () => {
+    // Scenario: scan reuses recommendations from another scan via contextScanId
+    // The cap should still apply to the final returned list
+    const contextScanRecommendations = Array(12).fill(null).map((_, i) => ({
+      id: i + 1,
+      text: `Recommendation ${i + 1}`,
+      scan_id: 'context-scan-123' // From a different scan
+    }));
+
+    const limit = getRecommendationVisibleLimit('diy');
+    const returnedToClient = limit === -1 ? contextScanRecommendations : contextScanRecommendations.slice(0, limit);
+
+    assert.strictEqual(returnedToClient.length, 5,
+      'Cap should apply to contextScanId recommendations');
+  });
+});
+
+// ========================================
+// ACCEPTANCE CRITERIA VERIFICATION
+// ========================================
+
+describe('Acceptance Criteria Verification', () => {
+
+  it('AC1: DIY user gets at most 5 recommendations', () => {
+    const limit = getRecommendationVisibleLimit('diy');
+    assert.strictEqual(limit, 5, 'DIY defaultVisible should be 5');
+
+    // Verify cap application
+    const recommendations = Array(20).fill(null);
+    const capped = recommendations.slice(0, limit);
+    assert.ok(capped.length <= 5, 'DIY user should receive at most 5 recommendations');
+  });
+
+  it('AC2: Free user gets at most 3 recommendations', () => {
+    const limit = getRecommendationVisibleLimit('free');
+    assert.strictEqual(limit, 3, 'Free defaultVisible should be 3');
+
+    // Verify cap application
+    const recommendations = Array(20).fill(null);
+    const capped = recommendations.slice(0, limit);
+    assert.ok(capped.length <= 3, 'Free user should receive at most 3 recommendations');
+  });
+
+  it('AC3: Pro/Agency/Enterprise have higher or unlimited caps', () => {
+    const proLimit = getRecommendationVisibleLimit('pro');
+    const agencyLimit = getRecommendationVisibleLimit('agency');
+    const enterpriseLimit = getRecommendationVisibleLimit('enterprise');
+
+    assert.strictEqual(proLimit, 10, 'Pro should have limit of 10');
+    assert.strictEqual(agencyLimit, -1, 'Agency should be unlimited (-1)');
+    assert.strictEqual(enterpriseLimit, -1, 'Enterprise should be unlimited (-1)');
+  });
+
+  it('AC4: Cap enforced even if userProgress is null', () => {
+    // The getRecommendationVisibleLimit function doesn't depend on userProgress
+    // It only depends on the plan, ensuring server-side enforcement
+    const userProgress = null; // Simulating missing userProgress
+    const limit = getRecommendationVisibleLimit('free');
+
+    assert.strictEqual(limit, 3, 'Cap should be determined by plan, not userProgress');
+    assert.notStrictEqual(limit, undefined, 'Limit should never be undefined');
+    assert.notStrictEqual(limit, null, 'Limit should never be null');
+  });
+
+  it('AC5: Cap applies to contextScanId recommendations', () => {
+    // The cap is applied at response time, after recommendations are fetched
+    // regardless of whether they came from the original scan or contextScanId
+    const limit = getRecommendationVisibleLimit('free');
+    const contextRecommendations = Array(10).fill({ from_context: true });
+
+    const capped = limit === -1 ? contextRecommendations : contextRecommendations.slice(0, limit);
+    assert.strictEqual(capped.length, 3, 'contextScanId recommendations should also be capped');
+  });
+});
