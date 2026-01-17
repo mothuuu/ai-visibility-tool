@@ -328,6 +328,34 @@ function getRecommendationLimits(planId) {
 }
 
 /**
+ * Get the maximum number of recommendations visible to a user based on their plan.
+ * This is used for server-side entitlement enforcement on API responses.
+ *
+ * IMPORTANT: This prevents entitlement leakage by capping the number of
+ * recommendations returned by the API, regardless of UI state or userProgress.
+ *
+ * @param {string} planId - Plan ID (will be normalized)
+ * @returns {number} Maximum visible recommendations (-1 means unlimited)
+ */
+function getRecommendationVisibleLimit(planId) {
+  const normalizedPlan = normalizePlan(planId);
+
+  // Recommendation visibility caps per plan
+  // These match the recs_per_cycle values for consistency
+  const visibilityLimits = {
+    free: 3,
+    freemium: 3,
+    diy: 5,
+    starter: 5,
+    pro: 10,
+    agency: -1,      // Unlimited
+    enterprise: -1   // Unlimited
+  };
+
+  return visibilityLimits[normalizedPlan] ?? 3; // Default to free tier limit
+}
+
+/**
  * Check if plan has a specific feature
  * @param {object} entitlements - Entitlements from getEntitlements()
  * @param {string} featureKey - Feature key (snake_case)
@@ -463,6 +491,7 @@ module.exports = {
   canScan,
   canScanPages,
   getRecommendationLimits,
+  getRecommendationVisibleLimit,
   hasFeature,
   getUpgradeSuggestion,
   validateEntitlementsShape,

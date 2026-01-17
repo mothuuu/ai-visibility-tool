@@ -16,7 +16,7 @@ const { loadOrgContext } = require('../middleware/orgContext');
 // Phase 2: Core Services - Single source of truth for plan, entitlements, usage, org
 // Phase 2.1: Use resolvePlanForRequest for org-first plan resolution
 const { resolvePlanForRequest } = require('../services/planService');
-const { getEntitlements, canScan, canScanPages, getUpgradeSuggestion } = require('../services/scanEntitlementService');
+const { getEntitlements, canScan, canScanPages, getUpgradeSuggestion, getRecommendationVisibleLimit } = require('../services/scanEntitlementService');
 const { canPerformScan, incrementUsageEvent, getUsageSummary, checkAndResetLegacyIfNeeded } = require('../services/usageService');
 const { ensureScanHasOrgContext, getOrCreateOrgForUser } = require('../services/organizationService');
 const { USAGE_EVENT_TYPES } = require('../constants/usageEventTypes');
@@ -1030,6 +1030,15 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
     const scanId = req.params.id;
     const userId = req.userId;
 
+    // ============================================
+    // PHASE 2: ENTITLEMENT-BASED RECOMMENDATION CAP
+    // Resolve user's plan to enforce recommendation visibility limit
+    // ============================================
+    const orgId = req.orgId || null;
+    const planResolution = await resolvePlanForRequest({ userId, orgId });
+    const recommendationVisibleLimit = getRecommendationVisibleLimit(planResolution.plan);
+    console.log(`📋 [GET Scan] User ${userId}: plan=${planResolution.plan}, recommendationLimit=${recommendationVisibleLimit === -1 ? 'unlimited' : recommendationVisibleLimit}`);
+
     const result = await db.query(
       `SELECT
         id, user_id, url, status, total_score, rubric_version,
@@ -1423,6 +1432,17 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
       // Continue without comparison data - it's optional
     }
 
+    // ============================================
+    // ENTITLEMENT CAP: Limit recommendations returned to client
+    // This prevents entitlement leakage by ensuring the API never returns
+    // more recommendations than the user's plan allows, regardless of UI state.
+    // ============================================
+    let cappedRecommendations = updatedRecResult.rows;
+    if (recommendationVisibleLimit !== -1 && cappedRecommendations.length > recommendationVisibleLimit) {
+      console.log(`🔒 Capping recommendations: ${cappedRecommendations.length} → ${recommendationVisibleLimit} (plan: ${planResolution.plan})`);
+      cappedRecommendations = cappedRecommendations.slice(0, recommendationVisibleLimit);
+    }
+
     res.json({
       success: true,
       scan: {
@@ -1430,7 +1450,7 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
         categories: categoryScores,
         categoryBreakdown: categoryScores, // Frontend expects this field name
         categoryWeights: V5_WEIGHTS, // Include weights for display
-        recommendations: updatedRecResult.rows,
+        recommendations: cappedRecommendations,
         faq: scan.faq_schema ? JSON.parse(scan.faq_schema) : null,
         userProgress: userProgress, // Include progress for DIY tier
         nextBatchUnlock: nextBatchUnlock, // Next batch unlock info
