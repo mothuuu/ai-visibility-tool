@@ -783,7 +783,10 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
     // 🔥 Save recommendations with HYBRID SYSTEM (NEW!)
     // Skip saving recommendations for competitor scans
 let progressInfo = null;
+const recsToSave = scanResult.recommendations?.length || 0;
+console.log(`[Scan] Checking recommendations for persistence: count=${recsToSave}, isCompetitor=${isCompetitorScan}, reusedFromContext=${!!scanResult.reusedFromContext}`);
 if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendations.length > 0 && !scanResult.reusedFromContext) {
+  console.log(`[Scan] ✅ Persisting ${recsToSave} recommendations for scan ${scan.id}`);
   // Prepare page priorities from request
   const selectedPages = pages && pages.length > 0
     ? pages.map((pageUrl, index) => ({
@@ -1809,6 +1812,221 @@ async function performCompetitorScan(url) {
   }
 }
 
+// ============================================
+// HELPER: Count measured scores in subfactorScores
+// Used for diagnostics when 0 recommendations are generated
+// ============================================
+function countMeasuredScores(subfactorScores) {
+  if (!subfactorScores) return 0;
+  let count = 0;
+  for (const category of Object.values(subfactorScores)) {
+    if (typeof category !== 'object' || category === null) continue;
+    for (const score of Object.values(category)) {
+      if (score && (score.state === 'measured' || typeof score === 'number')) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
+// ============================================
+// BASELINE FALLBACK: High-signal recommendations for paid plans
+// These are universal recommendations that apply to any website
+// Used when the generator returns 0 recommendations
+// ============================================
+function generateBaselineRecommendations(url, scanEvidence, industry) {
+  const baselineRecs = [
+    {
+      title: 'Add FAQ Schema Markup',
+      category: 'AI Search Readiness',
+      subfactor: 'faqSchemaScore',
+      priority: 85,
+      priorityScore: 85,
+      finding: 'FAQ schema markup helps AI assistants understand your expertise and provide direct answers from your content.',
+      impact: 'High visibility in AI-powered search results and voice assistants',
+      actionSteps: [
+        'Identify 5-10 common questions your customers ask',
+        'Create clear, concise answers for each question',
+        'Add FAQPage schema markup to your page using JSON-LD',
+        'Validate schema with Google Rich Results Test'
+      ],
+      estimatedTime: '2-4 hours',
+      difficulty: 'medium',
+      estimatedScoreGain: 8,
+      customizedImplementation: null,
+      readyToUseContent: null,
+      implementationNotes: ['Test with multiple AI assistants after implementation'],
+      quickWins: ['Start with your top 3 most asked questions'],
+      validationChecklist: ['FAQPage schema validates', 'Answers are concise (<300 chars)', 'Questions match search intent']
+    },
+    {
+      title: 'Implement XML Sitemap with Priority Signals',
+      category: 'Technical Setup',
+      subfactor: 'sitemapScore',
+      priority: 82,
+      priorityScore: 82,
+      finding: 'A well-structured XML sitemap with priority and changefreq signals helps AI crawlers efficiently index your content.',
+      impact: 'Faster AI crawler discovery and more complete content indexing',
+      actionSteps: [
+        'Generate or update your XML sitemap',
+        'Include priority values (0.0-1.0) for each page',
+        'Add lastmod dates for accurate freshness signals',
+        'Submit sitemap to Google Search Console and Bing Webmaster Tools'
+      ],
+      estimatedTime: '1-2 hours',
+      difficulty: 'easy',
+      estimatedScoreGain: 6,
+      customizedImplementation: null,
+      readyToUseContent: null,
+      implementationNotes: ['Keep sitemap under 50,000 URLs per file'],
+      quickWins: ['Auto-generate sitemap with your CMS'],
+      validationChecklist: ['Sitemap accessible at /sitemap.xml', 'No 404 URLs in sitemap', 'Submitted to search consoles']
+    },
+    {
+      title: 'Add Author Bio and Credentials',
+      category: 'Trust & Authority',
+      subfactor: 'authorBiosScore',
+      priority: 78,
+      priorityScore: 78,
+      finding: 'AI assistants prioritize content from identifiable experts with verifiable credentials.',
+      impact: 'Increased trust signals for E-E-A-T and AI citation likelihood',
+      actionSteps: [
+        'Add author name and photo to content pages',
+        'Include relevant credentials and experience',
+        'Link to author social profiles and other publications',
+        'Add Person schema markup for the author'
+      ],
+      estimatedTime: '2-3 hours',
+      difficulty: 'medium',
+      estimatedScoreGain: 7,
+      customizedImplementation: null,
+      readyToUseContent: null,
+      implementationNotes: ['Use consistent author profiles across all content'],
+      quickWins: ['Start with your highest-traffic pages'],
+      validationChecklist: ['Author visible on page', 'Person schema validates', 'Credentials mentioned']
+    },
+    {
+      title: 'Improve Content Structure with Semantic Headings',
+      category: 'Content Structure',
+      subfactor: 'headingHierarchyScore',
+      priority: 76,
+      priorityScore: 76,
+      finding: 'Well-structured content with proper H1-H6 hierarchy helps AI parse and understand your content organization.',
+      impact: 'Better AI comprehension and featured snippet eligibility',
+      actionSteps: [
+        'Ensure each page has exactly one H1 tag',
+        'Use H2-H6 in logical, hierarchical order',
+        'Include question-based headings for FAQ-style content',
+        'Keep headings descriptive and keyword-relevant'
+      ],
+      estimatedTime: '1-2 hours per page',
+      difficulty: 'easy',
+      estimatedScoreGain: 5,
+      customizedImplementation: null,
+      readyToUseContent: null,
+      implementationNotes: ['Avoid skipping heading levels (H1 → H3)'],
+      quickWins: ['Fix H1 issues on your homepage first'],
+      validationChecklist: ['Single H1 per page', 'No skipped levels', 'Headings are descriptive']
+    },
+    {
+      title: 'Add Organization Schema with Social Links',
+      category: 'Technical Setup',
+      subfactor: 'structuredDataScore',
+      priority: 75,
+      priorityScore: 75,
+      finding: 'Organization schema helps AI understand your brand identity and connect your web presence.',
+      impact: 'Enhanced Knowledge Graph eligibility and brand recognition in AI results',
+      actionSteps: [
+        'Create Organization JSON-LD schema',
+        'Include name, logo, description, and contact info',
+        'Add all official social media profile URLs (sameAs)',
+        'Place schema in your site-wide template'
+      ],
+      estimatedTime: '1-2 hours',
+      difficulty: 'medium',
+      estimatedScoreGain: 6,
+      customizedImplementation: null,
+      readyToUseContent: null,
+      implementationNotes: ['Use consistent brand name across all schema'],
+      quickWins: ['Add to homepage first'],
+      validationChecklist: ['Schema validates', 'Logo URL accessible', 'Social links correct']
+    },
+    {
+      title: 'Optimize Image Alt Text for AI Understanding',
+      category: 'AI Readability',
+      subfactor: 'altTextScore',
+      priority: 72,
+      priorityScore: 72,
+      finding: 'Descriptive alt text helps AI assistants understand visual content and improves accessibility.',
+      impact: 'Better multimodal AI understanding and accessibility compliance',
+      actionSteps: [
+        'Audit all images for missing alt attributes',
+        'Write descriptive alt text (not just keywords)',
+        'Include context about what the image shows',
+        'Keep alt text under 125 characters'
+      ],
+      estimatedTime: '30 min per 20 images',
+      difficulty: 'easy',
+      estimatedScoreGain: 5,
+      customizedImplementation: null,
+      readyToUseContent: null,
+      implementationNotes: ['Decorative images should have empty alt=""'],
+      quickWins: ['Focus on hero images and product photos first'],
+      validationChecklist: ['All meaningful images have alt', 'Alt describes image content', 'No keyword stuffing']
+    },
+    {
+      title: 'Improve Internal Linking Structure',
+      category: 'AI Search Readiness',
+      subfactor: 'linkedSubpagesScore',
+      priority: 70,
+      priorityScore: 70,
+      finding: 'Strong internal linking helps AI crawlers discover and understand the relationships between your content.',
+      impact: 'Better content discovery and topic authority signals for AI',
+      actionSteps: [
+        'Identify pillar pages and supporting content',
+        'Add contextual links between related articles',
+        'Use descriptive anchor text (not "click here")',
+        'Create topic clusters with hub-and-spoke linking'
+      ],
+      estimatedTime: '2-4 hours',
+      difficulty: 'medium',
+      estimatedScoreGain: 6,
+      customizedImplementation: null,
+      readyToUseContent: null,
+      implementationNotes: ['Limit to 100 internal links per page maximum'],
+      quickWins: ['Link new content to your top-performing pages'],
+      validationChecklist: ['Orphan pages linked', 'Descriptive anchors used', 'Topic clusters visible']
+    },
+    {
+      title: 'Add Content Freshness Signals',
+      category: 'Content Freshness',
+      subfactor: 'lastUpdatedScore',
+      priority: 68,
+      priorityScore: 68,
+      finding: 'Clear last-updated dates signal to AI that your content is current and maintained.',
+      impact: 'Improved freshness signals and reduced stale content penalties',
+      actionSteps: [
+        'Add visible "Last Updated" dates to content pages',
+        'Include dateModified in your Article/WebPage schema',
+        'Set up a content audit schedule',
+        'Update stale content with current information'
+      ],
+      estimatedTime: '1-2 hours initial setup',
+      difficulty: 'easy',
+      estimatedScoreGain: 5,
+      customizedImplementation: null,
+      readyToUseContent: null,
+      implementationNotes: ['Only show dates on content that is actually updated'],
+      quickWins: ['Add dates to blog posts and guides'],
+      validationChecklist: ['Dates visible on page', 'dateModified in schema', 'Content actually refreshed']
+    }
+  ];
+
+  // Return all baseline recommendations (8 high-signal recs)
+  return baselineRecs;
+}
+
 /**
  * Transform V5 categories structure to flat subfactor scores
  * The new V5 engine returns nested objects and different key names
@@ -2045,7 +2263,36 @@ async function performV5Scan(url, plan, pages = null, userProgress = null, userI
         mode // Pass mode for strategy selection
       );
 
-      console.log(`📊 Generated ${recommendationResults.data.recommendations.length} recommendations`);
+      const recCount = recommendationResults.data.recommendations.length;
+      console.log(`📊 Generated ${recCount} recommendations`);
+
+      // ============================================
+      // INSTRUMENTATION: Log when paid plans get 0 recommendations
+      // This helps debug the entitlement leakage issue
+      // ============================================
+      const isPaidPlan = ['diy', 'pro', 'agency', 'enterprise'].includes(plan?.toLowerCase());
+      if (recCount === 0 && isPaidPlan && !skipRecommendationGeneration) {
+        console.warn(`⚠️ [ZERO_RECS] Paid plan "${plan}" got 0 recommendations!`);
+        console.warn(`   Mode: ${mode}, Industry: ${finalIndustry}`);
+
+        // Log diagnostic info without sensitive data
+        const diagnostics = {
+          hasV5Scores: !!subfactorScores && Object.keys(subfactorScores).length > 0,
+          hasEvidence: !!scanEvidence && Object.keys(scanEvidence).length > 0,
+          categoryCount: Object.keys(subfactorScores || {}).length,
+          measuredScoreCount: countMeasuredScores(subfactorScores)
+        };
+        console.warn(`   Diagnostics:`, JSON.stringify(diagnostics));
+
+        // ============================================
+        // BASELINE FALLBACK: Guarantee recommendations for paid plans
+        // If generator returned 0 recs, use baseline set
+        // ============================================
+        console.log(`🛡️ Activating baseline fallback for paid plan "${plan}"`);
+        const baselineRecs = generateBaselineRecommendations(url, scanEvidence, finalIndustry);
+        recommendationResults.data.recommendations = baselineRecs;
+        console.log(`✅ Baseline fallback injected ${baselineRecs.length} recommendations`);
+      }
     }
 
     console.log(`✅ V5 scan complete. Total score: ${totalScore}/100 (${finalIndustry})`);
