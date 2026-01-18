@@ -959,6 +959,20 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
 
     console.log(`✅ Scan ${scan.id} completed with score: ${scanResult.totalScore}`);
 
+    // ============================================
+    // ENTITLEMENT CAP: Apply recommendation visibility limit before response
+    // This prevents entitlement leakage by capping recommendations in POST /analyze
+    // (matches the cap already enforced in GET /api/scan/:id)
+    // ============================================
+    const recommendationLimit = getRecommendationVisibleLimit(planResolution.plan);
+    if (!isCompetitorScan && recommendationLimit !== -1 && Array.isArray(scanResult.recommendations)) {
+      const originalCount = scanResult.recommendations.length;
+      scanResult.recommendations = scanResult.recommendations.slice(0, recommendationLimit);
+      if (originalCount > recommendationLimit) {
+        console.log(`🔒 [POST Analyze] Capped recommendations: ${originalCount} → ${recommendationLimit} (plan: ${planResolution.plan})`);
+      }
+    }
+
     // Return results
     res.json({
       success: true,
@@ -1022,6 +1036,82 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
       error: 'Scan blocked',
       details: error.message
     });
+  }
+});
+
+// ============================================
+// GET /api/scan/list/recent - List recent scans
+// ============================================
+// IMPORTANT: This route MUST be defined BEFORE router.get('/:id', ...)
+// because Express matches routes in order. If /:id comes first, it would
+// interpret '/list/recent' as id='list' and never reach this handler.
+router.get('/list/recent', authenticateToken, loadOrgContext, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = parseInt(req.query.offset) || 0;
+
+    // Try full query first, fall back to basic query if columns don't exist
+    let result;
+    try {
+      result = await db.query(
+        `SELECT
+          id, url, status, total_score, rubric_version,
+          page_count, industry, domain_type, extracted_domain,
+          ai_readability_score, ai_search_readiness_score,
+          content_freshness_score, content_structure_score,
+          speed_ux_score, technical_setup_score,
+          trust_authority_score, voice_optimization_score,
+          created_at, completed_at
+         FROM scans
+         WHERE user_id = $1
+         ORDER BY created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [userId, limit, offset]
+      );
+    } catch (dbError) {
+      if (dbError.code === '42703') { // column does not exist
+        console.log('Some scan columns missing, using basic query');
+        result = await db.query(
+          `SELECT
+            id, url, score as total_score, industry, page_count, created_at
+           FROM scans
+           WHERE user_id = $1
+           ORDER BY created_at DESC
+           LIMIT $2 OFFSET $3`,
+          [userId, limit, offset]
+        );
+        // Add default values for missing columns
+        result.rows = result.rows.map(row => ({
+          ...row,
+          status: 'completed',
+          rubric_version: 'V5',
+          completed_at: row.created_at
+        }));
+      } else {
+        throw dbError;
+      }
+    }
+
+    const countResult = await db.query(
+      'SELECT COUNT(*) as total FROM scans WHERE user_id = $1',
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      scans: result.rows,
+      pagination: {
+        total: parseInt(countResult.rows[0].total),
+        limit,
+        offset,
+        hasMore: offset + result.rows.length < parseInt(countResult.rows[0].total)
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ List scans error:', error);
+    res.status(500).json({ error: 'Failed to retrieve scans' });
   }
 });
 
@@ -1472,79 +1562,6 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
   } catch (error) {
     console.error('❌ Get scan error:', error);
     res.status(500).json({ error: 'Failed to retrieve scan' });
-  }
-});
-
-// ============================================
-// GET /api/scan/list/recent - List recent scans
-// ============================================
-router.get('/list/recent', authenticateToken, loadOrgContext, async (req, res) => {
-  try {
-    const userId = req.userId;
-    const limit = parseInt(req.query.limit) || 10;
-    const offset = parseInt(req.query.offset) || 0;
-
-    // Try full query first, fall back to basic query if columns don't exist
-    let result;
-    try {
-      result = await db.query(
-        `SELECT
-          id, url, status, total_score, rubric_version,
-          page_count, industry, domain_type, extracted_domain,
-          ai_readability_score, ai_search_readiness_score,
-          content_freshness_score, content_structure_score,
-          speed_ux_score, technical_setup_score,
-          trust_authority_score, voice_optimization_score,
-          created_at, completed_at
-         FROM scans
-         WHERE user_id = $1
-         ORDER BY created_at DESC
-         LIMIT $2 OFFSET $3`,
-        [userId, limit, offset]
-      );
-    } catch (dbError) {
-      if (dbError.code === '42703') { // column does not exist
-        console.log('Some scan columns missing, using basic query');
-        result = await db.query(
-          `SELECT
-            id, url, score as total_score, industry, page_count, created_at
-           FROM scans
-           WHERE user_id = $1
-           ORDER BY created_at DESC
-           LIMIT $2 OFFSET $3`,
-          [userId, limit, offset]
-        );
-        // Add default values for missing columns
-        result.rows = result.rows.map(row => ({
-          ...row,
-          status: 'completed',
-          rubric_version: 'V5',
-          completed_at: row.created_at
-        }));
-      } else {
-        throw dbError;
-      }
-    }
-
-    const countResult = await db.query(
-      'SELECT COUNT(*) as total FROM scans WHERE user_id = $1',
-      [userId]
-    );
-
-    res.json({
-      success: true,
-      scans: result.rows,
-      pagination: {
-        total: parseInt(countResult.rows[0].total),
-        limit,
-        offset,
-        hasMore: offset + result.rows.length < parseInt(countResult.rows[0].total)
-      }
-    });
-
-  } catch (error) {
-    console.error('❌ List scans error:', error);
-    res.status(500).json({ error: 'Failed to retrieve scans' });
   }
 });
 

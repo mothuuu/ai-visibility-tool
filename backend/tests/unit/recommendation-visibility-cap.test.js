@@ -341,3 +341,107 @@ describe('Acceptance Criteria Verification', () => {
     assert.strictEqual(capped.length, 3, 'contextScanId recommendations should also be capped');
   });
 });
+
+// ========================================
+// POST /api/scan/analyze CAP TESTS
+// Tests the cap applied in POST /analyze before returning response
+// ========================================
+
+/**
+ * Helper function that mirrors the cap logic in POST /api/scan/analyze
+ * This is extracted for unit testing without spinning up HTTP
+ */
+function applyRecommendationCap(recommendations, plan, isCompetitorScan) {
+  const limit = getRecommendationVisibleLimit(plan);
+  if (!isCompetitorScan && limit !== -1 && Array.isArray(recommendations)) {
+    return recommendations.slice(0, limit);
+  }
+  return recommendations;
+}
+
+describe('POST /api/scan/analyze Cap (applyRecommendationCap helper)', () => {
+
+  it('free plan caps recommendations to 3 in analyze response', () => {
+    const recommendations = Array(10).fill(null).map((_, i) => ({ id: i + 1 }));
+    const capped = applyRecommendationCap(recommendations, 'free', false);
+    assert.strictEqual(capped.length, 3, 'Free should cap to 3');
+  });
+
+  it('diy plan caps recommendations to 5 in analyze response', () => {
+    const recommendations = Array(10).fill(null).map((_, i) => ({ id: i + 1 }));
+    const capped = applyRecommendationCap(recommendations, 'diy', false);
+    assert.strictEqual(capped.length, 5, 'DIY should cap to 5');
+  });
+
+  it('pro plan caps recommendations to 10 in analyze response', () => {
+    const recommendations = Array(20).fill(null).map((_, i) => ({ id: i + 1 }));
+    const capped = applyRecommendationCap(recommendations, 'pro', false);
+    assert.strictEqual(capped.length, 10, 'Pro should cap to 10');
+  });
+
+  it('agency plan does not cap (unlimited)', () => {
+    const recommendations = Array(50).fill(null).map((_, i) => ({ id: i + 1 }));
+    const capped = applyRecommendationCap(recommendations, 'agency', false);
+    assert.strictEqual(capped.length, 50, 'Agency should not cap (unlimited)');
+  });
+
+  it('enterprise plan does not cap (unlimited)', () => {
+    const recommendations = Array(50).fill(null).map((_, i) => ({ id: i + 1 }));
+    const capped = applyRecommendationCap(recommendations, 'enterprise', false);
+    assert.strictEqual(capped.length, 50, 'Enterprise should not cap (unlimited)');
+  });
+
+  it('competitor scan does not apply cap (scores-only)', () => {
+    const recommendations = []; // Competitor scans have no recommendations
+    const capped = applyRecommendationCap(recommendations, 'pro', true);
+    assert.strictEqual(capped.length, 0, 'Competitor scan should have no recommendations');
+  });
+
+  it('competitor scan with accidental recommendations still returns them unchanged', () => {
+    // Edge case: if somehow a competitor scan had recommendations, don't cap them
+    const recommendations = Array(20).fill(null).map((_, i) => ({ id: i + 1 }));
+    const capped = applyRecommendationCap(recommendations, 'free', true);
+    assert.strictEqual(capped.length, 20, 'Competitor scan bypasses cap');
+  });
+
+  it('handles null recommendations array gracefully', () => {
+    const capped = applyRecommendationCap(null, 'free', false);
+    assert.strictEqual(capped, null, 'Null input should return null');
+  });
+
+  it('handles undefined recommendations array gracefully', () => {
+    const capped = applyRecommendationCap(undefined, 'free', false);
+    assert.strictEqual(capped, undefined, 'Undefined input should return undefined');
+  });
+
+  it('handles empty recommendations array', () => {
+    const capped = applyRecommendationCap([], 'free', false);
+    assert.strictEqual(capped.length, 0, 'Empty array should remain empty');
+  });
+
+  it('cap applies to baseline fallback recommendations', () => {
+    // Simulating baseline fallback scenario where 8 recs are generated
+    const baselineFallbackRecs = Array(8).fill(null).map((_, i) => ({
+      id: i + 1,
+      title: `Baseline Rec ${i + 1}`
+    }));
+    const capped = applyRecommendationCap(baselineFallbackRecs, 'free', false);
+    assert.strictEqual(capped.length, 3, 'Baseline fallback should be capped for free plan');
+  });
+
+  it('cap applies to context-reuse recommendations', () => {
+    // Simulating context reuse scenario
+    const contextReuseRecs = Array(15).fill(null).map((_, i) => ({
+      id: i + 1,
+      from_context: true
+    }));
+    const capped = applyRecommendationCap(contextReuseRecs, 'diy', false);
+    assert.strictEqual(capped.length, 5, 'Context-reuse recs should be capped for DIY plan');
+  });
+
+  it('recommendations when count <= limit remain unchanged', () => {
+    const recommendations = Array(2).fill(null).map((_, i) => ({ id: i + 1 }));
+    const capped = applyRecommendationCap(recommendations, 'free', false);
+    assert.strictEqual(capped.length, 2, 'When count < limit, all recs should be returned');
+  });
+});
