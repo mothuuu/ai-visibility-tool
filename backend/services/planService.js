@@ -92,19 +92,36 @@ function normalizePlan(plan) {
     return lowered;
   }
 
-  // Handle aliases
+  // Handle aliases (keep in sync with scanEntitlementService.js PLAN_ALIASES)
   const aliases = {
+    // Prefixed variants
     'plan_diy': 'diy',
     'plan_pro': 'pro',
     'plan_enterprise': 'enterprise',
     'plan_agency': 'agency',
     'plan_free': 'free',
+    'plan_starter': 'diy',
+    'plan_gold': 'pro',
+    'plan_platinum': 'enterprise',
+    'plan_silver': 'diy',
+    'plan_bronze': 'free',
+    // Tier-prefixed variants
+    'tier_gold': 'pro',
+    'tier_platinum': 'enterprise',
+    'tier_silver': 'diy',
+    'tier_bronze': 'free',
+    // Legacy/alternative names
     'starter': 'diy',
     'basic': 'diy',
     'professional': 'pro',
     'business': 'enterprise',
     'team': 'agency',
-    'teams': 'agency'
+    'teams': 'agency',
+    // Metal-tier naming
+    'gold': 'pro',
+    'platinum': 'enterprise',
+    'silver': 'diy',
+    'bronze': 'free'
   };
 
   if (aliases[lowered]) {

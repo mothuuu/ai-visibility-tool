@@ -170,18 +170,44 @@ const SCAN_ENTITLEMENTS = {
 };
 
 // Plan aliases for normalization
+// Maps legacy, Stripe, and alternative plan names to canonical tiers
 const PLAN_ALIASES = {
+  // Prefixed variants (Stripe, internal systems)
   'plan_diy': 'diy',
   'plan_pro': 'pro',
   'plan_enterprise': 'enterprise',
   'plan_agency': 'agency',
   'plan_free': 'free',
   'plan_freemium': 'freemium',
+  'plan_starter': 'diy',
+  'plan_gold': 'pro',
+  'plan_platinum': 'enterprise',
+  'plan_silver': 'diy',
+  'plan_bronze': 'free',
+
+  // Tier-prefixed variants
+  'tier_diy': 'diy',
+  'tier_pro': 'pro',
+  'tier_enterprise': 'enterprise',
+  'tier_agency': 'agency',
+  'tier_free': 'free',
+  'tier_gold': 'pro',
+  'tier_platinum': 'enterprise',
+  'tier_silver': 'diy',
+  'tier_bronze': 'free',
+
+  // Legacy/alternative names
   'basic': 'diy',
   'professional': 'pro',
   'business': 'enterprise',
   'team': 'agency',
-  'teams': 'agency'
+  'teams': 'agency',
+
+  // Metal-tier naming (common in pricing tiers)
+  'gold': 'pro',           // Gold = Pro tier (10 recs visible)
+  'platinum': 'enterprise', // Platinum = Enterprise tier (unlimited)
+  'silver': 'diy',          // Silver = DIY tier (5 recs visible)
+  'bronze': 'free'          // Bronze = Free tier (3 recs visible)
 };
 
 // =============================================================================
