@@ -10,6 +10,7 @@ const UsageTrackerService = require('../services/usage-tracker-service');
 const RecommendationContextService = require('../services/recommendation-context-service');
 const RefreshCycleService = require('../services/refresh-cycle-service');
 const GuestScanCacheService = require('../services/guest-scan-cache-service');
+const { skipRecommendation: canonicalSkipRecommendation, resolveEffectiveScanId } = require('../services/recommendation-status-service');
 const { createGuestRateLimiter } = require('../middleware/guestRateLimit');
 const { loadOrgContext } = require('../middleware/orgContext');
 
@@ -1647,6 +1648,7 @@ router.post('/:id/recommendation/:recId/feedback', authenticateToken, async (req
 // ============================================
 // POST /api/scan/:id/recommendation/:recId/skip
 // Skip a recommendation (available after 5 days)
+// CONTEXT-SAFE: Uses canonical skip logic that handles context_scan_id reuse
 // ============================================
 router.post('/:id/recommendation/:recId/skip', authenticateToken, async (req, res) => {
   try {
@@ -1654,7 +1656,7 @@ router.post('/:id/recommendation/:recId/skip', authenticateToken, async (req, re
     const userId = req.userId;
     const { skipData } = req.body;
 
-    // Verify scan belongs to user
+    // Verify scan belongs to user (auth check only - not used for rec lookup)
     const scanCheck = await db.query(
       'SELECT id FROM scans WHERE id = $1 AND user_id = $2',
       [scanId, userId]
@@ -1664,73 +1666,27 @@ router.post('/:id/recommendation/:recId/skip', authenticateToken, async (req, re
       return res.status(404).json({ error: 'Scan not found' });
     }
 
-    // Get recommendation details
-    const recResult = await db.query(
-      `SELECT id, unlock_state, skip_enabled_at, skipped_at, status
-       FROM scan_recommendations
-       WHERE id = $1 AND scan_id = $2`,
-      [recId, scanId]
-    );
+    // Use canonical skip logic (handles context_scan_id resolution internally)
+    // The recommendation is looked up by ID only (not scan_id constraint),
+    // with ownership verified via JOIN to scans table.
+    const result = await canonicalSkipRecommendation(recId, userId, skipData || null);
 
-    if (recResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Recommendation not found' });
-    }
-
-    const recommendation = recResult.rows[0];
-
-    // Check if already skipped
-    if (recommendation.skipped_at) {
-      return res.status(400).json({
-        error: 'Already skipped',
-        message: 'This recommendation has already been skipped.'
+    if (!result.success) {
+      return res.status(result.status || 400).json({
+        error: result.error,
+        message: result.message,
+        ...(result.skipEnabledAt && { skipEnabledAt: result.skipEnabledAt }),
+        ...(result.daysRemaining && { daysRemaining: result.daysRemaining })
       });
     }
 
-    // Check if recommendation is locked
-    if (recommendation.unlock_state === 'locked') {
-      return res.status(403).json({
-        error: 'Recommendation not yet unlocked',
-        message: 'You can only skip unlocked recommendations.'
-      });
-    }
-
-    // Check if skip is enabled (5 days after unlock)
-    const now = new Date();
-    const skipEnabledAt = recommendation.skip_enabled_at ? new Date(recommendation.skip_enabled_at) : null;
-
-    if (skipEnabledAt && skipEnabledAt > now) {
-      const daysRemaining = Math.ceil((skipEnabledAt - now) / (1000 * 60 * 60 * 24));
-      return res.status(403).json({
-        error: 'Skip not yet available',
-        message: `You can skip this recommendation in ${daysRemaining} day${daysRemaining > 1 ? 's' : ''}.`,
-        skipEnabledAt: skipEnabledAt.toISOString(),
-        daysRemaining
-      });
-    }
-
-    // Mark as skipped and store skip data
-    await db.query(
-      `UPDATE scan_recommendations
-       SET skipped_at = NOW(),
-           status = 'skipped',
-           user_feedback = $3
-       WHERE id = $1 AND scan_id = $2`,
-      [recId, scanId, skipData || null]
-    );
-
-    // Update user progress (skipped counts as completed)
-    await db.query(
-      `UPDATE user_progress
-       SET completed_recommendations = completed_recommendations + 1
-       WHERE user_id = $1 AND scan_id = $2`,
-      [userId, scanId]
-    );
-
-    console.log(`⏭️  User ${userId} skipped recommendation ${recId} for scan ${scanId}`);
+    // Log with context info for debugging
+    console.log(`⏭️  [scan-scoped] User ${userId} skipped rec ${recId} via scan ${scanId} (effective: ${result.effectiveScanId})`);
 
     res.json({
       success: true,
-      message: 'Recommendation skipped. It will appear in your "Skipped" tab.'
+      message: result.message,
+      progress: result.progress
     });
 
   } catch (error) {
