@@ -15,6 +15,9 @@ const progressRepo = require('../repositories/progressRepository');
 const { resolvePlanForRequest } = require('../services/planService');
 const { getRecommendationVisibleLimit } = require('../services/scanEntitlementService');
 
+// Canonical recommendation status service for context-safe skip/implement
+const { skipRecommendation: canonicalSkipRecommendation } = require('../services/recommendation-status-service');
+
 // ============================================
 // POST /api/recommendations/:id/mark-complete
 // Mark a recommendation as implemented (completed)
@@ -611,13 +614,15 @@ router.post('/unlock-next', authenticateToken, async (req, res) => {
 // ============================================
 // POST /api/recommendations/:id/skip
 // Mark a recommendation as skipped
+// CANONICAL: Uses shared skip logic for context-safe operation
 // ============================================
 router.post('/:id/skip', authenticateToken, async (req, res) => {
   try {
     const recId = req.params.id;
     const userId = req.user.id;
+    const { feedback, skipData } = req.body;
 
-    console.log(`⏭️ Skipping recommendation ${recId} for user ${userId}`);
+    console.log(`⏭️ [rec-scoped] Skipping recommendation ${recId} for user ${userId}`);
 
     // Check if user is on Free plan (not allowed to skip)
     const userPlanCheck = await db.query('SELECT plan FROM users WHERE id = $1', [userId]);
@@ -629,81 +634,25 @@ router.post('/:id/skip', authenticateToken, async (req, res) => {
       });
     }
 
-    // Verify the recommendation belongs to this user
-    const recCheck = await db.query(
-      `SELECT sr.id, sr.scan_id, sr.status, s.user_id
-       FROM scan_recommendations sr
-       JOIN scans s ON sr.scan_id = s.id
-       WHERE sr.id = $1`,
-      [recId]
-    );
+    // Use canonical skip logic (handles ownership, validation, and context-safe progress update)
+    const result = await canonicalSkipRecommendation(recId, userId, feedback || skipData || null);
 
-    if (recCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'Recommendation not found' });
-    }
-
-    const rec = recCheck.rows[0];
-
-    if (rec.user_id !== userId) {
-      return res.status(403).json({ error: 'Not authorized' });
-    }
-
-    if (rec.status !== 'active') {
-      return res.status(400).json({
-        error: 'Can only skip active recommendations'
+    if (!result.success) {
+      return res.status(result.status || 400).json({
+        error: result.error,
+        message: result.message,
+        ...(result.skipEnabledAt && { skipEnabledAt: result.skipEnabledAt }),
+        ...(result.daysRemaining && { daysRemaining: result.daysRemaining }),
+        ...(result.currentState && { currentState: result.currentState })
       });
     }
 
-    // Update recommendation to skipped
-    // Write to CANONICAL columns (unlock_state, skipped_at, resurface_at)
-    await db.query(
-      `UPDATE scan_recommendations
-       SET unlock_state = 'skipped',
-           status = 'skipped',
-           skipped_at = CURRENT_TIMESTAMP,
-           resurface_at = CURRENT_TIMESTAMP + INTERVAL '30 days',
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1`,
-      [recId]
-    );
-
-    // Update user_progress
-    await db.query(
-      `UPDATE user_progress
-       SET recommendations_skipped = recommendations_skipped + 1,
-           active_recommendations = active_recommendations - 1,
-           last_activity_date = CURRENT_DATE
-       WHERE scan_id = $1`,
-      [rec.scan_id]
-    );
-
-    console.log(`   ✅ Recommendation skipped`);
-
-    // Get updated progress
-    const progressResult = await db.query(
-      `SELECT
-        total_recommendations,
-        active_recommendations,
-        completed_recommendations,
-        recommendations_implemented,
-        recommendations_skipped
-       FROM user_progress
-       WHERE scan_id = $1`,
-      [rec.scan_id]
-    );
-
-    const progress = progressResult.rows[0];
+    console.log(`   ✅ Recommendation skipped (effective scan: ${result.effectiveScanId})`);
 
     res.json({
       success: true,
-      message: 'Recommendation skipped',
-      progress: {
-        total: progress.total_recommendations,
-        active: progress.active_recommendations,
-        completed: progress.completed_recommendations,
-        implemented: progress.recommendations_implemented,
-        skipped: progress.recommendations_skipped
-      }
+      message: result.message,
+      progress: result.progress
     });
 
   } catch (error) {
