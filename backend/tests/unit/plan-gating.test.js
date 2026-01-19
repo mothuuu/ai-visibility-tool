@@ -62,21 +62,45 @@ describe('Plan Normalization (Phase 4A.2.2)', () => {
       assert.strictEqual(normalizePlan('FREEMIUM'), 'freemium');
     });
 
-    it('aliases starter/basic to free', () => {
-      assert.strictEqual(normalizePlan('starter'), 'free');
-      assert.strictEqual(normalizePlan('basic'), 'free');
-      assert.strictEqual(normalizePlan('STARTER'), 'free');
+    it('aliases starter/basic to diy', () => {
+      assert.strictEqual(normalizePlan('starter'), 'diy');
+      assert.strictEqual(normalizePlan('basic'), 'diy');
+      assert.strictEqual(normalizePlan('STARTER'), 'diy');
+      assert.strictEqual(normalizePlan('BASIC'), 'diy');
     });
 
-    it('aliases business to pro', () => {
-      assert.strictEqual(normalizePlan('business'), 'pro');
-      assert.strictEqual(normalizePlan('BUSINESS'), 'pro');
+    it('aliases business to enterprise', () => {
+      assert.strictEqual(normalizePlan('business'), 'enterprise');
+      assert.strictEqual(normalizePlan('BUSINESS'), 'enterprise');
     });
 
-    it('defaults unknown plans to free', () => {
-      assert.strictEqual(normalizePlan('platinum'), 'free');
-      assert.strictEqual(normalizePlan('gold'), 'free');
+    it('aliases metal-tier names to canonical plans', () => {
+      // Gold = Pro tier
+      assert.strictEqual(normalizePlan('gold'), 'pro');
+      assert.strictEqual(normalizePlan('Gold'), 'pro');
+      assert.strictEqual(normalizePlan('GOLD'), 'pro');
+      assert.strictEqual(normalizePlan('plan_gold'), 'pro');
+      assert.strictEqual(normalizePlan('tier_gold'), 'pro');
+
+      // Platinum = Enterprise tier
+      assert.strictEqual(normalizePlan('platinum'), 'enterprise');
+      assert.strictEqual(normalizePlan('Platinum'), 'enterprise');
+      assert.strictEqual(normalizePlan('PLATINUM'), 'enterprise');
+      assert.strictEqual(normalizePlan('plan_platinum'), 'enterprise');
+      assert.strictEqual(normalizePlan('tier_platinum'), 'enterprise');
+
+      // Silver = DIY tier
+      assert.strictEqual(normalizePlan('silver'), 'diy');
+      assert.strictEqual(normalizePlan('SILVER'), 'diy');
+
+      // Bronze = Free tier
+      assert.strictEqual(normalizePlan('bronze'), 'free');
+      assert.strictEqual(normalizePlan('BRONZE'), 'free');
+    });
+
+    it('defaults truly unknown plans to free', () => {
       assert.strictEqual(normalizePlan('xyz123'), 'free');
+      assert.strictEqual(normalizePlan('randomplan'), 'free');
     });
 
     it('trims whitespace', () => {

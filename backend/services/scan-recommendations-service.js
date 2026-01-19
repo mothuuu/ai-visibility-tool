@@ -34,9 +34,33 @@ function normalizePlan(plan) {
     return normalized;
   }
 
-  // Handle common aliases
-  if (normalized === 'starter' || normalized === 'basic') return 'free';
-  if (normalized === 'business') return 'pro';
+  // Handle common aliases (keep in sync with scanEntitlementService.js PLAN_ALIASES)
+  const aliases = {
+    'starter': 'diy',
+    'basic': 'diy',
+    'professional': 'pro',
+    'business': 'enterprise',
+    'team': 'agency',
+    'teams': 'agency',
+    // Metal-tier naming
+    'gold': 'pro',
+    'platinum': 'enterprise',
+    'silver': 'diy',
+    'bronze': 'free',
+    // Prefixed variants
+    'plan_gold': 'pro',
+    'plan_platinum': 'enterprise',
+    'plan_silver': 'diy',
+    'plan_bronze': 'free',
+    'tier_gold': 'pro',
+    'tier_platinum': 'enterprise',
+    'tier_silver': 'diy',
+    'tier_bronze': 'free'
+  };
+
+  if (aliases[normalized]) {
+    return aliases[normalized];
+  }
 
   console.warn(`[ScanRecommendationsService] Unknown plan "${plan}", defaulting to free`);
   return 'free';

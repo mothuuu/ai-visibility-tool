@@ -66,10 +66,30 @@ describe('Recommendation Visibility Limit (Entitlement Cap)', () => {
       assert.strictEqual(getRecommendationVisibleLimit(undefined), 3);
     });
 
-    it('defaults to 3 for unknown plans', () => {
-      assert.strictEqual(getRecommendationVisibleLimit('platinum'), 3);
-      assert.strictEqual(getRecommendationVisibleLimit('gold'), 3);
+    it('defaults to 3 for truly unknown plans', () => {
       assert.strictEqual(getRecommendationVisibleLimit('unknown'), 3);
+      assert.strictEqual(getRecommendationVisibleLimit('randomplan'), 3);
+      assert.strictEqual(getRecommendationVisibleLimit('xyz123'), 3);
+    });
+
+    it('handles metal-tier aliases correctly', () => {
+      // Gold = Pro tier (10 visible)
+      assert.strictEqual(getRecommendationVisibleLimit('gold'), 10);
+      assert.strictEqual(getRecommendationVisibleLimit('Gold'), 10);
+      assert.strictEqual(getRecommendationVisibleLimit('GOLD'), 10);
+
+      // Platinum = Enterprise tier (unlimited)
+      assert.strictEqual(getRecommendationVisibleLimit('platinum'), -1);
+      assert.strictEqual(getRecommendationVisibleLimit('Platinum'), -1);
+      assert.strictEqual(getRecommendationVisibleLimit('PLATINUM'), -1);
+
+      // Silver = DIY tier (5 visible)
+      assert.strictEqual(getRecommendationVisibleLimit('silver'), 5);
+      assert.strictEqual(getRecommendationVisibleLimit('SILVER'), 5);
+
+      // Bronze = Free tier (3 visible)
+      assert.strictEqual(getRecommendationVisibleLimit('bronze'), 3);
+      assert.strictEqual(getRecommendationVisibleLimit('BRONZE'), 3);
     });
 
     it('handles plan aliases correctly', () => {
@@ -89,6 +109,11 @@ describe('Recommendation Visibility Limit (Entitlement Cap)', () => {
       assert.strictEqual(getRecommendationVisibleLimit('plan_pro'), 10);
       assert.strictEqual(getRecommendationVisibleLimit('plan_enterprise'), -1);
       assert.strictEqual(getRecommendationVisibleLimit('plan_agency'), -1);
+      // Metal-tier prefixed
+      assert.strictEqual(getRecommendationVisibleLimit('plan_gold'), 10);
+      assert.strictEqual(getRecommendationVisibleLimit('plan_platinum'), -1);
+      assert.strictEqual(getRecommendationVisibleLimit('tier_gold'), 10);
+      assert.strictEqual(getRecommendationVisibleLimit('tier_platinum'), -1);
     });
   });
 });
