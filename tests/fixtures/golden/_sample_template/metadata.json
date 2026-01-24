@@ -1,0 +1,15 @@
+{
+  "fixture_id": "_sample_template",
+  "description": "Sample template fixture demonstrating the expected structure. Replace with real data when capturing.",
+  "captured_at": "2026-01-24T00:00:00.000Z",
+  "scan_id": 0,
+  "source_scan_id": null,
+  "viewer_user_id": 0,
+  "viewer_org_id": null,
+  "viewer_effective_plan": "free",
+  "viewer_plan_source": "no_context",
+  "domain": "example.com",
+  "scan_status": "complete",
+  "scan_score": 65,
+  "notes": "This is a template fixture. No PII stored. Viewer plan is authoritative for entitlements."
+}

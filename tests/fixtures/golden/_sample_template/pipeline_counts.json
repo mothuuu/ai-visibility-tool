@@ -1,0 +1,11 @@
+{
+  "fixture_id": "_sample_template",
+  "counts": {
+    "total_candidates": 12,
+    "after_ranking": null,
+    "after_dedupe": null,
+    "after_gating": null,
+    "returned": 3
+  },
+  "notes": "Stage counts not available without modifying pipeline; recorded as null in Step 0.0. This is a template fixture."
+}
