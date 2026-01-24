@@ -317,6 +317,17 @@ async function fetchScanData(scanId) {
 }
 
 /**
+ * Fetch user's organization ID
+ */
+async function fetchUserOrgId(userId) {
+  const { rows } = await db.query(`
+    SELECT organization_id FROM users WHERE id = $1
+  `, [userId]);
+
+  return rows[0]?.organization_id || null;
+}
+
+/**
  * Fetch user plan context
  */
 async function fetchUserPlanContext(userId, orgId) {
@@ -384,18 +395,28 @@ async function captureFixture(scanId, fixtureId, viewerUserId, outDir, dryRun = 
   // Use viewer user ID or fall back to scan owner
   const effectiveViewerUserId = viewerUserId || scanData.user_id;
 
-  // 2. Fetch plan context for viewer
-  const planContext = await fetchUserPlanContext(effectiveViewerUserId, scanData.organization_id);
+  // 2. Look up the VIEWER's org (not the scan owner's org!)
+  // This is critical for viewer-based entitlements
+  let viewerOrgId;
+  if (viewerUserId) {
+    viewerOrgId = await fetchUserOrgId(viewerUserId);
+    console.log(`  Viewer user: ${viewerUserId} (org: ${viewerOrgId})`);
+  } else {
+    viewerOrgId = scanData.organization_id;
+  }
+
+  // 3. Fetch plan context for viewer using VIEWER's org
+  const planContext = await fetchUserPlanContext(effectiveViewerUserId, viewerOrgId);
   console.log(`  Viewer plan: ${planContext.effectivePlan} (source: ${planContext.planSource}, cap: ${planContext.visibleLimit})`);
 
-  // 3. Fetch recommendations
-  const recsResult = await fetchRecommendations(scanId, effectiveViewerUserId, scanData.organization_id);
+  // 4. Fetch recommendations
+  const recsResult = await fetchRecommendations(scanId, effectiveViewerUserId, viewerOrgId);
   console.log(`  Recommendations: ${recsResult.recommendations.length} returned (${recsResult.totalCandidates} total candidates)`);
 
-  // 4. Count total candidates in DB
+  // 5. Count total candidates in DB
   const totalCandidates = await countTotalCandidates(scanId);
 
-  // 5. Build fixture files
+  // 6. Build fixture files
   const capturedAt = new Date().toISOString();
 
   // metadata.json
@@ -406,7 +427,7 @@ async function captureFixture(scanId, fixtureId, viewerUserId, outDir, dryRun = 
     scan_id: scanId,
     source_scan_id: null, // Would be set if context reuse is involved
     viewer_user_id: effectiveViewerUserId,
-    viewer_org_id: scanData.organization_id || null,
+    viewer_org_id: viewerOrgId || null,
     viewer_effective_plan: planContext.effectivePlan,
     viewer_plan_source: planContext.planSource,
     domain: scanData.domain,
@@ -459,7 +480,7 @@ async function captureFixture(scanId, fixtureId, viewerUserId, outDir, dryRun = 
     notes: 'Stage counts not available without modifying pipeline; recorded as null in Step 0.0.'
   };
 
-  // 6. Write files (unless dry run)
+  // 7. Write files (unless dry run)
   if (dryRun) {
     console.log('\n  [DRY RUN] Would write:');
     console.log(`    - ${fixtureId}/metadata.json`);
