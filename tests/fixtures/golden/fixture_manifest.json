@@ -1,0 +1,41 @@
+{
+  "version": "1.0.0",
+  "created_at": "2026-01-24T00:00:00.000Z",
+  "updated_at": "2026-01-24T00:00:00.000Z",
+  "phase": "4A.3",
+  "step": "0.0",
+  "description": "Golden fixture set for Phase 4A.3 Recommendation Quality Overhaul regression testing",
+  "invariants_frozen": [
+    "viewer_based_entitlements",
+    "cap_per_plan",
+    "returned_count_range",
+    "top_rec_keys_order",
+    "sections_present",
+    "no_unresolved_placeholders"
+  ],
+  "not_frozen": [
+    "exact_text_wording",
+    "action_item_count",
+    "generated_asset_content",
+    "detailed_phrasing"
+  ],
+  "plan_caps": {
+    "free": 3,
+    "diy": 5,
+    "pro": 10,
+    "agency": -1,
+    "enterprise": -1
+  },
+  "fixtures": [
+    {
+      "fixture_id": "_sample_template",
+      "description": "Sample template fixture demonstrating the expected structure",
+      "scan_id": 0,
+      "viewer_plan": "free",
+      "expected_cap": 3,
+      "returned_count": 3,
+      "captured_at": "2026-01-24T00:00:00.000Z",
+      "is_template": true
+    }
+  ]
+}
