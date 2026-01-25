@@ -30,9 +30,7 @@ const TIER_LIMITS = {
     upgradeMessage: 'Upgrade to DIY for deep scans, personalized code, and daily recommendations'
   },
   diy: {
-    maxRecommendationsPerUnlock: 5,  // Progressive unlock - 5 every 5 days
-    unlockIntervalDays: 5,           // Unlock interval: 5 days
-    progressiveUnlock: true,
+    maxRecommendations: 5,           // Model A: cap of 5 active recommendations
     showCodeSnippets: true,
     showEvidence: true,
     showFAQ: true,
@@ -64,36 +62,29 @@ function filterByTier(recommendations, customizedFAQ, tier = 'free', metadata = 
   // Sort by priority score (highest first)
   const sortedRecs = [...recs].sort((a, b) => b.priorityScore - a.priorityScore);
 
-  // Determine how many recommendations to show based on tier
+  // Model A: Determine how many recommendations to show based on tier cap
+  // No progressive unlock - all paid tiers use cap-based filtering
   let limitedRecs;
   let activeCount = 0;
 
-  if (tier === 'diy' && limits.progressiveUnlock) {
-    // DIY tier with progressive unlock
-    if (userProgress && userProgress.active_recommendations > 0) {
-      // Use saved progress if valid
-      activeCount = userProgress.active_recommendations;
-    } else {
-      // First scan OR corrupted data - default to 5 recommendations
-      activeCount = limits.maxRecommendationsPerUnlock || 5;
-      console.log(`⚠️ DIY tier: No valid userProgress, defaulting to ${activeCount} recommendations`);
-    }
-    limitedRecs = sortedRecs.slice(0, activeCount);
-  } else if (tier === 'guest') {
+  if (tier === 'guest') {
     // Guest - NO recommendations
     limitedRecs = [];
   } else if (tier === 'free') {
     // Free - Top 3 only
     limitedRecs = sortedRecs.slice(0, 3);
+    activeCount = limitedRecs.length;
   } else {
-    // Pro - All recommendations
-    limitedRecs = sortedRecs.slice(0, limits.maxRecommendations || recs.length);
+    // DIY, Pro, Agency, Enterprise - Apply cap from limits
+    const cap = limits.maxRecommendations || recs.length;
+    limitedRecs = sortedRecs.slice(0, cap);
+    activeCount = limitedRecs.length;
   }
 
   // Filter each recommendation based on tier
   const filteredRecs = limitedRecs.map(rec => filterRecommendation(rec, limits));
 
-  // Build tier-specific response
+  // Build tier-specific response (Model A: no unlock timing info)
   return {
     tier: tier,
     limits: {
@@ -101,8 +92,7 @@ function filterByTier(recommendations, customizedFAQ, tier = 'free', metadata = 
       recommendationsAvailable: recs.length,
       hasMoreRecommendations: tier === 'guest' ? true : (recs.length > filteredRecs.length),
       activeRecommendations: activeCount,
-      canUnlockMore: tier === 'diy' && userProgress ? canUnlockMore(userProgress) : false,
-      daysUntilNextUnlock: tier === 'diy' && userProgress ? getDaysUntilNextUnlock(userProgress) : null
+      cap: limits.maxRecommendations || null
     },
     recommendations: filteredRecs,
     faq: filterFAQ(customizedFAQ, limits),
@@ -112,41 +102,9 @@ function filterByTier(recommendations, customizedFAQ, tier = 'free', metadata = 
   };
 }
 
-// Helper function to check if user can unlock more recommendations (5-day interval)
-function canUnlockMore(userProgress) {
-  if (!userProgress) return false;
-
-  const now = new Date();
-  const lastUnlock = userProgress.last_unlock_date ? new Date(userProgress.last_unlock_date) : null;
-
-  // If never unlocked before, can unlock
-  if (!lastUnlock) {
-    return true;
-  }
-
-  // Calculate days since last unlock
-  const daysSinceLastUnlock = Math.floor((now - lastUnlock) / (1000 * 60 * 60 * 24));
-
-  // Can unlock if 5 or more days have passed
-  return daysSinceLastUnlock >= 5;
-}
-
-// Helper function to calculate days until next unlock
-function getDaysUntilNextUnlock(userProgress) {
-  if (!userProgress || !userProgress.last_unlock_date) {
-    return 0; // Can unlock now
-  }
-
-  const now = new Date();
-  const lastUnlock = new Date(userProgress.last_unlock_date);
-  const daysSinceLastUnlock = Math.floor((now - lastUnlock) / (1000 * 60 * 60 * 24));
-
-  if (daysSinceLastUnlock >= 5) {
-    return 0; // Can unlock now
-  }
-
-  return 5 - daysSinceLastUnlock; // Days remaining
-}
+// Model A: Batch unlock helpers removed - no cooldown period
+// canUnlockMore and getDaysUntilNextUnlock are deprecated
+// Recommendations now refill immediately when skip/implement actions are taken
 
 function filterRecommendation(rec, limits) {
   const filtered = {
@@ -223,10 +181,10 @@ function getUpgradeCTA(tier, totalRecommendations, faq, limits) {
   if (tier === 'free') {
     return {
       show: true,
-      title: 'Upgrade to DIY for deep scans, personalized code, and daily recommendations',
+      title: 'Upgrade to DIY for deep scans, personalized code, and more recommendations',
       message: `You're seeing 3 of ${totalRecommendations} recommendations. Upgrade to DIY Starter for the complete picture.`,
       benefits: [
-        'New recommendations every 5 days',
+        '5 active recommendations at a time',
         '5-page deep scans (vs 1 page)',
         'Copy-paste ready code snippets',
         'Industry-specific FAQ schema',
@@ -249,7 +207,7 @@ function getUpgradeCTA(tier, totalRecommendations, faq, limits) {
         'AI Visibility Score',
         'Brand Visibility Index (NEW)',
         'Competitive Analysis (vs 3 competitors)',
-        'All recommendations unlocked immediately',
+        '10 active recommendations (vs 5)',
         'Priority support'
       ],
       cta: 'Join Pro Waitlist - $99/month',
@@ -287,14 +245,12 @@ function getTierFeatures(tier) {
     diy: {
       scansPerMonth: 25,
       pagesPerScan: 5,
-      recommendationsPerUnlock: 5,
-      unlockIntervalDays: 5,
-      progressiveUnlock: true,
+      maxActiveRecommendations: 5,
       codeSnippets: true,
       faqSchema: true,
       pdfExport: true,
       tracking: true,
-      description: 'DIY - 5 recommendations every 5 days + code'
+      description: 'DIY - 5 active recommendations + code'
     },
     pro: {
       scansPerMonth: 50,
