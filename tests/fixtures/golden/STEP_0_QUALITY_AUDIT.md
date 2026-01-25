@@ -10,7 +10,7 @@
 
 ### What's Working
 
-1. **Entitlement gating is correct** — Viewer-based caps enforced properly (Free=3, DIY=5, Pro=10, Enterprise=unlimited)
+1. **Entitlement gating is correct** — Viewer-based caps enforced properly (Free=3, DIY=5, Pro=8, Enterprise=unlimited)
 2. **Evidence gating infrastructure exists** — `evidenceGating.js` assesses quality with STRONG/MEDIUM/WEAK/AMBIGUOUS states
 3. **34 playbook templates fully populated** — All have `why_it_matters_template`, `action_items_template`, `examples_template`
 4. **3 generation hooks working** — Organization schema, FAQ schema, OG tags auto-generation
@@ -544,3 +544,70 @@ All fixtures pass PII validation.
 | `backend/recommendations/evidenceGating.js` | Add detection_state logic |
 | `frontend/results.js` | Display recommendation section |
 | `backend/analyzers/recommendation-generator.js` | Integrate detection_state |
+
+---
+
+## Step 0.11: Fixture PII Scan
+
+### Scan Commands Run
+
+```bash
+# Email check (excluding schema.org patterns)
+grep -rn "@" tests/fixtures/golden/ --include="*.json" | grep -v "schema.org\|@type\|@context\|REDACTED"
+
+# Phone pattern check
+grep -rE "[0-9]{3}[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}" tests/fixtures/golden/ --include="*.json"
+
+# Token/key check
+grep -rn "Bearer\|token\|apikey\|api_key\|secret" tests/fixtures/golden/ --include="*.json" | grep -vi "REDACTED"
+```
+
+### Results
+
+| Check | Found | Redacted |
+|-------|-------|----------|
+| Emails | NO | N/A |
+| Phone numbers | NO | N/A |
+| Tokens/keys | NO | N/A |
+
+**Status:** CLEAN
+
+---
+
+## Step 0.12: Fixture Evidence Verification
+
+### Note
+
+Fixtures were captured on production server (Render). Evidence field verification requires syncing fixtures to local repo.
+
+### Expected Evidence Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `pages_checked` | YES | Number of pages analyzed |
+| `detection_state` | RECOMMENDED | NOT_FOUND / CONTENT_NO_SCHEMA / COMPLETE |
+| `source_urls` | OPTIONAL | URLs where issue was detected |
+| `has_*` flags | VARIES | Boolean detection flags |
+
+### Verification Status
+
+| Fixture | Status | Notes |
+|---------|--------|-------|
+| viewer_free_plan | ⏳ Pending sync | Captured on Render server |
+| viewer_diy_plan | ⏳ Pending sync | Captured on Render server |
+| viewer_pro_plan | ⏳ Pending sync | Captured on Render server |
+| cross_plan_free_viewing_pro | ⏳ Pending sync | Captured on Render server |
+
+**Next Step:** Pull fixture files from production to local repo for full evidence verification.
+
+---
+
+## Corrected Plan Caps
+
+| Plan | Cap | Verified |
+|------|-----|----------|
+| Free | 3 | ✅ via fixture |
+| DIY | 5 | ✅ via fixture |
+| **Pro** | **8** | ✅ via fixture |
+| Enterprise | unlimited | ⏳ No enterprise users |
+| Agency | unlimited | ⏳ No agency users |
