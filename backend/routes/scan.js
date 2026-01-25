@@ -1348,24 +1348,9 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
       [contextScanId]
     );
 
-    // Calculate next batch unlock info
-    let nextBatchUnlock = null;
-    if (userProgress && userProgress.current_batch < userProgress.total_batches) {
-      const nextBatchNum = userProgress.current_batch + 1;
-      const nextBatchDate = userProgress[`batch_${nextBatchNum}_unlock_date`];
-      if (nextBatchDate) {
-        const now = new Date();
-        const unlockDate = new Date(nextBatchDate);
-        const daysUntilUnlock = Math.ceil((unlockDate - now) / (1000 * 60 * 60 * 24));
-
-        nextBatchUnlock = {
-          batchNumber: nextBatchNum,
-          unlockDate: nextBatchDate,
-          daysRemaining: Math.max(0, daysUntilUnlock),
-          recommendationsInBatch: 5
-        };
-      }
-    }
+    // Model A: No batch unlock concept - recommendations refill immediately on skip/implement
+    // The nextBatchUnlock calculation has been removed in favor of dynamic top-N with no cooldown
+    const nextBatchUnlock = null;
 
     const categoryScores = {
       aiReadability: scan.ai_readability_score,

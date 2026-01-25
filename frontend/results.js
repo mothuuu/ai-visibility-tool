@@ -508,55 +508,12 @@ function displayRecommendations(recommendations, userTier, userProgress, nextBat
     const container = document.getElementById('recommendationsList');
     container.innerHTML = '';
 
-    console.log('Displaying recommendations:', recommendations); // Debug log
+    console.log('Displaying recommendations:', recommendations);
     console.log('User tier:', userTier);
     console.log('User progress:', userProgress);
-    console.log('Next batch unlock:', nextBatchUnlock);
-    console.log('Batches just unlocked:', batchesUnlocked);
 
-    // Show batch unlock notification if batches were just unlocked
-    if (batchesUnlocked && batchesUnlocked > 0) {
-        const notification = document.createElement('div');
-        notification.className = 'mb-6 p-6 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border-2 border-green-300';
-        notification.innerHTML = `
-            <div class="flex items-center gap-3">
-                <span class="text-4xl">🎉</span>
-                <div>
-                    <h3 class="text-xl font-bold text-gray-900 mb-1">New Recommendations Unlocked!</h3>
-                    <p class="text-gray-700">
-                        Batch ${batchesUnlocked} has been automatically unlocked.
-                        ${nextBatchUnlock ? `Next batch unlocks in ${nextBatchUnlock.daysRemaining} day${nextBatchUnlock.daysRemaining !== 1 ? 's' : ''}.` : 'All batches unlocked!'}
-                    </p>
-                </div>
-            </div>
-        `;
-        container.appendChild(notification);
-    }
-
-    // Show batch countdown timer if next batch is available
-    if (nextBatchUnlock && nextBatchUnlock.daysRemaining > 0) {
-        const countdownTimer = document.createElement('div');
-        countdownTimer.className = 'mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border-2 border-purple-200';
-        countdownTimer.innerHTML = `
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <span class="text-3xl">⏰</span>
-                    <div>
-                        <h4 class="font-bold text-gray-900">Next Batch Unlock</h4>
-                        <p class="text-sm text-gray-600">
-                            ${nextBatchUnlock.recommendationsInBatch} more recommendations unlock in
-                            <span class="font-bold text-purple-600">${nextBatchUnlock.daysRemaining} day${nextBatchUnlock.daysRemaining !== 1 ? 's' : ''}</span>
-                        </p>
-                    </div>
-                </div>
-                <div class="text-right">
-                    <div class="text-2xl font-bold text-purple-600">${nextBatchUnlock.daysRemaining}</div>
-                    <div class="text-xs text-gray-600">days left</div>
-                </div>
-            </div>
-        `;
-        container.appendChild(countdownTimer);
-    }
+    // Model A: No batch unlock UI - recommendations refill immediately on skip/implement
+    // The batch unlock UI has been removed in favor of dynamic top-N with no cooldown
 
     // Separate active, implemented, and skipped recommendations
     const implementedRecs = recommendations.filter(rec => rec.implemented_at || rec.status === 'implemented');
@@ -564,18 +521,26 @@ function displayRecommendations(recommendations, userTier, userProgress, nextBat
     const skippedRecs = recommendations.filter(rec => rec.skipped_at && !rec.implemented_at);
     const lockedRecs = recommendations.filter(rec => rec.unlock_state === 'locked');
 
-    // Determine how many active recommendations to show based on tier
+    // Model A: Determine how many active recommendations to show based on tier cap
+    // The backend already enforces the cap, but we apply it here too for consistency
+    // Caps: Free=3, DIY=5, Pro=10, Enterprise/Agency=unlimited
+    const tierCaps = {
+        free: 3,
+        diy: 5,
+        starter: 5,
+        pro: 10,
+        agency: -1,      // unlimited
+        enterprise: -1   // unlimited
+    };
+    const cap = tierCaps[userTier] ?? 3;
+
     let displayRecs;
-    if (userTier === 'free') {
-        // Free: Top 3 only
-        displayRecs = activeRecs.slice(0, 3);
-    } else if (userTier === 'diy' && userProgress) {
-        // DIY: Show based on active_recommendations count
-        const activeCount = userProgress.active_recommendations || 5;
-        displayRecs = activeRecs.slice(0, activeCount);
-    } else {
-        // Pro: All active recommendations
+    if (cap === -1) {
+        // Unlimited: show all active recommendations
         displayRecs = activeRecs;
+    } else {
+        // Apply cap to active recommendations
+        displayRecs = activeRecs.slice(0, cap);
     }
 
     // Create tab interface if there are skipped or implemented recommendations
@@ -830,7 +795,7 @@ function displayUpgradeCTA(userTier, totalRecs) {
         container.innerHTML = `
             <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg p-8 text-center">
                 <h3 class="text-2xl font-bold mb-4">Upgrade to DIY Starter</h3>
-                <p class="mb-6">Get 5-page deep scans, personalized code, and daily recommendation unlocks</p>
+                <p class="mb-6">Get 5-page deep scans, personalized code, and 5 active recommendations</p>
                 <a href="checkout.html?plan=diy" class="inline-block px-8 py-3 bg-white text-purple-600 font-bold rounded-full hover:bg-gray-100 transition-all">
                     Upgrade to DIY - $29/month →
                 </a>
