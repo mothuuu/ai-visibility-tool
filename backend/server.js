@@ -16,6 +16,7 @@ const feedbackRoutes = require('./routes/feedback');
 const supportChatRoutes = require('./routes/support-chat');
 const waitlistRoutes = require('./routes/waitlist');
 const adminRoutes = require('./routes/admin');
+const adminControlCenterRoutes = require('./routes/admin/index');
 const citationNetworkRoutes = require('./routes/citationNetwork');
 const organizationRoutes = require('./routes/organization');
 
@@ -111,7 +112,8 @@ app.use('/api/competitors', competitorRoutes); // Competitive tracking (Elite mo
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/support-chat', supportChatRoutes);
 app.use('/api/waitlist', waitlistRoutes);
-app.use('/api/admin', adminRoutes); // Admin routes
+app.use('/api/admin', adminRoutes); // Admin org/plan routes
+app.use('/api/admin', adminControlCenterRoutes); // Admin control center routes (overview, users, curation, etc.)
 app.use('/api/citation-network', citationNetworkRoutes); // AI Citation Network
 app.use('/api/org', organizationRoutes); // Phase 3B: Organization/Team management
 app.use('/api/test', require('./routes/test-routes'));
