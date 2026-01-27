@@ -1,0 +1,15 @@
+{
+  "fixture_id": "viewer_diy_plan",
+  "description": "DIY plan viewer: capped at 5 recommendations",
+  "captured_at": "2026-01-27T12:00:00.000Z",
+  "scan_id": 100,
+  "source_scan_id": null,
+  "viewer_user_id": 1002,
+  "viewer_org_id": null,
+  "viewer_effective_plan": "diy",
+  "viewer_plan_source": "synthetic_fixture",
+  "domain": "example.com",
+  "scan_status": "complete",
+  "scan_score": 72,
+  "notes": "Synthetic golden fixture for Model A regression testing. No PII stored. Viewer plan is authoritative for entitlements."
+}

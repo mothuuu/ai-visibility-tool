@@ -1,0 +1,44 @@
+{
+  "fixture_id": "viewer_free_plan",
+  "expected": {
+    "viewer_based_entitlements": true,
+    "cap": 3,
+    "sections_required": [
+      "finding",
+      "why_it_matters",
+      "recommendation",
+      "what_to_include",
+      "how_to_implement"
+    ],
+    "no_unresolved_placeholders": true
+  },
+  "snapshot": {
+    "returned_count": 3,
+    "top_rec_keys": [
+      "ai_search_readiness.faq_schema",
+      "technical_setup.organization_schema",
+      "content_structure.meta_description"
+    ],
+    "sections_present": {
+      "finding": true,
+      "why_it_matters": true,
+      "recommendation": true,
+      "what_to_include": true,
+      "how_to_implement": true
+    },
+    "unresolved_placeholder_count": 0
+  },
+  "evidence_minimums": {
+    "ai_search_readiness.faq_schema": {
+      "requires": [
+        "detection_state",
+        "pages_checked",
+        "source_urls"
+      ],
+      "present": [
+        "detection_state",
+        "pages_checked"
+      ]
+    }
+  }
+}

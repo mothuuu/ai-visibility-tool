@@ -28,6 +28,7 @@
 | `backend/repositories/progressRepository.js` | `PLAN_LIMITS.pro.batch_size` | 8 | Aligned |
 | `frontend/results.js` | `tierCaps.pro` | 8 | Aligned |
 | `tests/fixtures/golden/fixture_manifest.json` | `plan_caps.pro` | 8 | Aligned |
+| `backend/analyzers/recommendation-engine/tier-filter.js` | DIY→Pro upgrade CTA | "8 active recommendations (vs 5)" | Aligned |
 
 ## Model A Invariants
 
@@ -35,3 +36,14 @@
 - `batch_unlock: false` - No batch unlock UI
 - `nextBatchUnlock` always `null` in API response
 - Skip/Implement actions refill Active list immediately (page reload)
+
+## Golden Fixtures (2026-01-27)
+
+| Fixture ID | Plan | Cap | Returned | Notes |
+|------------|------|-----|----------|-------|
+| `_sample_template` | free | 3 | 3 | Template fixture |
+| `viewer_free_plan` | free | 3 | 3 | Synthetic, Model A |
+| `viewer_diy_plan` | diy | 5 | 5 | Synthetic, Model A |
+| `viewer_pro_plan` | pro | 8 | 8 | Synthetic, Model A |
+| `viewer_agency_plan` | agency | -1 | 12 | Synthetic, unlimited |
+| `viewer_enterprise_plan` | enterprise | -1 | 12 | Synthetic, unlimited |

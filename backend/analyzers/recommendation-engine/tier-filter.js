@@ -207,7 +207,7 @@ function getUpgradeCTA(tier, totalRecommendations, faq, limits) {
         'AI Visibility Score',
         'Brand Visibility Index (NEW)',
         'Competitive Analysis (vs 3 competitors)',
-        '10 active recommendations (vs 5)',
+        '8 active recommendations (vs 5)',
         'Priority support'
       ],
       cta: 'Join Pro Waitlist - $99/month',

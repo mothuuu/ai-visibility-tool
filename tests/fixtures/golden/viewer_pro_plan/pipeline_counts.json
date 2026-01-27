@@ -1,0 +1,11 @@
+{
+  "fixture_id": "viewer_pro_plan",
+  "counts": {
+    "total_candidates": 12,
+    "after_ranking": null,
+    "after_dedupe": null,
+    "after_gating": null,
+    "returned": 8
+  },
+  "notes": "Synthetic fixture. Stage counts not available; recorded as null."
+}

@@ -1,0 +1,66 @@
+{
+  "success": true,
+  "recommendations": [
+    {
+      "id": 1,
+      "scan_id": 100,
+      "pillar_key": "ai_search_readiness.faq_schema",
+      "category": "ai_search_readiness",
+      "unlock_state": "active",
+      "title": "Add FAQPage Schema",
+      "marketing_copy": "Implementing FAQPage schema helps AI systems understand your frequently asked questions.",
+      "why_it_matters": "AI systems rely on structured data to surface your content in answer boxes.",
+      "what_to_do": "Add FAQPage schema to pages with question-answer content.",
+      "how_to_do": "Use JSON-LD format to mark up your FAQ content.",
+      "evidence": {
+        "subfactor_key": "faq_schema",
+        "detection_state": "NOT_FOUND",
+        "pages_checked": 5
+      },
+      "confidence_score": 0.95,
+      "created_at": "2026-01-27T00:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "scan_id": 100,
+      "pillar_key": "technical_setup.organization_schema",
+      "category": "technical_setup",
+      "unlock_state": "active",
+      "title": "Add Organization Schema",
+      "marketing_copy": "Organization schema helps AI systems identify and display your company information.",
+      "why_it_matters": "Establishes your entity in AI knowledge graphs.",
+      "what_to_do": "Add Organization schema to your homepage.",
+      "how_to_do": "Include logo, name, URL, and contact information in JSON-LD.",
+      "evidence": {
+        "subfactor_key": "organization_schema",
+        "detection_state": "MISSING",
+        "pages_checked": 1
+      },
+      "confidence_score": 0.92,
+      "created_at": "2026-01-27T00:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "scan_id": 100,
+      "pillar_key": "content_structure.meta_description",
+      "category": "content_structure",
+      "unlock_state": "active",
+      "title": "Optimize Meta Description",
+      "marketing_copy": "A well-crafted meta description improves how AI summarizes your content.",
+      "why_it_matters": "Meta descriptions are often used as source material for AI-generated summaries.",
+      "what_to_do": "Write a compelling meta description that summarizes the page content.",
+      "how_to_do": "Keep it under 160 characters and include your primary keywords.",
+      "evidence": {
+        "subfactor_key": "meta_description",
+        "detection_state": "WEAK",
+        "current_length": 45
+      },
+      "confidence_score": 0.88,
+      "created_at": "2026-01-27T00:00:00.000Z"
+    }
+  ],
+  "total_count": 3,
+  "cap_applied": true,
+  "cap_value": 3,
+  "viewer_plan": "free"
+}

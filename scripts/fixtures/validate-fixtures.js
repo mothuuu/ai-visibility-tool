@@ -62,6 +62,25 @@ const REQUIRED_INVARIANTS_FIELDS = [
   'snapshot'
 ];
 
+// Model A plan caps (single source of truth: backend/config/planCaps.js)
+const MODEL_A_PLAN_CAPS = {
+  free: 3,
+  freemium: 3,
+  diy: 5,
+  starter: 5,
+  pro: 8,
+  agency: -1,
+  enterprise: -1
+};
+
+// Model A invariants — batch unlock must NOT exist
+const MODEL_A_FORBIDDEN_API_FIELDS = [
+  'nextBatchUnlock',
+  'batch_unlock',
+  'daysUntilNextUnlock',
+  'canUnlockMore'
+];
+
 // Required fields in expected section
 const REQUIRED_EXPECTED_FIELDS = [
   'viewer_based_entitlements',
@@ -259,6 +278,40 @@ function validateApiResponse(data) {
     });
   }
 
+  // Model A invariant: no batch unlock fields in API response
+  for (const field of MODEL_A_FORBIDDEN_API_FIELDS) {
+    if (data[field] !== undefined && data[field] !== null) {
+      issues.push({
+        type: 'model_a_violation',
+        severity: 'error',
+        message: `Model A violation: api_response contains forbidden field '${field}' (value: ${JSON.stringify(data[field])})`
+      });
+    }
+  }
+
+  // Model A invariant: cap consistency
+  if (data.viewer_plan && data.cap_value !== undefined) {
+    const expectedCap = MODEL_A_PLAN_CAPS[data.viewer_plan];
+    if (expectedCap !== undefined && data.cap_value !== expectedCap) {
+      issues.push({
+        type: 'cap_mismatch',
+        severity: 'error',
+        message: `Cap mismatch: viewer_plan '${data.viewer_plan}' should have cap ${expectedCap}, got ${data.cap_value}`
+      });
+    }
+  }
+
+  // Model A invariant: returned count must not exceed cap
+  if (data.recommendations && data.cap_value !== undefined && data.cap_value !== -1) {
+    if (data.recommendations.length > data.cap_value) {
+      issues.push({
+        type: 'cap_exceeded',
+        severity: 'error',
+        message: `Cap exceeded: returned ${data.recommendations.length} recommendations but cap is ${data.cap_value}`
+      });
+    }
+  }
+
   return issues;
 }
 
@@ -315,6 +368,25 @@ function validateInvariants(data, fixtureId) {
         message: 'snapshot.top_rec_keys must be an array in invariants.json'
       });
     }
+
+    // Model A invariant: returned_count must not exceed cap
+    if (data.expected && data.expected.cap !== -1 &&
+        data.snapshot.returned_count > data.expected.cap) {
+      issues.push({
+        type: 'cap_exceeded',
+        severity: 'error',
+        message: `Model A: returned_count (${data.snapshot.returned_count}) exceeds cap (${data.expected.cap})`
+      });
+    }
+  }
+
+  // Model A invariant: viewer_based_entitlements must be true
+  if (data.expected && data.expected.viewer_based_entitlements !== true) {
+    issues.push({
+      type: 'model_a_violation',
+      severity: 'error',
+      message: 'Model A requires viewer_based_entitlements = true'
+    });
   }
 
   return issues;
@@ -481,6 +553,59 @@ function validateManifest(manifestPath, fixtureIds, verbose) {
         severity: 'warning',
         message: `Manifest entry '${entry.fixture_id}' has no corresponding directory`
       });
+    }
+  }
+
+  // Model A manifest invariants
+  if (manifest.model !== 'A') {
+    issues.push({
+      type: 'model_a_violation',
+      severity: 'error',
+      message: `Manifest model must be 'A', got '${manifest.model}'`
+    });
+  }
+
+  if (manifest.batch_unlock !== false) {
+    issues.push({
+      type: 'model_a_violation',
+      severity: 'error',
+      message: 'Manifest batch_unlock must be false for Model A'
+    });
+  }
+
+  if (manifest.nextBatchUnlock_is_null_or_absent !== true) {
+    issues.push({
+      type: 'model_a_violation',
+      severity: 'warning',
+      message: 'Manifest should declare nextBatchUnlock_is_null_or_absent: true'
+    });
+  }
+
+  // Validate plan_caps in manifest match SSOT
+  if (manifest.plan_caps) {
+    for (const [plan, expectedCap] of Object.entries(MODEL_A_PLAN_CAPS)) {
+      if (plan === 'freemium' || plan === 'starter') continue; // aliases
+      if (manifest.plan_caps[plan] !== undefined && manifest.plan_caps[plan] !== expectedCap) {
+        issues.push({
+          type: 'cap_mismatch',
+          severity: 'error',
+          message: `Manifest plan_caps.${plan} is ${manifest.plan_caps[plan]}, expected ${expectedCap}`
+        });
+      }
+    }
+  }
+
+  // Validate each fixture entry has correct cap for its plan
+  for (const entry of manifest.fixtures) {
+    if (entry.viewer_plan && entry.expected_cap !== undefined) {
+      const expectedCap = MODEL_A_PLAN_CAPS[entry.viewer_plan];
+      if (expectedCap !== undefined && entry.expected_cap !== expectedCap) {
+        issues.push({
+          type: 'cap_mismatch',
+          severity: 'error',
+          message: `Fixture '${entry.fixture_id}': expected_cap ${entry.expected_cap} does not match plan '${entry.viewer_plan}' cap ${expectedCap}`
+        });
+      }
     }
   }
 
