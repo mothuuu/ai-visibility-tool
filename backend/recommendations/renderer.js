@@ -44,6 +44,24 @@ const {
   getTargetLevelDescription
 } = require('./targeting');
 
+const {
+  resolveTemplate,
+  resolveTemplateArray,
+  validateNoPlaceholderLeaks: strictLeakCheck
+} = require('./placeholderResolver');
+
+const { buildEvidenceContext } = require('./evidenceHelpers');
+
+const {
+  getDetectionState,
+  hasDetectionFunction,
+  shouldSuppressRecommendation
+} = require('./detectionStates.top10');
+
+// Top 10 subfactor list (Phase 4A.3c)
+const TOP_10_SUBFACTORS = require('./topSubfactors.phase4a3c.json').top10;
+const TOP_10_SET = new Set(TOP_10_SUBFACTORS);
+
 // ========================================
 // CONFIGURATION
 // ========================================
@@ -443,8 +461,10 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
   // Step 3: Sort by priority
   const sortedFailing = sortByPriority(failingSubfactors, playbookEntries);
 
-  // Step 4: Build placeholder context
+  // Step 4: Build placeholder context (merges base context + evidence extractors)
   const placeholderContext = buildPlaceholderContext(scanEvidence, context, scan);
+  const evidenceContext = buildEvidenceContext(scanEvidence);
+  const mergedContext = { ...placeholderContext, ...evidenceContext };
 
   // Step 5: Generate recommendations (limit to MAX_RECOMMENDATIONS_PER_SCAN)
   const toProcess = sortedFailing.slice(0, MAX_RECOMMENDATIONS_PER_SCAN);
@@ -460,8 +480,12 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
         pillar: PILLAR_DISPLAY_NAMES[failing.category] || failing.category,
         subfactor_key: fallbackSubfactorKey,
         gap: `Improve ${failing.subfactor.replace(/Score$/, '')}`,
+        finding: '',
         why_it_matters: `This subfactor scored ${failing.score}/100, below the ${failing.threshold} threshold.`,
+        recommendation: '',
+        what_to_include: '',
         action_items: ['Review and improve this area based on best practices'],
+        how_to_implement: ['Review and improve this area based on best practices'],
         examples: [],
         evidence_json: {
           subfactor_key: failing.subfactor,
@@ -478,6 +502,20 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
         target_level: getTargetLevel(fallbackSubfactorKey)
       });
       continue;
+    }
+
+    // Step 5a (Phase 4A.3c): Check detection state for Top 10 subfactors
+    const isTop10 = TOP_10_SET.has(entry.canonical_key);
+    let detectionState = null;
+
+    if (isTop10 && hasDetectionFunction(entry.canonical_key)) {
+      detectionState = getDetectionState(entry.canonical_key, scanEvidence);
+
+      // Suppress if COMPLETE (issue resolved)
+      if (shouldSuppressRecommendation(detectionState)) {
+        console.log(`[Renderer] Suppressing ${entry.canonical_key}: detection state is COMPLETE`);
+        continue;
+      }
     }
 
     // Step 6: Assess evidence quality
@@ -500,10 +538,31 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
     // Step 8: Adjust automation level based on evidence quality
     let adjustedAutomationLevel = adjustAutomationLevel(entry.automation_level, evidenceQuality);
 
-    // Resolve templates
-    const whyItMatters = resolvePlaceholders(entry.why_it_matters_template, placeholderContext);
-    let actionItems = resolvePlaceholdersInArray(entry.action_items_template, placeholderContext);
-    const examples = resolvePlaceholdersInArray(entry.examples_template, placeholderContext);
+    // Step 8a (Phase 4A.3c): Resolve 5 sections for Top 10 using strict resolver
+    const resolveOpts = { detectionState: detectionState || 'default' };
+    let finding = '';
+    let recommendationText = '';
+    let whatToInclude = '';
+
+    if (isTop10 && entry.finding_templates) {
+      // Use strict placeholder resolver with state-keyed templates
+      finding = resolveTemplate(entry.finding_templates, mergedContext, resolveOpts);
+      recommendationText = resolveTemplate(entry.recommendation_template, mergedContext, resolveOpts);
+      whatToInclude = resolveTemplate(entry.what_to_include_template, mergedContext, resolveOpts);
+    }
+
+    // Resolve existing templates (use strict resolver for Top 10, legacy for others)
+    const whyItMatters = isTop10
+      ? resolveTemplate(entry.why_it_matters_template, mergedContext, resolveOpts)
+      : resolvePlaceholders(entry.why_it_matters_template, placeholderContext);
+
+    let actionItems = isTop10
+      ? resolveTemplateArray(entry.action_items_template, mergedContext, resolveOpts)
+      : resolvePlaceholdersInArray(entry.action_items_template, placeholderContext);
+
+    const examples = isTop10
+      ? resolveTemplateArray(entry.examples_template, mergedContext, resolveOpts)
+      : resolvePlaceholdersInArray(entry.examples_template, placeholderContext);
 
     // Step 9: Add verification action items for weak/ambiguous evidence
     if (evidenceQuality === EVIDENCE_QUALITY.WEAK || evidenceQuality === EVIDENCE_QUALITY.AMBIGUOUS) {
@@ -522,18 +581,26 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
     evidenceJson.score = failing.score;
     evidenceJson.threshold = failing.threshold;
     evidenceJson.gap = failing.gap;
+    if (detectionState) {
+      evidenceJson.detection_state = detectionState;
+    }
 
     // Determine target level (site vs page)
     const targetLevel = getTargetLevel(entry.canonical_key);
 
-    // Build recommendation object
+    // Build recommendation object (5-section output for Top 10)
     const recommendation = {
       rec_key: generateRecKey(entry.canonical_key, scanId),
       pillar: entry.playbook_category,
       subfactor_key: entry.canonical_key,
       gap: entry.playbook_gap,
+      // Phase 4A.3c: 5 sections
+      finding: finding,
       why_it_matters: whyItMatters,
+      recommendation: recommendationText,
+      what_to_include: whatToInclude,
       action_items: actionItems,
+      how_to_implement: actionItems, // alias for backward compat
       examples: examples,
       evidence_json: evidenceJson,
       automation_level: adjustedAutomationLevel,
@@ -543,7 +610,10 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
       evidence_quality: evidenceQuality,
       evidence_summary: evidenceSummary,
       // Target level (site vs page)
-      target_level: targetLevel
+      target_level: targetLevel,
+      // Phase 4A.3c metadata
+      detection_state: detectionState,
+      is_top10: isTop10
     };
 
     // Step 10: Call generation hook if applicable AND evidence is sufficient
@@ -587,6 +657,19 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
             recommendation.automation_level = 'draft';
           }
         }
+      }
+    }
+
+    // Phase 4A.3c: Validate no placeholder leaks for Top 10
+    if (isTop10) {
+      const leakCheck = strictLeakCheck({
+        finding: recommendation.finding,
+        why_it_matters: recommendation.why_it_matters,
+        recommendation: recommendation.recommendation,
+        what_to_include: recommendation.what_to_include
+      });
+      if (!leakCheck.valid) {
+        console.warn(`[Renderer] Placeholder leaks in ${entry.canonical_key}:`, leakCheck.leaks);
       }
     }
 
@@ -679,6 +762,9 @@ function validateNoUnresolvedPlaceholders(recommendations) {
 
     checkField('why_it_matters', rec.why_it_matters);
     checkField('gap', rec.gap);
+    checkField('finding', rec.finding);
+    checkField('recommendation', rec.recommendation);
+    checkField('what_to_include', rec.what_to_include);
 
     if (Array.isArray(rec.action_items)) {
       rec.action_items.forEach((item, i) => checkField(`action_items[${i}]`, item));
@@ -711,6 +797,9 @@ module.exports = {
 
   // Target level constants (re-exported for convenience)
   TARGET_LEVEL,
+
+  // Phase 4A.3c: Top 10 list
+  TOP_10_SUBFACTORS,
 
   // Utilities (exported for testing)
   extractFailingSubfactors,

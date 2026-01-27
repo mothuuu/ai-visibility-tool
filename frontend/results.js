@@ -836,8 +836,10 @@ function createRecommendationCard(rec, index, userPlan, isSkipped = false) {
     const title = rec.recommendation_text || rec.title || 'Recommendation';
     const subcategory = rec.subcategory || '';
     const finding = rec.findings || rec.finding || '';
-    const impact = rec.impact_description || rec.impact || '';
-    const actionSteps = rec.action_steps || rec.actionSteps || [];
+    const impact = rec.impact_description || rec.impact || rec.why_it_matters || '';
+    const recommendationSection = rec.recommendation || '';
+    const whatToInclude = rec.what_to_include || '';
+    const actionSteps = rec.action_steps || rec.actionSteps || rec.how_to_implement || rec.action_items || [];
     const codeSnippet = rec.code_snippet || rec.codeSnippet || '';
     const estimatedImpact = rec.estimated_impact || rec.estimatedScoreGain || 0;
     const effort = rec.estimated_effort || rec.effort || '';
@@ -908,10 +910,12 @@ function createRecommendationCard(rec, index, userPlan, isSkipped = false) {
         </div>
 
         <div class="rec-body">
-            ${(finding || impact) ? `
+            ${(finding || impact || recommendationSection) ? `
                 <div class="rec-description">
                     ${finding ? `<p><strong>🔍 Finding:</strong> ${renderMarkdown(finding)}</p>` : ''}
                     ${impact ? `<p style="margin-top: ${finding ? '15px' : '0'};"><strong>💡 Why It Matters:</strong> ${renderMarkdown(impact)}</p>` : ''}
+                    ${recommendationSection ? `<p style="margin-top: 15px;"><strong>✅ Recommendation:</strong> ${renderMarkdown(recommendationSection)}</p>` : ''}
+                    ${whatToInclude ? `<p style="margin-top: 15px;"><strong>📋 What to Include:</strong> ${renderMarkdown(whatToInclude)}</p>` : ''}
                 </div>
             ` : ''}
 
