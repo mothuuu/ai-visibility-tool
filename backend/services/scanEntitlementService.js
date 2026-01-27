@@ -108,9 +108,9 @@ const SCAN_ENTITLEMENTS = {
     scans_per_period: 50,
     pages_per_scan: 25,
     competitor_scans: 3,
-    recs_per_cycle: 10,
+    recs_per_cycle: 8,
     cycle_days: 5,
-    batch_size: 10,
+    batch_size: 8,
     max_domains: 1,
     max_team_seats: 3,
     features: {
@@ -366,19 +366,9 @@ function getRecommendationLimits(planId) {
 function getRecommendationVisibleLimit(planId) {
   const normalizedPlan = normalizePlan(planId);
 
-  // Recommendation visibility caps per plan
-  // These match the recs_per_cycle values for consistency
-  const visibilityLimits = {
-    free: 3,
-    freemium: 3,
-    diy: 5,
-    starter: 5,
-    pro: 10,
-    agency: -1,      // Unlimited
-    enterprise: -1   // Unlimited
-  };
-
-  return visibilityLimits[normalizedPlan] ?? 3; // Default to free tier limit
+  // Single source of truth: backend/config/planCaps.js
+  const { PLAN_CAPS } = require('../config/planCaps');
+  return PLAN_CAPS[normalizedPlan] ?? PLAN_CAPS.free;
 }
 
 /**

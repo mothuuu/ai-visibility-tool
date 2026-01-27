@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "created_at": "2026-01-24T00:00:00.000Z",
-  "updated_at": "2026-01-24T00:00:00.000Z",
+  "updated_at": "2026-01-27T12:00:00.000Z",
   "phase": "4A.3",
   "step": "0.0",
   "description": "Golden fixture set for Phase 4A.3 Recommendation Quality Overhaul regression testing",
@@ -19,10 +19,14 @@
     "generated_asset_content",
     "detailed_phrasing"
   ],
+  "model": "A",
+  "batch_unlock": false,
+  "batch_unlock_ui_strings_absent": true,
+  "nextBatchUnlock_is_null_or_absent": true,
   "plan_caps": {
     "free": 3,
     "diy": 5,
-    "pro": 10,
+    "pro": 8,
     "agency": -1,
     "enterprise": -1
   },
@@ -36,6 +40,51 @@
       "returned_count": 3,
       "captured_at": "2026-01-24T00:00:00.000Z",
       "is_template": true
+    },
+    {
+      "fixture_id": "viewer_free_plan",
+      "description": "Free plan viewer: capped at 3 recommendations",
+      "scan_id": 100,
+      "viewer_plan": "free",
+      "expected_cap": 3,
+      "returned_count": 3,
+      "captured_at": "2026-01-27T12:00:00.000Z"
+    },
+    {
+      "fixture_id": "viewer_diy_plan",
+      "description": "DIY plan viewer: capped at 5 recommendations",
+      "scan_id": 100,
+      "viewer_plan": "diy",
+      "expected_cap": 5,
+      "returned_count": 5,
+      "captured_at": "2026-01-27T12:00:00.000Z"
+    },
+    {
+      "fixture_id": "viewer_pro_plan",
+      "description": "Pro plan viewer: capped at 8 recommendations",
+      "scan_id": 100,
+      "viewer_plan": "pro",
+      "expected_cap": 8,
+      "returned_count": 8,
+      "captured_at": "2026-01-27T12:00:00.000Z"
+    },
+    {
+      "fixture_id": "viewer_agency_plan",
+      "description": "Agency plan viewer: unlimited recommendations",
+      "scan_id": 100,
+      "viewer_plan": "agency",
+      "expected_cap": -1,
+      "returned_count": 12,
+      "captured_at": "2026-01-27T12:00:00.000Z"
+    },
+    {
+      "fixture_id": "viewer_enterprise_plan",
+      "description": "Enterprise plan viewer: unlimited recommendations",
+      "scan_id": 100,
+      "viewer_plan": "enterprise",
+      "expected_cap": -1,
+      "returned_count": 12,
+      "captured_at": "2026-01-27T12:00:00.000Z"
     }
   ]
 }

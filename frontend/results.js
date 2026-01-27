@@ -523,12 +523,12 @@ function displayRecommendations(recommendations, userTier, userProgress, nextBat
 
     // Model A: Determine how many active recommendations to show based on tier cap
     // The backend already enforces the cap, but we apply it here too for consistency
-    // Caps: Free=3, DIY=5, Pro=10, Enterprise/Agency=unlimited
+    // Caps: Free=3, DIY=5, Pro=8, Enterprise/Agency=unlimited
     const tierCaps = {
         free: 3,
         diy: 5,
         starter: 5,
-        pro: 10,
+        pro: 8,
         agency: -1,      // unlimited
         enterprise: -1   // unlimited
     };

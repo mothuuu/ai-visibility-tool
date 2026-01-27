@@ -20,7 +20,7 @@ const PLAN_LIMITS = {
   free: { batch_size: 3, cycle_days: 7 },
   starter: { batch_size: 5, cycle_days: 5 },
   diy: { batch_size: 5, cycle_days: 5 },
-  pro: { batch_size: 10, cycle_days: 5 },
+  pro: { batch_size: 8, cycle_days: 5 },
   enterprise: { batch_size: 15, cycle_days: 3 }
 };
 

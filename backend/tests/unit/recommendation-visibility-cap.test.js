@@ -41,8 +41,8 @@ describe('Recommendation Visibility Limit (Entitlement Cap)', () => {
       assert.strictEqual(getRecommendationVisibleLimit('starter'), 5);
     });
 
-    it('returns 10 for pro plan', () => {
-      assert.strictEqual(getRecommendationVisibleLimit('pro'), 10);
+    it('returns 8 for pro plan', () => {
+      assert.strictEqual(getRecommendationVisibleLimit('pro'), 8);
     });
 
     it('returns -1 (unlimited) for agency plan', () => {
@@ -56,7 +56,7 @@ describe('Recommendation Visibility Limit (Entitlement Cap)', () => {
     it('handles case-insensitive plan names', () => {
       assert.strictEqual(getRecommendationVisibleLimit('FREE'), 3);
       assert.strictEqual(getRecommendationVisibleLimit('DIY'), 5);
-      assert.strictEqual(getRecommendationVisibleLimit('PRO'), 10);
+      assert.strictEqual(getRecommendationVisibleLimit('PRO'), 8);
       assert.strictEqual(getRecommendationVisibleLimit('AGENCY'), -1);
       assert.strictEqual(getRecommendationVisibleLimit('ENTERPRISE'), -1);
     });
@@ -73,10 +73,10 @@ describe('Recommendation Visibility Limit (Entitlement Cap)', () => {
     });
 
     it('handles metal-tier aliases correctly', () => {
-      // Gold = Pro tier (10 visible)
-      assert.strictEqual(getRecommendationVisibleLimit('gold'), 10);
-      assert.strictEqual(getRecommendationVisibleLimit('Gold'), 10);
-      assert.strictEqual(getRecommendationVisibleLimit('GOLD'), 10);
+      // Gold = Pro tier (8 visible)
+      assert.strictEqual(getRecommendationVisibleLimit('gold'), 8);
+      assert.strictEqual(getRecommendationVisibleLimit('Gold'), 8);
+      assert.strictEqual(getRecommendationVisibleLimit('GOLD'), 8);
 
       // Platinum = Enterprise tier (unlimited)
       assert.strictEqual(getRecommendationVisibleLimit('platinum'), -1);
@@ -95,8 +95,8 @@ describe('Recommendation Visibility Limit (Entitlement Cap)', () => {
     it('handles plan aliases correctly', () => {
       // basic -> diy -> 5
       assert.strictEqual(getRecommendationVisibleLimit('basic'), 5);
-      // professional -> pro -> 10
-      assert.strictEqual(getRecommendationVisibleLimit('professional'), 10);
+      // professional -> pro -> 8
+      assert.strictEqual(getRecommendationVisibleLimit('professional'), 8);
       // business -> enterprise -> -1 (unlimited)
       assert.strictEqual(getRecommendationVisibleLimit('business'), -1);
       // teams -> agency -> -1
@@ -106,13 +106,13 @@ describe('Recommendation Visibility Limit (Entitlement Cap)', () => {
     it('handles plan_* prefix aliases', () => {
       assert.strictEqual(getRecommendationVisibleLimit('plan_free'), 3);
       assert.strictEqual(getRecommendationVisibleLimit('plan_diy'), 5);
-      assert.strictEqual(getRecommendationVisibleLimit('plan_pro'), 10);
+      assert.strictEqual(getRecommendationVisibleLimit('plan_pro'), 8);
       assert.strictEqual(getRecommendationVisibleLimit('plan_enterprise'), -1);
       assert.strictEqual(getRecommendationVisibleLimit('plan_agency'), -1);
       // Metal-tier prefixed
-      assert.strictEqual(getRecommendationVisibleLimit('plan_gold'), 10);
+      assert.strictEqual(getRecommendationVisibleLimit('plan_gold'), 8);
       assert.strictEqual(getRecommendationVisibleLimit('plan_platinum'), -1);
-      assert.strictEqual(getRecommendationVisibleLimit('tier_gold'), 10);
+      assert.strictEqual(getRecommendationVisibleLimit('tier_gold'), 8);
       assert.strictEqual(getRecommendationVisibleLimit('tier_platinum'), -1);
     });
   });
@@ -150,7 +150,7 @@ describe('Cap Application Logic', () => {
     assert.deepStrictEqual(cappedRecommendations.map(r => r.id), [1, 2, 3, 4, 5]);
   });
 
-  it('caps pro user recommendations to 10', () => {
+  it('caps pro user recommendations to 8', () => {
     const recommendations = Array(20).fill(null).map((_, i) => ({ id: i + 1, text: `Rec ${i + 1}` }));
     const limit = getRecommendationVisibleLimit('pro');
 
@@ -159,7 +159,7 @@ describe('Cap Application Logic', () => {
       cappedRecommendations = cappedRecommendations.slice(0, limit);
     }
 
-    assert.strictEqual(cappedRecommendations.length, 10);
+    assert.strictEqual(cappedRecommendations.length, 8);
   });
 
   it('does not cap agency user recommendations (unlimited)', () => {
@@ -261,7 +261,7 @@ describe('Entitlement Leakage Prevention', () => {
       'CRITICAL: DIY user received more than 5 recommendations - ENTITLEMENT LEAKAGE!');
   });
 
-  it('pro user cannot see more than 10 recommendations regardless of DB count', () => {
+  it('pro user cannot see more than 8 recommendations regardless of DB count', () => {
     const dbRecommendations = Array(25).fill(null).map((_, i) => ({
       id: i + 1,
       text: `Recommendation ${i + 1}`
@@ -270,10 +270,10 @@ describe('Entitlement Leakage Prevention', () => {
     const limit = getRecommendationVisibleLimit('pro');
     const returnedToClient = limit === -1 ? dbRecommendations : dbRecommendations.slice(0, limit);
 
-    assert.strictEqual(returnedToClient.length, 10,
-      'Pro user should only see 10 recommendations regardless of DB count');
-    assert.ok(returnedToClient.length <= 10,
-      'CRITICAL: Pro user received more than 10 recommendations - ENTITLEMENT LEAKAGE!');
+    assert.strictEqual(returnedToClient.length, 8,
+      'Pro user should only see 8 recommendations regardless of DB count');
+    assert.ok(returnedToClient.length <= 8,
+      'CRITICAL: Pro user received more than 8 recommendations - ENTITLEMENT LEAKAGE!');
   });
 
   it('cap applies even when userProgress is null/missing', () => {
@@ -340,7 +340,7 @@ describe('Acceptance Criteria Verification', () => {
     const agencyLimit = getRecommendationVisibleLimit('agency');
     const enterpriseLimit = getRecommendationVisibleLimit('enterprise');
 
-    assert.strictEqual(proLimit, 10, 'Pro should have limit of 10');
+    assert.strictEqual(proLimit, 8, 'Pro should have limit of 8');
     assert.strictEqual(agencyLimit, -1, 'Agency should be unlimited (-1)');
     assert.strictEqual(enterpriseLimit, -1, 'Enterprise should be unlimited (-1)');
   });
@@ -398,10 +398,10 @@ describe('POST /api/scan/analyze Cap (applyRecommendationCap helper)', () => {
     assert.strictEqual(capped.length, 5, 'DIY should cap to 5');
   });
 
-  it('pro plan caps recommendations to 10 in analyze response', () => {
+  it('pro plan caps recommendations to 8 in analyze response', () => {
     const recommendations = Array(20).fill(null).map((_, i) => ({ id: i + 1 }));
     const capped = applyRecommendationCap(recommendations, 'pro', false);
-    assert.strictEqual(capped.length, 10, 'Pro should cap to 10');
+    assert.strictEqual(capped.length, 8, 'Pro should cap to 8');
   });
 
   it('agency plan does not cap (unlimited)', () => {

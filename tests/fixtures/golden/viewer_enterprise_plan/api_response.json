@@ -1,0 +1,238 @@
+{
+  "success": true,
+  "recommendations": [
+    {
+      "id": 1,
+      "scan_id": 100,
+      "pillar_key": "ai_search_readiness.faq_schema",
+      "category": "ai_search_readiness",
+      "unlock_state": "active",
+      "title": "Add FAQPage Schema",
+      "marketing_copy": "Implementing FAQPage schema helps AI systems understand your frequently asked questions.",
+      "why_it_matters": "AI systems rely on structured data to surface your content in answer boxes.",
+      "what_to_do": "Add FAQPage schema to pages with question-answer content.",
+      "how_to_do": "Use JSON-LD format to mark up your FAQ content.",
+      "evidence": {
+        "subfactor_key": "faq_schema",
+        "detection_state": "NOT_FOUND",
+        "pages_checked": 5
+      },
+      "confidence_score": 0.95,
+      "created_at": "2026-01-27T00:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "scan_id": 100,
+      "pillar_key": "technical_setup.organization_schema",
+      "category": "technical_setup",
+      "unlock_state": "active",
+      "title": "Add Organization Schema",
+      "marketing_copy": "Organization schema helps AI systems identify and display your company information.",
+      "why_it_matters": "Establishes your entity in AI knowledge graphs.",
+      "what_to_do": "Add Organization schema to your homepage.",
+      "how_to_do": "Include logo, name, URL, and contact information in JSON-LD.",
+      "evidence": {
+        "subfactor_key": "organization_schema",
+        "detection_state": "MISSING",
+        "pages_checked": 1
+      },
+      "confidence_score": 0.92,
+      "created_at": "2026-01-27T00:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "scan_id": 100,
+      "pillar_key": "content_structure.meta_description",
+      "category": "content_structure",
+      "unlock_state": "active",
+      "title": "Optimize Meta Description",
+      "marketing_copy": "A well-crafted meta description improves how AI summarizes your content.",
+      "why_it_matters": "Meta descriptions are often used as source material for AI-generated summaries.",
+      "what_to_do": "Write a compelling meta description that summarizes the page content.",
+      "how_to_do": "Keep it under 160 characters and include your primary keywords.",
+      "evidence": {
+        "subfactor_key": "meta_description",
+        "detection_state": "WEAK",
+        "current_length": 45
+      },
+      "confidence_score": 0.88,
+      "created_at": "2026-01-27T00:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "scan_id": 100,
+      "pillar_key": "ai_search_readiness.speakable_schema",
+      "category": "ai_search_readiness",
+      "unlock_state": "active",
+      "title": "Add Speakable Schema",
+      "marketing_copy": "Speakable schema helps voice assistants identify content suitable for reading aloud.",
+      "why_it_matters": "Voice search is growing rapidly; speakable markup positions your content for voice results.",
+      "what_to_do": "Add Speakable schema to key content sections.",
+      "how_to_do": "Mark up headlines and summary paragraphs with speakable properties.",
+      "evidence": {
+        "subfactor_key": "speakable_schema",
+        "detection_state": "NOT_FOUND",
+        "pages_checked": 5
+      },
+      "confidence_score": 0.85,
+      "created_at": "2026-01-27T00:00:00.000Z"
+    },
+    {
+      "id": 5,
+      "scan_id": 100,
+      "pillar_key": "content_structure.heading_hierarchy",
+      "category": "content_structure",
+      "unlock_state": "active",
+      "title": "Fix Heading Hierarchy",
+      "marketing_copy": "Proper heading hierarchy helps AI understand content structure and topic relationships.",
+      "why_it_matters": "AI models use heading structure to determine content hierarchy and relevance.",
+      "what_to_do": "Ensure headings follow a logical H1 > H2 > H3 hierarchy.",
+      "how_to_do": "Audit each page for skipped heading levels and fix the nesting order.",
+      "evidence": {
+        "subfactor_key": "heading_hierarchy",
+        "detection_state": "ISSUES_FOUND",
+        "pages_checked": 5
+      },
+      "confidence_score": 0.83,
+      "created_at": "2026-01-27T00:00:00.000Z"
+    },
+    {
+      "id": 6,
+      "scan_id": 100,
+      "pillar_key": "technical_setup.robots_txt",
+      "category": "technical_setup",
+      "unlock_state": "active",
+      "title": "Update Robots.txt for AI Crawlers",
+      "marketing_copy": "Ensure AI crawlers can access your important content.",
+      "why_it_matters": "AI bots need crawler access to index and reference your content.",
+      "what_to_do": "Review robots.txt to allow AI-specific crawlers.",
+      "how_to_do": "Add User-agent rules for GPTBot, Google-Extended, and similar AI crawlers.",
+      "evidence": {
+        "subfactor_key": "robots_txt",
+        "detection_state": "BLOCKING",
+        "pages_checked": 1
+      },
+      "confidence_score": 0.8,
+      "created_at": "2026-01-27T00:00:00.000Z"
+    },
+    {
+      "id": 7,
+      "scan_id": 100,
+      "pillar_key": "ai_search_readiness.article_schema",
+      "category": "ai_search_readiness",
+      "unlock_state": "active",
+      "title": "Add Article Schema",
+      "marketing_copy": "Article schema helps AI systems understand and cite your published content.",
+      "why_it_matters": "Structured article data improves how AI models reference your content.",
+      "what_to_do": "Add Article schema to blog posts and news articles.",
+      "how_to_do": "Include author, datePublished, headline, and image properties.",
+      "evidence": {
+        "subfactor_key": "article_schema",
+        "detection_state": "NOT_FOUND",
+        "pages_checked": 3
+      },
+      "confidence_score": 0.78,
+      "created_at": "2026-01-27T00:00:00.000Z"
+    },
+    {
+      "id": 8,
+      "scan_id": 100,
+      "pillar_key": "content_structure.internal_linking",
+      "category": "content_structure",
+      "unlock_state": "active",
+      "title": "Improve Internal Linking",
+      "marketing_copy": "Strong internal linking helps AI models understand topic relationships on your site.",
+      "why_it_matters": "AI systems use link structure to determine content authority and relationships.",
+      "what_to_do": "Add contextual internal links between related content pages.",
+      "how_to_do": "Use descriptive anchor text linking to topically relevant pages.",
+      "evidence": {
+        "subfactor_key": "internal_linking",
+        "detection_state": "WEAK",
+        "pages_checked": 5
+      },
+      "confidence_score": 0.75,
+      "created_at": "2026-01-27T00:00:00.000Z"
+    },
+    {
+      "id": 9,
+      "scan_id": 100,
+      "pillar_key": "technical_setup.sitemap",
+      "category": "technical_setup",
+      "unlock_state": "active",
+      "title": "Optimize XML Sitemap",
+      "marketing_copy": "An optimized sitemap helps AI crawlers discover and prioritize your content.",
+      "why_it_matters": "Sitemaps guide crawlers to your most important pages efficiently.",
+      "what_to_do": "Ensure sitemap is complete, updated, and includes priority hints.",
+      "how_to_do": "Add lastmod dates, priority values, and remove non-indexable URLs.",
+      "evidence": {
+        "subfactor_key": "sitemap",
+        "detection_state": "OUTDATED",
+        "pages_checked": 1
+      },
+      "confidence_score": 0.72,
+      "created_at": "2026-01-27T00:00:00.000Z"
+    },
+    {
+      "id": 10,
+      "scan_id": 100,
+      "pillar_key": "ai_search_readiness.howto_schema",
+      "category": "ai_search_readiness",
+      "unlock_state": "active",
+      "title": "Add HowTo Schema",
+      "marketing_copy": "HowTo schema helps AI systems display step-by-step instructions from your content.",
+      "why_it_matters": "AI assistants frequently surface how-to content for user queries.",
+      "what_to_do": "Add HowTo schema to instructional content pages.",
+      "how_to_do": "Mark up each step with name, text, and optional image properties.",
+      "evidence": {
+        "subfactor_key": "howto_schema",
+        "detection_state": "NOT_FOUND",
+        "pages_checked": 3
+      },
+      "confidence_score": 0.7,
+      "created_at": "2026-01-27T00:00:00.000Z"
+    },
+    {
+      "id": 11,
+      "scan_id": 100,
+      "pillar_key": "content_structure.alt_text",
+      "category": "content_structure",
+      "unlock_state": "active",
+      "title": "Add Descriptive Alt Text",
+      "marketing_copy": "Descriptive alt text helps AI models understand image content for multimodal search.",
+      "why_it_matters": "Multimodal AI systems use alt text to index and describe images.",
+      "what_to_do": "Write descriptive alt text for all meaningful images.",
+      "how_to_do": "Describe what the image shows, its context, and relevance to the page.",
+      "evidence": {
+        "subfactor_key": "alt_text",
+        "detection_state": "MISSING_MANY",
+        "pages_checked": 5,
+        "missing_count": 12
+      },
+      "confidence_score": 0.68,
+      "created_at": "2026-01-27T00:00:00.000Z"
+    },
+    {
+      "id": 12,
+      "scan_id": 100,
+      "pillar_key": "technical_setup.page_speed",
+      "category": "technical_setup",
+      "unlock_state": "active",
+      "title": "Improve Page Load Speed",
+      "marketing_copy": "Fast-loading pages are favored by AI systems that consider user experience signals.",
+      "why_it_matters": "Performance metrics influence AI ranking and citation preferences.",
+      "what_to_do": "Optimize Core Web Vitals scores across key pages.",
+      "how_to_do": "Compress images, defer non-critical JS, and enable browser caching.",
+      "evidence": {
+        "subfactor_key": "page_speed",
+        "detection_state": "SLOW",
+        "lcp_ms": 4200
+      },
+      "confidence_score": 0.65,
+      "created_at": "2026-01-27T00:00:00.000Z"
+    }
+  ],
+  "total_count": 12,
+  "cap_applied": false,
+  "cap_value": -1,
+  "viewer_plan": "enterprise"
+}
