@@ -46,10 +46,10 @@ describe('Model A: No Batch Unlock/Cooldown', () => {
         'DIY tier should have maxRecommendations = 5 for Model A cap-based logic');
     });
 
-    it('Pro tier has maxRecommendations property', () => {
+    it('Pro tier has maxRecommendations property set to 8', () => {
       const proLimits = TIER_LIMITS.pro;
-      assert.strictEqual(proLimits.maxRecommendations, 300,
-        'Pro tier should have maxRecommendations defined');
+      assert.strictEqual(proLimits.maxRecommendations, 8,
+        'Pro tier should have maxRecommendations = 8 for Model A cap-based logic');
     });
   });
 
@@ -92,7 +92,7 @@ describe('Model A: No Batch Unlock/Cooldown', () => {
         'Free should return exactly 3 recommendations');
     });
 
-    it('Pro tier returns up to maxRecommendations', () => {
+    it('Pro tier returns up to 8 recommendations (cap)', () => {
       const recommendations = Array(20).fill(null).map((_, i) => ({
         id: i + 1,
         title: `Rec ${i + 1}`,
@@ -101,8 +101,8 @@ describe('Model A: No Batch Unlock/Cooldown', () => {
 
       const result = filterByTier(recommendations, null, 'pro', {}, null);
 
-      assert.strictEqual(result.recommendations.length, 20,
-        'Pro should return all 20 recommendations (under 300 cap)');
+      assert.strictEqual(result.recommendations.length, 8,
+        'Pro should return exactly 8 recommendations (cap)');
     });
 
     it('Guest tier returns no recommendations', () => {
@@ -166,7 +166,7 @@ describe('Model A: Unified DIY/Pro UI Behavior', () => {
 
     // Both should use cap-based logic (different caps, same approach)
     assert.strictEqual(diyResult.limits.cap, 5, 'DIY cap should be 5');
-    assert.strictEqual(proResult.limits.cap, 300, 'Pro cap should be 300');
+    assert.strictEqual(proResult.limits.cap, 8, 'Pro cap should be 8');
 
     // Neither should have unlock timing info
     assert.strictEqual(diyResult.limits.canUnlockMore, undefined);
@@ -205,14 +205,22 @@ describe('Entitlement Service Consistency with Model A', () => {
       'Entitlement service and tier-filter should have same DIY cap');
   });
 
+  it('Pro visible limit matches tier-filter cap', () => {
+    const entitlementLimit = getRecommendationVisibleLimit('pro');
+    const tierFilterCap = TIER_LIMITS.pro.maxRecommendations;
+
+    assert.strictEqual(entitlementLimit, tierFilterCap,
+      'Entitlement service and tier-filter should have same Pro cap');
+  });
+
   it('Free visible limit is 3', () => {
     const limit = getRecommendationVisibleLimit('free');
     assert.strictEqual(limit, 3);
   });
 
-  it('Pro visible limit is 10', () => {
+  it('Pro visible limit is 8', () => {
     const limit = getRecommendationVisibleLimit('pro');
-    assert.strictEqual(limit, 10);
+    assert.strictEqual(limit, 8);
   });
 
   it('Agency visible limit is unlimited', () => {

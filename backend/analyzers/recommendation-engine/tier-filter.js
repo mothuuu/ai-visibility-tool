@@ -39,7 +39,7 @@ const TIER_LIMITS = {
     pagesPerScan: 5
   },
   pro: {
-    maxRecommendations: 300,  // All recommendations immediately
+    maxRecommendations: 8,   // Model A: cap of 8 active recommendations
     showCodeSnippets: true,
     showEvidence: true,
     showFAQ: true,

@@ -19,10 +19,14 @@
     "generated_asset_content",
     "detailed_phrasing"
   ],
+  "model": "A",
+  "batch_unlock": false,
+  "batch_unlock_ui_strings_absent": true,
+  "nextBatchUnlock_is_null_or_absent": true,
   "plan_caps": {
     "free": 3,
     "diy": 5,
-    "pro": 10,
+    "pro": 8,
     "agency": -1,
     "enterprise": -1
   },
