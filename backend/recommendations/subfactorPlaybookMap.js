@@ -164,7 +164,19 @@ const SUBFACTOR_TO_PLAYBOOK = {
     impact: 'High',
     automation_level: 'generate',
     generator_hook_key: 'technical_setup.organization_schema',
+    // Phase 4A.3c: State-keyed templates
+    finding_templates: {
+      NOT_FOUND: 'We scanned {{pages_checked_count}} pages on {{domain}} and found no Organization schema markup.',
+      SCHEMA_INVALID: 'Organization schema was detected on {{domain}} but has validation issues: {{error_summary}}.',
+      default: 'No Organization schema detected on {{domain}}.'
+    },
     why_it_matters_template: 'Without Organization schema, AI assistants cannot confidently identify {{company_name}} as a verified business entity. This reduces your chances of being recommended when users ask about companies in your space.',
+    recommendation_template: {
+      NOT_FOUND: 'Add Organization JSON-LD schema to your homepage to establish {{company_name}} as a recognized entity in AI knowledge graphs.',
+      SCHEMA_INVALID: 'Fix the validation issues in your existing Organization schema and re-test using Google Rich Results Test.',
+      default: 'Implement Organization schema markup on your website.'
+    },
+    what_to_include_template: 'Include company name, logo URL, official website URL, description, and sameAs links to verified social profiles (LinkedIn, Twitter).',
     action_items_template: [
       'Add the Organization JSON-LD schema to your website <head> section',
       'Include your company name, logo URL, and official website',
@@ -189,7 +201,19 @@ const SUBFACTOR_TO_PLAYBOOK = {
     effort: 'M',
     impact: 'High',
     automation_level: 'guide',
+    // Phase 4A.3c: State-keyed templates
+    finding_templates: {
+      NOT_FOUND: 'No structured data (schema markup) detected on {{domain}}. AI systems have no machine-readable context about your business.',
+      PARTIAL: 'We found {{schema_count}} schema type(s) on {{domain}} ({{detected_schemas}}), but key schemas are missing: {{missing_schemas}}.',
+      default: 'Limited structured data coverage detected on {{domain}}.'
+    },
     why_it_matters_template: 'Your site has {{schema_count}} schema types, but AI assistants look for comprehensive structured data. Missing schemas mean AI cannot fully understand what {{company_name}} offers.',
+    recommendation_template: {
+      NOT_FOUND: 'Add Organization, WebSite, and FAQPage schemas as a foundation. These three give AI systems the minimum context to identify and recommend {{company_name}}.',
+      PARTIAL: 'Expand your schema coverage by adding the missing types: {{missing_schemas}}. You already have {{detected_schemas}} — build on that foundation.',
+      default: 'Increase structured data coverage across your site.'
+    },
+    what_to_include_template: 'Priority schemas for {{industry}} businesses: Organization (identity), WebSite (search box), FAQPage (common questions), and {{industry_specific_schema}} (industry-specific).',
     action_items_template: [
       'Audit existing schema markup using Google Rich Results Test',
       'Add Organization schema (if missing)',
@@ -216,7 +240,19 @@ const SUBFACTOR_TO_PLAYBOOK = {
     effort: 'S',
     impact: 'High',
     automation_level: 'guide',
+    // Phase 4A.3c: State-keyed templates
+    finding_templates: {
+      NOT_FOUND: 'No XML sitemap detected at {{site_url}}/sitemap.xml. AI crawlers have no guide to your site structure.',
+      PARTIAL: 'A sitemap was detected but appears incomplete or empty at {{site_url}}/sitemap.xml.',
+      default: 'Sitemap issues detected on {{domain}}.'
+    },
     why_it_matters_template: 'No sitemap detected at {{site_url}}/sitemap.xml. Without a sitemap, AI crawlers may miss important pages on your site, reducing your overall AI visibility.',
+    recommendation_template: {
+      NOT_FOUND: 'Generate and submit an XML sitemap that includes all important pages. Reference it in your robots.txt file.',
+      PARTIAL: 'Update your sitemap to include all important pages with accurate lastmod dates and priority values.',
+      default: 'Ensure your sitemap is complete and up to date.'
+    },
+    what_to_include_template: 'Include all indexable pages with lastmod dates, priority values, and changefreq hints. Remove non-indexable or redirecting URLs.',
     action_items_template: [
       'Generate an XML sitemap including all important pages',
       'Submit sitemap to Google Search Console and Bing Webmaster Tools',
@@ -242,7 +278,19 @@ const SUBFACTOR_TO_PLAYBOOK = {
     impact: 'Med-High',
     automation_level: 'generate',
     generator_hook_key: 'technical_setup.open_graph_tags',
+    // Phase 4A.3c: State-keyed templates
+    finding_templates: {
+      NOT_FOUND: 'No Open Graph or Twitter Card meta tags detected on {{domain}}. Shared links appear as plain URLs without rich previews.',
+      PARTIAL: 'Some social meta tags detected on {{domain}}, but key tags are missing (og:title, og:description, og:image, or twitter:card).',
+      default: 'Social meta tags are incomplete on {{domain}}.'
+    },
     why_it_matters_template: 'When {{company_name}} links are shared on social media or messaging apps, they appear as plain URLs without rich previews. This reduces click-through rates and brand recognition.',
+    recommendation_template: {
+      NOT_FOUND: 'Add og:title, og:description, og:image, and twitter:card meta tags to all key pages. This enables rich link previews across social platforms and messaging apps.',
+      PARTIAL: 'Complete the missing social meta tags to ensure full rich preview support across all platforms.',
+      default: 'Implement complete Open Graph and Twitter Card meta tags.'
+    },
+    what_to_include_template: 'Use high-quality images (1200x630px for og:image), compelling descriptions under 200 characters, and consistent branding across all pages.',
     action_items_template: [
       'Add og:title, og:description, og:image, og:url to page <head>',
       'Add Twitter Card meta tags (twitter:card, twitter:title, etc.)',
@@ -292,7 +340,19 @@ const SUBFACTOR_TO_PLAYBOOK = {
     effort: 'S-M',
     impact: 'High',
     automation_level: 'manual',
+    // Phase 4A.3c: State-keyed templates
+    finding_templates: {
+      BLOCKING: 'Your robots.txt file is blocking AI crawlers (GPTBot, CCBot, etc.) from accessing {{domain}}. AI systems cannot index your content.',
+      PARTIAL: 'Crawler access is available but server response time (TTFB: {{ttfb}}ms) exceeds recommended thresholds, reducing crawl efficiency.',
+      default: 'Potential crawler access issues detected on {{domain}}.'
+    },
     why_it_matters_template: 'AI crawlers may be blocked from accessing your content. If crawlers cannot reach your pages, your content will not appear in AI recommendations.',
+    recommendation_template: {
+      BLOCKING: 'Update your robots.txt to explicitly allow GPTBot, CCBot, and Google-Extended crawlers. These AI bots need access to index your content.',
+      PARTIAL: 'Optimize server response time to under 500ms TTFB. Slow responses reduce crawl completeness and may signal poor quality.',
+      default: 'Review and optimize crawler access to your site.'
+    },
+    what_to_include_template: 'Ensure robots.txt allows AI crawlers, server TTFB is under 500ms, and no authentication or geo-blocking interferes with crawler access.',
     action_items_template: [
       'Review robots.txt for overly restrictive rules',
       'Ensure GPTBot, CCBot, and other AI crawlers are not blocked',
@@ -321,7 +381,21 @@ const SUBFACTOR_TO_PLAYBOOK = {
     impact: 'High',
     automation_level: 'generate',
     generator_hook_key: 'ai_search_readiness.icp_faqs',
+    // Phase 4A.3c: State-keyed templates
+    finding_templates: {
+      NOT_FOUND: 'We checked {{pages_checked_count}} pages and found no FAQ content or FAQPage schema on {{domain}}.',
+      CONTENT_NO_SCHEMA: 'We found {{faq_count}} FAQ items but no FAQPage schema markup. Pages with FAQ content: {{pages_with_faqs}}.',
+      PARTIAL: 'FAQ content detected with schema, but fewer than 5 questions — not enough to establish topical depth for AI assistants.',
+      default: 'FAQ content is missing or insufficient on {{domain}}.'
+    },
     why_it_matters_template: 'Your site lacks FAQ content tailored to {{icp_roles}} decision-makers. When these buyers ask AI assistants about {{industry}} solutions, your competitors with comprehensive FAQs get recommended instead.',
+    recommendation_template: {
+      NOT_FOUND: 'Create an FAQ section with at least 6-10 questions targeting {{icp_roles}} buyer queries, and add FAQPage schema markup.',
+      CONTENT_NO_SCHEMA: 'Add FAQPage schema markup to your existing FAQ content to make it machine-readable for AI assistants.',
+      PARTIAL: 'Expand your FAQ content to cover more {{icp_roles}} questions. Aim for 6-10 high-quality Q&As with schema.',
+      default: 'Build comprehensive FAQ content with schema markup.'
+    },
+    what_to_include_template: 'Focus on questions {{icp_roles}} actually ask: pricing, implementation timeline, integrations, ROI, and comparisons. Use FAQPage schema for each.',
     action_items_template: [
       'Create an FAQ section addressing common {{icp_roles}} questions',
       'Add FAQPage schema markup to your FAQ content',
@@ -346,7 +420,19 @@ const SUBFACTOR_TO_PLAYBOOK = {
     effort: 'S-M',
     impact: 'High',
     automation_level: 'draft',
+    // Phase 4A.3c: State-keyed templates
+    finding_templates: {
+      NOT_FOUND: 'Your pages have {{heading_count}} headings, but none are phrased as questions. AI assistants match user questions to content headings — zero question headings means zero direct matches.',
+      PARTIAL: 'Your pages have {{heading_count}} headings with some question-based phrasing, but most are statement-style. Increasing question coverage will improve AI query matching.',
+      default: 'Limited question-based headings detected on {{domain}}.'
+    },
     why_it_matters_template: 'AI assistants match user questions to content headings. Your pages use {{heading_count}} headings, but few are phrased as questions. This reduces your match rate for conversational AI queries.',
+    recommendation_template: {
+      NOT_FOUND: 'Rewrite key H2/H3 headings as questions that your {{icp_roles}} would ask. Use "How", "What", "Why" formats that mirror natural AI queries.',
+      PARTIAL: 'Expand question-based headings to cover more of your content sections. Aim for at least 30% of H2/H3 headings as questions.',
+      default: 'Convert more headings to question format for better AI query matching.'
+    },
+    what_to_include_template: 'Target questions your {{icp_roles}} ask: "How much does X cost?", "What is the ROI of X?", "How does X compare to Y?". Place direct answers immediately after each heading.',
     action_items_template: [
       'Rewrite key H2/H3 headings as questions (How, What, Why, When)',
       'Research common questions using AlsoAsked or AnswerThePublic',
@@ -370,7 +456,19 @@ const SUBFACTOR_TO_PLAYBOOK = {
     effort: 'M',
     impact: 'Med-High',
     automation_level: 'guide',
+    // Phase 4A.3c: State-keyed templates
+    finding_templates: {
+      NOT_FOUND: 'No quantifiable proof points detected on {{domain}} — no statistics, metrics, case studies, or verifiable claims found in scanned content.',
+      PARTIAL: 'Some proof points detected on {{domain}}, but content lacks the depth of evidence that makes AI assistants confident in citing your content.',
+      default: 'Weak evidence and proof points on {{domain}}.'
+    },
     why_it_matters_template: 'AI assistants prefer to cite content with clear evidence and proof points. Your content lacks specific numbers, case studies, or verifiable claims that make it citation-worthy.',
+    recommendation_template: {
+      NOT_FOUND: 'Add specific statistics, customer metrics, and case study outcomes to your key pages. AI assistants strongly prefer citation-worthy, verifiable content.',
+      PARTIAL: 'Strengthen your proof points with more specific data: customer counts, ROI percentages, performance benchmarks, and named case studies.',
+      default: 'Add stronger evidence and proof points to your content.'
+    },
+    what_to_include_template: 'Include: customer count, ROI metrics, performance benchmarks, named case studies, third-party validations, and industry recognition.',
     action_items_template: [
       'Add specific statistics and metrics (e.g., "95% uptime", "2x faster")',
       'Include customer testimonials with names and companies',
@@ -446,7 +544,19 @@ const SUBFACTOR_TO_PLAYBOOK = {
     effort: 'S-M',
     impact: 'Med-High',
     automation_level: 'guide',
+    // Phase 4A.3c: State-keyed templates
+    finding_templates: {
+      NOT_FOUND: 'No author bylines, team credentials, or Person schema detected on {{domain}}. AI systems cannot verify the expertise behind your content.',
+      PARTIAL: 'Some author information found on {{domain}}, but author bios lack depth (credentials, experience, LinkedIn links) needed for strong E-E-A-T signals.',
+      default: 'Author and team credential signals are weak on {{domain}}.'
+    },
     why_it_matters_template: 'AI assistants evaluate E-E-A-T (Experience, Expertise, Authority, Trust) signals. {{company_name}} content lacks visible author credentials, reducing AI confidence in your expertise.',
+    recommendation_template: {
+      NOT_FOUND: 'Add author bylines to all content pages, create detailed team bios, and implement Person schema for key authors.',
+      PARTIAL: 'Enhance existing author information with credentials, years of experience, LinkedIn links, and Person schema markup.',
+      default: 'Strengthen author and team credential signals.'
+    },
+    what_to_include_template: 'Author name, title, years of experience, relevant certifications, LinkedIn profile link, and a 2-3 sentence professional bio.',
     action_items_template: [
       'Add author bylines to blog posts and articles',
       'Create detailed team/about page with credentials',
@@ -545,7 +655,21 @@ const SUBFACTOR_TO_PLAYBOOK = {
     effort: 'S',
     impact: 'Med-High',
     automation_level: 'guide',
+    // Phase 4A.3c: State-keyed templates
+    finding_templates: {
+      NOT_FOUND: 'None of the {{total_images}} images on {{domain}} have alt text. Multimodal AI systems cannot understand or index your visual content.',
+      WEAK: '{{images_without_alt}} of {{total_images}} images on {{domain}} lack alt text. More than half your images are invisible to AI.',
+      PARTIAL: '{{images_without_alt}} of {{total_images}} images still need alt text. You are close — fix these remaining gaps.',
+      default: 'Image alt text coverage is incomplete on {{domain}}.'
+    },
     why_it_matters_template: '{{images_without_alt}} of {{total_images}} images on your site lack alt text. Multimodal AI assistants now analyze images, and missing alt text means lost opportunities for visual search citations.',
+    recommendation_template: {
+      NOT_FOUND: 'Audit all images and add descriptive alt text (5-125 characters) that describes what the image shows and its relevance to the page.',
+      WEAK: 'Prioritize adding alt text to hero images, product photos, and infographics first — these carry the most AI visibility value.',
+      PARTIAL: 'Fix the remaining {{images_without_alt}} images missing alt text to achieve full coverage.',
+      default: 'Add descriptive alt text to all meaningful images.'
+    },
+    what_to_include_template: 'Describe what the image shows, its context on the page, and any text visible in the image. Avoid generic phrases like "image" or "photo".',
     action_items_template: [
       'Audit all images for missing or generic alt text',
       'Write descriptive alt text (5-125 characters)',

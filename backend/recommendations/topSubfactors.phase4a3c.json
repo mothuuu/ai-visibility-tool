@@ -1,0 +1,17 @@
+{
+  "top10": [
+    "technical_setup.organization_schema",
+    "technical_setup.structured_data_coverage",
+    "technical_setup.sitemap_indexing",
+    "technical_setup.crawler_access",
+    "ai_search_readiness.icp_faqs",
+    "ai_search_readiness.query_intent_alignment",
+    "technical_setup.social_meta_tags",
+    "ai_search_readiness.evidence_proof_points",
+    "trust_authority.author_bios",
+    "ai_readability.alt_text_coverage"
+  ],
+  "generated_at": "2026-01-27T12:00:00.000Z",
+  "source": "playbook priority ranking (P0 High first, then P1 High/Med-High)",
+  "selection_criteria": "Top 10 by priority * impact score from subfactorPlaybookMap.js"
+}
