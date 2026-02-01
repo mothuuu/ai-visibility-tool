@@ -219,6 +219,32 @@ function extractFirstSnippet(assets) {
 }
 
 /**
+ * Phase 4A.3c: Build evidence_json with embedded Top 10 rendered sections.
+ * Stores finding, recommendation, what_to_include, how_to_implement inside
+ * evidence_json.phase4a3c so the GET endpoint can extract them without new columns.
+ */
+function buildEvidenceJsonWithPhase4a3c(rec) {
+  const baseJson = rec.evidence_json || {};
+  const result = { ...baseJson };
+
+  // Embed Phase 4A.3c rendered sections for Top 10 recs
+  if (rec.is_top10) {
+    result.phase4a3c = {
+      finding: rec.finding || '',
+      recommendation: rec.recommendation || '',
+      what_to_include: rec.what_to_include || '',
+      how_to_implement: Array.isArray(rec.how_to_implement)
+        ? rec.how_to_implement
+        : (rec.action_items || []),
+      detection_state: rec.detection_state || null,
+      is_top10: true
+    };
+  }
+
+  return JSON.stringify(result);
+}
+
+/**
  * Map renderer output to database columns
  *
  * @param {Object} rec - Recommendation from renderer
@@ -254,7 +280,9 @@ function mapRendererOutputToDb(rec, engineVersion) {
     engine_version: engineVersion || 'v5.1',
 
     // JSONB columns (stringified; cast in SQL)
-    evidence_json: rec.evidence_json ? JSON.stringify(rec.evidence_json) : null,
+    // Phase 4A.3c: Embed Top 10 rendered sections into evidence_json
+    // so the GET endpoint can extract them without new DB columns
+    evidence_json: buildEvidenceJsonWithPhase4a3c(rec),
     generated_assets: rec.generated_assets ? JSON.stringify(rec.generated_assets) : null,
     examples: rec.examples ? JSON.stringify(rec.examples) : null,
 
@@ -262,7 +290,8 @@ function mapRendererOutputToDb(rec, engineVersion) {
     category: rec.pillar,
     recommendation_text: (rec.gap || rec.subfactor_key || '').substring(0, 500),
     impact_description: rec.why_it_matters,
-    findings: rec.evidence_summary,
+    // Phase 4A.3c: For Top 10 recs, use evidence-based finding; else evidence_summary
+    findings: rec.finding || rec.evidence_summary,
     code_snippet: extractFirstSnippet(rec.generated_assets),
 
     // IMPORTANT: action_steps may be TEXT in legacy schema
