@@ -1579,33 +1579,60 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
     // ENTITLEMENT CAP: Limit ACTIVE recommendations returned to client
     // Cap applies only to active recs — implemented/skipped/resolved always pass through
     // so resolved_complete items from the adapter don't consume active slots.
+    //
+    // REFILL LOGIC: When enrichment resolves items to 'implemented', freed cap slots
+    // are filled from the larger pool (including previously locked recs).
+    // Dedup ensures implemented titles don't reappear in active.
     // ============================================
     let cappedRecommendations;
     let recommendationsMeta;
-    const NON_ACTIVE_STATUSES = new Set(['implemented', 'skipped', 'dismissed']);
     {
-      const active = [];
       const implemented = [];
       const skipped = [];
+      const activePool = []; // all candidates for active (any unlock_state)
       for (const rec of enrichedRecs) {
         if (rec.status === 'implemented') {
           implemented.push(rec);
         } else if (rec.status === 'skipped' || rec.status === 'dismissed') {
           skipped.push(rec);
         } else {
-          active.push(rec);
+          activePool.push(rec);
         }
       }
-      const cappedActive = (recommendationVisibleLimit !== -1 && active.length > recommendationVisibleLimit)
-        ? active.slice(0, recommendationVisibleLimit)
-        : active;
-      if (recommendationVisibleLimit !== -1 && active.length > recommendationVisibleLimit) {
-        console.log(`🔒 Capping active recommendations: ${active.length} → ${recommendationVisibleLimit} (plan: ${planResolution.plan})`);
+
+      // Dedup: remove titles from active that already appear in implemented
+      const norm = (s) => (s || '').toLowerCase().trim();
+      const implementedTitles = new Set(
+        implemented.map(r => norm(r.recommendation_text))
+      );
+      const dedupedActive = activePool.filter(r => !implementedTitles.has(norm(r.recommendation_text)));
+
+      // Sort active pool by priority (preserving DB ordering: priority DESC, impact_score DESC)
+      // Recs from DB are already sorted, but after dedup we re-confirm ordering
+      const pr = (r) => -(r.priority ?? 0); // negate so higher priority sorts first
+      const imp = (r) => -(r.impact_score ?? r.estimated_impact ?? 0);
+      dedupedActive.sort((a, b) => pr(a) - pr(b) || imp(a) - imp(b));
+
+      // Apply cap to active only
+      const activeTotal = dedupedActive.length;
+      const cappedActive = (recommendationVisibleLimit !== -1 && dedupedActive.length > recommendationVisibleLimit)
+        ? dedupedActive.slice(0, recommendationVisibleLimit)
+        : dedupedActive;
+
+      if (recommendationVisibleLimit !== -1 && activeTotal > recommendationVisibleLimit) {
+        console.log(`🔒 Capping active recommendations: ${activeTotal} → ${recommendationVisibleLimit} (plan: ${planResolution.plan})`);
       }
+
+      // Promote: set unlock_state to 'active' on all returned active recs
+      // so frontend doesn't filter them out as 'locked'
+      for (const rec of cappedActive) {
+        rec.unlock_state = 'active';
+      }
+
       cappedRecommendations = [...cappedActive, ...implemented, ...skipped];
       recommendationsMeta = {
         cap: recommendationVisibleLimit,
-        active_count: active.length,
+        active_total: activeTotal,
         active_returned: cappedActive.length,
         implemented_count: implemented.length,
         skipped_count: skipped.length

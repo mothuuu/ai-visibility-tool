@@ -478,29 +478,50 @@ describe('POST /api/scan/analyze Cap (applyRecommendationCap helper)', () => {
 
 /**
  * Helper that mirrors the GET /scan/:id active-only cap logic
+ * with dedup, priority ordering, and unlock_state promotion
  */
 function applyActiveOnlyCap(recommendations, plan) {
   const limit = getRecommendationVisibleLimit(plan);
-  const active = [];
   const implemented = [];
   const skipped = [];
+  const activePool = [];
   for (const rec of recommendations) {
     if (rec.status === 'implemented') {
       implemented.push(rec);
     } else if (rec.status === 'skipped' || rec.status === 'dismissed') {
       skipped.push(rec);
     } else {
-      active.push(rec);
+      activePool.push(rec);
     }
   }
-  const cappedActive = (limit !== -1 && active.length > limit)
-    ? active.slice(0, limit)
-    : active;
+
+  // Dedup: remove titles from active that already appear in implemented
+  const norm = (s) => (s || '').toLowerCase().trim();
+  const implementedTitles = new Set(
+    implemented.map(r => norm(r.recommendation_text))
+  );
+  const dedupedActive = activePool.filter(r => !implementedTitles.has(norm(r.recommendation_text)));
+
+  // Sort by priority DESC, impact DESC
+  const pr = (r) => -(r.priority ?? 0);
+  const imp = (r) => -(r.impact_score ?? r.estimated_impact ?? 0);
+  dedupedActive.sort((a, b) => pr(a) - pr(b) || imp(a) - imp(b));
+
+  const activeTotal = dedupedActive.length;
+  const cappedActive = (limit !== -1 && dedupedActive.length > limit)
+    ? dedupedActive.slice(0, limit)
+    : dedupedActive;
+
+  // Promote unlock_state
+  for (const rec of cappedActive) {
+    rec.unlock_state = 'active';
+  }
+
   return {
     recommendations: [...cappedActive, ...implemented, ...skipped],
     meta: {
       cap: limit,
-      active_count: active.length,
+      active_total: activeTotal,
       active_returned: cappedActive.length,
       implemented_count: implemented.length,
       skipped_count: skipped.length
@@ -512,8 +533,8 @@ describe('Active-Only Cap Logic', () => {
 
   it('implemented recs do not consume cap slots', () => {
     const recs = [
-      ...Array(5).fill(null).map((_, i) => ({ id: i + 1, status: 'pending' })),
-      ...Array(3).fill(null).map((_, i) => ({ id: 100 + i, status: 'implemented' })),
+      ...Array(5).fill(null).map((_, i) => ({ id: i + 1, status: 'pending', recommendation_text: `Active Rec ${i}` })),
+      ...Array(3).fill(null).map((_, i) => ({ id: 100 + i, status: 'implemented', recommendation_text: `Impl Rec ${i}` })),
     ];
     const result = applyActiveOnlyCap(recs, 'diy'); // cap = 5
     assert.strictEqual(result.meta.active_returned, 5, 'All 5 active should be returned');
@@ -523,21 +544,21 @@ describe('Active-Only Cap Logic', () => {
 
   it('cap applies only to active when mixed with implemented', () => {
     const recs = [
-      ...Array(8).fill(null).map((_, i) => ({ id: i + 1, status: 'pending' })),
-      ...Array(3).fill(null).map((_, i) => ({ id: 100 + i, status: 'implemented' })),
+      ...Array(8).fill(null).map((_, i) => ({ id: i + 1, status: 'pending', recommendation_text: `Active Rec ${i}` })),
+      ...Array(3).fill(null).map((_, i) => ({ id: 100 + i, status: 'implemented', recommendation_text: `Impl Rec ${i}` })),
     ];
     const result = applyActiveOnlyCap(recs, 'diy'); // cap = 5
     assert.strictEqual(result.meta.active_returned, 5, 'Active should be capped to 5');
-    assert.strictEqual(result.meta.active_count, 8, 'Total active before cap is 8');
+    assert.strictEqual(result.meta.active_total, 8, 'Total active before cap is 8');
     assert.strictEqual(result.meta.implemented_count, 3, 'Implemented not affected by cap');
     assert.strictEqual(result.recommendations.length, 8, 'Total = 5 capped active + 3 implemented');
   });
 
   it('skipped recs do not consume cap slots', () => {
     const recs = [
-      ...Array(3).fill(null).map((_, i) => ({ id: i + 1, status: 'pending' })),
-      ...Array(2).fill(null).map((_, i) => ({ id: 50 + i, status: 'skipped' })),
-      ...Array(1).fill(null).map((_, i) => ({ id: 100 + i, status: 'implemented' })),
+      ...Array(3).fill(null).map((_, i) => ({ id: i + 1, status: 'pending', recommendation_text: `Active Rec ${i}` })),
+      ...Array(2).fill(null).map((_, i) => ({ id: 50 + i, status: 'skipped', recommendation_text: `Skipped Rec ${i}` })),
+      ...Array(1).fill(null).map((_, i) => ({ id: 100 + i, status: 'implemented', recommendation_text: `Impl Rec ${i}` })),
     ];
     const result = applyActiveOnlyCap(recs, 'free'); // cap = 3
     assert.strictEqual(result.meta.active_returned, 3, 'All 3 active fit within cap');
@@ -548,8 +569,8 @@ describe('Active-Only Cap Logic', () => {
 
   it('unlimited plan returns all recs without capping', () => {
     const recs = [
-      ...Array(20).fill(null).map((_, i) => ({ id: i + 1, status: 'pending' })),
-      ...Array(5).fill(null).map((_, i) => ({ id: 100 + i, status: 'implemented' })),
+      ...Array(20).fill(null).map((_, i) => ({ id: i + 1, status: 'pending', recommendation_text: `Active Rec ${i}` })),
+      ...Array(5).fill(null).map((_, i) => ({ id: 100 + i, status: 'implemented', recommendation_text: `Impl Rec ${i}` })),
     ];
     const result = applyActiveOnlyCap(recs, 'agency'); // cap = -1
     assert.strictEqual(result.meta.active_returned, 20, 'All active returned for unlimited');
@@ -558,10 +579,10 @@ describe('Active-Only Cap Logic', () => {
 
   it('null/undefined status recs treated as active', () => {
     const recs = [
-      { id: 1, status: null },
-      { id: 2, status: undefined },
-      { id: 3 },
-      { id: 4, status: 'implemented' },
+      { id: 1, status: null, recommendation_text: 'Rec A' },
+      { id: 2, status: undefined, recommendation_text: 'Rec B' },
+      { id: 3, recommendation_text: 'Rec C' },
+      { id: 4, status: 'implemented', recommendation_text: 'Impl Rec D' },
     ];
     const result = applyActiveOnlyCap(recs, 'free'); // cap = 3
     assert.strictEqual(result.meta.active_returned, 3, 'null/undefined/missing status = active');
@@ -570,10 +591,126 @@ describe('Active-Only Cap Logic', () => {
   });
 
   it('meta counts are accurate when all recs are implemented', () => {
-    const recs = Array(5).fill(null).map((_, i) => ({ id: i + 1, status: 'implemented' }));
+    const recs = Array(5).fill(null).map((_, i) => ({ id: i + 1, status: 'implemented', recommendation_text: `Impl Rec ${i}` }));
     const result = applyActiveOnlyCap(recs, 'free'); // cap = 3
     assert.strictEqual(result.meta.active_returned, 0, 'No active recs');
     assert.strictEqual(result.meta.implemented_count, 5, 'All implemented');
     assert.strictEqual(result.recommendations.length, 5, 'All pass through');
+  });
+});
+
+// ========================================
+// REFILL + DEDUP + ORDERING TESTS
+// After COMPLETE resolution, active should refill to cap from pool
+// ========================================
+
+describe('Refill After Resolution', () => {
+
+  it('pool 12, 3 implemented, cap=8 => active=8, implemented=3 (refill from pool)', () => {
+    const recs = [
+      ...Array(12).fill(null).map((_, i) => ({
+        id: i + 1,
+        status: i < 3 ? 'implemented' : 'pending',
+        recommendation_text: i < 3 ? `Impl Rec ${i}` : `Active Rec ${i}`,
+        priority: 100 - i,
+        unlock_state: i < 5 ? 'active' : 'locked'
+      }))
+    ];
+    const result = applyActiveOnlyCap(recs, 'pro'); // cap = 8
+    assert.strictEqual(result.meta.active_returned, 8, 'Active should refill to cap from pool');
+    assert.strictEqual(result.meta.implemented_count, 3, 'Implemented count correct');
+    assert.strictEqual(result.recommendations.length, 11, 'Total = 8 active + 3 implemented');
+    // Verify all returned active have unlock_state promoted
+    const returnedActive = result.recommendations.filter(r => r.status !== 'implemented');
+    assert.ok(returnedActive.every(r => r.unlock_state === 'active'), 'All active recs should have unlock_state=active');
+  });
+
+  it('pool 5, 4 implemented, cap=8 => active=1, implemented=4 (pool smaller than cap)', () => {
+    const recs = [
+      ...Array(4).fill(null).map((_, i) => ({
+        id: i + 1, status: 'implemented', recommendation_text: `Impl Rec ${i}`
+      })),
+      { id: 5, status: 'pending', recommendation_text: 'Only Active Rec' }
+    ];
+    const result = applyActiveOnlyCap(recs, 'pro'); // cap = 8
+    assert.strictEqual(result.meta.active_returned, 1, 'Only 1 active available');
+    assert.strictEqual(result.meta.implemented_count, 4, 'All 4 implemented');
+    assert.strictEqual(result.recommendations.length, 5);
+  });
+
+  it('pool 15, 0 implemented, cap=5 => active=5 (normal capping)', () => {
+    const recs = Array(15).fill(null).map((_, i) => ({
+      id: i + 1, status: 'pending', recommendation_text: `Rec ${i}`, priority: 100 - i
+    }));
+    const result = applyActiveOnlyCap(recs, 'diy'); // cap = 5
+    assert.strictEqual(result.meta.active_returned, 5);
+    assert.strictEqual(result.meta.active_total, 15);
+    assert.strictEqual(result.recommendations.length, 5);
+  });
+
+  it('dedup: duplicate title in active and implemented => removed from active', () => {
+    const recs = [
+      { id: 1, status: 'implemented', recommendation_text: 'Add FAQ Schema Markup' },
+      { id: 2, status: 'pending', recommendation_text: 'Add FAQ Schema Markup' }, // duplicate
+      { id: 3, status: 'pending', recommendation_text: 'Improve Alt Text Coverage' },
+      { id: 4, status: 'pending', recommendation_text: 'Add Organization Schema' },
+    ];
+    const result = applyActiveOnlyCap(recs, 'free'); // cap = 3
+    assert.strictEqual(result.meta.active_returned, 2, 'Duplicate removed, only 2 unique active');
+    assert.strictEqual(result.meta.implemented_count, 1);
+    // Verify the duplicate title is NOT in active
+    const activeRecs = result.recommendations.filter(r => r.status !== 'implemented');
+    assert.ok(!activeRecs.some(r => r.recommendation_text === 'Add FAQ Schema Markup'),
+      'Duplicate title should not appear in active');
+  });
+
+  it('dedup is case-insensitive', () => {
+    const recs = [
+      { id: 1, status: 'implemented', recommendation_text: 'add faq schema markup' },
+      { id: 2, status: 'pending', recommendation_text: 'Add FAQ Schema Markup' }, // same title, different case
+      { id: 3, status: 'pending', recommendation_text: 'Unique Rec' },
+    ];
+    const result = applyActiveOnlyCap(recs, 'free'); // cap = 3
+    assert.strictEqual(result.meta.active_returned, 1, 'Case-insensitive dedup removes duplicate');
+  });
+
+  it('active preserves priority ordering (higher priority first)', () => {
+    const recs = [
+      { id: 1, status: 'pending', recommendation_text: 'Low Priority', priority: 10 },
+      { id: 2, status: 'pending', recommendation_text: 'High Priority', priority: 90 },
+      { id: 3, status: 'pending', recommendation_text: 'Medium Priority', priority: 50 },
+    ];
+    const result = applyActiveOnlyCap(recs, 'free'); // cap = 3
+    const titles = result.recommendations.map(r => r.recommendation_text);
+    assert.deepStrictEqual(titles, ['High Priority', 'Medium Priority', 'Low Priority'],
+      'Should be sorted by priority DESC');
+  });
+
+  it('locked recs get promoted to active when within cap', () => {
+    const recs = [
+      { id: 1, status: 'implemented', recommendation_text: 'Resolved Item', unlock_state: 'active' },
+      { id: 2, status: 'pending', recommendation_text: 'Active Item', unlock_state: 'active', priority: 80 },
+      { id: 3, status: 'pending', recommendation_text: 'Locked Item 1', unlock_state: 'locked', priority: 70 },
+      { id: 4, status: 'pending', recommendation_text: 'Locked Item 2', unlock_state: 'locked', priority: 60 },
+    ];
+    const result = applyActiveOnlyCap(recs, 'free'); // cap = 3
+    assert.strictEqual(result.meta.active_returned, 3, 'Locked items promoted to fill cap');
+    const activeRecs = result.recommendations.filter(r => r.status !== 'implemented');
+    assert.ok(activeRecs.every(r => r.unlock_state === 'active'),
+      'All returned active recs should have unlock_state=active');
+  });
+
+  it('returned list has active first, then implemented', () => {
+    const recs = [
+      { id: 1, status: 'implemented', recommendation_text: 'Impl A' },
+      { id: 2, status: 'pending', recommendation_text: 'Active A', priority: 90 },
+      { id: 3, status: 'pending', recommendation_text: 'Active B', priority: 80 },
+    ];
+    const result = applyActiveOnlyCap(recs, 'free'); // cap = 3
+    const activeSlice = result.recommendations.slice(0, 2);
+    assert.ok(activeSlice.every(r => r.status !== 'implemented'),
+      'Active recs should come before implemented in the array');
+    assert.strictEqual(result.recommendations[2].status, 'implemented',
+      'Implemented should be at the end');
   });
 });
