@@ -24,6 +24,15 @@ const PLAN_CAPS = Object.freeze({
 });
 
 /**
+ * How many recommendations to PERSIST per scan, regardless of plan cap.
+ * Plan caps control what is SHOWN, not what is STORED.
+ * A larger persisted pool allows GET-time refill when items resolve to implemented.
+ *
+ * This only affects NEW scans — existing scans are not backfilled.
+ */
+const PERSIST_POOL_LIMIT = 25;
+
+/**
  * Apply a cap safely.
  * -1 (unlimited) returns the full list; any positive integer slices.
  *
@@ -50,4 +59,4 @@ function getCapForPlan(plan) {
   return PLAN_CAPS[key] ?? PLAN_CAPS.free;
 }
 
-module.exports = { PLAN_CAPS, applyCap, getCapForPlan };
+module.exports = { PLAN_CAPS, applyCap, getCapForPlan, PERSIST_POOL_LIMIT };

@@ -1,5 +1,6 @@
 // Helper functions for hybrid recommendation system
 const db = require('../db/database');
+const { PERSIST_POOL_LIMIT } = require('../config/planCaps');
 
 // Site-wide recommendation categories (affect whole site)
 const SITE_WIDE_CATEGORIES = [
@@ -79,8 +80,8 @@ async function saveHybridRecommendations(scanId, userId, mainUrl, selectedPages,
   console.log(`   🌐 ${siteWideRecs.length} site-wide recommendations`);
   console.log(`   📄 ${pageSpecificRecs.length} page-specific recommendations`);
   
-  // Limit site-wide to 10-15
-  const limitedSiteWide = siteWideRecs.slice(0, 15);
+  // Persist a larger pool so GET-time refill works when items resolve to implemented
+  const limitedSiteWide = siteWideRecs.slice(0, PERSIST_POOL_LIMIT);
   
   // FIXED: Save ALL page-specific recommendations (no 5-per-page limit for single page)
   const pagesWithRecs = selectedPages || [{ url: mainUrl, priority: 1 }];
