@@ -44,7 +44,7 @@ async function validatePreviousRecommendations(userId, newScanId, newEvidence) {
 
     // Get completed/implemented recommendations from previous scan
     const completedRecsResult = await db.query(
-      `SELECT id, category, recommendation_text, findings, subfactor,
+      `SELECT id, category, recommendation_text, findings, subfactor_key,
               unlock_state, marked_complete_at
        FROM scan_recommendations
        WHERE scan_id = $1
@@ -108,8 +108,8 @@ async function validatePreviousRecommendations(userId, newScanId, newEvidence) {
 async function validateSingleRecommendation(recommendation, newScanId, newEvidence, previousScan) {
   console.log(`[Validation] Checking: ${recommendation.recommendation_text.substring(0, 60)}...`);
 
-  // Determine validation logic based on subfactor
-  const subfactor = recommendation.subfactor || recommendation.category;
+  // Determine validation logic based on subfactor_key (column renamed from subfactor)
+  const subfactor = recommendation.subfactor_key || recommendation.category;
   let validationResult;
 
   switch (subfactor) {

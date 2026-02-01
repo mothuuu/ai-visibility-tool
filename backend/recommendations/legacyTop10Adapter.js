@@ -217,9 +217,30 @@ function enrichLegacyRecommendations({ recommendations, detailedAnalysis, scan, 
         const rendered = renderSingleTop10(match.key, scanEvidence, scan);
 
         if (!rendered) {
-          // COMPLETE or suppressed — do NOT overwrite legacy fields
+          // COMPLETE or suppressed — mark as implemented/resolved
+          const now = new Date().toISOString();
+
+          // Move out of Active into Implemented/Resolved
+          if (!next.status || next.status === 'pending') {
+            next.status = 'implemented';
+          }
+          next.implemented_at = next.implemented_at || now;
+
+          // Optional bookkeeping (safe)
+          next.archived_reason = next.archived_reason || 'resolved_by_latest_scan';
+          next.validation_status = next.validation_status || 'complete';
+
+          // User-facing clarity (legacy fields the UI already renders)
+          next.findings = 'Detected as complete in the latest scan — no action needed.';
+          next.impact_description = 'This item appears properly implemented on your site.';
+
+          // V2 fields (null is fine — these sections aren't needed for resolved items)
+          next.recommendation = next.recommendation || null;
+          next.what_to_include = next.what_to_include || null;
+          next.how_to_implement = next.how_to_implement || null;
+
           if (debug) {
-            next._debug_renderer_path = 'suppressed_complete';
+            next._debug_renderer_path = 'resolved_complete';
             next._debug_canonical_key = match.key;
             next._debug_matched_by = match.matched_by;
             next._debug_is_top10 = true;

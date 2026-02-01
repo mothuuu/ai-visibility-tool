@@ -370,7 +370,95 @@ describe('legacyTop10Adapter — renderSingleTop10', () => {
 });
 
 // ============================================
-// 11. normTitle edge cases
+// 11. COMPLETE → Implemented/Resolved behavior
+// ============================================
+describe('legacyTop10Adapter — COMPLETE suppression → implemented', () => {
+  // Evidence that triggers COMPLETE for organization_schema:
+  // hasOrganizationSchema = true, no validation errors
+  const completeEvidence = {
+    ...sampleEvidence,
+    technical: {
+      ...(sampleEvidence.technical || {}),
+      hasOrganizationSchema: true,
+      structuredData: [{ type: 'Organization', raw: { name: 'Test' } }],
+      schemaValidationErrors: []
+    }
+  };
+
+  it('marks COMPLETE rec as implemented with resolved messaging', () => {
+    const rec = makeLegacyRec({
+      recommendation_text: 'Add Organization Schema with Social Links',
+      category: 'Technical Setup',
+      status: 'pending',
+      findings: 'old finding',
+      impact_description: 'old impact'
+    });
+    const { recommendations } = enrichLegacyRecommendations({
+      recommendations: [rec],
+      detailedAnalysis: completeEvidence,
+      debug: false
+    });
+    const enriched = recommendations[0];
+
+    assert.equal(enriched.status, 'implemented');
+    assert.ok(enriched.implemented_at, 'implemented_at should be set');
+    assert.ok(enriched.findings.includes('complete'), 'findings should mention complete');
+    assert.ok(enriched.impact_description.includes('implemented'), 'impact should mention implemented');
+    assert.equal(enriched.archived_reason, 'resolved_by_latest_scan');
+    assert.equal(enriched.validation_status, 'complete');
+  });
+
+  it('does not overwrite existing implemented status', () => {
+    const rec = makeLegacyRec({
+      recommendation_text: 'Add Organization Schema with Social Links',
+      status: 'implemented',
+      implemented_at: '2026-01-15T00:00:00.000Z'
+    });
+    const { recommendations } = enrichLegacyRecommendations({
+      recommendations: [rec],
+      detailedAnalysis: completeEvidence,
+      debug: false
+    });
+    const enriched = recommendations[0];
+
+    assert.equal(enriched.status, 'implemented');
+    assert.equal(enriched.implemented_at, '2026-01-15T00:00:00.000Z');
+  });
+
+  it('debug shows resolved_complete path', () => {
+    const rec = makeLegacyRec({
+      recommendation_text: 'Add Organization Schema with Social Links',
+      status: 'pending'
+    });
+    const { recommendations } = enrichLegacyRecommendations({
+      recommendations: [rec],
+      detailedAnalysis: completeEvidence,
+      debug: true
+    });
+    const enriched = recommendations[0];
+
+    assert.equal(enriched._debug_renderer_path, 'resolved_complete');
+    assert.equal(enriched._debug_canonical_key, 'technical_setup.organization_schema');
+    assert.equal(enriched._debug_is_top10, true);
+  });
+
+  it('does not mutate original rec object', () => {
+    const original = makeLegacyRec({
+      recommendation_text: 'Add Organization Schema with Social Links',
+      status: 'pending'
+    });
+    const originalStatus = original.status;
+    enrichLegacyRecommendations({
+      recommendations: [original],
+      detailedAnalysis: completeEvidence,
+      debug: false
+    });
+    assert.equal(original.status, originalStatus, 'Original should not be mutated');
+  });
+});
+
+// ============================================
+// 12. normTitle edge cases
 // ============================================
 describe('legacyTop10Adapter — normTitle', () => {
   it('handles null/undefined', () => {
