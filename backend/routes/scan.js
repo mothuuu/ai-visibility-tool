@@ -1565,14 +1565,31 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
     }
 
     // ============================================
-    // ENTITLEMENT CAP: Limit recommendations returned to client
-    // This prevents entitlement leakage by ensuring the API never returns
-    // more recommendations than the user's plan allows, regardless of UI state.
+    // ENTITLEMENT CAP: Limit ACTIVE recommendations returned to client
+    // Cap applies only to active recs — implemented/skipped/resolved always pass through
+    // so resolved_complete items from the adapter don't consume active slots.
     // ============================================
-    let cappedRecommendations = enrichedRecs;
-    if (recommendationVisibleLimit !== -1 && cappedRecommendations.length > recommendationVisibleLimit) {
-      console.log(`🔒 Capping recommendations: ${cappedRecommendations.length} → ${recommendationVisibleLimit} (plan: ${planResolution.plan})`);
-      cappedRecommendations = cappedRecommendations.slice(0, recommendationVisibleLimit);
+    let cappedRecommendations;
+    const NON_ACTIVE_STATUSES = new Set(['implemented', 'skipped', 'dismissed']);
+    if (recommendationVisibleLimit !== -1) {
+      const active = [];
+      const nonActive = [];
+      for (const rec of enrichedRecs) {
+        if (NON_ACTIVE_STATUSES.has(rec.status)) {
+          nonActive.push(rec);
+        } else {
+          active.push(rec);
+        }
+      }
+      const cappedActive = active.length > recommendationVisibleLimit
+        ? active.slice(0, recommendationVisibleLimit)
+        : active;
+      if (active.length > recommendationVisibleLimit) {
+        console.log(`🔒 Capping active recommendations: ${active.length} → ${recommendationVisibleLimit} (plan: ${planResolution.plan})`);
+      }
+      cappedRecommendations = [...cappedActive, ...nonActive];
+    } else {
+      cappedRecommendations = enrichedRecs;
     }
 
     res.json({
