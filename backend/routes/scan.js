@@ -988,10 +988,21 @@ if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendation
     // ============================================
     const recommendationLimit = getRecommendationVisibleLimit(planResolution.plan);
     if (!isCompetitorScan && recommendationLimit !== -1 && Array.isArray(scanResult.recommendations)) {
-      const originalCount = scanResult.recommendations.length;
-      scanResult.recommendations = scanResult.recommendations.slice(0, recommendationLimit);
-      if (originalCount > recommendationLimit) {
-        console.log(`🔒 [POST Analyze] Capped recommendations: ${originalCount} → ${recommendationLimit} (plan: ${planResolution.plan})`);
+      // Cap applies to active recommendations only; implemented/skipped pass through
+      const postActive = [];
+      const postNonActive = [];
+      for (const rec of scanResult.recommendations) {
+        if (rec.status === 'implemented' || rec.status === 'skipped' || rec.status === 'dismissed') {
+          postNonActive.push(rec);
+        } else {
+          postActive.push(rec);
+        }
+      }
+      const originalActiveCount = postActive.length;
+      const cappedPostActive = postActive.slice(0, recommendationLimit);
+      scanResult.recommendations = [...cappedPostActive, ...postNonActive];
+      if (originalActiveCount > recommendationLimit) {
+        console.log(`🔒 [POST Analyze] Capped active recommendations: ${originalActiveCount} → ${recommendationLimit} (plan: ${planResolution.plan})`);
       }
     }
 
@@ -1570,26 +1581,35 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
     // so resolved_complete items from the adapter don't consume active slots.
     // ============================================
     let cappedRecommendations;
+    let recommendationsMeta;
     const NON_ACTIVE_STATUSES = new Set(['implemented', 'skipped', 'dismissed']);
-    if (recommendationVisibleLimit !== -1) {
+    {
       const active = [];
-      const nonActive = [];
+      const implemented = [];
+      const skipped = [];
       for (const rec of enrichedRecs) {
-        if (NON_ACTIVE_STATUSES.has(rec.status)) {
-          nonActive.push(rec);
+        if (rec.status === 'implemented') {
+          implemented.push(rec);
+        } else if (rec.status === 'skipped' || rec.status === 'dismissed') {
+          skipped.push(rec);
         } else {
           active.push(rec);
         }
       }
-      const cappedActive = active.length > recommendationVisibleLimit
+      const cappedActive = (recommendationVisibleLimit !== -1 && active.length > recommendationVisibleLimit)
         ? active.slice(0, recommendationVisibleLimit)
         : active;
-      if (active.length > recommendationVisibleLimit) {
+      if (recommendationVisibleLimit !== -1 && active.length > recommendationVisibleLimit) {
         console.log(`🔒 Capping active recommendations: ${active.length} → ${recommendationVisibleLimit} (plan: ${planResolution.plan})`);
       }
-      cappedRecommendations = [...cappedActive, ...nonActive];
-    } else {
-      cappedRecommendations = enrichedRecs;
+      cappedRecommendations = [...cappedActive, ...implemented, ...skipped];
+      recommendationsMeta = {
+        cap: recommendationVisibleLimit,
+        active_count: active.length,
+        active_returned: cappedActive.length,
+        implemented_count: implemented.length,
+        skipped_count: skipped.length
+      };
     }
 
     res.json({
@@ -1600,6 +1620,7 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
         categoryBreakdown: categoryScores, // Frontend expects this field name
         categoryWeights: V5_WEIGHTS, // Include weights for display
         recommendations: cappedRecommendations,
+        recommendations_meta: recommendationsMeta,
         faq: scan.faq_schema ? JSON.parse(scan.faq_schema) : null,
         userProgress: userProgress, // Include progress for DIY tier
         nextBatchUnlock: nextBatchUnlock, // Next batch unlock info

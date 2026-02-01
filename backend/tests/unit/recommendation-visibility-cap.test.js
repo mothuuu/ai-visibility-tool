@@ -470,3 +470,110 @@ describe('POST /api/scan/analyze Cap (applyRecommendationCap helper)', () => {
     assert.strictEqual(capped.length, 2, 'When count < limit, all recs should be returned');
   });
 });
+
+// ========================================
+// ACTIVE-ONLY CAP TESTS
+// Implemented/skipped recs should NOT consume cap slots
+// ========================================
+
+/**
+ * Helper that mirrors the GET /scan/:id active-only cap logic
+ */
+function applyActiveOnlyCap(recommendations, plan) {
+  const limit = getRecommendationVisibleLimit(plan);
+  const active = [];
+  const implemented = [];
+  const skipped = [];
+  for (const rec of recommendations) {
+    if (rec.status === 'implemented') {
+      implemented.push(rec);
+    } else if (rec.status === 'skipped' || rec.status === 'dismissed') {
+      skipped.push(rec);
+    } else {
+      active.push(rec);
+    }
+  }
+  const cappedActive = (limit !== -1 && active.length > limit)
+    ? active.slice(0, limit)
+    : active;
+  return {
+    recommendations: [...cappedActive, ...implemented, ...skipped],
+    meta: {
+      cap: limit,
+      active_count: active.length,
+      active_returned: cappedActive.length,
+      implemented_count: implemented.length,
+      skipped_count: skipped.length
+    }
+  };
+}
+
+describe('Active-Only Cap Logic', () => {
+
+  it('implemented recs do not consume cap slots', () => {
+    const recs = [
+      ...Array(5).fill(null).map((_, i) => ({ id: i + 1, status: 'pending' })),
+      ...Array(3).fill(null).map((_, i) => ({ id: 100 + i, status: 'implemented' })),
+    ];
+    const result = applyActiveOnlyCap(recs, 'diy'); // cap = 5
+    assert.strictEqual(result.meta.active_returned, 5, 'All 5 active should be returned');
+    assert.strictEqual(result.meta.implemented_count, 3, 'All 3 implemented should be counted');
+    assert.strictEqual(result.recommendations.length, 8, 'Total should be 5 active + 3 implemented');
+  });
+
+  it('cap applies only to active when mixed with implemented', () => {
+    const recs = [
+      ...Array(8).fill(null).map((_, i) => ({ id: i + 1, status: 'pending' })),
+      ...Array(3).fill(null).map((_, i) => ({ id: 100 + i, status: 'implemented' })),
+    ];
+    const result = applyActiveOnlyCap(recs, 'diy'); // cap = 5
+    assert.strictEqual(result.meta.active_returned, 5, 'Active should be capped to 5');
+    assert.strictEqual(result.meta.active_count, 8, 'Total active before cap is 8');
+    assert.strictEqual(result.meta.implemented_count, 3, 'Implemented not affected by cap');
+    assert.strictEqual(result.recommendations.length, 8, 'Total = 5 capped active + 3 implemented');
+  });
+
+  it('skipped recs do not consume cap slots', () => {
+    const recs = [
+      ...Array(3).fill(null).map((_, i) => ({ id: i + 1, status: 'pending' })),
+      ...Array(2).fill(null).map((_, i) => ({ id: 50 + i, status: 'skipped' })),
+      ...Array(1).fill(null).map((_, i) => ({ id: 100 + i, status: 'implemented' })),
+    ];
+    const result = applyActiveOnlyCap(recs, 'free'); // cap = 3
+    assert.strictEqual(result.meta.active_returned, 3, 'All 3 active fit within cap');
+    assert.strictEqual(result.meta.skipped_count, 2, 'Skipped pass through');
+    assert.strictEqual(result.meta.implemented_count, 1, 'Implemented pass through');
+    assert.strictEqual(result.recommendations.length, 6, 'Total = 3 active + 2 skipped + 1 implemented');
+  });
+
+  it('unlimited plan returns all recs without capping', () => {
+    const recs = [
+      ...Array(20).fill(null).map((_, i) => ({ id: i + 1, status: 'pending' })),
+      ...Array(5).fill(null).map((_, i) => ({ id: 100 + i, status: 'implemented' })),
+    ];
+    const result = applyActiveOnlyCap(recs, 'agency'); // cap = -1
+    assert.strictEqual(result.meta.active_returned, 20, 'All active returned for unlimited');
+    assert.strictEqual(result.recommendations.length, 25, 'All recs returned for unlimited');
+  });
+
+  it('null/undefined status recs treated as active', () => {
+    const recs = [
+      { id: 1, status: null },
+      { id: 2, status: undefined },
+      { id: 3 },
+      { id: 4, status: 'implemented' },
+    ];
+    const result = applyActiveOnlyCap(recs, 'free'); // cap = 3
+    assert.strictEqual(result.meta.active_returned, 3, 'null/undefined/missing status = active');
+    assert.strictEqual(result.meta.implemented_count, 1);
+    assert.strictEqual(result.recommendations.length, 4);
+  });
+
+  it('meta counts are accurate when all recs are implemented', () => {
+    const recs = Array(5).fill(null).map((_, i) => ({ id: i + 1, status: 'implemented' }));
+    const result = applyActiveOnlyCap(recs, 'free'); // cap = 3
+    assert.strictEqual(result.meta.active_returned, 0, 'No active recs');
+    assert.strictEqual(result.meta.implemented_count, 5, 'All implemented');
+    assert.strictEqual(result.recommendations.length, 5, 'All pass through');
+  });
+});

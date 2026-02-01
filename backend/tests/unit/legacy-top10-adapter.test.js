@@ -408,6 +408,29 @@ describe('legacyTop10Adapter — COMPLETE suppression → implemented', () => {
     assert.equal(enriched.validation_status, 'complete');
   });
 
+  it('sets v2 fields to empty safe values (not null)', () => {
+    const rec = makeLegacyRec({
+      recommendation_text: 'Add Organization Schema with Social Links',
+      category: 'Technical Setup',
+      status: 'pending'
+    });
+    const { recommendations } = enrichLegacyRecommendations({
+      recommendations: [rec],
+      detailedAnalysis: completeEvidence,
+      debug: false
+    });
+    const enriched = recommendations[0];
+
+    assert.equal(enriched.status, 'implemented');
+    assert.strictEqual(enriched.recommendation, '', 'recommendation should be empty string');
+    assert.strictEqual(enriched.what_to_include, '', 'what_to_include should be empty string');
+    assert.ok(Array.isArray(enriched.how_to_implement), 'how_to_implement should be an array');
+    assert.equal(enriched.how_to_implement.length, 0, 'how_to_implement should be empty array');
+    // Legacy resolved messaging should still be present
+    assert.ok(enriched.findings.includes('complete'));
+    assert.ok(enriched.impact_description.includes('implemented'));
+  });
+
   it('does not overwrite existing implemented status', () => {
     const rec = makeLegacyRec({
       recommendation_text: 'Add Organization Schema with Social Links',
