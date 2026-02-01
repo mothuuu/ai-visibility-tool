@@ -5,50 +5,54 @@
 
 ## Problem Statement
 
-Live scan output (scanId 684/685) shows legacy behavior:
+Live scan output (scanId 684/685/693/694) shows legacy behavior:
 - Only 3 sections render (Finding + Why + How to Implement)
 - Recommendation + What to Include sections missing for Top10 keys
-- Finding shows generic `evidence_summary` instead of evidence-based finding
+- Finding shows generic template text instead of evidence-based finding
 - PDFs also show legacy 3-section format
+
+DevTools confirmed actual DB row shape:
+- `rec_key`: **null**
+- `subfactor_key`: **null**
+- `evidence_json`: **null**
+- `why_it_matters`: **null** (v2 column exists but never populated)
+- `category`: human label like "AI Search Readiness"
+- `recommendation_text`: title like "Add FAQ Schema Markup"
 
 ## Root Cause Analysis
 
 ### Chain of Evidence
 
-Traced the full pipeline: **Renderer → Persistence → GET Endpoint → Frontend**
+Traced the full pipeline: **Renderer → Persistence → DB Row → GET Endpoint → Frontend**
 
 #### 1. Renderer Output (CORRECT)
 
-`backend/recommendations/renderer.js` correctly produces all 5 sections for Top 10 recs:
+`backend/recommendations/renderer.js` correctly produces all 5 sections for Top 10 recs.
+All 10 Top10 playbook entries confirmed present with all templates.
+199 tests pass.
 
-| Field | Source | Status |
-|-------|--------|--------|
-| `finding` | State-keyed `finding_templates` | Produced correctly |
-| `why_it_matters` | `why_it_matters_template` | Produced correctly |
-| `recommendation` | State-keyed `recommendation_template` | Produced correctly |
-| `what_to_include` | `what_to_include_template` | Produced correctly |
-| `action_items` / `how_to_implement` | `action_items_template` | Produced correctly |
-
-#### 2. Persistence Layer (BUG #1 — fields lost)
+#### 2. Persistence Layer (BUG #1 — keys never stored, fields lost)
 
 `backend/services/scan-recommendations-service.js` → `mapRendererOutputToDb()`:
 
 | Renderer Field | DB Column | What Was Stored | Bug? |
 |---------------|-----------|-----------------|------|
 | `finding` | `findings` | `rec.evidence_summary` | **YES — evidence_summary overwrites finding** |
-| `why_it_matters` | `why_it_matters` | `rec.why_it_matters` | OK (v2 column) |
 | `recommendation` | (none) | Not stored | **YES — dropped entirely** |
 | `what_to_include` | (none) | Not stored | **YES — dropped entirely** |
-| `action_items` | `action_steps` | JSON string | OK |
+| `rec_key` | `rec_key` | Generated but... | Keys end up null in DB |
+| `subfactor_key` | `subfactor_key` | Generated but... | Keys end up null in DB |
 
-**Root cause:** `mapRendererOutputToDb()` line 265 maps `findings: rec.evidence_summary` instead of `rec.finding`. The `recommendation` and `what_to_include` fields have no corresponding DB columns and were silently dropped.
+**Critical finding:** Even with persistence fixes, **existing rows have null keys**.
+Canonical key matching based on `rec_key`/`subfactor_key` will always fail for existing data.
 
-#### 3. GET Endpoint (BUG #2 — fields not selected)
+#### 3. GET Endpoint (BUG #2 — no enrichment at all)
 
 `backend/routes/scan.js` → `GET /api/scan/:id`:
 
-- SELECT queries did not include v2 columns: `subfactor_key`, `rec_key`, `why_it_matters`, `evidence_json`, `confidence`, `evidence_quality`, `engine_version`
-- Even if persistence was correct, the API response would not include the new fields
+- SELECT queries originally excluded v2 columns entirely
+- No enrichment logic existed — raw DB rows returned as-is
+- Previous fix attempt used canonical key matching, but keys are null in DB → always missed
 
 #### 4. Frontend Mapping (BUG #3 — wrong field precedence)
 
@@ -56,69 +60,75 @@ Traced the full pipeline: **Renderer → Persistence → GET Endpoint → Fronte
 
 | UI Section | Code | What Rendered | Bug? |
 |-----------|------|---------------|------|
-| Finding | `rec.findings \|\| rec.finding` | `evidence_summary` (not finding) | **YES — wrong source** |
-| Why It Matters | `rec.impact_description \|\| rec.impact \|\| rec.why_it_matters` | `why_it_matters` (via impact_description) | OK (but indirect) |
+| Finding | `rec.findings \|\| rec.finding` | generic template text | **YES — not evidence-based** |
+| Why It Matters | `rec.impact_description \|\| ...` | generic template text | **YES — not evidence-based** |
 | Recommendation | `rec.recommendation` | Empty (never stored) | **YES — always empty** |
 | What to Include | `rec.what_to_include` | Empty (never stored) | **YES — always empty** |
-| How to Implement | `rec.action_steps \|\| ...` | action_items JSON string | Partially OK |
 
-#### 5. PDF Export Path
+## Solution: GET-Time Legacy Adapter
 
-PDF export uses `window.print()` — renders whatever the HTML shows. No separate PDF generation path. Fixing the HTML rendering fixes PDF.
+Since DB rows have null keys, the fix must work at **GET time** using the only reliable
+identifier available: the **recommendation title** (`recommendation_text`).
 
-## Fixes Applied
+### Architecture
 
-### Fix 1: Persistence — Store Phase 4A.3c fields in evidence_json
+```
+GET /api/scan/:id
+  ↓
+  load scan + recommendations from DB (rows have null keys)
+  ↓
+  enrichLegacyRecommendations({recommendations, detailedAnalysis, scan, debug})
+    ├── for each rec: match title → canonical Top10 key
+    │   ├── Strategy 1: Exact title match (33-entry normalized dictionary)
+    │   ├── Strategy 2: rec_key/subfactor_key if populated (future-proofing)
+    │   └── Strategy 3: Conservative keyword fallback
+    ├── for matched recs: call renderSingleTop10(key, evidence, scan)
+    │   ├── getPlaybookEntry(key) → playbook templates
+    │   ├── getDetectionState(key, evidence) → state-keyed resolution
+    │   ├── shouldSuppressRecommendation(state) → skip if COMPLETE
+    │   └── resolveTemplate(templates, mergedContext, opts) → 5 sections
+    ├── write into LEGACY fields: findings, impact_description, action_steps
+    └── write into V2 fields: finding, recommendation, what_to_include, etc.
+  ↓
+  apply entitlement cap → res.json()
+```
 
-In `mapRendererOutputToDb()`:
-- `findings` now maps to `rec.finding || rec.evidence_summary` (Top10 finding wins)
-- Added `buildEvidenceJsonWithPhase4a3c()` that embeds `finding`, `recommendation`, `what_to_include`, `how_to_implement` inside `evidence_json.phase4a3c` for Top 10 recs
+### Why Title-Based Matching
 
-### Fix 2: GET Endpoint — SELECT v2 columns + enrich response
-
-- Both SELECT queries now include: `subfactor_key`, `rec_key`, `why_it_matters`, `evidence_json`, `confidence`, `evidence_quality`, `engine_version`
-- Added enrichment loop that extracts `phase4a3c` fields from `evidence_json` and merges into response
-- Top 10 fields take precedence over legacy fields
-
-### Fix 3: Admin-Gated Debug Mode
-
-- `?debug=1` query param + admin role → `_debug` payload in response
-- Per-rec debug: `_debug_renderer_path`, `_debug_canonical_key`, `_debug_is_top10`
-- No console.log in prod; only response enrichment when gated
-
-### Fix 4: Canonical Key Normalization
-
-- `backend/recommendations/canonicalKey.js` with `getCanonicalKey(rec)` and `isTop10(rec)`
-- 4 matching rules: exact subfactor_key → rec_key base → constructed pillar.suffix → unique suffix
-- Unit tests covering all rules + negatives
-
-### Fix 5: Frontend Field Precedence
-
-- `finding` now: `rec.finding || rec.findings` (enriched field first)
-- `impact` now: `rec.why_it_matters || rec.impact_description || rec.impact` (v2 first)
-- `actionSteps` now safely parses JSON strings from `action_steps`
+- 144 distinct titles audited from production DB
+- 33 mapped to 9 of 10 Top10 keys (query_intent_alignment unmapped — no title seen yet)
+- Normalized matching handles case/whitespace/punctuation variations
+- Keyword fallback catches slight title variations not in dictionary
+- Debug mode tracks unmatched titles for dictionary expansion
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `backend/recommendations/canonicalKey.js` | NEW — canonical key normalization |
-| `backend/tests/unit/canonical-key.test.js` | NEW — unit tests for canonical key |
-| `backend/services/scan-recommendations-service.js` | Fix persistence mapping + embed phase4a3c in evidence_json |
-| `backend/routes/scan.js` | Add v2 SELECT columns, enrichment loop, admin debug mode |
-| `frontend/results.js` | Fix field precedence for 5-section rendering |
-| `backend/recommendations/PHASE_4A3C_DEBUG_REPORT.md` | This report |
+| `backend/recommendations/legacyTop10Adapter.js` | NEW — title map, key resolution, GET-time enrichment |
+| `backend/tests/unit/legacy-top10-adapter.test.js` | NEW — 29 unit tests |
+| `backend/routes/scan.js` | Wire adapter into GET endpoint, admin debug |
+| `backend/services/scan-recommendations-service.js` | Persistence fixes (finding field, evidence_json embedding) |
+| `frontend/results.js` | Field precedence fix for 5-section rendering |
+| `backend/recommendations/canonicalKey.js` | Key normalization (used by persistence layer) |
+| `backend/tests/unit/canonical-key.test.js` | 18 unit tests for canonical key |
+
+## Test Results
+
+- 344 recommendation-related tests pass (315 existing + 29 new)
+- 0 regressions
+- 131 Phase 4A.3c evidence-based tests still green
 
 ## Verification Checklist
 
-- [ ] Hit scan endpoint with `?debug=1` as admin: Top10 recs show `renderer_path = top10`
+- [ ] Hit scan endpoint with `?debug=1` as admin: Top10 recs show `_debug_renderer_path = top10`
 - [ ] Fields present: finding, why_it_matters, recommendation, what_to_include, how_to_implement
-- [ ] UI shows 5 sections for Top10 recs
-- [ ] Finding and Why are distinct and in correct UI blocks
-- [ ] PDF export (window.print) shows 5 sections
+- [ ] Legacy fields updated: findings (evidence-based), impact_description, action_steps
+- [ ] UI shows improved Finding + Why content immediately (legacy field writes)
+- [ ] PDF export (window.print) shows improved content
 - [ ] No placeholder leaks (`{{...}}`, `[placeholder]`, `undefined`, `null`)
-- [ ] `npm test` passes
-- [ ] `node scripts/fixtures/validate-fixtures.js` passes
+- [ ] `_debug.unmatched_titles` shows which titles still need mapping
+- [ ] Frontend update to render Recommendation + What to Include sections (separate task)
 
 ## Non-Changes (preserved)
 
@@ -126,4 +136,4 @@ In `mapRendererOutputToDb()`:
 - Plan caps / gating — untouched
 - Ranking/dedupe/selection logic — untouched
 - Existing test assertions — untouched
-- No new console.log statements in production paths
+- No new console.log statements in production paths (error catch only for renderer failures)

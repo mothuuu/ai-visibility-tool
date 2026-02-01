@@ -60,9 +60,8 @@ const { PLAN_LIMITS } = require('../middleware/usageLimits');
 const refreshService = new RefreshCycleService();
 const usageTracker = new UsageTrackerService(db);
 
-// Phase 4A.3c: Top 10 subfactor list + canonical key helpers
-const TOP_10_SUBFACTORS = require('../recommendations/topSubfactors.phase4a3c.json').top10;
-const { getCanonicalKey, isTop10 } = require('../recommendations/canonicalKey');
+// Phase 4A.3c: GET-time legacy Top 10 adapter
+const { enrichLegacyRecommendations } = require('../recommendations/legacyTop10Adapter');
 
 /**
  * Phase 4A.3c: Check if user has admin role (for debug mode gating).
@@ -1540,95 +1539,29 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
     }
 
     // ============================================
-    // Phase 4A.3c: ENRICH recommendations with Top 10 fields from evidence_json
-    // The renderer stores finding, recommendation, what_to_include in evidence_json.
-    // Extract and merge into the response so the frontend can render 5 sections.
-    // ============================================
-    const enrichedRecs = updatedRecResult.rows.map(rec => {
-      const enriched = { ...rec };
-
-      // Parse evidence_json if it's a string
-      let evidenceData = rec.evidence_json;
-      if (typeof evidenceData === 'string') {
-        try { evidenceData = JSON.parse(evidenceData); } catch { evidenceData = {}; }
-      }
-      evidenceData = evidenceData || {};
-
-      // Determine if this is a Top 10 rec via canonical key
-      const canonicalKey = getCanonicalKey(rec);
-      const recIsTop10 = canonicalKey !== null;
-
-      // Extract Phase 4A.3c fields from evidence_json (where they're stored)
-      if (recIsTop10 && evidenceData.phase4a3c) {
-        const p = evidenceData.phase4a3c;
-        // Top 10 fields win over legacy fields
-        if (p.finding) enriched.finding = p.finding;
-        if (p.recommendation) enriched.recommendation = p.recommendation;
-        if (p.what_to_include) enriched.what_to_include = p.what_to_include;
-        if (p.how_to_implement) enriched.how_to_implement = p.how_to_implement;
-        // why_it_matters is already stored in its own column
-      }
-
-      // Ensure why_it_matters is surfaced (v2 column takes precedence over impact_description)
-      if (rec.why_it_matters && !enriched.impact_description) {
-        enriched.impact_description = rec.why_it_matters;
-      }
-
-      enriched._is_top10 = recIsTop10;
-      enriched._canonical_key = canonicalKey;
-
-      return enriched;
-    });
-
-    // ============================================
-    // Phase 4A.3c: ADMIN DEBUG MODE
-    // When ?debug=1 AND user is admin, add _debug breadcrumbs
+    // Phase 4A.3c: GET-time Top 10 enrichment via legacy adapter
+    // Matches recommendations to Top10 keys using title-based matching,
+    // runs the Phase 4A.3c renderer, writes into BOTH legacy fields
+    // (instant UI fix) AND v2 fields (future-proofing).
     // ============================================
     const debugRequested = req.query.debug === '1';
+    const userIsAdmin = debugRequested ? await isAdminUser(userId) : false;
+    const debugMode = debugRequested && userIsAdmin;
+
+    const { recommendations: enrichedRecs, debugInfo } = enrichLegacyRecommendations({
+      recommendations: updatedRecResult.rows,
+      detailedAnalysis: scan.detailed_analysis,
+      scan: scan,
+      debug: debugMode
+    });
+
     let debugPayload = null;
-
-    if (debugRequested) {
-      const userIsAdmin = await isAdminUser(userId);
-      if (userIsAdmin) {
-        debugPayload = {
-          renderer_version: '4A.3c',
-          endpoint_path: 'routes/scan.js GET /:id',
-          top10_keys_loaded: TOP_10_SUBFACTORS.length,
-          rec_debug_sample: enrichedRecs.slice(0, 10).map(rec => ({
-            title: rec.recommendation_text || '',
-            rec_key: rec.rec_key || null,
-            subfactor_key: rec.subfactor_key || null,
-            canonical_key: rec._canonical_key,
-            is_top10: rec._is_top10,
-            renderer_path: rec._is_top10
-              ? (rec.evidence_json?.phase4a3c ? 'top10' : 'legacy')
-              : 'legacy',
-            has_finding: !!(rec.finding || rec.findings),
-            has_why: !!(rec.why_it_matters || rec.impact_description),
-            has_recommendation: !!rec.recommendation,
-            has_what_to_include: !!rec.what_to_include,
-            has_how_to_implement: !!(rec.how_to_implement || rec.action_steps),
-            engine_version: rec.engine_version || null
-          }))
-        };
-
-        // Add per-rec debug fields
-        for (const rec of enrichedRecs) {
-          rec._debug_renderer_path = rec._is_top10
-            ? (rec.evidence_json?.phase4a3c ? 'top10' : 'legacy')
-            : 'legacy';
-          rec._debug_canonical_key = rec._canonical_key;
-          rec._debug_is_top10 = rec._is_top10;
-        }
-      }
-    }
-
-    // Clean internal fields from non-debug responses
-    if (!debugPayload) {
-      for (const rec of enrichedRecs) {
-        delete rec._is_top10;
-        delete rec._canonical_key;
-      }
+    if (debugMode) {
+      debugPayload = {
+        phase: '4A.3c',
+        adapter: 'legacyTop10Adapter',
+        ...debugInfo
+      };
     }
 
     // ============================================
