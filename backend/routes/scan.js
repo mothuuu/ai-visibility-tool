@@ -1637,6 +1637,13 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
         implemented_count: implemented.length,
         skipped_count: skipped.length
       };
+
+      // Append refill debug info to admin debug payload
+      if (debugMode && debugPayload) {
+        debugPayload.refill = recommendationsMeta;
+        debugPayload.active_titles = cappedActive.map(r => r.recommendation_text).slice(0, 10);
+        debugPayload.implemented_titles = implemented.map(r => r.recommendation_text).slice(0, 10);
+      }
     }
 
     res.json({

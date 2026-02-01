@@ -1,6 +1,11 @@
 // Helper functions for hybrid recommendation system
 const db = require('../db/database');
 
+// Minimum number of site-wide recs to persist per scan, regardless of plan cap.
+// The plan cap controls what is SHOWN, not what is STORED.
+// A larger pool allows GET-time refill when items resolve to implemented.
+const PERSIST_POOL_LIMIT = 25;
+
 // Site-wide recommendation categories (affect whole site)
 const SITE_WIDE_CATEGORIES = [
   'indexNowScore',
@@ -79,8 +84,8 @@ async function saveHybridRecommendations(scanId, userId, mainUrl, selectedPages,
   console.log(`   🌐 ${siteWideRecs.length} site-wide recommendations`);
   console.log(`   📄 ${pageSpecificRecs.length} page-specific recommendations`);
   
-  // Limit site-wide to 10-15
-  const limitedSiteWide = siteWideRecs.slice(0, 15);
+  // Persist a larger pool so GET-time refill works when items resolve to implemented
+  const limitedSiteWide = siteWideRecs.slice(0, PERSIST_POOL_LIMIT);
   
   // FIXED: Save ALL page-specific recommendations (no 5-per-page limit for single page)
   const pagesWithRecs = selectedPages || [{ url: mainUrl, priority: 1 }];
