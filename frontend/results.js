@@ -835,11 +835,13 @@ function createRecommendationCard(rec, index, userPlan, isSkipped = false) {
     // Use the correct field names from API
     const title = rec.recommendation_text || rec.title || 'Recommendation';
     const subcategory = rec.subcategory || '';
-    const finding = rec.findings || rec.finding || '';
-    const impact = rec.impact_description || rec.impact || rec.why_it_matters || '';
+    // Phase 4A.3c: Prefer enriched Top 10 fields, fallback to legacy
+    const finding = rec.finding || rec.findings || '';
+    const impact = rec.why_it_matters || rec.impact_description || rec.impact || '';
     const recommendationSection = rec.recommendation || '';
     const whatToInclude = rec.what_to_include || '';
-    const actionSteps = rec.action_steps || rec.actionSteps || rec.how_to_implement || rec.action_items || [];
+    const rawSteps = rec.how_to_implement || rec.action_steps || rec.actionSteps || rec.action_items || [];
+    const actionSteps = typeof rawSteps === 'string' ? (function() { try { return JSON.parse(rawSteps); } catch { return []; } })() : (Array.isArray(rawSteps) ? rawSteps : []);
     const codeSnippet = rec.code_snippet || rec.codeSnippet || '';
     const estimatedImpact = rec.estimated_impact || rec.estimatedScoreGain || 0;
     const effort = rec.estimated_effort || rec.effort || '';
