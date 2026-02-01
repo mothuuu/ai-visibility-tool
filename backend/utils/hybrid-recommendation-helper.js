@@ -1,10 +1,6 @@
 // Helper functions for hybrid recommendation system
 const db = require('../db/database');
-
-// Minimum number of site-wide recs to persist per scan, regardless of plan cap.
-// The plan cap controls what is SHOWN, not what is STORED.
-// A larger pool allows GET-time refill when items resolve to implemented.
-const PERSIST_POOL_LIMIT = 25;
+const { PERSIST_POOL_LIMIT } = require('../config/planCaps');
 
 // Site-wide recommendation categories (affect whole site)
 const SITE_WIDE_CATEGORIES = [
