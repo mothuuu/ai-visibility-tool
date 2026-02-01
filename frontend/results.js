@@ -227,11 +227,13 @@ function displayResults(scan, quota) {
         displayCategoryScores(scan.categoryBreakdown, scan.recommendations || [], scan.categoryWeights || {});
     }
 
-    // Update recommendations count (simplified - full message shown in Optimization Mode card)
-    const recCount = scan.recommendations ? scan.recommendations.length : 0;
+    // Update recommendations count — show active count only (not implemented/skipped)
+    const meta = scan.recommendations_meta;
+    const recs = scan.recommendations || [];
+    const activeCount = meta?.active_returned ?? recs.filter(r => !r.status || r.status === 'pending' || r.status === 'active').length;
     const recCountEl = document.getElementById('recCount');
     if (recCountEl) {
-        recCountEl.textContent = `${recCount} recommendation${recCount !== 1 ? 's' : ''} found`;
+        recCountEl.textContent = `${activeCount} recommendation${activeCount !== 1 ? 's' : ''} found`;
     }
 
     // Display recommendations based on tier and scan type

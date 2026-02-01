@@ -234,10 +234,12 @@ function enrichLegacyRecommendations({ recommendations, detailedAnalysis, scan, 
           next.findings = 'Detected as complete in the latest scan — no action needed.';
           next.impact_description = 'This item appears properly implemented on your site.';
 
-          // V2 fields (null is fine — these sections aren't needed for resolved items)
-          next.recommendation = next.recommendation || null;
-          next.what_to_include = next.what_to_include || null;
-          next.how_to_implement = next.how_to_implement || null;
+          // V2 fields: empty safe values so UI won't render blank sections
+          next.recommendation = '';
+          next.what_to_include = '';
+          next.how_to_implement = [];
+          next.finding = next.finding || null;
+          next.why_it_matters = next.why_it_matters || null;
 
           if (debug) {
             next._debug_renderer_path = 'resolved_complete';
