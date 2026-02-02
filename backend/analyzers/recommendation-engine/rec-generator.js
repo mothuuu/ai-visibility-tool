@@ -13,6 +13,7 @@ require('dotenv').config();
 
 const OpenAI = require('openai');
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
+const { joinUrl } = require('../../utils/url-canonicalizer');
 
 // ✅ FAQ library + customizer - NOW FULLY INTEGRATED
 const { loadLibrary, hasLibrary } = require('./faq-library-loader');
@@ -4088,7 +4089,7 @@ function makeProgrammaticSitemapRecommendation(issue, scanEvidence, industry) {
 
   // Use the actual detected sitemap location if available
   const sitemapLocation = scanEvidence.technical?.sitemapLocation || 'sitemap.xml';
-  const sitemapUrl = `${domain}/${sitemapLocation}`;
+  const sitemapUrl = joinUrl(domain, sitemapLocation);
   const pageCount = scanEvidence.technical?.sitemapPageCount || 0;
   const lastModified = scanEvidence.technical?.sitemapLastModified || 'Unknown';
 

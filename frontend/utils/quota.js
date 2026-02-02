@@ -90,12 +90,12 @@ function getQuotaDisplay(quota, quotaLegacy) {
 function getQuotaFromUser(user) {
   if (!user) return null;
 
-  // Plan-based limits (matches backend PLAN_LIMITS)
+  // Plan-based limits (matches backend scanEntitlementService SCAN_ENTITLEMENTS)
   const PLAN_LIMITS = {
     free: { primary: 2, competitor: 0 },
-    diy: { primary: 25, competitor: 2 },
+    diy: { primary: 25, competitor: 1 },
     pro: { primary: 50, competitor: 3 },
-    agency: { primary: -1, competitor: 0 },
+    agency: { primary: -1, competitor: 10 },
     enterprise: { primary: -1, competitor: 10 }
   };
 

@@ -182,10 +182,25 @@ function parseCanonicalTag(html, baseUrl) {
   };
 }
 
+/**
+ * Join a base (hostname or origin) with a path, ensuring exactly one slash
+ * between them. Prevents double-slash URLs like "example.com//sitemap.xml".
+ *
+ * @param {string} base  - e.g. "example.com" or "https://example.com/"
+ * @param {string} path  - e.g. "sitemap.xml" or "/sitemap.xml"
+ * @returns {string}
+ */
+function joinUrl(base, path) {
+  const cleanBase = (base || '').replace(/\/+$/, '');
+  const cleanPath = (path || '').replace(/^\/+/, '');
+  return cleanPath ? `${cleanBase}/${cleanPath}` : cleanBase;
+}
+
 module.exports = {
   canonicalizeUrl,
   urlsAreEquivalent,
   getCacheKey,
   canonicalizeWithRedirects,
-  parseCanonicalTag
+  parseCanonicalTag,
+  joinUrl
 };
