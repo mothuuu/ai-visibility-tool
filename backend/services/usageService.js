@@ -302,16 +302,23 @@ async function incrementUsageEvent({ userId, orgId, eventType, scanId = null }) 
   const newCount = legacyResult.rows[0]?.new_count || 0;
 
   // Dual-write to v2 if enabled and org context exists
+  // Uses record_usage_event() DB function which auto-resolves period_id
+  // via get_or_create_usage_period() — fixes NULL period_id failures
   if (v2Exists && orgId && isDualWriteEnabled()) {
     try {
-      await db.query(`
-        INSERT INTO usage_events (organization_id, user_id, event_type, scan_id, created_at)
-        VALUES ($1, $2, $3, $4, NOW())
-      `, [orgId, userId, eventType, scanId]);
+      await db.query(
+        `SELECT * FROM record_usage_event($1, $2, $3, $4, $5)`,
+        [orgId, eventType, userId, scanId, JSON.stringify({})]
+      );
 
       console.log(`[UsageService] v2 event recorded: ${eventType} for org ${orgId}`);
     } catch (error) {
-      console.error('[UsageService] v2 write failed (continuing with legacy):', error.message);
+      // 23505 = unique_violation → idempotent retry, not an error
+      if (error.code === '23505') {
+        console.log(`[UsageService] v2 event already exists (idempotent): ${eventType} scan=${scanId}`);
+      } else {
+        console.error('[UsageService] v2 write failed (continuing with legacy):', error.message);
+      }
     }
   }
 
