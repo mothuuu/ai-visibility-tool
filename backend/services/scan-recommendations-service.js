@@ -348,7 +348,7 @@ async function persistScanRecommendations({ scanId, recommendations, engineVersi
 
     // Assign unlock_state based on rank
     sortedRecs.forEach((rec, index) => {
-      rec._unlock_state = index < unlockLimit ? 'unlocked' : 'locked';
+      rec._unlock_state = index < unlockLimit ? 'active' : 'locked';
     });
 
     for (const rec of sortedRecs) {
