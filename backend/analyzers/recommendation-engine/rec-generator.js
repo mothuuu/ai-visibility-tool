@@ -4227,7 +4227,7 @@ ${hasSitemap ? `- Pages included: ${pageCount}\n- Last modified: ${lastModified}
 </urlset>
 
 <!-- Add to robots.txt -->
-Sitemap: ${domain}/sitemap.xml`;
+Sitemap: ${joinUrl(domain, 'sitemap.xml')}`;
 
   // Build implementation notes
   const implementationNotes = [
@@ -4297,7 +4297,7 @@ Sitemap: ${domain}/sitemap.xml`;
 1. Install Yoast SEO plugin
 2. Go to SEO → General → Features
 3. Enable "XML sitemaps"
-4. View sitemap at: ${domain}/sitemap_index.xml
+4. View sitemap at: ${joinUrl(domain, 'sitemap_index.xml')}
 \`\`\`
 
 **Method B: Node.js/Express**
@@ -4363,7 +4363,7 @@ User-agent: *
 Allow: /
 
 # Sitemap location
-Sitemap: ${domain}/sitemap.xml
+Sitemap: ${joinUrl(domain, 'sitemap.xml')}
 \`\`\`
 
 ### 3. Submit to Search Engines
@@ -4385,7 +4385,7 @@ Sitemap: ${domain}/sitemap.xml
 **Check Sitemap Format:**
 \`\`\`bash
 # Test sitemap is accessible
-curl ${domain}/sitemap.xml
+curl ${joinUrl(domain, 'sitemap.xml')}
 
 # Validate XML format
 xmllint --noout sitemap.xml
@@ -4493,7 +4493,7 @@ Disallow: /*?*filter=
 Disallow: /search?
 
 # Sitemap location
-Sitemap: ${domain}/sitemap.xml
+Sitemap: ${joinUrl(domain, 'sitemap.xml')}
 
 # Optional: Crawl delay (use sparingly)
 # Crawl-delay: 10`;
@@ -4566,7 +4566,7 @@ Disallow: /wp-admin/
 Disallow: /private/
 
 # Sitemap
-Sitemap: ${domain}/sitemap.xml
+Sitemap: ${joinUrl(domain, 'sitemap.xml')}
 \`\`\`
 
 ### 2. Advanced Configuration (If Needed)
