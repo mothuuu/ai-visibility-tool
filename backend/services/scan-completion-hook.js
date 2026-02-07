@@ -16,6 +16,7 @@ const RefreshCycleService = require('./refresh-cycle-service');
 const ImpactScoreCalculator = require('./impact-score-calculator');
 const EliteRecommendationGenerator = require('./elite-recommendation-generator');
 const RecommendationContextService = require('./recommendation-context-service');
+const { generateAndPersistRecommendations } = require('./recommendation-orchestrator');
 
 class ScanCompletionHook {
   constructor(pool) {
@@ -83,6 +84,16 @@ class ScanCompletionHook {
       } else {
         // GENERATE NEW RECOMMENDATIONS
         console.log('  📎 No active context - generating new recommendations');
+
+        // 4.5. Generate base recommendations via orchestrator
+        console.log('  🎯 Generating recommendations...');
+        try {
+          const recResult = await generateAndPersistRecommendations(scanId);
+          console.log(`     ✓ Generated ${recResult.recommendations_count || 0} recommendations`);
+        } catch (recError) {
+          console.error('     ✗ Recommendation generation failed:', recError.message);
+          // Continue with hook - don't fail the entire completion
+        }
 
         // 5. Calculate impact scores for recommendations
         await this.calculateImpactScores(userId, scanId, scanResults);
