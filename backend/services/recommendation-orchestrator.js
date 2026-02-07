@@ -13,6 +13,7 @@
  */
 
 const db = require('../db/database');
+const planService = require('./planService');
 
 // ========================================
 // UTILITIES
@@ -163,7 +164,7 @@ function extractScanEvidence(detailedAnalysis) {
 // ========================================
 
 /**
- * Fetch user plan from the users table
+ * Fetch user plan using PlanService
  *
  * @param {string} userId - User ID from scan
  * @returns {Promise<string>} - User's plan (defaults to 'free' if not found)
@@ -174,32 +175,28 @@ async function fetchUserPlan(userId) {
   }
 
   try {
-    // Try 'plan' column first (common naming)
-    const result = await db.query(`
-      SELECT plan, pricing_tier
-      FROM users
-      WHERE id = $1
-    `, [userId]);
+    // Use PlanService which handles org overrides, Stripe, and all edge cases
+    const planResult = await planService.resolvePlanForRequest({ userId });
 
-    if (result.rows.length === 0) {
-      console.warn(`[RecommendationOrchestrator] User ${userId} not found, defaulting to free plan`);
-      return 'free';
-    }
+    // Extract plan from result (handles various response shapes)
+    const plan =
+      planResult?.plan ||
+      planResult?.effective_plan ||
+      planResult?.org?.effective_plan ||
+      'free';
 
-    const user = result.rows[0];
+    const normalized = planService.normalizePlan(plan);
 
-    // Try 'plan' column, fall back to 'pricing_tier'
-    const plan = user.plan || user.pricing_tier || 'free';
+    console.log(
+      `[RecommendationOrchestrator] User ${userId} plan: ${normalized}` +
+      (planResult?.plan_source ? ` (source: ${planResult.plan_source})` : '')
+    );
 
-    console.log(`[RecommendationOrchestrator] User ${userId} plan: ${plan}`);
-    return plan;
+    return normalized;
   } catch (error) {
-    // Handle case where columns don't exist
-    if (error.message && error.message.includes('column')) {
-      console.warn(`[RecommendationOrchestrator] Plan column not found in users table, defaulting to free: ${error.message}`);
-    } else {
-      console.error(`[RecommendationOrchestrator] Error fetching user plan: ${error.message}`);
-    }
+    console.error(
+      `[RecommendationOrchestrator] Error resolving user plan via PlanService: ${error.message}`
+    );
     return 'free';
   }
 }
