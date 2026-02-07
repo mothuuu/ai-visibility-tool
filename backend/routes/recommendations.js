@@ -19,6 +19,66 @@ const { getRecommendationVisibleLimit } = require('../services/scanEntitlementSe
 const { skipRecommendation: canonicalSkipRecommendation } = require('../services/recommendation-status-service');
 
 // ============================================
+// HELPER: Refill active slot after implementing/skipping
+// When a rec leaves the active pool, promote the next locked rec
+// ============================================
+async function refillActiveSlot(scanId, userId) {
+  try {
+    // 1. Get user's plan and unlock limit
+    const planResult = await resolvePlanForRequest({ userId });
+    const plan = planResult?.plan || 'free';
+    const unlockLimit = getRecommendationVisibleLimit(plan);
+
+    // Unlimited plans don't need refill logic
+    if (unlockLimit === -1) {
+      return { refilled: false, reason: 'unlimited_plan' };
+    }
+
+    // 2. Count current active recs for this scan
+    const activeCountResult = await db.query(`
+      SELECT COUNT(*) as count
+      FROM scan_recommendations
+      WHERE scan_id = $1 AND unlock_state = 'active'
+    `, [scanId]);
+
+    const activeCount = parseInt(activeCountResult.rows[0].count, 10);
+
+    // 3. If already at or above cap, no refill needed
+    if (activeCount >= unlockLimit) {
+      return { refilled: false, reason: 'at_cap', activeCount, unlockLimit };
+    }
+
+    // 4. Find the next locked rec to promote (by priority then id for consistency)
+    const nextLocked = await db.query(`
+      SELECT id, recommendation_text
+      FROM scan_recommendations
+      WHERE scan_id = $1 AND unlock_state = 'locked'
+      ORDER BY priority DESC, id ASC
+      LIMIT 1
+    `, [scanId]);
+
+    if (nextLocked.rows.length === 0) {
+      return { refilled: false, reason: 'no_locked_recs' };
+    }
+
+    // 5. Promote locked → active
+    await db.query(`
+      UPDATE scan_recommendations
+      SET unlock_state = 'active', unlocked_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+    `, [nextLocked.rows[0].id]);
+
+    console.log(`   🔄 [RefillActiveSlot] Promoted rec ${nextLocked.rows[0].id} to active (scan ${scanId})`);
+
+    return { refilled: true, promotedRecId: nextLocked.rows[0].id };
+
+  } catch (error) {
+    console.error(`   ❌ [RefillActiveSlot] Error: ${error.message}`);
+    return { refilled: false, reason: 'error', error: error.message };
+  }
+}
+
+// ============================================
 // POST /api/recommendations/:id/mark-complete
 // Mark a recommendation as implemented (completed)
 // This sets both unlock_state and status so the 5-day refresh cycle
@@ -91,6 +151,16 @@ router.post('/:id/mark-complete', authenticateToken, async (req, res) => {
     );
 
     console.log(`   ✅ Recommendation marked as implemented (status + unlock_state updated)`);
+
+    // Refill active slot - promote next locked rec if below plan cap
+    const refillResult = await refillActiveSlot(rec.scan_id, userId);
+    if (refillResult.refilled) {
+      // If we refilled, increment active_recommendations back up
+      await db.query(
+        `UPDATE user_progress SET active_recommendations = active_recommendations + 1 WHERE scan_id = $1`,
+        [rec.scan_id]
+      );
+    }
 
     // Get updated progress
     const progressResult = await db.query(
@@ -261,6 +331,16 @@ router.post('/:id/implement', authenticateToken, async (req, res) => {
     );
 
     console.log(`   ✅ Recommendation ${recId} implemented successfully`);
+
+    // Refill active slot - promote next locked rec if below plan cap
+    const refillResult = await refillActiveSlot(rec.scan_id, userId);
+    if (refillResult.refilled) {
+      // If we refilled, increment active_recommendations back up
+      await db.query(
+        `UPDATE user_progress SET active_recommendations = active_recommendations + 1 WHERE scan_id = $1`,
+        [rec.scan_id]
+      );
+    }
 
     // Get updated progress
     const progressResult = await db.query(
@@ -649,10 +729,14 @@ router.post('/:id/skip', authenticateToken, async (req, res) => {
 
     console.log(`   ✅ Recommendation skipped (effective scan: ${result.effectiveScanId})`);
 
+    // Refill active slot - promote next locked rec if below plan cap
+    const refillResult = await refillActiveSlot(result.effectiveScanId, userId);
+
     res.json({
       success: true,
       message: result.message,
-      progress: result.progress
+      progress: result.progress,
+      refill: refillResult.refilled ? { promotedRecId: refillResult.promotedRecId } : null
     });
 
   } catch (error) {
@@ -716,6 +800,16 @@ router.post('/:id/implement', authenticateToken, async (req, res) => {
       [rec.scan_id]
     );
 
+    // Refill active slot - promote next locked rec if below plan cap
+    const refillResult = await refillActiveSlot(rec.scan_id, userId);
+    if (refillResult.refilled) {
+      // If we refilled, increment active_recommendations back up
+      await db.query(
+        `UPDATE user_progress SET active_recommendations = active_recommendations + 1 WHERE scan_id = $1`,
+        [rec.scan_id]
+      );
+    }
+
     const progressResult = await db.query(
       `SELECT total_recommendations, active_recommendations, completed_recommendations,
               recommendations_implemented, recommendations_skipped
@@ -726,7 +820,8 @@ router.post('/:id/implement', authenticateToken, async (req, res) => {
     res.json({
       success: true,
       message: 'Recommendation marked as implemented',
-      progress: progressResult.rows[0] || null
+      progress: progressResult.rows[0] || null,
+      refill: refillResult.refilled ? { promotedRecId: refillResult.promotedRecId } : null
     });
   } catch (error) {
     console.error('❌ Implement recommendation error:', error);
