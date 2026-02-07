@@ -1,6 +1,7 @@
 // Helper functions for hybrid recommendation system
 const db = require('../db/database');
-const { PERSIST_POOL_LIMIT } = require('../config/planCaps');
+const { PERSIST_POOL_LIMIT, getCapForPlan } = require('../config/planCaps');
+const { normalizePlan } = require('../services/scanEntitlementService');
 
 // Site-wide recommendation categories (affect whole site)
 const SITE_WIDE_CATEGORIES = [
@@ -94,19 +95,11 @@ async function saveHybridRecommendations(scanId, userId, mainUrl, selectedPages,
   
   console.log(`   📄 Will save ${recsPerPage} recommendations per page (${pagesWithRecs.length} page(s))`);
 
-  // Determine initial active count based on plan (case-insensitive comparison)
-  const planLower = (userPlan || '').toLowerCase();
-  let initialActive;
-  if (planLower === 'free') {
-    initialActive = 3;  // Free: Top 3 recommendations
-  } else if (planLower === 'diy') {
-    initialActive = 5;  // DIY: First 5, then progressive unlock
-  } else if (planLower === 'pro' || planLower === 'enterprise' || planLower === 'agency') {
-    initialActive = 999; // Pro/Enterprise/Agency: All recommendations active immediately
-  } else {
-    initialActive = 0;   // Guest: No recommendations
-    console.warn(`⚠️ Unknown plan "${userPlan}" - defaulting to 0 active recommendations`);
-  }
+  // Determine initial active count based on plan - use planCaps.js as SSOT
+  const normalizedPlan = normalizePlan(userPlan);
+  const capValue = getCapForPlan(normalizedPlan);
+  // -1 means unlimited, use a large number for array slicing
+  const initialActive = capValue === -1 ? 999 : capValue;
 
   console.log(`   🔓 Initial active recommendations for ${userPlan} tier: ${initialActive}`);
 

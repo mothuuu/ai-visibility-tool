@@ -14,6 +14,7 @@
 
 const crypto = require('crypto');
 const db = require('../db/database');
+const { getCapForPlan } = require('../config/planCaps');
 
 // ========================================
 // PLAN GATING (Phase 4A.2.2)
@@ -76,16 +77,10 @@ function normalizePlan(plan) {
  * @returns {number} - Number of recommendations to unlock (Infinity for unlimited)
  */
 function getUnlockLimit(plan) {
-  const limits = {
-    free: 3,
-    freemium: 3,
-    diy: 5,
-    pro: Infinity,
-    agency: Infinity,
-    enterprise: Infinity
-  };
-
-  return limits[plan] ?? 3;
+  // Use planCaps.js as single source of truth
+  const cap = getCapForPlan(plan);
+  // -1 means unlimited
+  return cap === -1 ? Infinity : cap;
 }
 
 /**
