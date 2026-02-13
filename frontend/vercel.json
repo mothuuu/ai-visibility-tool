@@ -1,4 +1,10 @@
 {
+  "rewrites": [
+    {
+      "source": "/scan",
+      "destination": "/dashboard.html"
+    }
+  ],
   "headers": [
     {
       "source": "/sitemap.xml",

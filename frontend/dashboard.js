@@ -341,6 +341,17 @@ async function initDashboard() {
             navigateToSection(section);
         }
 
+        // Check for ?url= param to auto-populate and trigger scan
+        const urlParam = urlParams.get('url');
+        if (urlParam) {
+            navigateToSection('start-new-scan');
+            const scanInput = document.getElementById('scanUrlInput');
+            if (scanInput) {
+                scanInput.value = urlParam;
+                startNewScan();
+            }
+        }
+
     } catch (error) {
         console.error('Dashboard init error:', error.message);
         console.error('Dashboard: Full error:', error);
