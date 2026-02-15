@@ -10,6 +10,7 @@ const UsageTrackerService = require('../services/usage-tracker-service');
 const RecommendationContextService = require('../services/recommendation-context-service');
 const RefreshCycleService = require('../services/refresh-cycle-service');
 const GuestScanCacheService = require('../services/guest-scan-cache-service');
+const { generateFindings } = require('../services/findingsService');
 const { skipRecommendation: canonicalSkipRecommendation, resolveEffectiveScanId } = require('../services/recommendation-status-service');
 const { createGuestRateLimiter } = require('../middleware/guestRateLimit');
 const { loadOrgContext } = require('../middleware/orgContext');
@@ -802,59 +803,14 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
     );
     
 
-    // 🔥 Save recommendations with HYBRID SYSTEM (NEW!)
-    // Skip saving recommendations for competitor scans
-let progressInfo = null;
-const recsToSave = scanResult.recommendations?.length || 0;
-console.log(`[Scan] Checking recommendations for persistence: count=${recsToSave}, isCompetitor=${isCompetitorScan}, reusedFromContext=${!!scanResult.reusedFromContext}`);
-if (!isCompetitorScan && scanResult.recommendations && scanResult.recommendations.length > 0 && !scanResult.reusedFromContext) {
-  console.log(`[Scan] ✅ Persisting ${recsToSave} recommendations for scan ${scan.id}`);
-  // Prepare page priorities from request
-  const selectedPages = pages && pages.length > 0
-    ? pages.map((pageUrl, index) => ({
-        url: pageUrl,
-        priority: index + 1 // First page = priority 1, etc.
-      }))
-    : [{ url: scanTarget, priority: 1 }]; // Just main URL if no pages specified
-
-  // Save with hybrid system (pass score for tracking)
-  // Phase 2.1: Use resolved plan
-  progressInfo = await saveHybridRecommendations(
-    scan.id,
-    userId,
-    scanTarget,
-    selectedPages,
-    scanResult.recommendations,
-    planResolution.plan,
-    Math.round(scanResult.totalScore),  // Score at creation for tracking
-    null  // Context ID will be set after context creation
-  );
-
-  // Initialize refresh cycle for paid users only (Free users don't need refresh cycles)
-  // Phase 2.1: Use resolved plan
-  if (planResolution.plan !== 'free') {
+    // Replaced by findingsService — Phase 1 pivot
+    let progressInfo = null;
     try {
-      await refreshService.initializeRefreshCycle(userId, scan.id);
-      console.log(`🔄 Refresh cycle initialized for scan ${scan.id}`);
-    } catch (refreshError) {
-      console.error('⚠️ Failed to initialize refresh cycle:', refreshError.message);
-      // Don't fail the scan if refresh cycle fails
+      await generateFindings(scan.id);
+    } catch (findingsErr) {
+      console.error(`[Findings] Error generating findings for scan ${scan.id}:`, findingsErr.message);
+      // Non-critical: do not fail the scan completion
     }
-  } else {
-    console.log(`⏭️ Skipping refresh cycle for Free user ${userId}`);
-
-    // Increment Free user's monthly recommendation counter
-    // Count how many recommendations were actually saved (limited to 3 for Free)
-    const recsSaved = Math.min(scanResult.recommendations.length, 3);
-    if (recsSaved > 0) {
-      await db.query(
-        `UPDATE users SET recs_generated_this_month = COALESCE(recs_generated_this_month, 0) + $1 WHERE id = $2`,
-        [recsSaved, userId]
-      );
-      console.log(`📊 Updated Free user rec counter: +${recsSaved} recommendations`);
-    }
-  }
-}
 
     // 📎 MANAGE RECOMMENDATION CONTEXT (5-day persistence)
     if (!isCompetitorScan) {
