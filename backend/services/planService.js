@@ -894,6 +894,135 @@ async function setOrgPlanOverride(orgId, planOverride, setByUserId, reason) {
 }
 
 // =============================================================================
+// FEATURE-MATRIX ENTITLEMENTS (Phase 1 pivot)
+// =============================================================================
+
+/**
+ * SSOT feature matrix for the new plan tiers.
+ * Keys are effective plan names (free, starter, pro).
+ * -1 means unlimited.
+ */
+const PLAN_ENTITLEMENTS = Object.freeze({
+  free: Object.freeze({
+    scansPerMonth:     1,
+    pagesPerScan:      1,
+    tokensPerCycle:    0,
+    canPurchaseTokens: false,
+    hasFindings:       'teaser',
+    hasCitation:       'teaser',
+    hasCompetitor:     false,
+    hasExports:        false
+  }),
+  starter: Object.freeze({
+    scansPerMonth:     4,
+    pagesPerScan:      3,
+    tokensPerCycle:    60,
+    canPurchaseTokens: true,
+    hasFindings:       'full',
+    hasCitation:       'standard',
+    hasCompetitor:     false,
+    hasExports:        false
+  }),
+  pro: Object.freeze({
+    scansPerMonth:     -1,
+    pagesPerScan:      10,
+    tokensPerCycle:    200,
+    canPurchaseTokens: true,
+    hasFindings:       'full',
+    hasCitation:       'pro',
+    hasCompetitor:     true,
+    hasExports:        true
+  })
+});
+
+/**
+ * Normalize a plan name: trim, lowercase, null/empty → 'free'.
+ *
+ * This is a lightweight normalizer for the new entitlement layer.
+ * It does NOT apply legacy aliases — use getEffectivePlan() for that.
+ *
+ * @param {string|null|undefined} planName
+ * @returns {string}
+ */
+function normalizePlanName(planName) {
+  if (!planName) return 'free';
+  return String(planName).trim().toLowerCase() || 'free';
+}
+
+/**
+ * Map a normalized plan name to the effective plan used for entitlement lookup.
+ *
+ * Backward-compat mappings:
+ *   'diy'      → 'starter'
+ *   'freemium' → 'free'
+ *
+ * @param {string|null|undefined} planName - Raw or normalized plan name
+ * @returns {string} Effective plan key (matches PLAN_ENTITLEMENTS keys)
+ */
+function getEffectivePlan(planName) {
+  const normalized = normalizePlanName(planName);
+
+  if (normalized === 'diy')      return 'starter';
+  if (normalized === 'freemium') return 'free';
+
+  return normalized;
+}
+
+/**
+ * Get feature-matrix entitlements for a plan.
+ *
+ * Uses getEffectivePlan() to resolve aliases first.
+ * Unknown plans log a warning and return free-tier entitlements (never crashes).
+ *
+ * @param {string|null|undefined} planName
+ * @returns {Readonly<{scansPerMonth:number, pagesPerScan:number, tokensPerCycle:number, canPurchaseTokens:boolean, hasFindings:string, hasCitation:string, hasCompetitor:boolean, hasExports:boolean}>}
+ */
+function getEntitlements(planName) {
+  const effective = getEffectivePlan(planName);
+  const entitlements = PLAN_ENTITLEMENTS[effective];
+
+  if (!entitlements) {
+    console.warn(`[PlanService] Unknown effective plan '${effective}' (raw: '${planName}') — returning free entitlements`);
+    return PLAN_ENTITLEMENTS.free;
+  }
+
+  return entitlements;
+}
+
+/**
+ * Check whether a plan grants access to a named feature.
+ *
+ * Supports both boolean keys (hasCompetitor, hasExports, canPurchaseTokens)
+ * and access-level keys (hasFindings, hasCitation) — for access-level keys
+ * any truthy non-'teaser' value is considered full access.
+ *
+ * @param {string|null|undefined} planName
+ * @param {string} featureName - Key in PLAN_ENTITLEMENTS (e.g. 'hasCompetitor')
+ * @returns {boolean}
+ */
+function canAccessFeature(planName, featureName) {
+  const ent = getEntitlements(planName);
+  const value = ent[featureName];
+
+  if (value === undefined) return false;
+  if (typeof value === 'boolean') return value;
+  // Access-level strings: 'full', 'standard', 'pro' → true; 'teaser' → false
+  if (typeof value === 'string') return value !== 'teaser';
+  // Numeric (e.g. tokensPerCycle): truthy if > 0
+  return value > 0;
+}
+
+/**
+ * Get the token allowance for a plan.
+ *
+ * @param {string|null|undefined} planName
+ * @returns {number} tokensPerCycle (0 for free)
+ */
+function getTokenAllowance(planName) {
+  return getEntitlements(planName).tokensPerCycle;
+}
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 
@@ -921,6 +1050,14 @@ module.exports = {
 
   // Utilities
   getPriceToPlanMapping,
+
+  // Feature-matrix entitlements (Phase 1 pivot)
+  PLAN_ENTITLEMENTS,
+  normalizePlanName,
+  getEffectivePlan,
+  getEntitlements,
+  canAccessFeature,
+  getTokenAllowance,
 
   // Constants
   ACTIVE_SUBSCRIPTION_STATUSES,
