@@ -19,6 +19,7 @@ const adminRoutes = require('./routes/admin');
 const adminControlCenterRoutes = require('./routes/admin/index');
 const citationNetworkRoutes = require('./routes/citationNetwork');
 const organizationRoutes = require('./routes/organization');
+const tokenRoutes = require('./routes/tokens');
 
 // Stripe webhook handler - imported directly for raw body mounting
 // P0: Export as function, not object
@@ -117,6 +118,7 @@ app.use('/api/admin', adminRoutes); // Admin org/plan routes
 app.use('/api/admin', adminControlCenterRoutes); // Admin control center routes (overview, users, curation, etc.)
 app.use('/api/citation-network', citationNetworkRoutes); // AI Citation Network
 app.use('/api/org', organizationRoutes); // Phase 3B: Organization/Team management
+app.use('/api/tokens', tokenRoutes); // Token balance and purchase
 app.use('/api/test', require('./routes/test-routes'));
 
 // Health check
