@@ -19,6 +19,7 @@ const adminRoutes = require('./routes/admin');
 const adminControlCenterRoutes = require('./routes/admin/index');
 const citationNetworkRoutes = require('./routes/citationNetwork');
 const organizationRoutes = require('./routes/organization');
+const findingsRoutes = require('./routes/findings');
 
 // Stripe webhook handler - imported directly for raw body mounting
 // P0: Export as function, not object
@@ -109,6 +110,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api', aiTestingRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/scan', scanRoutes);
+app.use('/api/scans', findingsRoutes);
 app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/competitors', competitorRoutes); // Competitive tracking (Elite mode)
 app.use('/api/feedback', feedbackRoutes);
