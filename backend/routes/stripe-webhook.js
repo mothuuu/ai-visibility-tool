@@ -25,8 +25,15 @@ const {
   syncPlanFromWebhook,
   handleSubscriptionDeleted: handleSubDeleted,
   upsertOrgStripeFields,
-  clearOrgStripeFields
+  clearOrgStripeFields,
+  getEntitlements
 } = require('../services/planService');
+
+// Phase 1.8: Import TokenService for token top-up and renewal grants
+const TokenService = require('../services/tokenService');
+
+// Valid token top-up amounts
+const VALID_TOKEN_AMOUNTS = [20, 50, 120, 250];
 
 /**
  * Main Stripe webhook handler
@@ -134,6 +141,11 @@ async function handleStripeWebhook(req, res) {
           handled = true;
           break;
 
+        case 'checkout.session.completed':
+          await handleCheckoutCompleted(event.data.object, client);
+          handled = true;
+          break;
+
         default:
           console.log(`ℹ️  Unhandled event type: ${event.type}`);
       }
@@ -198,6 +210,15 @@ async function handleSubscriptionDeleted(subscription, client) {
   `, [user.id]);
 
   console.log(`✅ User ${user.email} downgraded from ${oldPlan} to free`);
+
+  // Phase 1.8: Expire all tokens on subscription cancellation
+  try {
+    await TokenService.expireAllTokens(user.id);
+    console.log(`[Token] Expired all tokens for user ${user.id} on subscription cancellation`);
+  } catch (tokenErr) {
+    console.error(`[Token] Failed to expire tokens for user ${user.id}:`, tokenErr.message);
+    // Don't break subscription handling — token expiry failure is non-fatal
+  }
 
   // Phase 2.1: Dual-write to organizations
   const orgResult = await clearOrgStripeFields(customerId, client);
@@ -306,6 +327,7 @@ async function handlePaymentFailed(invoice, client) {
 
 /**
  * Handle successful payment
+ * Phase 1.8: Also handles monthly token grants on subscription renewal
  */
 async function handlePaymentSucceeded(invoice, client) {
   console.log(`✅ Payment succeeded for invoice: ${invoice.id}`);
@@ -314,7 +336,7 @@ async function handlePaymentSucceeded(invoice, client) {
   const queryFn = client ? client.query.bind(client) : db.query.bind(db);
 
   const userResult = await queryFn(
-    'SELECT id, email FROM users WHERE stripe_customer_id = $1',
+    'SELECT id, email, plan FROM users WHERE stripe_customer_id = $1',
     [customerId]
   );
 
@@ -325,6 +347,16 @@ async function handlePaymentSucceeded(invoice, client) {
 
   const user = userResult.rows[0];
   console.log(`💰 Payment succeeded for ${user.email}: $${(invoice.amount_paid / 100).toFixed(2)}`);
+
+  // Phase 1.8: Grant monthly tokens on subscription renewal
+  if (invoice.billing_reason === 'subscription_cycle') {
+    try {
+      await handleRenewalTokenGrant(invoice, user, queryFn);
+    } catch (tokenErr) {
+      console.error(`[Token] Failed to grant renewal tokens for user ${user.id}:`, tokenErr.message);
+      // Don't break payment handling — token grant failure is non-fatal
+    }
+  }
 }
 
 /**
@@ -378,6 +410,114 @@ async function handleSubscriptionCreated(subscription, client) {
   if (orgResult.success) {
     console.log(`✅ Org ${orgResult.orgId} Stripe fields updated (new subscription, status: ${subscription.status})`);
   }
+}
+
+// =============================================================================
+// Phase 1.8: Token Top-Up and Renewal Token Grant Handlers
+// =============================================================================
+
+/**
+ * Handle checkout.session.completed for token top-ups.
+ * Only processes sessions with mode='payment' and metadata.type='token_topup'.
+ * Non-topup checkout sessions are ignored (existing flows handle those).
+ */
+async function handleCheckoutCompleted(session, client) {
+  const metadata = session.metadata || {};
+
+  // Only handle token top-ups — let other checkout flows pass through
+  if (session.mode !== 'payment' || metadata.type !== 'token_topup') {
+    console.log(`[Token] checkout.session.completed is not a token top-up (mode=${session.mode}, type=${metadata.type}), skipping`);
+    return;
+  }
+
+  // Verify payment status
+  if (session.payment_status !== 'paid') {
+    console.warn(`[Token] Token top-up session ${session.id} not paid (status=${session.payment_status}), skipping`);
+    return;
+  }
+
+  // Idempotency: check token_transactions for duplicate crediting
+  const queryFn = client ? client.query.bind(client) : db.query.bind(db);
+  const dupCheck = await queryFn(
+    `SELECT id FROM token_transactions WHERE reference_type = 'stripe_checkout_session' AND reference_id = $1 LIMIT 1`,
+    [session.id]
+  );
+  if (dupCheck.rows.length > 0) {
+    console.log(`[Token] Already credited session ${session.id}, skipping`);
+    return;
+  }
+
+  // Extract and validate userId
+  const userId = parseInt(metadata.user_id, 10);
+  if (!userId || isNaN(userId)) {
+    console.error(`[Token] Invalid user_id in metadata for session ${session.id}:`, JSON.stringify(metadata));
+    return; // Return 200 — don't make Stripe retry bad data
+  }
+
+  // Cross-check client_reference_id if set
+  if (session.client_reference_id && session.client_reference_id !== String(userId)) {
+    console.error(`[Token] client_reference_id mismatch: ${session.client_reference_id} vs metadata.user_id ${userId} for session ${session.id}`);
+    return;
+  }
+
+  // Validate user exists
+  const userResult = await queryFn('SELECT id FROM users WHERE id = $1', [userId]);
+  if (userResult.rows.length === 0) {
+    console.error(`[Token] User ${userId} not found in DB for session ${session.id}`);
+    return;
+  }
+
+  // Extract and validate token amount
+  const tokenAmount = parseInt(metadata.token_amount, 10);
+  if (!tokenAmount || isNaN(tokenAmount) || !VALID_TOKEN_AMOUNTS.includes(tokenAmount)) {
+    console.error(`[Token] Invalid token_amount ${metadata.token_amount} for session ${session.id}. Valid amounts: ${VALID_TOKEN_AMOUNTS.join(', ')}`);
+    return;
+  }
+
+  // Credit tokens
+  await TokenService.creditPurchasedTokens(userId, tokenAmount, 'stripe_checkout_session', session.id);
+  console.log(`[Token] Credited ${tokenAmount} tokens to user ${userId} from session ${session.id}`);
+}
+
+/**
+ * Handle monthly token grant on subscription renewal.
+ * Called from handlePaymentSucceeded when billing_reason === 'subscription_cycle'.
+ */
+async function handleRenewalTokenGrant(invoice, user, queryFn) {
+  // Idempotency: check token_transactions for duplicate grant
+  const dupCheck = await queryFn(
+    `SELECT id FROM token_transactions WHERE reference_type = 'stripe_invoice' AND reference_id = $1 LIMIT 1`,
+    [invoice.id]
+  );
+  if (dupCheck.rows.length > 0) {
+    console.log(`[Token] Already granted tokens for invoice ${invoice.id}, skipping`);
+    return;
+  }
+
+  // Determine plan entitlements
+  const entitlements = getEntitlements(user.plan);
+  const tokensPerCycle = entitlements.tokensPerCycle;
+
+  if (!tokensPerCycle || tokensPerCycle === 0) {
+    console.log(`[Token] Plan '${user.plan}' has 0 tokensPerCycle, skipping renewal grant for user ${user.id}`);
+    return;
+  }
+
+  // Convert invoice period timestamps to dates
+  const cycleStartDate = invoice.period_start
+    ? new Date(invoice.period_start * 1000)
+    : new Date();
+  const cycleEndDate = invoice.period_end
+    ? new Date(invoice.period_end * 1000)
+    : new Date();
+
+  // Expire remaining monthly tokens from previous cycle
+  await TokenService.expireMonthlyTokens(user.id);
+
+  // Grant new monthly tokens
+  await TokenService.grantMonthlyTokens(user.id, tokensPerCycle, cycleStartDate, cycleEndDate);
+
+  console.log(`[Token] Granted ${tokensPerCycle} monthly tokens to user ${user.id} for cycle ${cycleStartDate.toISOString()} to ${cycleEndDate.toISOString()}`);
 }
 
 // Export as function (not object with named export)
