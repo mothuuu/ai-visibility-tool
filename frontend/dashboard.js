@@ -1243,7 +1243,7 @@ async function loadDashboardData() {
         loadRecentScans(),
         loadLatestScores(),
         loadTrackedPages(),
-        loadRecommendations(),
+        loadFindings(),
         loadSubscriptionData()
     ]);
 }
@@ -1480,25 +1480,235 @@ async function loadTrackedPages() {
     if (dashboardPagesTracked) dashboardPagesTracked.textContent = '0';
 }
 
-// Load recommendations
-async function loadRecommendations() {
-    // For now, show placeholder counts
-    const recommendationsCount = document.getElementById('recommendationsCount');
-    const criticalIssuesCount = document.getElementById('criticalIssuesCount');
-    const quickWinsCount = document.getElementById('quickWinsCount');
+// Pack catalog — maps suggested_pack_type to display name and token cost
+const PACK_CATALOG = {
+    schema_pack:        { name: 'Schema Pack',        tokens: 60 },
+    faq_pack:           { name: 'FAQ Pack',           tokens: 40 },
+    evidence_trust:     { name: 'Trust Pack',         tokens: 50 },
+    entity_clarity:     { name: 'Entity Pack',        tokens: 45 },
+    citation_pack:      { name: 'Citation Pack',      tokens: 55 },
+    performance_pack:   { name: 'Performance Pack',   tokens: 50 },
+    technical_seo_pack: { name: 'Technical SEO Pack', tokens: 60 },
+    aeo_pack:           { name: 'AEO Pack',           tokens: 50 },
+    quick_wins:         { name: 'Quick Wins Pack',    tokens: 30 }
+};
 
-    if (recommendationsCount) recommendationsCount.textContent = '0';
-    if (criticalIssuesCount) criticalIssuesCount.textContent = '0';
-    if (quickWinsCount) quickWinsCount.textContent = '0';
+// Findings state
+let findingsData = null;
+let activeSeverityFilters = new Set();
 
-    // Placeholder for recommendation stats
-    document.getElementById('recoCriticalCount').textContent = '0';
-    document.getElementById('recoHighCount').textContent = '0';
-    document.getElementById('recoMediumCount').textContent = '0';
-    document.getElementById('recoCompletedCount').textContent = '0';
+// Load findings for the latest scan
+async function loadFindings() {
+    const authToken = localStorage.getItem('authToken');
+    const findingsCountBadge = document.getElementById('findingsCount');
+    const loadingEl = document.getElementById('findingsLoading');
+    const errorEl = document.getElementById('findingsError');
+    const container = document.getElementById('findingsContainer');
+    const summaryBar = document.getElementById('findingsSummaryBar');
+    const filtersEl = document.getElementById('findingsSeverityFilters');
+    const upgradeOverlay = document.getElementById('findingsUpgradeOverlay');
 
-    document.getElementById('criticalIssuesTotal').textContent = '0';
-    document.getElementById('quickWinsTotal').textContent = '0';
+    // Reset
+    if (findingsCountBadge) findingsCountBadge.textContent = '0';
+    if (upgradeOverlay) upgradeOverlay.style.display = 'none';
+
+    if (!authToken) return;
+
+    // Get latest scan ID
+    try {
+        const scansRes = await fetch(`${API_BASE_URL}/scan/list/recent`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (!scansRes.ok) return;
+        const scansData = await scansRes.json();
+        const scans = scansData.scans || [];
+        if (scans.length === 0) return;
+
+        const scanId = scans[0].id;
+
+        // Show loading
+        if (loadingEl) loadingEl.style.display = 'block';
+        if (container) container.style.display = 'none';
+        if (errorEl) errorEl.style.display = 'none';
+
+        const res = await fetch(`${API_BASE_URL}/scans/${scanId}/findings`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (loadingEl) loadingEl.style.display = 'none';
+
+        if (!res.ok) {
+            if (errorEl) errorEl.style.display = 'block';
+            return;
+        }
+
+        findingsData = await res.json();
+        if (container) container.style.display = 'block';
+
+        // Update nav badge
+        if (findingsCountBadge) findingsCountBadge.textContent = findingsData.total_count || '0';
+
+        // Update summary bar
+        updateFindingsSummary(findingsData);
+
+        // Update filter buttons with counts
+        updateFilterCounts(findingsData.severity_counts);
+
+        // Setup filter click handlers
+        setupSeverityFilters();
+
+        // Render findings
+        renderFindings(findingsData.findings);
+
+        // Handle plan_limited overlay
+        if (findingsData.plan_limited) {
+            const upgradeTotal = document.getElementById('findingsUpgradeTotal');
+            if (upgradeTotal) upgradeTotal.textContent = findingsData.total_count;
+            if (upgradeOverlay) upgradeOverlay.style.display = 'block';
+        }
+
+    } catch (error) {
+        console.error('Error loading findings:', error);
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (errorEl) errorEl.style.display = 'block';
+    }
+}
+
+function updateFindingsSummary(data) {
+    const totalEl = document.getElementById('findingsTotalCount');
+    const breakdownEl = document.getElementById('findingsSummaryBreakdown');
+
+    if (totalEl) totalEl.textContent = data.total_count || 0;
+
+    if (breakdownEl) {
+        const sc = data.severity_counts || {};
+        const parts = [];
+        if (sc.critical) parts.push(`${sc.critical} critical`);
+        if (sc.high) parts.push(`${sc.high} high`);
+        if (sc.medium) parts.push(`${sc.medium} medium`);
+        if (sc.low) parts.push(`${sc.low} low`);
+        breakdownEl.textContent = parts.join(' \u00B7 ');
+    }
+}
+
+function updateFilterCounts(severityCounts) {
+    const sc = severityCounts || {};
+    const el = (id) => document.getElementById(id);
+    if (el('filterCriticalCount')) el('filterCriticalCount').textContent = sc.critical || 0;
+    if (el('filterHighCount')) el('filterHighCount').textContent = sc.high || 0;
+    if (el('filterMediumCount')) el('filterMediumCount').textContent = sc.medium || 0;
+    if (el('filterLowCount')) el('filterLowCount').textContent = sc.low || 0;
+}
+
+function setupSeverityFilters() {
+    const buttons = document.querySelectorAll('.severity-filter-btn');
+    buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const severity = btn.getAttribute('data-severity');
+
+            if (severity === 'all') {
+                // Clear all individual filters, activate 'all'
+                activeSeverityFilters.clear();
+                buttons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            } else {
+                // Toggle this severity
+                const allBtn = document.querySelector('.severity-filter-btn[data-severity="all"]');
+                if (allBtn) allBtn.classList.remove('active');
+
+                if (activeSeverityFilters.has(severity)) {
+                    activeSeverityFilters.delete(severity);
+                    btn.classList.remove('active');
+                } else {
+                    activeSeverityFilters.add(severity);
+                    btn.classList.add('active');
+                }
+
+                // If none selected, reactivate 'all'
+                if (activeSeverityFilters.size === 0) {
+                    if (allBtn) allBtn.classList.add('active');
+                }
+            }
+
+            // Re-render with current filters
+            if (findingsData) {
+                renderFindings(findingsData.findings);
+            }
+        });
+    });
+}
+
+function renderFindings(findings) {
+    const container = document.getElementById('findingsContainer');
+    if (!container) return;
+
+    // Apply client-side severity filter
+    let filtered = findings;
+    if (activeSeverityFilters.size > 0) {
+        filtered = findings.filter(f => activeSeverityFilters.has(f.severity));
+    }
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon"><i class="fas fa-check-circle"></i></div>
+                <div class="empty-text">${activeSeverityFilters.size > 0 ? 'No findings match the selected filters' : 'No findings for this scan'}</div>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = filtered.map((f, idx) => {
+        const pack = f.suggested_pack_type ? PACK_CATALOG[f.suggested_pack_type] : null;
+        const urlCount = f.impacted_url_count || 0;
+        const desc = f.description || '';
+
+        return `
+            <div class="finding-card" data-severity="${f.severity}">
+                <div class="finding-card-header">
+                    <span class="severity-badge ${f.severity}">${f.severity}</span>
+                    <span class="finding-title">${escapeHtml(f.title)}</span>
+                    <span class="pillar-tag">${escapeHtml(f.pillar)}</span>
+                </div>
+                ${desc ? `
+                    <div class="finding-description" id="finding-desc-${idx}">${escapeHtml(desc)}</div>
+                    ${desc.length > 150 ? `<button class="finding-expand-btn" onclick="toggleFindingDesc(${idx})">Show more</button>` : ''}
+                ` : ''}
+                <div class="finding-footer">
+                    <div class="finding-meta">
+                        ${urlCount > 0 ? `<span><i class="fas fa-link"></i> ${urlCount} page${urlCount !== 1 ? 's' : ''} affected</span>` : ''}
+                    </div>
+                    ${pack ? `
+                        <button class="fix-this-btn" disabled>
+                            Fix with ${escapeHtml(pack.name)} &middot; ${pack.tokens} tokens
+                            <span class="fix-tooltip">Execution Packs coming soon</span>
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function toggleFindingDesc(idx) {
+    const desc = document.getElementById(`finding-desc-${idx}`);
+    const btn = desc?.nextElementSibling;
+    if (!desc) return;
+
+    if (desc.classList.contains('expanded')) {
+        desc.classList.remove('expanded');
+        if (btn) btn.textContent = 'Show more';
+    } else {
+        desc.classList.add('expanded');
+        if (btn) btn.textContent = 'Show less';
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
 }
 
 // Start new scan
