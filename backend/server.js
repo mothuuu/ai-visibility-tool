@@ -27,6 +27,7 @@ const handleStripeWebhook = require('./routes/stripe-webhook');
 // Background jobs
 const { getWorker } = require('./jobs/submissionWorker');
 const { sendActionReminders } = require('./jobs/citationNetworkReminders');
+const { startTokenExpiryCron } = require('./jobs/tokenExpiry');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -184,4 +185,7 @@ app.listen(PORT, () => {
   } else {
     console.log('[Server] Citation reminders disabled (set ENABLE_CITATION_REMINDERS=1 to enable)');
   }
+
+  // Schedule token expiry safety-net job (daily at midnight UTC)
+  startTokenExpiryCron();
 });
