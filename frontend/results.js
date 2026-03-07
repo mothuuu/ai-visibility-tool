@@ -641,7 +641,7 @@ function displayRecommendations(recommendations, userTier, userProgress, nextBat
         upgradeMsg.innerHTML = `
             <h3 class="text-xl font-bold mb-2">🔒 ${recommendations.length - 5} More Recommendations Available</h3>
             <p class="text-gray-700 mb-4">Upgrade to DIY Starter to unlock all recommendations, FAQ generation, and unlimited scans.</p>
-            <a href="checkout.html?url=${encodeURIComponent(document.getElementById('scanUrl').textContent)}"
+            <a href="plans.html"
                class="inline-block px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all">
                 Upgrade to DIY - $29/month
             </a>
@@ -798,7 +798,7 @@ function displayUpgradeCTA(userTier, totalRecs) {
             <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg p-8 text-center">
                 <h3 class="text-2xl font-bold mb-4">Upgrade to DIY Starter</h3>
                 <p class="mb-6">Get 5-page deep scans, personalized code, and 5 active recommendations</p>
-                <a href="checkout.html?plan=diy" class="inline-block px-8 py-3 bg-white text-purple-600 font-bold rounded-full hover:bg-gray-100 transition-all">
+                <a href="plans.html" class="inline-block px-8 py-3 bg-white text-purple-600 font-bold rounded-full hover:bg-gray-100 transition-all">
                     Upgrade to DIY - $29/month →
                 </a>
             </div>
@@ -1058,7 +1058,7 @@ function createRecommendationCard(rec, index, userPlan, isSkipped = false) {
                         </button>
                     ` : ''}
                 ` : `
-                    <a href="/checkout.html?plan=diy" style="padding: 10px 16px; background: linear-gradient(135deg, #00B9DA 0%, #7D41A5 100%); color: white; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 6px;">
+                    <a href="/plans.html" style="padding: 10px 16px; background: linear-gradient(135deg, #00B9DA 0%, #7D41A5 100%); color: white; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 6px;">
                         <span>🔓</span> Upgrade to DIY to track progress →
                     </a>
                 `}
@@ -1224,7 +1224,7 @@ function displayUpgradeCTA(upgradeData, userPlan) {
                     </ul>
                 </div>
 
-                <a href="checkout.html?url=${encodeURIComponent(document.getElementById('scanUrl')?.textContent || '')}" 
+                <a href="plans.html" 
                    class="block w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-lg font-semibold text-center hover:from-blue-700 hover:to-teal-700 transition-all">
                     Upgrade to DIY Starter - $29/month
                 </a>

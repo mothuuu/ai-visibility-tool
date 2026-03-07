@@ -5336,31 +5336,111 @@ function populateProfileForm(profile) {
 }
 
 // ============================================================================
+// PLANS_CONFIG — Single source of truth for ALL plan-related UI
+// ============================================================================
+// Drives: plan comparison page, CTA gating, token widget, upgrade links.
+// Display prices are copy-only; Stripe price IDs are the SSOT for charges.
+
+const PLANS_CONFIG = {
+    free: {
+        name: 'Free',
+        price: '$0',
+        priceNote: 'forever',
+        monthlyTokens: 0,
+        canPurchaseTokens: false,
+        features: {
+            scansPerMonth: '1',
+            pagesPerScan: '1',
+            findings: 'Top 3 teaser',
+            citationMonitoring: 'Snapshot only',
+            competitorScanning: '\u2014',
+            monthlyTokens: '\u2014',
+            tokenTopUps: '\u2014',
+            benchmarking: '\u2014',
+            exports: '\u2014',
+            citationAlerts: '\u2014'
+        }
+    },
+    starter: {
+        name: 'Starter',
+        planKey: 'diy',           // backend plan name sent to checkout endpoint
+        price: '$29',
+        priceNote: '/mo',
+        monthlyTokens: 60,
+        canPurchaseTokens: true,
+        highlight: 'Most Popular',
+        features: {
+            scansPerMonth: '4',
+            pagesPerScan: '3',
+            findings: 'Full with evidence',
+            citationMonitoring: 'Biweekly, 1\u20132 engines',
+            competitorScanning: '\u2014',
+            monthlyTokens: '60',
+            tokenTopUps: 'Available',
+            benchmarking: 'Vertical percentile',
+            exports: '\u2014',
+            citationAlerts: '\u2014'
+        }
+    },
+    pro: {
+        name: 'Pro',
+        planKey: 'pro',
+        price: '$99',
+        priceNote: '/mo',
+        monthlyTokens: 200,
+        canPurchaseTokens: true,
+        highlight: 'Best Value',
+        features: {
+            scansPerMonth: 'Unlimited',
+            pagesPerScan: '10',
+            findings: 'Full with evidence',
+            citationMonitoring: 'Weekly, 3+ engines, full context',
+            competitorScanning: 'Up to 5 domains',
+            monthlyTokens: '200',
+            tokenTopUps: 'Available',
+            benchmarking: 'Vertical percentile',
+            exports: 'PDF + CSV',
+            citationAlerts: 'Gained/lost alerts'
+        }
+    }
+};
+
+// Token bundle display prices (display-only; Stripe is SSOT for actual charges)
+const TOKEN_BUNDLES = [
+    { bundle: '20',  tokens: 20,  price: '$19'  },
+    { bundle: '50',  tokens: 50,  price: '$39'  },
+    { bundle: '120', tokens: 120, price: '$79'  },
+    { bundle: '250', tokens: 250, price: '$149' }
+];
+
+// Centralized route for plan/upgrade page
+const ROUTES = {
+    PLANS: 'plans.html'
+};
+
+// Resolve a user plan to its PLANS_CONFIG key.
+// Backend stores 'diy'; UI treats it as 'starter'.
+function resolvePlanKey(plan) {
+    const p = (plan || 'free').toLowerCase();
+    if (p === 'diy') return 'starter';
+    if (PLANS_CONFIG[p]) return p;
+    return 'free';
+}
+
+function getPlanConfig(plan) {
+    return PLANS_CONFIG[resolvePlanKey(plan)];
+}
+
+// ============================================================================
 // TOKEN BALANCE WIDGET
 // ============================================================================
-
-// Single source of truth for plan entitlements (client-side)
-const TOKEN_PLAN_ENTITLEMENTS = {
-    free:       { monthlyAllowance: 0,   canPurchaseTokens: false },
-    diy:        { monthlyAllowance: 60,  canPurchaseTokens: true  },
-    starter:    { monthlyAllowance: 60,  canPurchaseTokens: true  },
-    pro:        { monthlyAllowance: 200, canPurchaseTokens: true  },
-    enterprise: { monthlyAllowance: 999, canPurchaseTokens: true  }
-};
-
-// Bundle display prices (display-only; Stripe is SSOT for actual charges)
-const TOKEN_BUNDLE_PRICES = {
-    '20':  '$19',
-    '50':  '$39',
-    '120': '$79',
-    '250': '$149'
-};
 
 // Global token balance state
 let tokenBalanceData = null;
 
 function getTokenEntitlements(plan) {
-    return TOKEN_PLAN_ENTITLEMENTS[(plan || 'free').toLowerCase()] || TOKEN_PLAN_ENTITLEMENTS.free;
+    const cfg = getPlanConfig(plan);
+    return { monthlyAllowance: cfg.monthlyTokens, canPurchaseTokens: cfg.canPurchaseTokens };
 }
 
 async function fetchTokenBalance() {
@@ -5451,7 +5531,7 @@ function renderTokenBalance(balance) {
         actionBtn.textContent = '✨ Upgrade';
         actionBtn.className = 'token-action-btn upgrade-plan';
         actionBtn.onclick = function () {
-            window.location.href = 'https://www.visible2ai.com/checkout.html';
+            window.location.href = ROUTES.PLANS;
         };
     }
 }
