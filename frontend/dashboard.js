@@ -5335,8 +5335,245 @@ function populateProfileForm(profile) {
     validateSaveButton();
 }
 
+// ============================================================================
+// TOKEN BALANCE WIDGET
+// ============================================================================
+
+// Single source of truth for plan entitlements (client-side)
+const TOKEN_PLAN_ENTITLEMENTS = {
+    free:       { monthlyAllowance: 0,   canPurchaseTokens: false },
+    diy:        { monthlyAllowance: 60,  canPurchaseTokens: true  },
+    starter:    { monthlyAllowance: 60,  canPurchaseTokens: true  },
+    pro:        { monthlyAllowance: 200, canPurchaseTokens: true  },
+    enterprise: { monthlyAllowance: 999, canPurchaseTokens: true  }
+};
+
+// Bundle display prices (display-only; Stripe is SSOT for actual charges)
+const TOKEN_BUNDLE_PRICES = {
+    '20':  '$19',
+    '50':  '$39',
+    '120': '$79',
+    '250': '$149'
+};
+
+// Global token balance state
+let tokenBalanceData = null;
+
+function getTokenEntitlements(plan) {
+    return TOKEN_PLAN_ENTITLEMENTS[(plan || 'free').toLowerCase()] || TOKEN_PLAN_ENTITLEMENTS.free;
+}
+
+async function fetchTokenBalance() {
+    const authToken = localStorage.getItem('authToken');
+    if (!authToken) return null;
+
+    try {
+        const resp = await fetch(`${API_BASE_URL}/tokens/balance`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (!resp.ok) throw new Error(`Balance fetch failed: ${resp.status}`);
+        const data = await resp.json();
+        tokenBalanceData = data;
+        return data;
+    } catch (err) {
+        console.error('[TokenBalance] Fetch error:', err.message);
+        return null;
+    }
+}
+
+function renderTokenBalance(balance) {
+    const widget = document.getElementById('tokenBalanceWidget');
+    if (!widget) return;
+
+    // If fetch failed, show error state
+    if (!balance) {
+        widget.classList.remove('hidden-widget');
+        document.getElementById('tokenTotalDisplay').textContent = '—';
+        document.getElementById('tokenCycleDays').textContent = '';
+        return;
+    }
+
+    const plan = (user && user.plan) || 'free';
+    const entitlements = getTokenEntitlements(plan);
+    const total = balance.total_available || 0;
+
+    // Show widget
+    widget.classList.remove('hidden-widget');
+
+    // Total count
+    document.getElementById('tokenTotalDisplay').textContent = total;
+
+    // Days remaining
+    const cycleDaysEl = document.getElementById('tokenCycleDays');
+    if (balance.cycle_end_date && plan !== 'free') {
+        const now = new Date();
+        const end = new Date(balance.cycle_end_date);
+        const daysLeft = Math.max(0, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
+        cycleDaysEl.textContent = `· ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`;
+    } else {
+        cycleDaysEl.textContent = '';
+    }
+
+    // Low balance warning (< 15 = cheapest pack cost)
+    if (total < 15) {
+        widget.classList.add('low-balance');
+    } else {
+        widget.classList.remove('low-balance');
+    }
+
+    // Breakdown details
+    const monthlyAllowance = entitlements.monthlyAllowance;
+    document.getElementById('tokenMonthlyDetail').textContent =
+        plan === 'free' ? '0' : `${balance.monthly_remaining || 0} of ${monthlyAllowance}`;
+    document.getElementById('tokenPurchasedDetail').textContent = balance.purchased_balance || 0;
+
+    // Cycle end date
+    const cycleEndLine = document.getElementById('tokenCycleEndLine');
+    if (balance.cycle_end_date && plan !== 'free') {
+        cycleEndLine.style.display = '';
+        const endDate = new Date(balance.cycle_end_date);
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        document.getElementById('tokenCycleEndDetail').textContent =
+            `${monthNames[endDate.getUTCMonth()]} ${endDate.getUTCDate()}`;
+    } else {
+        cycleEndLine.style.display = 'none';
+    }
+
+    // Action button: "Upgrade" for free users, "Buy Tokens" for paid users
+    const actionBtn = document.getElementById('tokenActionBtn');
+    if (entitlements.canPurchaseTokens) {
+        actionBtn.style.display = '';
+        actionBtn.textContent = '🪙 Buy Tokens';
+        actionBtn.className = 'token-action-btn buy-tokens';
+        actionBtn.onclick = toggleBundleSelector;
+    } else {
+        actionBtn.style.display = '';
+        actionBtn.textContent = '✨ Upgrade';
+        actionBtn.className = 'token-action-btn upgrade-plan';
+        actionBtn.onclick = function () {
+            window.location.href = 'https://www.visible2ai.com/checkout.html';
+        };
+    }
+}
+
+function toggleBundleSelector() {
+    const selector = document.getElementById('tokenBundleSelector');
+    selector.classList.toggle('visible');
+}
+
+function setupTokenWidgetListeners() {
+    // Toggle dropdown
+    const toggle = document.getElementById('tokenBalanceToggle');
+    if (toggle) {
+        toggle.addEventListener('click', function () {
+            const widget = document.getElementById('tokenBalanceWidget');
+            widget.classList.toggle('expanded');
+            // Close bundle selector when collapsing
+            if (!widget.classList.contains('expanded')) {
+                document.getElementById('tokenBundleSelector').classList.remove('visible');
+                clearBundleSelection();
+            }
+        });
+    }
+
+    // Bundle option selection
+    let selectedBundle = null;
+    const bundleOptions = document.querySelectorAll('.token-bundle-option');
+    bundleOptions.forEach(function (opt) {
+        opt.addEventListener('click', function () {
+            bundleOptions.forEach(function (o) { o.classList.remove('selected'); });
+            opt.classList.add('selected');
+            selectedBundle = opt.getAttribute('data-bundle');
+            document.getElementById('tokenContinueBtn').disabled = false;
+        });
+    });
+
+    // Continue to checkout
+    const continueBtn = document.getElementById('tokenContinueBtn');
+    if (continueBtn) {
+        continueBtn.addEventListener('click', async function () {
+            if (!selectedBundle) return;
+
+            continueBtn.disabled = true;
+            continueBtn.textContent = 'Redirecting…';
+
+            try {
+                const authToken = localStorage.getItem('authToken');
+                const resp = await fetch(`${API_BASE_URL}/tokens/purchase`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ bundle: selectedBundle })
+                });
+
+                if (!resp.ok) {
+                    const err = await resp.json().catch(function () { return {}; });
+                    throw new Error(err.error || 'Purchase request failed');
+                }
+
+                const data = await resp.json();
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    throw new Error('No checkout URL returned');
+                }
+            } catch (err) {
+                console.error('[TokenBalance] Purchase error:', err.message);
+                continueBtn.textContent = 'Continue to Checkout';
+                continueBtn.disabled = false;
+                alert('Could not start checkout: ' + err.message);
+            }
+        });
+    }
+
+    function clearBundleSelection() {
+        selectedBundle = null;
+        bundleOptions.forEach(function (o) { o.classList.remove('selected'); });
+        document.getElementById('tokenContinueBtn').disabled = true;
+        document.getElementById('tokenContinueBtn').textContent = 'Continue to Checkout';
+    }
+}
+
+async function handleStripeTokenReturn() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session_id');
+    const status = urlParams.get('status');
+
+    // If cancelled or no session_id, do nothing
+    if (status === 'cancel' || !sessionId) return;
+
+    // Re-fetch balance after successful checkout return
+    if (sessionId) {
+        console.log('[TokenBalance] Detected Stripe return, refreshing balance…');
+        const balance = await fetchTokenBalance();
+        renderTokenBalance(balance);
+
+        // Clear session_id from URL
+        urlParams.delete('session_id');
+        urlParams.delete('status');
+        const cleanUrl = urlParams.toString()
+            ? `${window.location.pathname}?${urlParams.toString()}`
+            : window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+    }
+}
+
+async function initTokenBalanceWidget() {
+    setupTokenWidgetListeners();
+
+    // Handle Stripe checkout return
+    await handleStripeTokenReturn();
+
+    // Fetch and display balance
+    const balance = await fetchTokenBalance();
+    renderTokenBalance(balance);
+}
+
 // Initialize on page load
 window.addEventListener('DOMContentLoaded', initDashboard);
 window.addEventListener('DOMContentLoaded', initCitationNetwork);
 window.addEventListener('DOMContentLoaded', initBusinessProfileForm);
 window.addEventListener('DOMContentLoaded', loadExistingProfile);
+window.addEventListener('DOMContentLoaded', initTokenBalanceWidget);
