@@ -1289,66 +1289,6 @@
             color: var(--gray-500);
         }
 
-        /* Recommendation Cards */
-        .recommendation-card {
-            background: white;
-            border: 1px solid var(--gray-200);
-            border-left: 4px solid var(--gray-300);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1rem;
-            transition: all 0.3s;
-        }
-
-        .recommendation-card:hover {
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        .recommendation-card.critical {
-            border-left-color: var(--critical-red);
-        }
-
-        .recommendation-card.high {
-            border-left-color: var(--high-yellow);
-        }
-
-        .recommendation-card.medium {
-            border-left-color: var(--medium-purple);
-        }
-
-        .recommendation-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 1rem;
-        }
-
-        .recommendation-title {
-            font-weight: 600;
-            color: var(--gray-900);
-            margin-bottom: 0.5rem;
-        }
-
-        .recommendation-description {
-            font-size: 0.875rem;
-            color: var(--gray-600);
-            line-height: 1.6;
-            margin-bottom: 1rem;
-        }
-
-        .recommendation-meta {
-            display: flex;
-            gap: 1rem;
-            font-size: 0.75rem;
-            color: var(--gray-500);
-            margin-bottom: 1rem;
-        }
-
-        .recommendation-actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-
         /* Issue Details */
         .issue-section {
             margin: 1.5rem 0;
@@ -2947,6 +2887,247 @@
             color: var(--complete-teal);
             font-size: 1rem;
         }
+
+        /* ===== Findings Section Styles ===== */
+
+        .findings-summary-bar {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            padding: 1rem 1.5rem;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid var(--gray-200);
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .findings-summary-total {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--gray-800);
+        }
+
+        .findings-summary-count {
+            font-size: 1.5rem;
+        }
+
+        .findings-summary-breakdown {
+            display: flex;
+            gap: 1rem;
+            color: var(--gray-500);
+            font-size: 0.9rem;
+        }
+
+        .findings-severity-filters {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .severity-filter-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 20px;
+            background: white;
+            color: var(--gray-600);
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.15s ease;
+        }
+
+        .severity-filter-btn:hover {
+            border-color: var(--brand-cyan);
+            color: var(--brand-cyan);
+        }
+
+        .severity-filter-btn.active {
+            background: var(--brand-cyan);
+            color: white;
+            border-color: var(--brand-cyan);
+        }
+
+        .severity-filter-btn[data-severity="critical"].active {
+            background: #EF4444;
+            border-color: #EF4444;
+        }
+
+        .severity-filter-btn[data-severity="high"].active {
+            background: #F59E0B;
+            border-color: #F59E0B;
+        }
+
+        .severity-filter-btn[data-severity="medium"].active {
+            background: #D97706;
+            border-color: #D97706;
+        }
+
+        .severity-filter-btn[data-severity="low"].active {
+            background: #10B981;
+            border-color: #10B981;
+        }
+
+        .finding-card {
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 0.75rem;
+            transition: box-shadow 0.15s ease;
+        }
+
+        .finding-card:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .finding-card-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .severity-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .severity-badge.critical { background: #FEE2E2; color: #DC2626; }
+        .severity-badge.high { background: #FEF3C7; color: #D97706; }
+        .severity-badge.medium { background: #FFF7ED; color: #C2410C; }
+        .severity-badge.low { background: #D1FAE5; color: #059669; }
+
+        .finding-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--gray-800);
+            flex: 1;
+        }
+
+        .pillar-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.15rem 0.5rem;
+            background: var(--gray-100);
+            border-radius: 6px;
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            font-weight: 500;
+            text-transform: capitalize;
+            flex-shrink: 0;
+        }
+
+        .finding-description {
+            color: var(--gray-600);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-bottom: 0.75rem;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .finding-description.expanded {
+            -webkit-line-clamp: unset;
+            display: block;
+        }
+
+        .finding-expand-btn {
+            background: none;
+            border: none;
+            color: var(--brand-cyan);
+            cursor: pointer;
+            font-size: 0.8rem;
+            padding: 0;
+            margin-bottom: 0.75rem;
+        }
+
+        .finding-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .finding-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            color: var(--gray-400);
+            font-size: 0.8rem;
+        }
+
+        .fix-this-btn {
+            padding: 0.4rem 1rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 8px;
+            background: var(--gray-100);
+            color: var(--gray-400);
+            cursor: not-allowed;
+            font-size: 0.8rem;
+            font-weight: 500;
+            position: relative;
+        }
+
+        .fix-this-btn:hover .fix-tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .fix-tooltip {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            bottom: calc(100% + 6px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--gray-800);
+            color: white;
+            padding: 0.4rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            transition: opacity 0.15s;
+            pointer-events: none;
+        }
+
+        .fix-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: var(--gray-800);
+        }
+
+        /* Upgrade Overlay */
+        .findings-upgrade-blur {
+            position: relative;
+            padding: 3rem 2rem;
+            background: linear-gradient(180deg, rgba(249,250,251,0) 0%, rgba(249,250,251,0.95) 30%, var(--gray-50) 100%);
+            border-radius: 12px;
+            text-align: center;
+            margin-top: -1rem;
+        }
+
+        .findings-upgrade-content h3 {
+            font-size: 1.25rem;
+            color: var(--gray-800);
+            margin-bottom: 0.5rem;
+        }
     </style>
     <!-- Google Analytics 4 -->
     <script src="analytics.js"></script>
@@ -3049,21 +3230,11 @@
                 </div>
 
                 <div class="nav-section">
-                    <div class="nav-section-title">Recommendations</div>
-                    <div class="nav-item" data-section="all-recommendations">
-                        <i class="fas fa-list"></i>
-                        <span>All Recommendations</span>
-                        <span class="badge" id="recommendationsCount">0</span>
-                    </div>
-                    <div class="nav-item" data-section="critical-issues">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <span>Critical Issues</span>
-                        <span class="badge badge-critical" id="criticalIssuesCount">0</span>
-                    </div>
-                    <div class="nav-item" data-section="quick-wins">
-                        <i class="fas fa-bolt"></i>
-                        <span>Quick Wins</span>
-                        <span class="badge" id="quickWinsCount">0</span>
+                    <div class="nav-section-title">Diagnostics</div>
+                    <div class="nav-item" data-section="findings">
+                        <i class="fas fa-search"></i>
+                        <span>Findings</span>
+                        <span class="badge" id="findingsCount">0</span>
                     </div>
                 </div>
 
@@ -3209,7 +3380,7 @@
                         <ul class="scan-type-features">
                             <li>Fast (2-3 minutes)</li>
                             <li>Detailed breakdown</li>
-                            <li>Actionable recommendations</li>
+                            <li>Actionable findings</li>
                         </ul>
                     </div>
                     <div class="scan-type-card" id="multiPageScanCard">
@@ -3522,113 +3693,64 @@
                 </div>
             </section>
 
-            <!-- All Recommendations Section -->
-            <section class="section" id="all-recommendations">
+            <!-- Findings Section -->
+            <section class="section" id="findings">
                 <div class="section-header">
-                    <h1 class="section-title">All Recommendations</h1>
-                    <p class="section-subtitle">Complete list of optimization opportunities</p>
+                    <h1 class="section-title">Findings</h1>
+                    <p class="section-subtitle">Diagnostic issues found in your latest scan</p>
                 </div>
 
-                <!-- Summary Cards -->
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-label">Critical</div>
-                        <div class="stat-value" style="color: var(--critical-red);" id="recoCriticalCount">0</div>
-                        <div class="stat-meta">🔴</div>
+                <!-- Summary Bar -->
+                <div class="findings-summary-bar" id="findingsSummaryBar">
+                    <div class="findings-summary-total">
+                        <span class="findings-summary-count" id="findingsTotalCount">0</span> findings
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-label">High</div>
-                        <div class="stat-value" style="color: var(--high-yellow);" id="recoHighCount">0</div>
-                        <div class="stat-meta">🟡</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Medium</div>
-                        <div class="stat-value" style="color: var(--medium-purple);" id="recoMediumCount">0</div>
-                        <div class="stat-meta">🟢</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Completed</div>
-                        <div class="stat-value" style="color: var(--complete-teal);" id="recoCompletedCount">0</div>
-                        <div class="stat-meta">✅</div>
-                    </div>
+                    <div class="findings-summary-breakdown" id="findingsSummaryBreakdown"></div>
                 </div>
 
-                <!-- Filter Bar -->
-                <div class="filter-bar">
-                    <select id="filterPriority">
-                        <option>All Priorities</option>
-                        <option>Critical</option>
-                        <option>High</option>
-                        <option>Medium</option>
-                    </select>
-                    <select id="filterCategory">
-                        <option>All Categories</option>
-                    </select>
-                    <select id="filterRecoStatus">
-                        <option>All Status</option>
-                        <option>Not Started</option>
-                        <option>In Progress</option>
-                        <option>Completed</option>
-                    </select>
+                <!-- Severity Filter Toggles -->
+                <div class="findings-severity-filters" id="findingsSeverityFilters">
+                    <button class="severity-filter-btn active" data-severity="all">All</button>
+                    <button class="severity-filter-btn" data-severity="critical">Critical (<span id="filterCriticalCount">0</span>)</button>
+                    <button class="severity-filter-btn" data-severity="high">High (<span id="filterHighCount">0</span>)</button>
+                    <button class="severity-filter-btn" data-severity="medium">Medium (<span id="filterMediumCount">0</span>)</button>
+                    <button class="severity-filter-btn" data-severity="low">Low (<span id="filterLowCount">0</span>)</button>
                 </div>
 
-                <!-- Recommendation Cards -->
-                <div id="recommendationsContainer">
+                <!-- Loading State -->
+                <div id="findingsLoading" style="display: none;">
                     <div class="empty-state">
-                        <div class="empty-icon">✅</div>
-                        <div class="empty-text">No recommendations available</div>
+                        <div class="empty-icon"><i class="fas fa-spinner fa-spin"></i></div>
+                        <div class="empty-text">Loading findings...</div>
                     </div>
                 </div>
-            </section>
 
-            <!-- Critical Issues Section -->
-            <section class="section" id="critical-issues">
-                <div class="section-header">
-                    <h1 class="section-title">Critical Issues (<span id="criticalIssuesTotal">0</span>)</h1>
-                    <p class="section-subtitle">High-priority problems requiring immediate attention</p>
-                </div>
-
-                <!-- Impact Banner -->
-                <div class="card" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid var(--high-yellow);">
-                    <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem;">
-                        ⚡ Potential Score Gain: <span id="criticalPotentialGain">+0 Points</span>
-                    </h3>
-                    <p style="color: var(--gray-700);">
-                        Fixing all critical issues could boost your score from <span id="criticalCurrentScore">--</span> to <span id="criticalPotentialScore">--</span>
-                    </p>
-                </div>
-
-                <!-- Detailed Issue Cards -->
-                <div id="criticalIssuesContainer">
+                <!-- Error State -->
+                <div id="findingsError" style="display: none;">
                     <div class="empty-state">
-                        <div class="empty-icon">✅</div>
-                        <div class="empty-text">No critical issues found!</div>
+                        <div class="empty-icon"><i class="fas fa-exclamation-circle"></i></div>
+                        <div class="empty-text">Failed to load findings</div>
+                        <button class="btn btn-primary" onclick="loadFindings()" style="margin-top: 1rem;">Retry</button>
                     </div>
                 </div>
-            </section>
 
-            <!-- Quick Wins Section -->
-            <section class="section" id="quick-wins">
-                <div class="section-header">
-                    <h1 class="section-title">Quick Wins (<span id="quickWinsTotal">0</span>)</h1>
-                    <p class="section-subtitle">Easy improvements with immediate impact</p>
-                </div>
-
-                <!-- Impact Summary -->
-                <div class="card" style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border: 2px solid var(--good-green);">
-                    <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem;">
-                        ⚡ Total Impact: <span id="quickWinsPotentialGain">+0 Points</span> in Under 2 Hours
-                    </h3>
-                    <p style="color: var(--gray-700);">
-                        These quick fixes can be implemented in under 15 minutes each
-                    </p>
-                </div>
-
-                <!-- Quick Win Cards -->
-                <div id="quickWinsContainer">
+                <!-- Findings Cards Container -->
+                <div id="findingsContainer">
                     <div class="empty-state">
-                        <div class="empty-icon">⚡</div>
-                        <div class="empty-text">No quick wins available</div>
+                        <div class="empty-icon"><i class="fas fa-check-circle"></i></div>
+                        <div class="empty-text">No findings for this scan</div>
+                    </div>
+                </div>
+
+                <!-- Free Plan Upgrade Overlay -->
+                <div id="findingsUpgradeOverlay" style="display: none;">
+                    <div class="findings-upgrade-blur">
+                        <div class="findings-upgrade-content">
+                            <i class="fas fa-lock" style="font-size: 2rem; color: var(--brand-purple); margin-bottom: 1rem;"></i>
+                            <h3>Upgrade to see all <span id="findingsUpgradeTotal">0</span> findings</h3>
+                            <p style="color: var(--gray-500); margin: 0.5rem 0 1.5rem;">Get full access to all diagnostic findings with a Starter plan</p>
+                            <a href="checkout.html" class="btn btn-primary">Upgrade to Starter</a>
+                        </div>
                     </div>
                 </div>
             </section>
