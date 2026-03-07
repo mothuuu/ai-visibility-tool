@@ -978,6 +978,221 @@
             }
         }
 
+        /* Token Balance Widget */
+        .token-balance-widget {
+            margin: 0.5rem 1rem 1rem;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            position: relative;
+        }
+
+        .token-balance-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .token-count {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--white);
+        }
+
+        .token-count .token-icon {
+            font-size: 1rem;
+        }
+
+        .token-cycle-days {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.55);
+            font-weight: 400;
+        }
+
+        .token-balance-row .chevron-indicator {
+            font-size: 0.6rem;
+            color: rgba(255, 255, 255, 0.4);
+            transition: transform 0.2s;
+        }
+
+        .token-balance-widget.expanded .chevron-indicator {
+            transform: rotate(180deg);
+        }
+
+        /* Warning state */
+        .token-balance-widget.low-balance .token-count {
+            color: var(--high-yellow);
+        }
+
+        .token-balance-widget.low-balance {
+            border-color: rgba(245, 158, 11, 0.35);
+            background: rgba(245, 158, 11, 0.08);
+            animation: tokenPulse 3s ease-in-out infinite;
+        }
+
+        @keyframes tokenPulse {
+            0%, 100% { border-color: rgba(245, 158, 11, 0.35); }
+            50% { border-color: rgba(245, 158, 11, 0.6); }
+        }
+
+        /* Dropdown */
+        .token-detail-dropdown {
+            display: none;
+            margin-top: 0.65rem;
+            padding-top: 0.65rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .token-balance-widget.expanded .token-detail-dropdown {
+            display: block;
+        }
+
+        .token-detail-line {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.78rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 0.35rem;
+        }
+
+        .token-detail-line .detail-value {
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .token-action-btn {
+            display: block;
+            width: 100%;
+            margin-top: 0.6rem;
+            padding: 0.55rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .token-action-btn.buy-tokens {
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+            color: white;
+        }
+
+        .token-action-btn.buy-tokens:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(0, 185, 218, 0.35);
+        }
+
+        .token-action-btn.upgrade-plan {
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--pink) 100%);
+            color: white;
+        }
+
+        .token-action-btn.upgrade-plan:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(243, 28, 126, 0.35);
+        }
+
+        /* Bundle selector */
+        .token-bundle-selector {
+            display: none;
+            margin-top: 0.5rem;
+        }
+
+        .token-bundle-selector.visible {
+            display: block;
+        }
+
+        .token-bundle-option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 0.65rem;
+            margin-bottom: 0.3rem;
+            border-radius: 7px;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.04);
+            transition: all 0.15s;
+        }
+
+        .token-bundle-option:hover,
+        .token-bundle-option.selected {
+            border-color: var(--cyan);
+            background: rgba(0, 185, 218, 0.1);
+        }
+
+        .token-bundle-option .bundle-tokens {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--white);
+        }
+
+        .token-bundle-option .bundle-price {
+            font-size: 0.78rem;
+            color: rgba(255, 255, 255, 0.65);
+        }
+
+        .token-continue-btn {
+            display: block;
+            width: 100%;
+            margin-top: 0.45rem;
+            padding: 0.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+            color: white;
+            transition: all 0.2s;
+        }
+
+        .token-continue-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(0, 185, 218, 0.35);
+        }
+
+        .token-continue-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Token widget hidden state */
+        .token-balance-widget.hidden-widget {
+            display: none;
+        }
+
+        .token-error-state {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.5);
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .token-balance-widget {
+                margin: 0.5rem 0.75rem;
+                padding: 0.6rem 0.75rem;
+            }
+
+            .token-count {
+                font-size: 0.82rem;
+            }
+
+            .token-cycle-days {
+                display: none;
+            }
+        }
+
         /* Modals */
         .modal-overlay {
             position: fixed;
@@ -3277,6 +3492,54 @@
                     </div>
                 </div>
             </nav>
+
+            <!-- Token Balance Widget -->
+            <div class="token-balance-widget hidden-widget" id="tokenBalanceWidget">
+                <div class="token-balance-row" id="tokenBalanceToggle" title="Click for details">
+                    <div>
+                        <span class="token-count">
+                            <span class="token-icon">🪙</span>
+                            <span id="tokenTotalDisplay">—</span> tokens
+                        </span>
+                        <span class="token-cycle-days" id="tokenCycleDays"></span>
+                    </div>
+                    <i class="fas fa-chevron-down chevron-indicator"></i>
+                </div>
+                <div class="token-detail-dropdown">
+                    <div class="token-detail-line">
+                        <span>Monthly</span>
+                        <span class="detail-value" id="tokenMonthlyDetail">—</span>
+                    </div>
+                    <div class="token-detail-line">
+                        <span>Purchased</span>
+                        <span class="detail-value" id="tokenPurchasedDetail">—</span>
+                    </div>
+                    <div class="token-detail-line" id="tokenCycleEndLine" style="display:none;">
+                        <span>Cycle ends</span>
+                        <span class="detail-value" id="tokenCycleEndDetail">—</span>
+                    </div>
+                    <button class="token-action-btn" id="tokenActionBtn" style="display:none;"></button>
+                    <div class="token-bundle-selector" id="tokenBundleSelector">
+                        <div class="token-bundle-option" data-bundle="20">
+                            <span class="bundle-tokens">20 tokens</span>
+                            <span class="bundle-price">$19</span>
+                        </div>
+                        <div class="token-bundle-option" data-bundle="50">
+                            <span class="bundle-tokens">50 tokens</span>
+                            <span class="bundle-price">$39</span>
+                        </div>
+                        <div class="token-bundle-option" data-bundle="120">
+                            <span class="bundle-tokens">120 tokens</span>
+                            <span class="bundle-price">$79</span>
+                        </div>
+                        <div class="token-bundle-option" data-bundle="250">
+                            <span class="bundle-tokens">250 tokens</span>
+                            <span class="bundle-price">$149</span>
+                        </div>
+                        <button class="token-continue-btn" id="tokenContinueBtn" disabled>Continue to Checkout</button>
+                    </div>
+                </div>
+            </div>
         </aside>
 
         <!-- Main Content -->

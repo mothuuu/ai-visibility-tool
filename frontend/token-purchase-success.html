@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Purchase - Redirecting...</title>
+    <script>
+        // Redirect to dashboard with session_id so balance refreshes
+        var params = new URLSearchParams(window.location.search);
+        var sessionId = params.get('session_id');
+        var target = 'dashboard.html';
+        if (sessionId) {
+            target += '?session_id=' + encodeURIComponent(sessionId);
+        }
+        window.location.replace(target);
+    </script>
+</head>
+<body>
+    <p>Redirecting to dashboard...</p>
+</body>
+</html>
