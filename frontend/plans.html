@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Choose Your Plan - Visible2AI</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+    <link rel="shortcut icon" href="/favicon.ico?v=2">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --brand-cyan: #00B9DA;
+            --brand-pink: #f31c7e;
+            --brand-purple: #7030A0;
+            --purple: #7D41A5;
+            --teal: #4DACA6;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+            --good-green: #10B981;
+            --high-yellow: #F59E0B;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .page-header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .page-header h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-purple) 50%, var(--brand-pink) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .page-header p {
+            color: var(--gray-500);
+            font-size: 1.05rem;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--gray-500);
+            text-decoration: none;
+            font-size: 0.875rem;
+            margin-bottom: 1.5rem;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover { color: var(--brand-cyan); }
+
+        /* Plan Cards Grid */
+        .plans-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.25rem;
+            margin-bottom: 3rem;
+        }
+
+        .plan-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem 1.5rem;
+            border: 2px solid var(--gray-200);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .plan-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .plan-card.highlighted {
+            border-color: var(--brand-cyan);
+            box-shadow: 0 4px 20px rgba(0, 185, 218, 0.15);
+        }
+
+        .plan-card.current-plan {
+            border-color: var(--good-green);
+        }
+
+        .plan-highlight-badge {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-purple) 100%);
+            color: white;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.3rem 1rem;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
+        }
+
+        .plan-name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: 0.25rem;
+        }
+
+        .plan-price {
+            display: flex;
+            align-items: baseline;
+            gap: 0.25rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .plan-price .amount {
+            font-size: 2.25rem;
+            font-weight: 800;
+            color: var(--gray-900);
+        }
+
+        .plan-price .period {
+            font-size: 0.9rem;
+            color: var(--gray-400);
+        }
+
+        /* Feature List */
+        .plan-features {
+            list-style: none;
+            flex: 1;
+            margin-bottom: 1.5rem;
+        }
+
+        .plan-features li {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            padding: 0.4rem 0;
+            font-size: 0.85rem;
+            color: var(--gray-700);
+            border-bottom: 1px solid var(--gray-100);
+        }
+
+        .plan-features li:last-child { border-bottom: none; }
+
+        .plan-features .feature-label {
+            color: var(--gray-400);
+            min-width: 90px;
+            flex-shrink: 0;
+            font-size: 0.78rem;
+        }
+
+        .plan-features .feature-value {
+            font-weight: 500;
+        }
+
+        .plan-features .feature-value.dash {
+            color: var(--gray-300);
+        }
+
+        .plan-features .feature-value.check {
+            color: var(--good-green);
+        }
+
+        /* CTA Buttons */
+        .plan-cta {
+            width: 100%;
+            padding: 0.8rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .plan-cta.primary {
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-purple) 100%);
+            color: white;
+        }
+
+        .plan-cta.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 185, 218, 0.35);
+        }
+
+        .plan-cta.secondary {
+            background: var(--gray-100);
+            color: var(--gray-500);
+            cursor: default;
+        }
+
+        .plan-cta.downgrade {
+            background: white;
+            color: var(--gray-500);
+            border: 1px solid var(--gray-300);
+            font-weight: 500;
+        }
+
+        .plan-cta.downgrade:hover {
+            border-color: var(--gray-400);
+            color: var(--gray-700);
+        }
+
+        .plan-cta:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        /* Current Plan Badge */
+        .current-plan-badge {
+            display: none;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--good-green);
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .plan-card.current-plan .current-plan-badge {
+            display: block;
+        }
+
+        /* Token Top-Up Section */
+        .topup-section {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            border: 2px solid var(--gray-200);
+            margin-bottom: 2rem;
+        }
+
+        .topup-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .topup-header h2 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: 0.25rem;
+        }
+
+        .topup-header p {
+            color: var(--gray-500);
+            font-size: 0.9rem;
+        }
+
+        .topup-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
+        .topup-card {
+            background: var(--gray-50);
+            border: 2px solid var(--gray-200);
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .topup-card:hover {
+            border-color: var(--brand-cyan);
+            background: #f0fafb;
+        }
+
+        .topup-tokens {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--gray-900);
+        }
+
+        .topup-label {
+            font-size: 0.78rem;
+            color: var(--gray-400);
+            margin-bottom: 0.5rem;
+        }
+
+        .topup-price {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--brand-purple);
+            margin-bottom: 0.75rem;
+        }
+
+        .topup-buy-btn {
+            width: 100%;
+            padding: 0.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-purple) 100%);
+            color: white;
+            transition: all 0.2s;
+        }
+
+        .topup-buy-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 185, 218, 0.3);
+        }
+
+        .topup-buy-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Status Banner */
+        .status-banner {
+            display: none;
+            padding: 1rem 1.5rem;
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .status-banner.info {
+            background: #e6f7fb;
+            color: var(--brand-cyan);
+            border: 1px solid rgba(0, 185, 218, 0.2);
+        }
+
+        .status-banner.success {
+            background: #ecfdf5;
+            color: var(--good-green);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .status-banner.warning {
+            background: #fffbeb;
+            color: var(--high-yellow);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        /* Loading Overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .loading-overlay .spinner {
+            background: white;
+            padding: 2rem 3rem;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .loading-overlay .spinner i {
+            font-size: 2rem;
+            color: var(--brand-cyan);
+            margin-bottom: 0.75rem;
+            display: block;
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .plans-grid {
+                grid-template-columns: 1fr;
+                max-width: 400px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+
+            .topup-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 500px) {
+            .topup-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            body { padding: 1rem 0.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="dashboard.html" class="back-link">
+            <i class="fas fa-arrow-left"></i> Back to Dashboard
+        </a>
+
+        <div class="page-header">
+            <h1>Choose Your Plan</h1>
+            <p>Pick the plan that fits your AI visibility needs</p>
+        </div>
+
+        <!-- Status Banner (shown on Stripe return or cancel) -->
+        <div class="status-banner" id="statusBanner"></div>
+
+        <!-- Plan Cards -->
+        <div class="plans-grid" id="plansGrid">
+            <!-- Rendered by JS -->
+        </div>
+
+        <!-- Token Top-Up Section -->
+        <div class="topup-section">
+            <div class="topup-header">
+                <h2>Need more tokens?</h2>
+                <p>Available for Starter and Pro subscribers</p>
+            </div>
+            <div class="topup-grid" id="topupGrid">
+                <!-- Rendered by JS -->
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 1rem;">
+            <a href="dashboard.html" class="back-link">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Redirecting to checkout...</p>
+        </div>
+    </div>
+
+    <script>
+    // =========================================================================
+    // plans.js — Plan comparison page
+    // =========================================================================
+
+    const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:3001/api'
+        : 'https://ai-visibility-tool.onrender.com/api';
+
+    // ---- PLANS_CONFIG (duplicated from dashboard.js for standalone use) -----
+    // This is the SINGLE source of truth. If this page is loaded standalone
+    // (not inside dashboard), it needs its own copy.  Keep in sync.
+    const PLANS_CONFIG = {
+        free: {
+            name: 'Free', planKey: null, price: '$0', priceNote: 'forever',
+            monthlyTokens: 0, canPurchaseTokens: false,
+            features: {
+                scansPerMonth: '1', pagesPerScan: '1',
+                findings: 'Top 3 teaser', citationMonitoring: 'Snapshot only',
+                competitorScanning: '\u2014', monthlyTokens: '\u2014',
+                tokenTopUps: '\u2014', benchmarking: '\u2014',
+                exports: '\u2014', citationAlerts: '\u2014'
+            }
+        },
+        starter: {
+            name: 'Starter', planKey: 'diy', price: '$29', priceNote: '/mo',
+            monthlyTokens: 60, canPurchaseTokens: true, highlight: 'Most Popular',
+            features: {
+                scansPerMonth: '4', pagesPerScan: '3',
+                findings: 'Full with evidence', citationMonitoring: 'Biweekly, 1\u20132 engines',
+                competitorScanning: '\u2014', monthlyTokens: '60',
+                tokenTopUps: 'Available', benchmarking: 'Vertical percentile',
+                exports: '\u2014', citationAlerts: '\u2014'
+            }
+        },
+        pro: {
+            name: 'Pro', planKey: 'pro', price: '$99', priceNote: '/mo',
+            monthlyTokens: 200, canPurchaseTokens: true, highlight: 'Best Value',
+            features: {
+                scansPerMonth: 'Unlimited', pagesPerScan: '10',
+                findings: 'Full with evidence',
+                citationMonitoring: 'Weekly, 3+ engines, full context',
+                competitorScanning: 'Up to 5 domains', monthlyTokens: '200',
+                tokenTopUps: 'Available', benchmarking: 'Vertical percentile',
+                exports: 'PDF + CSV', citationAlerts: 'Gained/lost alerts'
+            }
+        }
+    };
+
+    const TOKEN_BUNDLES = [
+        { bundle: '20',  tokens: 20,  price: '$19'  },
+        { bundle: '50',  tokens: 50,  price: '$39'  },
+        { bundle: '120', tokens: 120, price: '$79'  },
+        { bundle: '250', tokens: 250, price: '$149' }
+    ];
+
+    const FEATURE_LABELS = {
+        scansPerMonth: 'Scans/mo',
+        pagesPerScan: 'Pages/scan',
+        findings: 'Findings',
+        citationMonitoring: 'Citations',
+        competitorScanning: 'Competitors',
+        monthlyTokens: 'Tokens/mo',
+        tokenTopUps: 'Token top-ups',
+        benchmarking: 'Benchmarking',
+        exports: 'Exports',
+        citationAlerts: 'Alerts'
+    };
+
+    function resolvePlanKey(plan) {
+        const p = (plan || 'free').toLowerCase();
+        if (p === 'diy') return 'starter';
+        if (PLANS_CONFIG[p]) return p;
+        return 'free';
+    }
+
+    // ---- State ----
+    let currentUser = null;
+    let currentPlanKey = 'free';
+
+    // ---- Init ----
+    window.addEventListener('DOMContentLoaded', async function () {
+        await loadCurrentUser();
+        renderPlans();
+        renderTopUps();
+        handleUrlParams();
+    });
+
+    async function loadCurrentUser() {
+        const authToken = localStorage.getItem('authToken');
+        if (!authToken) return;
+
+        try {
+            const resp = await fetch(`${API_BASE_URL}/auth/me`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            currentUser = data.user;
+            currentPlanKey = resolvePlanKey(currentUser.plan);
+        } catch (e) {
+            console.error('[Plans] Failed to load user:', e.message);
+        }
+    }
+
+    // ---- Render Plan Cards ----
+    function renderPlans() {
+        const grid = document.getElementById('plansGrid');
+        grid.innerHTML = '';
+
+        ['free', 'starter', 'pro'].forEach(function (key) {
+            const plan = PLANS_CONFIG[key];
+            const isCurrent = (key === currentPlanKey);
+
+            const card = document.createElement('div');
+            card.className = 'plan-card' + (plan.highlight ? ' highlighted' : '') + (isCurrent ? ' current-plan' : '');
+
+            // Highlight badge
+            let badge = '';
+            if (isCurrent) {
+                badge = '<div class="plan-highlight-badge" style="background:var(--good-green);">Current Plan</div>';
+            } else if (plan.highlight) {
+                badge = '<div class="plan-highlight-badge">' + plan.highlight + '</div>';
+            }
+
+            // Feature rows
+            let featureHtml = '';
+            Object.keys(FEATURE_LABELS).forEach(function (fk) {
+                const val = plan.features[fk] || '\u2014';
+                const isDash = val === '\u2014';
+                featureHtml += '<li>' +
+                    '<span class="feature-label">' + FEATURE_LABELS[fk] + '</span>' +
+                    '<span class="feature-value' + (isDash ? ' dash' : '') + '">' + val + '</span>' +
+                    '</li>';
+            });
+
+            // CTA button
+            let ctaHtml = '';
+            if (isCurrent) {
+                ctaHtml = '<button class="plan-cta secondary" disabled>Current Plan</button>';
+            } else if (key === 'free') {
+                // Free column for paid users — hide CTA
+                ctaHtml = '';
+            } else {
+                // Upgrade or downgrade
+                const planRanks = { free: 0, starter: 1, pro: 2 };
+                const currentRank = planRanks[currentPlanKey] || 0;
+                const targetRank = planRanks[key] || 0;
+
+                if (targetRank > currentRank) {
+                    // Upgrade
+                    const label = key === 'starter' ? 'Start Starter \u00B7 $29/mo' : 'Go Pro \u00B7 $99/mo';
+                    ctaHtml = '<button class="plan-cta primary" onclick="startCheckout(\'' + key + '\')">' + label + '</button>';
+                } else {
+                    // Downgrade
+                    ctaHtml = '<button class="plan-cta downgrade" onclick="openBillingPortal()">Downgrade</button>';
+                }
+            }
+
+            card.innerHTML = badge +
+                '<div class="plan-name">' + plan.name + '</div>' +
+                '<div class="plan-price"><span class="amount">' + plan.price + '</span><span class="period">' + plan.priceNote + '</span></div>' +
+                '<ul class="plan-features">' + featureHtml + '</ul>' +
+                ctaHtml;
+
+            grid.appendChild(card);
+        });
+    }
+
+    // ---- Render Token Top-Ups ----
+    function renderTopUps() {
+        const grid = document.getElementById('topupGrid');
+        grid.innerHTML = '';
+
+        const canBuy = currentPlanKey !== 'free' && PLANS_CONFIG[currentPlanKey].canPurchaseTokens;
+
+        TOKEN_BUNDLES.forEach(function (b) {
+            const card = document.createElement('div');
+            card.className = 'topup-card';
+
+            const btnLabel = canBuy ? 'Buy' : 'Upgrade first';
+            const disabled = canBuy ? '' : ' disabled';
+
+            card.innerHTML =
+                '<div class="topup-tokens">' + b.tokens + '</div>' +
+                '<div class="topup-label">tokens</div>' +
+                '<div class="topup-price">' + b.price + '</div>' +
+                '<button class="topup-buy-btn"' + disabled + ' data-bundle="' + b.bundle + '">' + btnLabel + '</button>';
+
+            grid.appendChild(card);
+        });
+
+        // Attach click handlers
+        grid.querySelectorAll('.topup-buy-btn:not([disabled])').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                purchaseTokenBundle(btn.getAttribute('data-bundle'));
+            });
+        });
+    }
+
+    // ---- Checkout Flow ----
+    async function startCheckout(planKey) {
+        const authToken = localStorage.getItem('authToken');
+        if (!authToken) {
+            window.location.href = 'auth.html?redirect=' + encodeURIComponent(window.location.href);
+            return;
+        }
+
+        const plan = PLANS_CONFIG[planKey];
+        if (!plan || !plan.planKey) return;
+
+        // Get domain
+        const domain = currentUser && currentUser.primary_domain
+            ? currentUser.primary_domain
+            : localStorage.getItem('primaryDomain') || '';
+
+        document.getElementById('loadingOverlay').style.display = 'flex';
+
+        try {
+            const resp = await fetch(`${API_BASE_URL}/subscription/create-checkout-session`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    plan: plan.planKey,
+                    domain: domain || 'pending'
+                })
+            });
+
+            if (!resp.ok) {
+                const err = await resp.json().catch(function () { return {}; });
+                throw new Error(err.error || 'Failed to create checkout session');
+            }
+
+            const data = await resp.json();
+            if (!data.url) throw new Error('No checkout URL returned');
+
+            // Store target plan for polling after return
+            sessionStorage.setItem('targetPlan', planKey);
+            window.location.href = data.url;
+
+        } catch (err) {
+            document.getElementById('loadingOverlay').style.display = 'none';
+            console.error('[Plans] Checkout error:', err.message);
+            showBanner('warning', 'Checkout failed: ' + err.message);
+        }
+    }
+
+    // ---- Token Purchase (reuse same POST /api/tokens/purchase) ----
+    async function purchaseTokenBundle(bundle) {
+        const authToken = localStorage.getItem('authToken');
+        if (!authToken) {
+            window.location.href = 'auth.html?redirect=' + encodeURIComponent(window.location.href);
+            return;
+        }
+
+        document.getElementById('loadingOverlay').style.display = 'flex';
+
+        try {
+            const resp = await fetch(`${API_BASE_URL}/tokens/purchase`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ bundle: bundle })
+            });
+
+            if (!resp.ok) {
+                const err = await resp.json().catch(function () { return {}; });
+                throw new Error(err.error || 'Purchase request failed');
+            }
+
+            const data = await resp.json();
+            if (data.url) {
+                window.location.href = data.url;
+            } else {
+                throw new Error('No checkout URL returned');
+            }
+        } catch (err) {
+            document.getElementById('loadingOverlay').style.display = 'none';
+            console.error('[Plans] Token purchase error:', err.message);
+            showBanner('warning', 'Could not start checkout: ' + err.message);
+        }
+    }
+
+    // ---- Billing Portal (for downgrades) ----
+    async function openBillingPortal() {
+        const authToken = localStorage.getItem('authToken');
+        if (!authToken) return;
+
+        document.getElementById('loadingOverlay').style.display = 'flex';
+
+        try {
+            const resp = await fetch(`${API_BASE_URL}/subscription/portal`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.error || 'Failed to open billing portal');
+
+            window.location.href = data.url;
+        } catch (err) {
+            document.getElementById('loadingOverlay').style.display = 'none';
+            console.error('[Plans] Portal error:', err.message);
+            showBanner('warning', 'Could not open billing portal: ' + err.message);
+        }
+    }
+
+    // ---- Handle URL params (Stripe return / cancel) ----
+    function handleUrlParams() {
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = params.get('session_id');
+        const cancelled = params.get('cancelled');
+        const targetPlan = sessionStorage.getItem('targetPlan');
+
+        if (cancelled === 'true') {
+            showBanner('info', 'Payment cancelled. No changes were made.');
+            cleanUrl();
+            return;
+        }
+
+        if (sessionId && targetPlan) {
+            showBanner('info', 'Activating your subscription...');
+            startActivationPolling(targetPlan, sessionId);
+        }
+    }
+
+    // ---- Activation Polling ----
+    function startActivationPolling(targetPlanKey, sessionId) {
+        const authToken = localStorage.getItem('authToken');
+        if (!authToken) return;
+
+        let planConfirmed = false;
+        let tokensConfirmed = false;
+        let elapsed = 0;
+        const INTERVAL = 2000;
+        const TIMEOUT = 15000;
+
+        const timer = setInterval(async function () {
+            elapsed += INTERVAL;
+
+            try {
+                // Poll user plan
+                if (!planConfirmed) {
+                    const userResp = await fetch(`${API_BASE_URL}/auth/me`, {
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    });
+                    if (userResp.ok) {
+                        const data = await userResp.json();
+                        const newPlanKey = resolvePlanKey(data.user.plan);
+                        if (newPlanKey === targetPlanKey) {
+                            planConfirmed = true;
+                            currentUser = data.user;
+                            currentPlanKey = newPlanKey;
+                            // Update localStorage
+                            localStorage.setItem('user', JSON.stringify(data.user));
+                        }
+                    }
+                }
+
+                // Poll token balance
+                if (!tokensConfirmed) {
+                    const balResp = await fetch(`${API_BASE_URL}/tokens/balance`, {
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    });
+                    if (balResp.ok) {
+                        const bal = await balResp.json();
+                        if (bal.monthly_remaining > 0) {
+                            tokensConfirmed = true;
+                        }
+                    }
+                }
+
+                // Both confirmed
+                if (planConfirmed && tokensConfirmed) {
+                    clearInterval(timer);
+                    sessionStorage.removeItem('targetPlan');
+                    cleanUrl();
+                    showBanner('success', 'Your ' + PLANS_CONFIG[targetPlanKey].name + ' plan is active! Tokens have been granted.');
+                    renderPlans();
+                    renderTopUps();
+                    return;
+                }
+
+                // Timeout handling
+                if (elapsed >= TIMEOUT) {
+                    clearInterval(timer);
+                    sessionStorage.removeItem('targetPlan');
+                    cleanUrl();
+
+                    if (planConfirmed && !tokensConfirmed) {
+                        showBanner('success', 'Plan active. Tokens will appear shortly.');
+                        renderPlans();
+                        renderTopUps();
+                    } else {
+                        showBanner('info', 'Your subscription is being activated. Refresh in a moment.');
+                    }
+                }
+
+            } catch (err) {
+                console.error('[Plans] Polling error:', err.message);
+                if (elapsed >= TIMEOUT) {
+                    clearInterval(timer);
+                    sessionStorage.removeItem('targetPlan');
+                    cleanUrl();
+                    showBanner('info', 'Your subscription is being activated. Refresh in a moment.');
+                }
+            }
+        }, INTERVAL);
+    }
+
+    // ---- Helpers ----
+    function showBanner(type, message) {
+        const banner = document.getElementById('statusBanner');
+        banner.className = 'status-banner ' + type;
+        banner.textContent = message;
+        banner.style.display = 'block';
+    }
+
+    function cleanUrl() {
+        const url = window.location.pathname;
+        window.history.replaceState({}, '', url);
+    }
+    </script>
+</body>
+</html>

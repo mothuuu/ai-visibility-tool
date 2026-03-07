@@ -350,7 +350,7 @@ function showFreePlanUpgradePrompt() {
             </div>
 
             <div style="margin-top: 40px;">
-                <a href="checkout.html?plan=diy" style="
+                <a href="plans.html" style="
                     display: inline-block;
                     padding: 18px 40px;
                     background: linear-gradient(135deg, #00B9DA 0%, #7030A0 100%);
