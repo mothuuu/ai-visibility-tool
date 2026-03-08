@@ -1,0 +1,284 @@
+{
+  "certification_library": {
+    "industry": "Healthcare",
+    "industry_id": "healthcare",
+    "version": "1.0",
+    "last_updated": "2025-11-13",
+    "metadata": {
+      "total_certifications": 12,
+      "detection_enabled": true,
+      "schema_generation": true
+    },
+    "certifications": [
+      {
+        "id": "cert_healthcare_001",
+        "name": "HIPAA Compliance",
+        "full_name": "Health Insurance Portability and Accountability Act",
+        "priority": "critical",
+        "category": "regulatory",
+        "expected_impact": "+25 points",
+        "detection_patterns": [
+          "hipaa",
+          "health insurance portability",
+          "hipaa compliance",
+          "hipaa certified",
+          "hipaa compliant"
+        ],
+        "schema_fields": ["organizationCredential", "accreditation", "award"],
+        "badge_patterns": ["hipaa-badge", "hipaa-seal", "hipaa-certified"],
+        "display_recommendation": {
+          "title": "Display HIPAA Compliance Certification",
+          "why_it_matters": "HIPAA compliance is legally required for healthcare organizations handling protected health information (PHI). Displaying this certification builds immediate trust with patients and healthcare partners.",
+          "impact_areas": ["Trust & Authority", "Legal Compliance", "E-E-A-T"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_healthcare_002",
+        "name": "HITECH Act Compliance",
+        "full_name": "Health Information Technology for Economic and Clinical Health Act",
+        "priority": "critical",
+        "category": "regulatory",
+        "expected_impact": "+20 points",
+        "detection_patterns": [
+          "hitech",
+          "hitech act",
+          "hitech compliance",
+          "meaningful use"
+        ],
+        "schema_fields": ["organizationCredential", "accreditation"],
+        "display_recommendation": {
+          "title": "Display HITECH Act Compliance",
+          "why_it_matters": "HITECH enhances HIPAA requirements for electronic health records. Demonstrating compliance shows commitment to data security and modern healthcare standards.",
+          "impact_areas": ["Trust & Authority", "Technical Excellence"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_healthcare_003",
+        "name": "SOC 2 Type II",
+        "full_name": "Service Organization Control 2 Type II",
+        "priority": "important",
+        "category": "security",
+        "expected_impact": "+22 points",
+        "detection_patterns": [
+          "soc 2",
+          "soc2",
+          "soc 2 type ii",
+          "soc 2 type 2",
+          "aicpa soc 2"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["soc2-badge", "soc-2-certified"],
+        "display_recommendation": {
+          "title": "Display SOC 2 Type II Certification",
+          "why_it_matters": "SOC 2 Type II demonstrates rigorous security, availability, and confidentiality controls audited over time. Essential for healthcare technology vendors and service providers.",
+          "impact_areas": ["Trust & Authority", "Security Compliance", "Vendor Trust"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_healthcare_004",
+        "name": "ISO 27001",
+        "full_name": "ISO/IEC 27001 Information Security Management",
+        "priority": "important",
+        "category": "security",
+        "expected_impact": "+20 points",
+        "detection_patterns": [
+          "iso 27001",
+          "iso/iec 27001",
+          "iso27001",
+          "isms certified"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["iso27001-badge", "iso-27001-certified"],
+        "display_recommendation": {
+          "title": "Display ISO 27001 Certification",
+          "why_it_matters": "ISO 27001 is the international standard for information security management. Shows systematic approach to protecting sensitive healthcare data.",
+          "impact_areas": ["Trust & Authority", "International Recognition", "Security Standards"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_healthcare_005",
+        "name": "HL7 Compliance",
+        "full_name": "Health Level Seven International Standards",
+        "priority": "relevant",
+        "category": "interoperability",
+        "expected_impact": "+15 points",
+        "detection_patterns": [
+          "hl7",
+          "health level seven",
+          "hl7 compliant",
+          "hl7 fhir",
+          "fhir compliant"
+        ],
+        "schema_fields": ["organizationCredential"],
+        "display_recommendation": {
+          "title": "Display HL7/FHIR Compliance",
+          "why_it_matters": "HL7 standards enable healthcare data interoperability. FHIR (Fast Healthcare Interoperability Resources) is becoming the modern standard for health data exchange.",
+          "impact_areas": ["Technical Excellence", "Interoperability", "Modern Standards"],
+          "difficulty": "medium",
+          "estimated_time": "30 minutes"
+        }
+      },
+      {
+        "id": "cert_healthcare_006",
+        "name": "FDA Registration",
+        "full_name": "U.S. Food and Drug Administration Registration",
+        "priority": "relevant",
+        "category": "regulatory",
+        "expected_impact": "+18 points",
+        "detection_patterns": [
+          "fda registered",
+          "fda approved",
+          "fda cleared",
+          "510(k) cleared",
+          "de novo"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "display_recommendation": {
+          "title": "Display FDA Registration/Clearance",
+          "why_it_matters": "FDA registration demonstrates medical device compliance and regulatory approval, critical for patient safety and healthcare provider trust.",
+          "impact_areas": ["Trust & Authority", "Regulatory Compliance", "Patient Safety"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_healthcare_007",
+        "name": "HITRUST CSF",
+        "full_name": "HITRUST Common Security Framework",
+        "priority": "important",
+        "category": "security",
+        "expected_impact": "+23 points",
+        "detection_patterns": [
+          "hitrust",
+          "hitrust csf",
+          "hitrust certified",
+          "hitrust csf certified"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["hitrust-badge", "hitrust-certified"],
+        "display_recommendation": {
+          "title": "Display HITRUST CSF Certification",
+          "why_it_matters": "HITRUST combines HIPAA, HITECH, and other healthcare security frameworks into one comprehensive standard. Highly valued by healthcare organizations.",
+          "impact_areas": ["Trust & Authority", "Comprehensive Security", "Healthcare Expertise"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_healthcare_008",
+        "name": "Joint Commission Accreditation",
+        "full_name": "The Joint Commission Healthcare Accreditation",
+        "priority": "relevant",
+        "category": "quality",
+        "expected_impact": "+18 points",
+        "detection_patterns": [
+          "joint commission",
+          "jcaho",
+          "joint commission accredited",
+          "tjc accredited"
+        ],
+        "schema_fields": ["organizationCredential", "accreditation"],
+        "display_recommendation": {
+          "title": "Display Joint Commission Accreditation",
+          "why_it_matters": "Joint Commission accreditation demonstrates commitment to quality and patient safety standards. Recognized gold standard for healthcare quality.",
+          "impact_areas": ["Trust & Authority", "Quality Standards", "Patient Safety"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_healthcare_009",
+        "name": "CCHIT Certification",
+        "full_name": "Certification Commission for Health Information Technology",
+        "priority": "relevant",
+        "category": "technology",
+        "expected_impact": "+12 points",
+        "detection_patterns": [
+          "cchit",
+          "cchit certified",
+          "ehr certified"
+        ],
+        "schema_fields": ["organizationCredential"],
+        "display_recommendation": {
+          "title": "Display CCHIT EHR Certification",
+          "why_it_matters": "CCHIT certification validates electronic health record (EHR) functionality, interoperability, and security standards.",
+          "impact_areas": ["Technical Excellence", "EHR Standards"],
+          "difficulty": "medium",
+          "estimated_time": "25 minutes"
+        }
+      },
+      {
+        "id": "cert_healthcare_010",
+        "name": "NCQA Accreditation",
+        "full_name": "National Committee for Quality Assurance",
+        "priority": "relevant",
+        "category": "quality",
+        "expected_impact": "+15 points",
+        "detection_patterns": [
+          "ncqa",
+          "ncqa accredited",
+          "ncqa certified",
+          "hedis"
+        ],
+        "schema_fields": ["organizationCredential", "accreditation"],
+        "display_recommendation": {
+          "title": "Display NCQA Accreditation",
+          "why_it_matters": "NCQA accreditation demonstrates quality healthcare measurement and improvement standards, particularly for health plans and managed care.",
+          "impact_areas": ["Trust & Authority", "Quality Measurement"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_healthcare_011",
+        "name": "ISO 13485",
+        "full_name": "ISO 13485 Medical Devices Quality Management",
+        "priority": "relevant",
+        "category": "quality",
+        "expected_impact": "+18 points",
+        "detection_patterns": [
+          "iso 13485",
+          "iso13485",
+          "medical device quality"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "display_recommendation": {
+          "title": "Display ISO 13485 Certification",
+          "why_it_matters": "ISO 13485 demonstrates quality management systems for medical device design and manufacturing. Essential for medical device companies.",
+          "impact_areas": ["Trust & Authority", "Manufacturing Quality", "Device Safety"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_healthcare_012",
+        "name": "URAC Accreditation",
+        "full_name": "Utilization Review Accreditation Commission",
+        "priority": "relevant",
+        "category": "quality",
+        "expected_impact": "+14 points",
+        "detection_patterns": [
+          "urac",
+          "urac accredited",
+          "urac certified"
+        ],
+        "schema_fields": ["organizationCredential", "accreditation"],
+        "display_recommendation": {
+          "title": "Display URAC Accreditation",
+          "why_it_matters": "URAC accreditation demonstrates quality healthcare standards across various healthcare sectors including telehealth, pharmacy, and case management.",
+          "impact_areas": ["Trust & Authority", "Quality Standards"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      }
+    ]
+  }
+}

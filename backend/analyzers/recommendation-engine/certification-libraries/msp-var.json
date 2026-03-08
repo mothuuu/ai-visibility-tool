@@ -1,0 +1,589 @@
+{
+  "certification_library": {
+    "industry": "MSP / VAR / Channel",
+    "industry_id": "msp-var",
+    "version": "1.0",
+    "last_updated": "2025-11-14",
+    "metadata": {
+      "total_certifications": 25,
+      "detection_enabled": true,
+      "schema_generation": true,
+      "applies_to_subverticals": ["msp", "managed service provider", "var", "value added reseller", "channel partner", "it services", "system integrator"]
+    },
+    "certifications": [
+      {
+        "id": "cert_msp_001",
+        "name": "Microsoft Solutions Partner",
+        "full_name": "Microsoft Solutions Partner",
+        "priority": "critical",
+        "category": "partner",
+        "expected_impact": "+30 points",
+        "detection_patterns": [
+          "microsoft solutions partner",
+          "microsoft partner",
+          "microsoft gold partner",
+          "microsoft certified partner",
+          "azure solutions partner"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "badge_patterns": ["microsoft-partner-badge", "microsoft-gold"],
+        "display_recommendation": {
+          "title": "Display Microsoft Solutions Partner Status",
+          "why_it_matters": "Microsoft Solutions Partner is one of the most recognized credentials for MSPs. Validates expertise in Microsoft 365, Azure, and enterprise IT solutions.",
+          "impact_areas": ["Trust & Authority", "Platform Expertise", "Enterprise Solutions"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_002",
+        "name": "Cisco Select/Premier Partner",
+        "full_name": "Cisco Select or Premier Certified Partner",
+        "priority": "critical",
+        "category": "partner",
+        "expected_impact": "+29 points",
+        "detection_patterns": [
+          "cisco partner",
+          "cisco select",
+          "cisco premier",
+          "cisco certified partner",
+          "cisco gold partner"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "badge_patterns": ["cisco-partner-badge", "cisco-premier"],
+        "display_recommendation": {
+          "title": "Display Cisco Partner Certification",
+          "why_it_matters": "Cisco partnership validates networking expertise and infrastructure capabilities. Essential for MSPs managing network infrastructure.",
+          "impact_areas": ["Trust & Authority", "Network Expertise", "Infrastructure"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_003",
+        "name": "AWS Partner",
+        "full_name": "AWS Partner Network Member",
+        "priority": "critical",
+        "category": "partner",
+        "expected_impact": "+28 points",
+        "detection_patterns": [
+          "aws partner",
+          "amazon web services partner",
+          "aws certified partner",
+          "aws solution provider",
+          "aws advanced partner"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "badge_patterns": ["aws-partner-badge", "aws-advanced"],
+        "display_recommendation": {
+          "title": "Display AWS Partner Status",
+          "why_it_matters": "AWS Partner Network membership demonstrates cloud expertise. Critical for MSPs offering cloud migration and management services.",
+          "impact_areas": ["Trust & Authority", "Cloud Expertise", "AWS Services"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_004",
+        "name": "Google Cloud Partner",
+        "full_name": "Google Cloud Partner",
+        "priority": "important",
+        "category": "partner",
+        "expected_impact": "+27 points",
+        "detection_patterns": [
+          "google cloud partner",
+          "gcp partner",
+          "google cloud certified partner",
+          "google cloud premier partner"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "badge_patterns": ["gcp-partner-badge", "google-cloud"],
+        "display_recommendation": {
+          "title": "Display Google Cloud Partner Status",
+          "why_it_matters": "Google Cloud Partner status validates GCP expertise and multi-cloud capabilities. Shows breadth of cloud platform knowledge.",
+          "impact_areas": ["Trust & Authority", "Cloud Expertise", "Multi-Cloud"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_005",
+        "name": "CompTIA Trustmark",
+        "full_name": "CompTIA Trustmark+ Certified",
+        "priority": "important",
+        "category": "partner",
+        "expected_impact": "+25 points",
+        "detection_patterns": [
+          "comptia trustmark",
+          "trustmark certified",
+          "comptia certified",
+          "comptia partner"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "badge_patterns": ["comptia-trustmark-badge"],
+        "display_recommendation": {
+          "title": "Display CompTIA Trustmark Certification",
+          "why_it_matters": "CompTIA Trustmark validates business practices, customer service, and technical expertise. Recognized industry standard for MSP credibility.",
+          "impact_areas": ["Trust & Authority", "Business Practices", "Industry Standards"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_006",
+        "name": "Fortinet NSE",
+        "full_name": "Fortinet Network Security Expert (NSE)",
+        "priority": "important",
+        "category": "team_credential",
+        "expected_impact": "+26 points",
+        "detection_patterns": [
+          "fortinet nse",
+          "network security expert",
+          "fortinet certified",
+          "nse certified",
+          "fortinet partner"
+        ],
+        "schema_fields": ["hasCredential", "educationalCredential"],
+        "badge_patterns": ["fortinet-nse-badge"],
+        "display_recommendation": {
+          "title": "Highlight Fortinet NSE Certifications",
+          "why_it_matters": "Fortinet NSE certification demonstrates advanced network security expertise. Critical for MSPs providing security services.",
+          "impact_areas": ["Team Expertise", "Security", "Network Protection"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_007",
+        "name": "Sophos Partner",
+        "full_name": "Sophos Certified Partner",
+        "priority": "important",
+        "category": "partner",
+        "expected_impact": "+24 points",
+        "detection_patterns": [
+          "sophos partner",
+          "sophos certified",
+          "sophos gold partner",
+          "sophos platinum partner"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "badge_patterns": ["sophos-partner-badge"],
+        "display_recommendation": {
+          "title": "Display Sophos Partner Status",
+          "why_it_matters": "Sophos partnership validates endpoint security and threat protection expertise. Essential for MSPs offering cybersecurity services.",
+          "impact_areas": ["Trust & Authority", "Endpoint Security", "Threat Protection"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_008",
+        "name": "Palo Alto Networks Partner",
+        "full_name": "Palo Alto Networks Certified Partner",
+        "priority": "important",
+        "category": "partner",
+        "expected_impact": "+27 points",
+        "detection_patterns": [
+          "palo alto networks",
+          "palo alto partner",
+          "pan certified",
+          "palo alto certified partner"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "badge_patterns": ["palo-alto-badge", "pan-partner"],
+        "display_recommendation": {
+          "title": "Display Palo Alto Networks Partnership",
+          "why_it_matters": "Palo Alto Networks partnership demonstrates enterprise-grade security expertise. Shows capability with next-gen firewalls and security platforms.",
+          "impact_areas": ["Trust & Authority", "Enterprise Security", "Firewall Expertise"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_009",
+        "name": "MSPAlliance Member",
+        "full_name": "MSPAlliance Member",
+        "priority": "important",
+        "category": "association",
+        "expected_impact": "+23 points",
+        "detection_patterns": [
+          "mspalliance member",
+          "msp alliance",
+          "member of mspalliance",
+          "mspalliance certified"
+        ],
+        "schema_fields": ["memberOf", "organizationCredential"],
+        "badge_patterns": ["mspalliance-badge"],
+        "display_recommendation": {
+          "title": "Display MSPAlliance Membership",
+          "why_it_matters": "MSPAlliance membership demonstrates commitment to MSP industry standards and best practices. Recognized professional association for managed service providers.",
+          "impact_areas": ["Professional Associations", "Industry Standards", "Best Practices"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_010",
+        "name": "CompTIA Member",
+        "full_name": "CompTIA Member Organization",
+        "priority": "relevant",
+        "category": "association",
+        "expected_impact": "+21 points",
+        "detection_patterns": [
+          "comptia member",
+          "member of comptia",
+          "comptia association",
+          "comptia organization"
+        ],
+        "schema_fields": ["memberOf", "organizationCredential"],
+        "badge_patterns": ["comptia-member-badge"],
+        "display_recommendation": {
+          "title": "Display CompTIA Membership",
+          "why_it_matters": "CompTIA membership validates commitment to IT industry standards. Leading trade association for IT channel companies.",
+          "impact_areas": ["Professional Associations", "Industry Legitimacy", "Channel Partner"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_011",
+        "name": "IT Nation Evolve",
+        "full_name": "IT Nation Evolve Participant",
+        "priority": "relevant",
+        "category": "association",
+        "expected_impact": "+20 points",
+        "detection_patterns": [
+          "it nation evolve",
+          "it nation",
+          "connectwise it nation",
+          "evolve member"
+        ],
+        "schema_fields": ["memberOf", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Highlight IT Nation Participation",
+          "why_it_matters": "IT Nation Evolve participation shows active engagement in the MSP community. Demonstrates commitment to continuous improvement and peer learning.",
+          "impact_areas": ["Professional Development", "Community Engagement", "Industry Knowledge"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_012",
+        "name": "SOC 2 Type II",
+        "full_name": "SOC 2 Type II Compliance",
+        "priority": "critical",
+        "category": "security",
+        "expected_impact": "+32 points",
+        "detection_patterns": [
+          "soc 2 type ii",
+          "soc 2 type 2",
+          "soc2 compliant",
+          "aicpa soc 2",
+          "soc 2 certified"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "badge_patterns": ["soc2-badge", "aicpa-soc2"],
+        "display_recommendation": {
+          "title": "Display SOC 2 Type II Compliance",
+          "why_it_matters": "SOC 2 Type II is critical for MSPs handling client data. Validates security controls and demonstrates commitment to data protection.",
+          "impact_areas": ["Trust & Authority", "Security Controls", "Client Trust"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_013",
+        "name": "ISO 27001",
+        "full_name": "ISO 27001 Information Security Management",
+        "priority": "critical",
+        "category": "security",
+        "expected_impact": "+30 points",
+        "detection_patterns": [
+          "iso 27001",
+          "iso/iec 27001",
+          "iso 27001 certified",
+          "isms certified"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "badge_patterns": ["iso-27001-badge"],
+        "display_recommendation": {
+          "title": "Display ISO 27001 Certification",
+          "why_it_matters": "ISO 27001 is the international standard for information security management. Essential for MSPs to demonstrate security commitment.",
+          "impact_areas": ["Trust & Authority", "Security", "International Standards"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_014",
+        "name": "NIST CSF",
+        "full_name": "NIST Cybersecurity Framework Adherence",
+        "priority": "important",
+        "category": "security",
+        "expected_impact": "+26 points",
+        "detection_patterns": [
+          "nist csf",
+          "nist cybersecurity framework",
+          "nist compliant",
+          "nist framework"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "display_recommendation": {
+          "title": "Display NIST CSF Adherence",
+          "why_it_matters": "NIST CSF adherence demonstrates structured approach to cybersecurity. Widely recognized framework for managing security risks.",
+          "impact_areas": ["Trust & Authority", "Security Framework", "Risk Management"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_015",
+        "name": "Clutch MSP Recognition",
+        "full_name": "Clutch Top MSP Recognition",
+        "priority": "important",
+        "category": "award",
+        "expected_impact": "+25 points",
+        "detection_patterns": [
+          "clutch top msp",
+          "clutch msp",
+          "clutch it services",
+          "clutch leader msp"
+        ],
+        "schema_fields": ["award", "organizationCredential"],
+        "badge_patterns": ["clutch-msp-badge"],
+        "display_recommendation": {
+          "title": "Display Clutch MSP Recognition",
+          "why_it_matters": "Clutch recognition based on verified client reviews provides strong third-party validation. AI systems heavily weight these external endorsements.",
+          "impact_areas": ["Trust & Authority", "Client Validation", "Industry Recognition"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_016",
+        "name": "ChannelE2E Rankings",
+        "full_name": "ChannelE2E Top MSP Rankings",
+        "priority": "important",
+        "category": "award",
+        "expected_impact": "+24 points",
+        "detection_patterns": [
+          "channele2e",
+          "channel e2e",
+          "channele2e top msp",
+          "top 100 msp"
+        ],
+        "schema_fields": ["award", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Display ChannelE2E Rankings",
+          "why_it_matters": "ChannelE2E rankings recognize leading MSPs globally. Provides industry-specific validation and competitive positioning.",
+          "impact_areas": ["Trust & Authority", "Industry Rankings", "Market Position"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_017",
+        "name": "UpCity Recognition",
+        "full_name": "UpCity Top IT Services Provider",
+        "priority": "relevant",
+        "category": "award",
+        "expected_impact": "+22 points",
+        "detection_patterns": [
+          "upcity",
+          "upcity top provider",
+          "upcity award",
+          "upcity certified"
+        ],
+        "schema_fields": ["award", "organizationCredential"],
+        "badge_patterns": ["upcity-badge"],
+        "display_recommendation": {
+          "title": "Display UpCity Recognition",
+          "why_it_matters": "UpCity awards based on reviews and performance provide local market validation. Demonstrates client satisfaction and service quality.",
+          "impact_areas": ["Trust & Authority", "Client Reviews", "Local Recognition"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_018",
+        "name": "Microsoft Certifications",
+        "full_name": "Microsoft Professional Certifications (MCSA/MCSE/Azure)",
+        "priority": "important",
+        "category": "team_credential",
+        "expected_impact": "+25 points",
+        "detection_patterns": [
+          "mcsa certified",
+          "mcse certified",
+          "azure certified",
+          "microsoft certified professional",
+          "azure administrator"
+        ],
+        "schema_fields": ["hasCredential", "educationalCredential"],
+        "display_recommendation": {
+          "title": "Highlight Team Microsoft Certifications",
+          "why_it_matters": "Microsoft certifications validate technical expertise of your team. Shows qualified professionals managing Microsoft technologies.",
+          "impact_areas": ["Team Expertise", "Microsoft Skills", "Professional Development"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_019",
+        "name": "Cisco Certifications",
+        "full_name": "Cisco Professional Certifications (CCNA/CCNP/CCIE)",
+        "priority": "important",
+        "category": "team_credential",
+        "expected_impact": "+26 points",
+        "detection_patterns": [
+          "ccna",
+          "ccnp",
+          "ccie",
+          "cisco certified",
+          "cisco network professional"
+        ],
+        "schema_fields": ["hasCredential", "educationalCredential"],
+        "display_recommendation": {
+          "title": "Highlight Team Cisco Certifications",
+          "why_it_matters": "Cisco certifications demonstrate networking expertise of your technical team. Shows capability to manage complex network infrastructure.",
+          "impact_areas": ["Team Expertise", "Network Engineering", "Technical Competency"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_020",
+        "name": "AWS Certifications",
+        "full_name": "AWS Professional Certifications",
+        "priority": "important",
+        "category": "team_credential",
+        "expected_impact": "+24 points",
+        "detection_patterns": [
+          "aws certified",
+          "aws solutions architect",
+          "aws sysops",
+          "aws developer",
+          "aws professional"
+        ],
+        "schema_fields": ["hasCredential", "educationalCredential"],
+        "display_recommendation": {
+          "title": "Highlight Team AWS Certifications",
+          "why_it_matters": "AWS certifications validate cloud expertise of your team. Critical for demonstrating cloud migration and management capabilities.",
+          "impact_areas": ["Team Expertise", "Cloud Skills", "AWS Competency"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_021",
+        "name": "CISSP",
+        "full_name": "CISSP (Certified Information Systems Security Professional)",
+        "priority": "important",
+        "category": "team_credential",
+        "expected_impact": "+27 points",
+        "detection_patterns": [
+          "cissp",
+          "certified information systems security professional",
+          "cissp certified"
+        ],
+        "schema_fields": ["hasCredential", "educationalCredential"],
+        "display_recommendation": {
+          "title": "Highlight CISSP Certifications",
+          "why_it_matters": "CISSP is the gold standard for security professionals. Demonstrates advanced security expertise on your team.",
+          "impact_areas": ["Team Expertise", "Security Excellence", "Professional Credentials"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_msp_022",
+        "name": "Client Success Stories",
+        "full_name": "Published Client Success Stories",
+        "priority": "important",
+        "category": "content",
+        "expected_impact": "+26 points",
+        "detection_patterns": [
+          "case study",
+          "success story",
+          "client story",
+          "customer success"
+        ],
+        "schema_fields": ["workExample", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Publish Client Success Stories",
+          "why_it_matters": "Success stories with measurable results build practical credibility. AI uses client co-mentions to infer reliability and expertise.",
+          "impact_areas": ["Trust & Authority", "Proven Results", "Client Validation"],
+          "difficulty": "medium",
+          "estimated_time": "2-4 hours per story"
+        }
+      },
+      {
+        "id": "cert_msp_023",
+        "name": "Service Level Agreements",
+        "full_name": "Published SLAs and Service Guarantees",
+        "priority": "important",
+        "category": "content",
+        "expected_impact": "+24 points",
+        "detection_patterns": [
+          "sla",
+          "service level agreement",
+          "uptime guarantee",
+          "service guarantee",
+          "99.9% uptime"
+        ],
+        "schema_fields": ["serviceOutput", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Publish SLA Commitments",
+          "why_it_matters": "Published SLAs demonstrate service commitment and transparency. Shows confidence in service delivery and provides measurable guarantees.",
+          "impact_areas": ["Trust & Authority", "Service Quality", "Transparency"],
+          "difficulty": "easy",
+          "estimated_time": "1-2 hours"
+        }
+      },
+      {
+        "id": "cert_msp_024",
+        "name": "Client Testimonials",
+        "full_name": "Verified Client Testimonials with Schema",
+        "priority": "important",
+        "category": "review",
+        "expected_impact": "+27 points",
+        "detection_patterns": [
+          "testimonials",
+          "client testimonials",
+          "customer reviews",
+          "verified reviews"
+        ],
+        "schema_fields": ["review", "aggregateRating"],
+        "display_recommendation": {
+          "title": "Implement Testimonial Schema",
+          "why_it_matters": "Verified testimonials with schema markup provide strong trust signals. AI systems recognize structured review data as credibility indicators.",
+          "impact_areas": ["Trust & Authority", "Social Proof", "Client Satisfaction"],
+          "difficulty": "easy",
+          "estimated_time": "1-2 hours"
+        }
+      },
+      {
+        "id": "cert_msp_025",
+        "name": "Technology Stack Documentation",
+        "full_name": "Published Technology Stack and Tools",
+        "priority": "relevant",
+        "category": "content",
+        "expected_impact": "+21 points",
+        "detection_patterns": [
+          "technology stack",
+          "tech stack",
+          "tools we use",
+          "our technology",
+          "partner technologies"
+        ],
+        "schema_fields": ["makesOffer", "serviceType"],
+        "display_recommendation": {
+          "title": "Document Technology Stack",
+          "why_it_matters": "Technology stack documentation shows transparency and technical capabilities. AI systems recognize tool mentions as expertise signals.",
+          "impact_areas": ["Trust & Authority", "Technical Transparency", "Capability Showcase"],
+          "difficulty": "easy",
+          "estimated_time": "1-2 hours"
+        }
+      }
+    ]
+  }
+}

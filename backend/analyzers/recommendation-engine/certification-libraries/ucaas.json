@@ -1,0 +1,221 @@
+{
+  "certification_library": {
+    "industry": "Cloud Communications/UCaaS",
+    "industry_id": "ucaas",
+    "version": "1.0",
+    "last_updated": "2025-11-13",
+    "metadata": {
+      "total_certifications": 9,
+      "detection_enabled": true,
+      "schema_generation": true
+    },
+    "certifications": [
+      {
+        "id": "cert_ucaas_001",
+        "name": "SOC 2 Type II",
+        "full_name": "Service Organization Control 2 Type II",
+        "priority": "critical",
+        "category": "security",
+        "expected_impact": "+25 points",
+        "detection_patterns": [
+          "soc 2",
+          "soc2",
+          "soc 2 type ii",
+          "soc 2 type 2",
+          "aicpa soc 2"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["soc2-badge", "soc-2-certified"],
+        "display_recommendation": {
+          "title": "Display SOC 2 Type II Certification",
+          "why_it_matters": "SOC 2 Type II is essential for UCaaS providers. Demonstrates security, availability, and confidentiality controls for cloud communications services.",
+          "impact_areas": ["Trust & Authority", "Security Compliance", "Service Reliability"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_ucaas_002",
+        "name": "ISO 27001",
+        "full_name": "ISO/IEC 27001 Information Security Management",
+        "priority": "critical",
+        "category": "security",
+        "expected_impact": "+23 points",
+        "detection_patterns": [
+          "iso 27001",
+          "iso/iec 27001",
+          "iso27001",
+          "isms certified"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["iso27001-badge", "iso-27001-certified"],
+        "display_recommendation": {
+          "title": "Display ISO 27001 Certification",
+          "why_it_matters": "ISO 27001 demonstrates systematic security management for global UCaaS operations. Essential for enterprise customers and international markets.",
+          "impact_areas": ["Trust & Authority", "International Recognition", "Enterprise Trust"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_ucaas_003",
+        "name": "GDPR Compliance",
+        "full_name": "General Data Protection Regulation",
+        "priority": "important",
+        "category": "privacy",
+        "expected_impact": "+22 points",
+        "detection_patterns": [
+          "gdpr",
+          "gdpr compliant",
+          "gdpr compliance",
+          "general data protection regulation"
+        ],
+        "schema_fields": ["organizationCredential"],
+        "display_recommendation": {
+          "title": "Display GDPR Compliance",
+          "why_it_matters": "GDPR compliance is mandatory for UCaaS providers serving EU customers. Demonstrates commitment to privacy and data protection.",
+          "impact_areas": ["Trust & Authority", "Privacy Protection", "EU Market Access"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_ucaas_004",
+        "name": "HIPAA Ready",
+        "full_name": "HIPAA-Ready Communications Platform",
+        "priority": "important",
+        "category": "regulatory",
+        "expected_impact": "+24 points",
+        "detection_patterns": [
+          "hipaa ready",
+          "hipaa compliant",
+          "hipaa",
+          "healthcare communications",
+          "phi protected"
+        ],
+        "schema_fields": ["organizationCredential", "accreditation"],
+        "display_recommendation": {
+          "title": "Display HIPAA-Ready Certification",
+          "why_it_matters": "HIPAA readiness enables healthcare organizations to use your UCaaS platform for protected health information. Opens critical healthcare market.",
+          "impact_areas": ["Trust & Authority", "Healthcare Market", "Data Protection"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_ucaas_005",
+        "name": "ISO 9001",
+        "full_name": "ISO 9001 Quality Management Systems",
+        "priority": "relevant",
+        "category": "quality",
+        "expected_impact": "+18 points",
+        "detection_patterns": [
+          "iso 9001",
+          "iso9001",
+          "quality management",
+          "qms certified"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["iso9001-badge", "iso-9001-certified"],
+        "display_recommendation": {
+          "title": "Display ISO 9001 Certification",
+          "why_it_matters": "ISO 9001 demonstrates quality management and continuous improvement. Shows commitment to service quality and customer satisfaction.",
+          "impact_areas": ["Trust & Authority", "Quality Assurance", "Process Excellence"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_ucaas_006",
+        "name": "FedRAMP",
+        "full_name": "Federal Risk and Authorization Management Program",
+        "priority": "relevant",
+        "category": "government",
+        "expected_impact": "+26 points",
+        "detection_patterns": [
+          "fedramp",
+          "fedramp authorized",
+          "fedramp certified",
+          "fedramp moderate",
+          "fedramp high"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["fedramp-badge", "fedramp-authorized"],
+        "display_recommendation": {
+          "title": "Display FedRAMP Authorization",
+          "why_it_matters": "FedRAMP authorization enables federal government UCaaS deployments. Demonstrates highest security standards and government trust.",
+          "impact_areas": ["Trust & Authority", "Government Market", "Enterprise Security"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_ucaas_007",
+        "name": "PCI DSS",
+        "full_name": "Payment Card Industry Data Security Standard",
+        "priority": "relevant",
+        "category": "security",
+        "expected_impact": "+20 points",
+        "detection_patterns": [
+          "pci dss",
+          "pci-dss",
+          "pci compliant",
+          "payment card industry"
+        ],
+        "schema_fields": ["organizationCredential", "accreditation"],
+        "badge_patterns": ["pci-badge", "pci-dss-compliant"],
+        "display_recommendation": {
+          "title": "Display PCI DSS Compliance",
+          "why_it_matters": "PCI DSS compliance enables secure payment processing through UCaaS platforms. Important for call center and contact center solutions.",
+          "impact_areas": ["Trust & Authority", "Payment Security", "Contact Center Solutions"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_ucaas_008",
+        "name": "ISO 27017",
+        "full_name": "ISO/IEC 27017 Cloud Security",
+        "priority": "relevant",
+        "category": "security",
+        "expected_impact": "+20 points",
+        "detection_patterns": [
+          "iso 27017",
+          "iso/iec 27017",
+          "iso27017",
+          "cloud security certified"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "display_recommendation": {
+          "title": "Display ISO 27017 Certification",
+          "why_it_matters": "ISO 27017 specifically addresses cloud service security controls. Demonstrates cloud-specific security expertise for UCaaS platforms.",
+          "impact_areas": ["Trust & Authority", "Cloud Security", "Service Provider Controls"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_ucaas_009",
+        "name": "ISO 27018",
+        "full_name": "ISO/IEC 27018 Cloud Privacy",
+        "priority": "relevant",
+        "category": "privacy",
+        "expected_impact": "+19 points",
+        "detection_patterns": [
+          "iso 27018",
+          "iso/iec 27018",
+          "iso27018",
+          "cloud privacy"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "display_recommendation": {
+          "title": "Display ISO 27018 Certification",
+          "why_it_matters": "ISO 27018 addresses cloud privacy and PII protection. Demonstrates commitment to protecting customer communications data.",
+          "impact_areas": ["Trust & Authority", "Privacy Protection", "Data Sovereignty"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      }
+    ]
+  }
+}
