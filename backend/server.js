@@ -10,9 +10,7 @@ const aiTestingRoutes = require('./routes/ai-testing');
 const authRoutes = require('./routes/auth');
 const subscriptionRoutes = require('./routes/subscription');
 const scanRoutes = require('./routes/scan');
-const recommendationRoutes = require('./routes/recommendations');
 const competitorRoutes = require('./routes/competitors');
-const feedbackRoutes = require('./routes/feedback');
 const supportChatRoutes = require('./routes/support-chat');
 const waitlistRoutes = require('./routes/waitlist');
 const adminRoutes = require('./routes/admin');
@@ -112,9 +110,7 @@ app.use('/api', aiTestingRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/scan', scanRoutes);
 app.use('/api/scans', findingsRoutes);
-app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/competitors', competitorRoutes); // Competitive tracking (Elite mode)
-app.use('/api/feedback', feedbackRoutes);
 app.use('/api/support-chat', supportChatRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/admin', adminRoutes); // Admin org/plan routes

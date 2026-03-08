@@ -14,7 +14,7 @@ const fs = require('fs');
 // FAQ library loader (if available)
 let loadLibrary, hasLibrary;
 try {
-  const faqLoader = require('../analyzers/recommendation-engine/faq-library-loader');
+  const faqLoader = require('./recommendation-engine/faq-library-loader');
   loadLibrary = faqLoader.loadLibrary;
   hasLibrary = faqLoader.hasLibrary;
 } catch (e) {

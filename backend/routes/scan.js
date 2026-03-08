@@ -2,23 +2,19 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
 
-const { saveHybridRecommendations } = require('../utils/hybrid-recommendation-helper');
 const { extractRootDomain, isPrimaryDomain } = require('../utils/domain-extractor');
 const { calculateScanComparison, getHistoricalTimeline } = require('../utils/scan-comparison');
 const { computePageSetHash } = require('../utils/page-context');
 const UsageTrackerService = require('../services/usage-tracker-service');
-const RecommendationContextService = require('../services/recommendation-context-service');
-const RefreshCycleService = require('../services/refresh-cycle-service');
 const GuestScanCacheService = require('../services/guest-scan-cache-service');
 const { generateFindings } = require('../services/findingsService');
-const { skipRecommendation: canonicalSkipRecommendation, resolveEffectiveScanId } = require('../services/recommendation-status-service');
 const { createGuestRateLimiter } = require('../middleware/guestRateLimit');
 const { loadOrgContext } = require('../middleware/orgContext');
 
 // Phase 2: Core Services - Single source of truth for plan, entitlements, usage, org
 // Phase 2.1: Use resolvePlanForRequest for org-first plan resolution
 const { resolvePlanForRequest } = require('../services/planService');
-const { getEntitlements, canScan, canScanPages, getUpgradeSuggestion, getRecommendationVisibleLimit } = require('../services/scanEntitlementService');
+const { getEntitlements, canScan, canScanPages, getUpgradeSuggestion } = require('../services/scanEntitlementService');
 const { canPerformScan, incrementUsageEvent, getUsageSummary, checkAndResetLegacyIfNeeded } = require('../services/usageService');
 const { ensureScanHasOrgContext, getOrCreateOrgForUser } = require('../services/organizationService');
 const { USAGE_EVENT_TYPES } = require('../constants/usageEventTypes');
@@ -32,8 +28,6 @@ const guestRateLimiter = createGuestRateLimiter({ maxScansPerDay: 5, db });
 // ============================================
 const V5EnhancedRubricEngine = require('../analyzers/v5-enhanced-rubric-engine'); // Import the ENHANCED class
 const V5RubricEngine = V5EnhancedRubricEngine; // Alias for compatibility
-const { generateCompleteRecommendations } = require('../analyzers/recommendation-generator');
-const { measured, notMeasured, isMeasured } = require('../analyzers/score-types');
 const { canonicalizeUrl, canonicalizeWithRedirects, getCacheKey } = require('../utils/url-canonicalizer');
 
 // Middleware to verify JWT token
@@ -58,11 +52,7 @@ const authenticateToken = (req, res, next) => {
 // Plan limits imported from middleware (single source of truth)
 const { PLAN_LIMITS } = require('../middleware/usageLimits');
 
-const refreshService = new RefreshCycleService();
 const usageTracker = new UsageTrackerService(db);
-
-// Phase 4A.3c: GET-time legacy Top 10 adapter
-const { enrichLegacyRecommendations } = require('../recommendations/legacyTop10Adapter');
 
 /**
  * Phase 4A.3c: Check if user has admin role (for debug mode gating).
@@ -94,30 +84,6 @@ const V5_WEIGHTS = {
   voiceOptimization: 0.12        // 12%
 };
 
-async function findReusableScanContext({ userId, domain, pageSetHash, withinDays = 5 }) {
-  const candidateResult = await db.query(
-    `SELECT s.id as scan_id, rrc.next_cycle_date, rrc.cycle_number, rrc.cycle_start_date
-     FROM scans s
-     JOIN recommendation_refresh_cycles rrc ON rrc.scan_id = s.id AND rrc.user_id = s.user_id
-     WHERE s.user_id = $1
-       AND s.domain = $2
-       AND s.domain_type = 'primary'
-       AND s.status = 'completed'
-       AND s.pages_analyzed ->> 'page_set_hash' = $3
-       AND s.completed_at >= NOW() - INTERVAL '1 day' * $4
-     ORDER BY s.completed_at DESC
-     LIMIT 1`,
-    [userId, domain, pageSetHash, withinDays]
-  );
-
-  if (candidateResult.rows.length === 0) return null;
-
-  const candidate = candidateResult.rows[0];
-  const nextCycleDate = candidate.next_cycle_date ? new Date(candidate.next_cycle_date) : null;
-  const cycleDue = nextCycleDate ? nextCycleDate <= new Date() : true;
-
-  return { ...candidate, cycle_due: cycleDue };
-}
 
 // ============================================
 // POST /api/scan/guest - Guest scan (no auth)
@@ -497,26 +463,12 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
 
     const { pageSetHash, normalizedPages } = computePageSetHash(scanTarget, pages || []);
 
-    // Free users get 30-day context window, paid users get 5-day
-    // Phase 2.1: Use resolved plan instead of user.plan
-    const contextWindowDays = planResolution.plan === 'free' ? 30 : 5;
-
-    const reusableContext = await findReusableScanContext({
-      userId,
-      domain: scanDomain,
-      pageSetHash,
-      withinDays: contextWindowDays
-    });
-
-    const contextScanId = reusableContext?.scan_id;
-    let shouldReuseRecommendations = Boolean(contextScanId);
-
     // Create scan record with status 'processing'
     // Phase 2: Include organization_id and domain_id from org context
     const scanRecord = await db.query(
       `INSERT INTO scans (
-        user_id, url, status, page_count, rubric_version, domain_type, extracted_domain, domain, pages_analyzed, recommendations, organization_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        user_id, url, status, page_count, rubric_version, domain_type, extracted_domain, domain, pages_analyzed, organization_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id, url, status, created_at, organization_id`,
       [
         userId,
@@ -528,7 +480,6 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
         scanDomain,
         scanDomain,
         JSON.stringify({ pages: normalizedPages, page_set_hash: pageSetHash }),
-        contextScanId ? JSON.stringify({ context_scan_id: contextScanId, page_set_hash: pageSetHash }) : null,
         orgContext?.orgId || null
       ]
     );
@@ -545,190 +496,16 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
       console.warn(`[Scan] Could not set org context: ${orgError.message}`);
     }
 
-    // Get existing user progress for this scan (if any) - only for primary domain scans
-    let userProgress = null;
-    if (!isCompetitorScan) {
-      const existingProgressResult = await db.query(
-        `SELECT * FROM user_progress WHERE user_id = $1 AND scan_id = $2`,
-        [userId, scan.id]
-      );
-      userProgress = existingProgressResult.rows.length > 0 ? existingProgressResult.rows[0] : null;
-    }
-
-    // Get current mode for user (before generating recommendations) - only for primary domain scans
-    let currentMode = 'optimization'; // Default
-    if (!isCompetitorScan) {
-      const { getCurrentMode } = require('../utils/mode-manager');
-      const modeData = await getCurrentMode(userId);
-      currentMode = modeData?.current_mode || 'optimization';
-      console.log(`🎯 User recommendation mode: ${currentMode}`);
-    }
-
-    // CHECK FOR ACTIVE RECOMMENDATION CONTEXT (5-day window)
-    // If user has scanned this same domain/pages within 5 days,
-    // reuse existing recommendations instead of generating new ones.
-    let activeContext = null;
-    // Note: shouldReuseRecommendations already declared above based on contextScanId
-
-    if (!isCompetitorScan) {
-      const contextService = new RecommendationContextService(db.pool);
-      const contextCheck = await contextService.shouldSkipRecommendationGeneration(
-        userId,
-        scanDomain,
-        pages || [],
-        isCompetitorScan
-      );
-
-      if (contextCheck.shouldSkip && contextCheck.activeContext) {
-        activeContext = contextCheck.activeContext;
-        shouldReuseRecommendations = true;
-        console.log(`📎 Active recommendation context found (within 5-day window)`);
-        console.log(`   Primary scan: ${activeContext.primaryScanId}`);
-        console.log(`   Expires: ${activeContext.expiresAt}`);
-        if (contextCheck.refreshProcessed) {
-          console.log(`   ✓ Refresh cycle processed - implemented/skipped recs replaced`);
-        }
-        console.log(`   → Will reuse existing recommendations instead of generating new ones`);
-      } else {
-        console.log(`📎 No active context - will generate new recommendations`);
-      }
-    }
-
     // Perform appropriate scan type
     let scanResult;
     if (isCompetitorScan) {
       // Lightweight competitor scan (scores only, no recommendations)
       console.log(`🔍 Performing lightweight competitor scan (scores only)`);
       scanResult = await performCompetitorScan(scanTarget);
-    } else if (shouldReuseRecommendations && activeContext) {
-      // Scan with REUSED recommendations (within 5-day window)
-      // Perform scoring only, then fetch existing recommendations
-      console.log(`🔄 Performing scan with reused recommendations (5-day context active)`);
-      // Phase 2.1: Use resolved plan
-      scanResult = await performV5Scan(scanTarget, planResolution.plan, pages, userProgress, user.industry, currentMode, true);
-
-      // Fetch existing recommendations from primary scan
-      const existingRecs = await db.query(`
-        SELECT * FROM scan_recommendations
-        WHERE scan_id = $1
-          AND unlock_state IN ('active', 'locked')
-          AND status NOT IN ('archived')
-        ORDER BY impact_score DESC
-      `, [activeContext.primaryScanId]);
-
-      // 🔥 NEW: Update findings based on CURRENT scan evidence
-      const updatedRecs = await updateRecommendationFindings(
-        existingRecs.rows,
-        scanResult.detailedAnalysis?.scanEvidence || {},
-        scan.id
-      );
-
-      // Attach updated recommendations to scan result
-      scanResult.recommendations = updatedRecs;
-      scanResult.reusedFromContext = true;
-      scanResult.primaryScanId = activeContext.primaryScanId;
-      console.log(`   ✓ Reused ${existingRecs.rows.length} recommendations from scan ${activeContext.primaryScanId}`);
-      console.log(`   ✓ Updated ${updatedRecs.filter(r => r.findingsUpdated).length} findings based on current evidence`);
     } else {
-      // FREE USER FREEZE LOGIC (two-level check)
-      const FREE_MONTHLY_REC_LIMIT = 3;
-      let skipRecsForFreeUser = false;
-      let domainFrozen = false;
-      let existingDomainRecs = null;
-
-      // Phase 2.1: Use resolved plan for free user check
-      if (planResolution.plan === 'free') {
-        // Get the start of current month for queries
-        const now = new Date();
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-        // LEVEL 1: Domain-level freeze check
-        // Has this Free user already scanned THIS domain this month?
-        const domainScanCheck = await db.query(`
-          SELECT s.id as scan_id, s.created_at
-          FROM scans s
-          WHERE s.user_id = $1
-            AND s.extracted_domain = $2
-            AND s.created_at >= $3
-            AND s.status = 'completed'
-          ORDER BY s.created_at ASC
-          LIMIT 1
-        `, [userId, scanDomain, monthStart.toISOString()]);
-
-        if (domainScanCheck.rows.length > 0) {
-          // User has already scanned this domain this month - FREEZE for this domain
-          const previousScanId = domainScanCheck.rows[0].scan_id;
-          console.log(`🔒 Domain freeze: Free user already scanned ${scanDomain} this month`);
-          console.log(`   Previous scan: ${previousScanId} on ${domainScanCheck.rows[0].created_at}`);
-
-          // Fetch existing recommendations for THIS domain
-          existingDomainRecs = await db.query(`
-            SELECT sr.* FROM scan_recommendations sr
-            WHERE sr.scan_id = $1
-              AND sr.unlock_state IN ('active', 'locked')
-              AND sr.status NOT IN ('archived')
-            ORDER BY sr.impact_score DESC
-            LIMIT 3
-          `, [previousScanId]);
-
-          domainFrozen = true;
-          skipRecsForFreeUser = true;
-          console.log(`   ✓ Found ${existingDomainRecs.rows.length} existing recommendations for this domain`);
-        } else {
-          // LEVEL 2: Account-level cap check (only if domain not frozen)
-          const recsUsed = user.recs_generated_this_month || 0;
-          if (recsUsed >= FREE_MONTHLY_REC_LIMIT) {
-            console.log(`⚠️ Free user ${userId} has used ${recsUsed}/${FREE_MONTHLY_REC_LIMIT} recommendations this month`);
-            console.log(`   → Skipping recommendation generation (account cap reached)`);
-            skipRecsForFreeUser = true;
-          } else {
-            console.log(`📊 Free user: ${recsUsed}/${FREE_MONTHLY_REC_LIMIT} recs used, first scan of ${scanDomain} this month`);
-          }
-        }
-      }
-
-      // Full V5 rubric scan with NEW recommendations (mode-aware)
-      // For Free users who hit their limit, skip recommendation generation
+      // Full V5 rubric scan
       // Phase 2.1: Use resolved plan
-      scanResult = await performV5Scan(scanTarget, planResolution.plan, pages, userProgress, user.industry, currentMode, skipRecsForFreeUser);
-
-      // MONTHLY FREEZE: For Free users, attach frozen recommendations
-      if (skipRecsForFreeUser) {
-        const now = new Date();
-        const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-        const daysUntilRefresh = Math.ceil((nextMonth - now) / (1000 * 60 * 60 * 24));
-
-        if (domainFrozen && existingDomainRecs) {
-          // Domain-level freeze: return recs from previous scan of this domain
-          console.log(`🔒 Domain freeze: Returning ${existingDomainRecs.rows.length} recommendations for ${scanDomain}`);
-          scanResult.recommendations = existingDomainRecs.rows;
-          scanResult.domainFrozen = true;
-          scanResult.freeRecLimitMessage = `Your recommendations for ${scanDomain} are locked until next month. New recommendations in ${daysUntilRefresh} day${daysUntilRefresh !== 1 ? 's' : ''}.`;
-        } else {
-          // Account-level freeze: return recs from any scan this month
-          console.log(`🔒 Account freeze: Fetching existing recommendations for Free user ${userId}`);
-          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-          const existingRecs = await db.query(`
-            SELECT sr.* FROM scan_recommendations sr
-            JOIN scans s ON sr.scan_id = s.id
-            WHERE s.user_id = $1
-              AND s.created_at >= $2
-              AND sr.unlock_state IN ('active', 'locked')
-              AND sr.status NOT IN ('archived')
-            ORDER BY sr.impact_score DESC
-            LIMIT 3
-          `, [userId, monthStart.toISOString()]);
-
-          scanResult.recommendations = existingRecs.rows;
-          scanResult.freeRecLimitMessage = `Your ${FREE_MONTHLY_REC_LIMIT} recommendations are locked for this month. New recommendations in ${daysUntilRefresh} day${daysUntilRefresh !== 1 ? 's' : ''}.`;
-          console.log(`   ✓ Returned ${existingRecs.rows.length} frozen recommendations`);
-        }
-
-        scanResult.freeRecLimitReached = true;
-        scanResult.recommendationsFrozen = true;
-        console.log(`   ✓ Next refresh: ${nextMonth.toISOString().split('T')[0]} (${daysUntilRefresh} days)`);
-      }
+      scanResult = await performV5Scan(scanTarget, planResolution.plan, pages, null, user.industry);
     }
 
     // Validate scan result structure
@@ -803,8 +580,7 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
     );
     
 
-    // Replaced by findingsService — Phase 1 pivot
-    let progressInfo = null;
+    // Generate findings for the scan
     try {
       await generateFindings(scan.id);
     } catch (findingsErr) {
@@ -812,25 +588,7 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
       // Non-critical: do not fail the scan completion
     }
 
-    // 📎 MANAGE RECOMMENDATION CONTEXT (5-day persistence)
-    if (!isCompetitorScan) {
-      const contextService = new RecommendationContextService(db.pool);
-
-      if (shouldReuseRecommendations && activeContext) {
-        // Link this scan to the existing context (pass latest score for tracking)
-        await contextService.linkScanToContext(activeContext.contextId, scan.id, Math.round(scanResult.totalScore));
-        console.log(`📎 Scan ${scan.id} linked to existing context (expires: ${activeContext.expiresAt})`);
-      } else if (!shouldReuseRecommendations && scanResult.recommendations && scanResult.recommendations.length > 0) {
-        // Create new context for this scan (it has the primary recommendations)
-        // Pass the initial score for "improved by X points" tracking
-        // Pass user plan for plan-specific context duration (Free=30 days, DIY/Pro=5 days)
-        // Phase 2.1: Use resolved plan
-        await contextService.createContext(userId, scan.id, scanDomain, pages || [], Math.round(scanResult.totalScore), planResolution.plan);
-        console.log(`📎 New recommendation context created for scan ${scan.id}`);
-      }
-    }
-
-    // 🔥 Save FAQ schema if available (DIY tier only)
+    // 🔥 Save FAQ schema if available
     if (scanResult.faq && scanResult.faq.length > 0) {
       await db.query(
         `UPDATE scans SET faq_schema = $1 WHERE id = $2`,
@@ -838,46 +596,7 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
       );
     }
 
-    // 🔍 Validate previous recommendations (Phase 3: Partial Implementation Detection)
-    if (!isCompetitorScan && scanResult.detailedAnalysis) {
-      try {
-        const { validatePreviousRecommendations } = require('../utils/validation-engine');
-        const validationResults = await validatePreviousRecommendations(
-          userId,
-          scan.id,
-          scanResult.detailedAnalysis.scanEvidence || {}
-        );
-
-        if (validationResults.validated) {
-          console.log(`🔍 Validation complete: ${validationResults.verified_complete} verified, ${validationResults.partial_progress} partial, ${validationResults.not_implemented} not implemented`);
-        }
-      } catch (validationError) {
-        console.error('⚠️  Validation failed (non-critical):', validationError.message);
-        // Don't fail the scan if validation fails
-      }
-    }
-
-    // 🎯 Check and update recommendation mode (Phase 4: Score-Based Mode Transition)
-    let modeInfo = null;
-    let refreshCycle = null; // Will be populated by refresh cycle service if applicable
-    if (!isCompetitorScan) {
-      try {
-        const { checkAndUpdateMode } = require('../utils/mode-manager');
-        // Phase 2.1: Use resolved plan
-        modeInfo = await checkAndUpdateMode(userId, scan.id, scanResult.totalScore, planResolution.plan);
-
-        if (modeInfo.modeChanged) {
-          console.log(`🎯 Mode changed: ${modeInfo.previousMode} → ${modeInfo.currentMode} (score: ${modeInfo.currentScore})`);
-        } else {
-          console.log(`🎯 Mode check: ${modeInfo.currentMode} (score: ${modeInfo.currentScore})`);
-        }
-      } catch (modeError) {
-        console.error('⚠️  Mode check failed (non-critical):', modeError.message);
-        // Don't fail the scan if mode check fails
-      }
-    }
-
-    // 🏆 Update competitive tracking if this is a tracked competitor (Phase 5: Elite Mode)
+    // 🏆 Update competitive tracking if this is a tracked competitor
     if (isCompetitorScan) {
       try {
         // Check if this competitor is being tracked
@@ -937,31 +656,6 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
 
     console.log(`✅ Scan ${scan.id} completed with score: ${scanResult.totalScore}`);
 
-    // ============================================
-    // ENTITLEMENT CAP: Apply recommendation visibility limit before response
-    // This prevents entitlement leakage by capping recommendations in POST /analyze
-    // (matches the cap already enforced in GET /api/scan/:id)
-    // ============================================
-    const recommendationLimit = getRecommendationVisibleLimit(planResolution.plan);
-    if (!isCompetitorScan && recommendationLimit !== -1 && Array.isArray(scanResult.recommendations)) {
-      // Cap applies to active recommendations only; implemented/skipped pass through
-      const postActive = [];
-      const postNonActive = [];
-      for (const rec of scanResult.recommendations) {
-        if (rec.status === 'implemented' || rec.status === 'skipped' || rec.status === 'dismissed') {
-          postNonActive.push(rec);
-        } else {
-          postActive.push(rec);
-        }
-      }
-      const originalActiveCount = postActive.length;
-      const cappedPostActive = postActive.slice(0, recommendationLimit);
-      scanResult.recommendations = [...cappedPostActive, ...postNonActive];
-      if (originalActiveCount > recommendationLimit) {
-        console.log(`🔒 [POST Analyze] Capped active recommendations: ${originalActiveCount} → ${recommendationLimit} (plan: ${planResolution.plan})`);
-      }
-    }
-
     // Return results
     res.json({
       success: true,
@@ -1001,9 +695,6 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
       plan: entitlements.plan,
       organization_id: scan.organization_id,
       domain_id: scan.domain_id,
-      mode: !isCompetitorScan ? modeInfo : null, // Mode information for primary domain scans
-      refreshCycle,
-      progress: progressInfo,
       message: isCompetitorScan
         ? `Competitor scan complete. Scores only - recommendations not available for competitor domains.`
         : null
@@ -1112,15 +803,6 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
     const scanId = req.params.id;
     const userId = req.userId;
 
-    // ============================================
-    // PHASE 2: ENTITLEMENT-BASED RECOMMENDATION CAP
-    // Resolve user's plan to enforce recommendation visibility limit
-    // ============================================
-    const orgId = req.orgId || null;
-    const planResolution = await resolvePlanForRequest({ userId, orgId });
-    const recommendationVisibleLimit = getRecommendationVisibleLimit(planResolution.plan);
-    console.log(`📋 [GET Scan] User ${userId}: plan=${planResolution.plan}, recommendationLimit=${recommendationVisibleLimit === -1 ? 'unlimited' : recommendationVisibleLimit}`);
-
     const result = await db.query(
       `SELECT
         id, user_id, url, status, total_score, rubric_version,
@@ -1141,42 +823,7 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
     }
 
     const scan = result.rows[0];
-    let contextScanId = scan.id;
-
-    // First, check if scan.recommendations JSON has context_scan_id (old system)
-    if (scan.recommendations) {
-      try {
-        const recMeta = typeof scan.recommendations === 'string'
-          ? JSON.parse(scan.recommendations)
-          : scan.recommendations;
-        contextScanId = recMeta?.context_scan_id || scan.id;
-      } catch (parseError) {
-        contextScanId = scan.id;
-      }
-    }
-
-    // If no context_scan_id found in JSON, check context_scan_links table (new system)
-    if (contextScanId === scan.id) {
-      try {
-        const contextLinkResult = await db.query(`
-          SELECT rc.primary_scan_id
-          FROM context_scan_links csl
-          JOIN recommendation_contexts rc ON csl.context_id = rc.id
-          WHERE csl.scan_id = $1
-          LIMIT 1
-        `, [scanId]);
-
-        if (contextLinkResult.rows.length > 0 && contextLinkResult.rows[0].primary_scan_id) {
-          contextScanId = contextLinkResult.rows[0].primary_scan_id;
-          console.log(`📎 Scan ${scanId} linked to context, using primary scan ${contextScanId} for recommendations`);
-        }
-      } catch (contextError) {
-        // Table might not exist yet, continue with current scan id
-        console.log(`⚠️ Context lookup failed (table may not exist): ${contextError.message}`);
-      }
-    }
-
-    // Get recommendations (includes Phase 4A.3c v2 columns)
+    // Read-only: get historical recommendations for this scan
     const recResult = await db.query(
       `SELECT
         id, category, recommendation_text, priority,
@@ -1186,165 +833,13 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
         customized_implementation, ready_to_use_content,
         implementation_notes, quick_wins, validation_checklist,
         user_rating, user_feedback, implemented_at,
-        -- Phase 4A.3c v2 columns
         subfactor_key, rec_key, why_it_matters, evidence_json,
         confidence, evidence_quality, engine_version
        FROM scan_recommendations
        WHERE scan_id = $1
        ORDER BY priority DESC, estimated_impact DESC`,
-      [contextScanId]
+      [scan.id]
     );
-
-    // Get user progress (for DIY progressive unlock)
-    const progressResult = await db.query(
-      `SELECT
-        total_recommendations, active_recommendations,
-        completed_recommendations, verified_recommendations,
-        current_batch, last_unlock_date, unlocks_today,
-        site_wide_total, site_wide_completed, site_wide_active,
-        page_specific_total, page_specific_completed,
-        site_wide_complete,
-        batch_1_unlock_date, batch_2_unlock_date,
-        batch_3_unlock_date, batch_4_unlock_date,
-        total_batches
-       FROM user_progress
-       WHERE user_id = $1 AND scan_id = $2`,
-      [userId, contextScanId]
-    );
-
-    let userProgress = progressResult.rows.length > 0 ? progressResult.rows[0] : null;
-
-    // Check if replacement cycle is due (replaces old batch unlock logic)
-    const { checkAndExecuteReplacement } = require('../utils/replacement-engine');
-    let replacementResult = null;
-
-    if (userProgress) {
-      try {
-        replacementResult = await checkAndExecuteReplacement(userId, contextScanId);
-
-        if (replacementResult.replaced) {
-          console.log(`🔄 Replacement executed: ${replacementResult.replacedCount} recommendations unlocked`);
-          console.log(`   Next replacement: ${replacementResult.nextReplacementDate}`);
-
-          // Refresh user progress after replacement
-          const updatedProgressResult = await db.query(
-            `SELECT * FROM user_progress WHERE user_id = $1 AND scan_id = $2`,
-            [userId, contextScanId]
-          );
-          if (updatedProgressResult.rows.length > 0) {
-            userProgress = updatedProgressResult.rows[0];
-          }
-        } else {
-          console.log(`🔄 Replacement check: ${replacementResult.reason || 'not due yet'}`);
-        }
-      } catch (replacementError) {
-        console.error('⚠️  Replacement check failed:', replacementError.message);
-        // Continue without failing the scan retrieval
-      }
-    }
-
-    // Legacy: Keep old batch unlock logic for backward compatibility (deprecated)
-    let batchesUnlocked = 0;
-    if (false && userProgress && userProgress.total_batches > 0) { // Disabled - using replacement engine now
-      const now = new Date();
-      const batchDates = [
-        userProgress.batch_1_unlock_date,
-        userProgress.batch_2_unlock_date,
-        userProgress.batch_3_unlock_date,
-        userProgress.batch_4_unlock_date
-      ];
-
-      let targetBatch = 1;
-      for (let i = 0; i < 4; i++) {
-        if (batchDates[i] && new Date(batchDates[i]) <= now) {
-          targetBatch = i + 1;
-        }
-      }
-
-      if (targetBatch > userProgress.current_batch) {
-        console.log(`🔓 [DEPRECATED] Auto-unlocking batches ${userProgress.current_batch + 1} to ${targetBatch} for scan ${scanId}`);
-
-        const recsPerBatch = 5;
-        const currentlyActive = userProgress.active_recommendations || 0;
-        const shouldBeActive = Math.min(targetBatch * recsPerBatch, userProgress.total_recommendations);
-        const toUnlock = shouldBeActive - currentlyActive;
-
-        if (toUnlock > 0) {
-          // Unlock the next batch of recommendations
-          // Write to CANONICAL columns only (surfaced_at, skip_available_at)
-          await db.query(
-            `UPDATE scan_recommendations
-             SET unlock_state = 'active',
-                 surfaced_at = NOW(),
-                 skip_available_at = NOW() + INTERVAL '120 hours',
-                 updated_at = NOW()
-             WHERE scan_id = $1
-               AND unlock_state = 'locked'
-               AND batch_number <= $2
-             ORDER BY batch_number, id
-             LIMIT $3`,
-            [scanId, targetBatch, toUnlock]
-          );
-
-          // Update user progress
-          await db.query(
-            `UPDATE user_progress
-             SET current_batch = $1,
-                 active_recommendations = $2
-             WHERE user_id = $3 AND scan_id = $4`,
-            [targetBatch, shouldBeActive, userId, scanId]
-          );
-
-          batchesUnlocked = targetBatch - userProgress.current_batch;
-          console.log(`   ✅ Unlocked ${toUnlock} recommendations (batches ${userProgress.current_batch + 1}-${targetBatch})`);
-
-          // Refresh user progress
-          const updatedProgress = await db.query(
-            `SELECT * FROM user_progress WHERE user_id = $1 AND scan_id = $2`,
-            [userId, scanId]
-          );
-          Object.assign(userProgress, updatedProgress.rows[0]);
-        }
-      }
-    }
-
-    // Get updated recommendations after potential unlock (with new delivery system fields)
-    // Use COALESCE for canonical field names with legacy fallbacks
-    const updatedRecResult = await db.query(
-      `SELECT
-        id, category, recommendation_text, priority,
-        estimated_impact, estimated_effort, status,
-        action_steps, findings, code_snippet,
-        impact_description,
-        customized_implementation, ready_to_use_content,
-        implementation_notes, quick_wins, validation_checklist,
-        user_rating, user_feedback,
-        COALESCE(implemented_at, marked_complete_at) AS implemented_at,
-        unlock_state, batch_number,
-        COALESCE(surfaced_at, unlocked_at) AS surfaced_at,
-        skipped_at,
-        recommendation_type, page_url,
-        -- New delivery system fields
-        recommendation_mode, elite_category, impact_score,
-        implementation_difficulty, compounding_effect_score,
-        industry_relevance_score, last_refresh_date, next_refresh_date,
-        refresh_cycle_number, implementation_progress, previous_findings,
-        is_partial_implementation, validation_status, validation_errors,
-        last_validated_at, affected_pages, pages_implemented,
-        auto_detected_at, archived_at, archived_reason,
-        COALESCE(skip_available_at, skip_enabled_at) AS skip_available_at,
-        -- Phase 4A.3c v2 columns
-        subfactor_key, rec_key, why_it_matters, evidence_json,
-        confidence, evidence_quality, engine_version
-       FROM scan_recommendations
-       WHERE scan_id = $1
-       ORDER BY batch_number, priority DESC, impact_score DESC NULLS LAST, estimated_impact DESC`,
-      [contextScanId]
-    );
-
-    // Model A: No batch unlock concept - recommendations refill immediately on skip/implement
-    // The nextBatchUnlock calculation has been removed in favor of dynamic top-N with no cooldown
-    const nextBatchUnlock = null;
 
     const categoryScores = {
       aiReadability: scan.ai_readability_score,
@@ -1358,103 +853,13 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
     };
 
     // ============================================
-    // RECOMMENDATION DELIVERY SYSTEM DATA
-    // ============================================
-
-    // Get or create user mode
-    let userMode = null;
-    try {
-      const modeResult = await db.query(
-        `SELECT * FROM user_modes WHERE user_id = $1`,
-        [userId]
-      );
-
-      if (modeResult.rows.length > 0) {
-        userMode = modeResult.rows[0];
-      } else {
-        // Create initial mode for user (Optimization mode by default)
-        const insertMode = await db.query(
-          `INSERT INTO user_modes (user_id, current_mode, current_score, score_at_mode_entry, highest_score_achieved)
-           VALUES ($1, 'optimization', $2, $2, $2)
-           RETURNING *`,
-          [userId, scan.total_score]
-        );
-        userMode = insertMode.rows[0];
-      }
-
-      // Update current score
-      await db.query(
-        `UPDATE user_modes SET current_score = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2`,
-        [scan.total_score, userId]
-      );
-      userMode.current_score = scan.total_score;
-
-    } catch (modeError) {
-      console.error('⚠️  Error fetching user mode:', modeError);
-    }
-
-    // Get unread notifications
-    let notifications = [];
-    try {
-      const notifResult = await db.query(
-        `SELECT id, notification_type, category, priority, title, message,
-                action_label, action_url, scan_id, recommendation_id,
-                is_read, created_at, expires_at
-         FROM user_notifications
-         WHERE user_id = $1 AND is_dismissed = false
-         ORDER BY created_at DESC
-         LIMIT 50`,
-        [userId]
-      );
-      notifications = notifResult.rows;
-    } catch (notifError) {
-      console.error('⚠️  Error fetching notifications:', notifError);
-    }
-
-    // Get current refresh cycle
-    let currentCycle = null;
-    try {
-      const cycleResult = await db.query(
-        `SELECT * FROM recommendation_refresh_cycles
-         WHERE user_id = $1 AND scan_id = $2
-         ORDER BY cycle_number DESC
-         LIMIT 1`,
-        [userId, contextScanId]
-      );
-      if (cycleResult.rows.length > 0) {
-        currentCycle = cycleResult.rows[0];
-      }
-    } catch (cycleError) {
-      console.error('⚠️  Error fetching refresh cycle:', cycleError);
-    }
-
-    // Get implementation detections (for auto-detected recommendations)
-    let recentDetections = [];
-    try {
-      const detectionResult = await db.query(
-        `SELECT d.*, r.recommendation_text, r.category
-         FROM implementation_detections d
-         JOIN scan_recommendations r ON d.recommendation_id = r.id
-         WHERE d.user_id = $1 AND d.current_scan_id = $2
-         ORDER BY d.detected_at DESC
-         LIMIT 10`,
-        [userId, scanId]
-      );
-      recentDetections = detectionResult.rows;
-    } catch (detectionError) {
-      console.error('⚠️  Error fetching detections:', detectionError);
-    }
-
-    // ============================================
     // HISTORIC COMPARISON LOGIC
     // ============================================
     let comparisonData = null;
     let historicalTimeline = null;
 
     try {
-      // Check if scan has domain field for comparison
       if (scan.domain) {
-        // Fetch previous scan for the same domain by this user
         const previousScanResult = await db.query(
           `SELECT
             id, url, total_score, created_at,
@@ -1473,12 +878,9 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
         );
 
         if (previousScanResult.rows.length > 0) {
-          const previousScan = previousScanResult.rows[0];
-          comparisonData = calculateScanComparison(scan, previousScan);
-          console.log(`📊 Comparison calculated for scan ${scanId} vs ${previousScan.id}`);
+          comparisonData = calculateScanComparison(scan, previousScanResult.rows[0]);
         }
 
-        // Fetch all scans for this domain for timeline visualization (last 10)
         const historicalScansResult = await db.query(
           `SELECT
             id, url, total_score, created_at,
@@ -1497,109 +899,10 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
 
         if (historicalScansResult.rows.length > 1) {
           historicalTimeline = getHistoricalTimeline(historicalScansResult.rows);
-          console.log(`📈 Historical timeline generated with ${historicalScansResult.rows.length} data points`);
         }
       }
     } catch (comparisonError) {
-      console.error('⚠️  Error calculating comparison (non-fatal):', comparisonError);
-      // Continue without comparison data - it's optional
-    }
-
-    // ============================================
-    // Phase 4A.3c: GET-time Top 10 enrichment via legacy adapter
-    // Matches recommendations to Top10 keys using title-based matching,
-    // runs the Phase 4A.3c renderer, writes into BOTH legacy fields
-    // (instant UI fix) AND v2 fields (future-proofing).
-    // ============================================
-    const debugRequested = req.query.debug === '1';
-    const userIsAdmin = debugRequested ? await isAdminUser(userId) : false;
-    const debugMode = debugRequested && userIsAdmin;
-
-    const { recommendations: enrichedRecs, debugInfo } = enrichLegacyRecommendations({
-      recommendations: updatedRecResult.rows,
-      detailedAnalysis: scan.detailed_analysis,
-      scan: scan,
-      debug: debugMode
-    });
-
-    let debugPayload = null;
-    if (debugMode) {
-      debugPayload = {
-        phase: '4A.3c',
-        adapter: 'legacyTop10Adapter',
-        ...debugInfo
-      };
-    }
-
-    // ============================================
-    // ENTITLEMENT CAP: Limit ACTIVE recommendations returned to client
-    // Cap applies only to active recs — implemented/skipped/resolved always pass through
-    // so resolved_complete items from the adapter don't consume active slots.
-    //
-    // REFILL LOGIC: When enrichment resolves items to 'implemented', freed cap slots
-    // are filled from the larger pool (including previously locked recs).
-    // Dedup ensures implemented titles don't reappear in active.
-    // ============================================
-    let cappedRecommendations;
-    let recommendationsMeta;
-    {
-      const implemented = [];
-      const skipped = [];
-      const activePool = []; // all candidates for active (any unlock_state)
-      for (const rec of enrichedRecs) {
-        if (rec.status === 'implemented') {
-          implemented.push(rec);
-        } else if (rec.status === 'skipped' || rec.status === 'dismissed') {
-          skipped.push(rec);
-        } else {
-          activePool.push(rec);
-        }
-      }
-
-      // Dedup: remove titles from active that already appear in implemented
-      const norm = (s) => (s || '').toLowerCase().trim();
-      const implementedTitles = new Set(
-        implemented.map(r => norm(r.recommendation_text))
-      );
-      const dedupedActive = activePool.filter(r => !implementedTitles.has(norm(r.recommendation_text)));
-
-      // Sort active pool by priority (preserving DB ordering: priority DESC, impact_score DESC)
-      // Recs from DB are already sorted, but after dedup we re-confirm ordering
-      const pr = (r) => -(r.priority ?? 0); // negate so higher priority sorts first
-      const imp = (r) => -(r.impact_score ?? r.estimated_impact ?? 0);
-      dedupedActive.sort((a, b) => pr(a) - pr(b) || imp(a) - imp(b));
-
-      // Apply cap to active only
-      const activeTotal = dedupedActive.length;
-      const cappedActive = (recommendationVisibleLimit !== -1 && dedupedActive.length > recommendationVisibleLimit)
-        ? dedupedActive.slice(0, recommendationVisibleLimit)
-        : dedupedActive;
-
-      if (recommendationVisibleLimit !== -1 && activeTotal > recommendationVisibleLimit) {
-        console.log(`🔒 Capping active recommendations: ${activeTotal} → ${recommendationVisibleLimit} (plan: ${planResolution.plan})`);
-      }
-
-      // Promote: set unlock_state to 'active' on all returned active recs
-      // so frontend doesn't filter them out as 'locked'
-      for (const rec of cappedActive) {
-        rec.unlock_state = 'active';
-      }
-
-      cappedRecommendations = [...cappedActive, ...implemented, ...skipped];
-      recommendationsMeta = {
-        cap: recommendationVisibleLimit,
-        active_total: activeTotal,
-        active_returned: cappedActive.length,
-        implemented_count: implemented.length,
-        skipped_count: skipped.length
-      };
-
-      // Append refill debug info to admin debug payload
-      if (debugMode && debugPayload) {
-        debugPayload.refill = recommendationsMeta;
-        debugPayload.active_titles = cappedActive.map(r => r.recommendation_text).slice(0, 10);
-        debugPayload.implemented_titles = implemented.map(r => r.recommendation_text).slice(0, 10);
-      }
+      console.error('Error calculating comparison (non-fatal):', comparisonError);
     }
 
     res.json({
@@ -1607,24 +910,12 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
       scan: {
         ...scan,
         categories: categoryScores,
-        categoryBreakdown: categoryScores, // Frontend expects this field name
-        categoryWeights: V5_WEIGHTS, // Include weights for display
-        recommendations: cappedRecommendations,
-        recommendations_meta: recommendationsMeta,
+        categoryBreakdown: categoryScores,
+        categoryWeights: V5_WEIGHTS,
+        recommendations: recResult.rows,
         faq: scan.faq_schema ? JSON.parse(scan.faq_schema) : null,
-        userProgress: userProgress, // Include progress for DIY tier
-        nextBatchUnlock: nextBatchUnlock, // Next batch unlock info
-        batchesUnlocked: batchesUnlocked, // How many batches were just unlocked
-        comparison: comparisonData, // Historic comparison data
-        historicalTimeline: historicalTimeline, // Timeline data for visualization
-        // Recommendation Delivery System data
-        userMode: userMode, // User mode (optimization/elite)
-        notifications: notifications, // User notifications
-        currentCycle: currentCycle, // Current refresh cycle
-        recentDetections: recentDetections, // Auto-detected implementations
-        unreadNotificationCount: notifications.filter(n => !n.is_read).length,
-        // Phase 4A.3c: Admin debug payload (only present when ?debug=1 AND admin)
-        ...(debugPayload ? { _debug: debugPayload } : {})
+        comparison: comparisonData,
+        historicalTimeline: historicalTimeline
       }
     });
 
@@ -1634,134 +925,6 @@ router.get('/:id', authenticateToken, loadOrgContext, async (req, res) => {
   }
 });
 
-// POST /api/scan/:id/recommendation/:recId/feedback
-// Learning Loop: Track user actions
-// ============================================
-router.post('/:id/recommendation/:recId/feedback', authenticateToken, async (req, res) => {
-  try {
-    const { id: scanId, recId } = req.params;
-    const userId = req.userId;
-    const { status, feedback, rating } = req.body;
-
-    // Verify scan belongs to user
-    const scanCheck = await db.query(
-      'SELECT id FROM scans WHERE id = $1 AND user_id = $2',
-      [scanId, userId]
-    );
-
-    if (scanCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'Scan not found' });
-    }
-
-    // Update recommendation
-    const updateFields = [];
-    const updateValues = [];
-    let paramCount = 1;
-
-    if (status) {
-      updateFields.push(`status = $${paramCount++}`);
-      updateValues.push(status);
-      
-      if (status === 'implemented') {
-        updateFields.push(`implemented_at = CURRENT_TIMESTAMP`);
-      }
-    }
-
-    if (feedback) {
-      updateFields.push(`user_feedback = $${paramCount++}`);
-      updateValues.push(feedback);
-    }
-
-    if (rating !== undefined) {
-      updateFields.push(`user_rating = $${paramCount++}`);
-      updateValues.push(rating);
-    }
-
-    if (updateFields.length === 0) {
-      return res.status(400).json({ error: 'No updates provided' });
-    }
-
-    updateValues.push(recId, scanId);
-
-    await db.query(
-      `UPDATE scan_recommendations
-       SET ${updateFields.join(', ')}
-       WHERE id = $${paramCount++} AND scan_id = $${paramCount}`,
-      updateValues
-    );
-
-    // If marking as implemented, update user progress
-    if (status === 'implemented') {
-      await db.query(
-        `UPDATE user_progress
-         SET completed_recommendations = completed_recommendations + 1
-         WHERE user_id = $1 AND scan_id = $2`,
-        [userId, scanId]
-      );
-    }
-
-    res.json({
-      success: true,
-      message: status === 'implemented'
-        ? 'Recommendation marked as implemented! Your progress has been updated.'
-        : 'Feedback recorded for learning loop'
-    });
-
-  } catch (error) {
-    console.error('❌ Feedback error:', error);
-    res.status(500).json({ error: 'Failed to record feedback' });
-  }
-});
-
-// ============================================
-// POST /api/scan/:id/recommendation/:recId/skip
-// Skip a recommendation (available after 5 days)
-// CONTEXT-SAFE: Uses canonical skip logic that handles context_scan_id reuse
-// ============================================
-router.post('/:id/recommendation/:recId/skip', authenticateToken, async (req, res) => {
-  try {
-    const { id: scanId, recId } = req.params;
-    const userId = req.userId;
-    const { skipData } = req.body;
-
-    // Verify scan belongs to user (auth check only - not used for rec lookup)
-    const scanCheck = await db.query(
-      'SELECT id FROM scans WHERE id = $1 AND user_id = $2',
-      [scanId, userId]
-    );
-
-    if (scanCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'Scan not found' });
-    }
-
-    // Use canonical skip logic (handles context_scan_id resolution internally)
-    // The recommendation is looked up by ID only (not scan_id constraint),
-    // with ownership verified via JOIN to scans table.
-    const result = await canonicalSkipRecommendation(recId, userId, skipData || null);
-
-    if (!result.success) {
-      return res.status(result.status || 400).json({
-        error: result.error,
-        message: result.message,
-        ...(result.skipEnabledAt && { skipEnabledAt: result.skipEnabledAt }),
-        ...(result.daysRemaining && { daysRemaining: result.daysRemaining })
-      });
-    }
-
-    // Log with context info for debugging
-    console.log(`⏭️  [scan-scoped] User ${userId} skipped rec ${recId} via scan ${scanId} (effective: ${result.effectiveScanId})`);
-
-    res.json({
-      success: true,
-      message: result.message,
-      progress: result.progress
-    });
-
-  } catch (error) {
-    console.error('❌ Skip recommendation error:', error);
-    res.status(500).json({ error: 'Failed to skip recommendation' });
-  }
-});
 
 // ============================================
 // DELETE /api/scan/:id - Delete a scan
@@ -1853,373 +1016,14 @@ async function performCompetitorScan(url) {
   }
 }
 
-// ============================================
-// HELPER: Count measured scores in subfactorScores
-// Used for diagnostics when 0 recommendations are generated
-// ============================================
-function countMeasuredScores(subfactorScores) {
-  if (!subfactorScores) return 0;
-  let count = 0;
-  for (const category of Object.values(subfactorScores)) {
-    if (typeof category !== 'object' || category === null) continue;
-    for (const score of Object.values(category)) {
-      if (score && (score.state === 'measured' || typeof score === 'number')) {
-        count++;
-      }
-    }
-  }
-  return count;
-}
 
-// ============================================
-// BASELINE FALLBACK: High-signal recommendations for paid plans
-// These are universal recommendations that apply to any website
-// Used when the generator returns 0 recommendations
-// ============================================
-function generateBaselineRecommendations(url, scanEvidence, industry) {
-  const baselineRecs = [
-    {
-      title: 'Add FAQ Schema Markup',
-      category: 'AI Search Readiness',
-      subfactor: 'faqSchemaScore',
-      priority: 85,
-      priorityScore: 85,
-      finding: 'FAQ schema markup helps AI assistants understand your expertise and provide direct answers from your content.',
-      impact: 'High visibility in AI-powered search results and voice assistants',
-      actionSteps: [
-        'Identify 5-10 common questions your customers ask',
-        'Create clear, concise answers for each question',
-        'Add FAQPage schema markup to your page using JSON-LD',
-        'Validate schema with Google Rich Results Test'
-      ],
-      estimatedTime: '2-4 hours',
-      difficulty: 'medium',
-      estimatedScoreGain: 8,
-      customizedImplementation: null,
-      readyToUseContent: null,
-      implementationNotes: ['Test with multiple AI assistants after implementation'],
-      quickWins: ['Start with your top 3 most asked questions'],
-      validationChecklist: ['FAQPage schema validates', 'Answers are concise (<300 chars)', 'Questions match search intent']
-    },
-    {
-      title: 'Implement XML Sitemap with Priority Signals',
-      category: 'Technical Setup',
-      subfactor: 'sitemapScore',
-      priority: 82,
-      priorityScore: 82,
-      finding: 'A well-structured XML sitemap with priority and changefreq signals helps AI crawlers efficiently index your content.',
-      impact: 'Faster AI crawler discovery and more complete content indexing',
-      actionSteps: [
-        'Generate or update your XML sitemap',
-        'Include priority values (0.0-1.0) for each page',
-        'Add lastmod dates for accurate freshness signals',
-        'Submit sitemap to Google Search Console and Bing Webmaster Tools'
-      ],
-      estimatedTime: '1-2 hours',
-      difficulty: 'easy',
-      estimatedScoreGain: 6,
-      customizedImplementation: null,
-      readyToUseContent: null,
-      implementationNotes: ['Keep sitemap under 50,000 URLs per file'],
-      quickWins: ['Auto-generate sitemap with your CMS'],
-      validationChecklist: ['Sitemap accessible at /sitemap.xml', 'No 404 URLs in sitemap', 'Submitted to search consoles']
-    },
-    {
-      title: 'Add Author Bio and Credentials',
-      category: 'Trust & Authority',
-      subfactor: 'authorBiosScore',
-      priority: 78,
-      priorityScore: 78,
-      finding: 'AI assistants prioritize content from identifiable experts with verifiable credentials.',
-      impact: 'Increased trust signals for E-E-A-T and AI citation likelihood',
-      actionSteps: [
-        'Add author name and photo to content pages',
-        'Include relevant credentials and experience',
-        'Link to author social profiles and other publications',
-        'Add Person schema markup for the author'
-      ],
-      estimatedTime: '2-3 hours',
-      difficulty: 'medium',
-      estimatedScoreGain: 7,
-      customizedImplementation: null,
-      readyToUseContent: null,
-      implementationNotes: ['Use consistent author profiles across all content'],
-      quickWins: ['Start with your highest-traffic pages'],
-      validationChecklist: ['Author visible on page', 'Person schema validates', 'Credentials mentioned']
-    },
-    {
-      title: 'Improve Content Structure with Semantic Headings',
-      category: 'Content Structure',
-      subfactor: 'headingHierarchyScore',
-      priority: 76,
-      priorityScore: 76,
-      finding: 'Well-structured content with proper H1-H6 hierarchy helps AI parse and understand your content organization.',
-      impact: 'Better AI comprehension and featured snippet eligibility',
-      actionSteps: [
-        'Ensure each page has exactly one H1 tag',
-        'Use H2-H6 in logical, hierarchical order',
-        'Include question-based headings for FAQ-style content',
-        'Keep headings descriptive and keyword-relevant'
-      ],
-      estimatedTime: '1-2 hours per page',
-      difficulty: 'easy',
-      estimatedScoreGain: 5,
-      customizedImplementation: null,
-      readyToUseContent: null,
-      implementationNotes: ['Avoid skipping heading levels (H1 → H3)'],
-      quickWins: ['Fix H1 issues on your homepage first'],
-      validationChecklist: ['Single H1 per page', 'No skipped levels', 'Headings are descriptive']
-    },
-    {
-      title: 'Add Organization Schema with Social Links',
-      category: 'Technical Setup',
-      subfactor: 'structuredDataScore',
-      priority: 75,
-      priorityScore: 75,
-      finding: 'Organization schema helps AI understand your brand identity and connect your web presence.',
-      impact: 'Enhanced Knowledge Graph eligibility and brand recognition in AI results',
-      actionSteps: [
-        'Create Organization JSON-LD schema',
-        'Include name, logo, description, and contact info',
-        'Add all official social media profile URLs (sameAs)',
-        'Place schema in your site-wide template'
-      ],
-      estimatedTime: '1-2 hours',
-      difficulty: 'medium',
-      estimatedScoreGain: 6,
-      customizedImplementation: null,
-      readyToUseContent: null,
-      implementationNotes: ['Use consistent brand name across all schema'],
-      quickWins: ['Add to homepage first'],
-      validationChecklist: ['Schema validates', 'Logo URL accessible', 'Social links correct']
-    },
-    {
-      title: 'Optimize Image Alt Text for AI Understanding',
-      category: 'AI Readability',
-      subfactor: 'altTextScore',
-      priority: 72,
-      priorityScore: 72,
-      finding: 'Descriptive alt text helps AI assistants understand visual content and improves accessibility.',
-      impact: 'Better multimodal AI understanding and accessibility compliance',
-      actionSteps: [
-        'Audit all images for missing alt attributes',
-        'Write descriptive alt text (not just keywords)',
-        'Include context about what the image shows',
-        'Keep alt text under 125 characters'
-      ],
-      estimatedTime: '30 min per 20 images',
-      difficulty: 'easy',
-      estimatedScoreGain: 5,
-      customizedImplementation: null,
-      readyToUseContent: null,
-      implementationNotes: ['Decorative images should have empty alt=""'],
-      quickWins: ['Focus on hero images and product photos first'],
-      validationChecklist: ['All meaningful images have alt', 'Alt describes image content', 'No keyword stuffing']
-    },
-    {
-      title: 'Improve Internal Linking Structure',
-      category: 'AI Search Readiness',
-      subfactor: 'linkedSubpagesScore',
-      priority: 70,
-      priorityScore: 70,
-      finding: 'Strong internal linking helps AI crawlers discover and understand the relationships between your content.',
-      impact: 'Better content discovery and topic authority signals for AI',
-      actionSteps: [
-        'Identify pillar pages and supporting content',
-        'Add contextual links between related articles',
-        'Use descriptive anchor text (not "click here")',
-        'Create topic clusters with hub-and-spoke linking'
-      ],
-      estimatedTime: '2-4 hours',
-      difficulty: 'medium',
-      estimatedScoreGain: 6,
-      customizedImplementation: null,
-      readyToUseContent: null,
-      implementationNotes: ['Limit to 100 internal links per page maximum'],
-      quickWins: ['Link new content to your top-performing pages'],
-      validationChecklist: ['Orphan pages linked', 'Descriptive anchors used', 'Topic clusters visible']
-    },
-    {
-      title: 'Add Content Freshness Signals',
-      category: 'Content Freshness',
-      subfactor: 'lastUpdatedScore',
-      priority: 68,
-      priorityScore: 68,
-      finding: 'Clear last-updated dates signal to AI that your content is current and maintained.',
-      impact: 'Improved freshness signals and reduced stale content penalties',
-      actionSteps: [
-        'Add visible "Last Updated" dates to content pages',
-        'Include dateModified in your Article/WebPage schema',
-        'Set up a content audit schedule',
-        'Update stale content with current information'
-      ],
-      estimatedTime: '1-2 hours initial setup',
-      difficulty: 'easy',
-      estimatedScoreGain: 5,
-      customizedImplementation: null,
-      readyToUseContent: null,
-      implementationNotes: ['Only show dates on content that is actually updated'],
-      quickWins: ['Add dates to blog posts and guides'],
-      validationChecklist: ['Dates visible on page', 'dateModified in schema', 'Content actually refreshed']
-    }
-  ];
 
-  // Return all baseline recommendations (8 high-signal recs)
-  return baselineRecs;
-}
 
-/**
- * Transform V5 categories structure to flat subfactor scores
- * The new V5 engine returns nested objects and different key names
- * This function flattens and renames to match what the issue detector expects
- *
- * RULEBOOK v1.2 Step 12: Tri-state scoring
- * Returns { score, state, evidenceRefs } for measured scores
- * Returns { score: null, state: 'not_measured', reason } for unmeasurable
- */
-function transformV5ToSubfactors(v5Categories) {
-  // Helper to convert raw scores to tri-state format
-  // V5RubricEngine returns scores on 0-100 scale, no multiplier needed
-  const toTriState = (rawScore, name) => {
-    if (rawScore === undefined || rawScore === null) {
-      return notMeasured(`${name} not measured`);
-    }
-    // Already tri-state format
-    if (rawScore.state) return rawScore;
-    // Convert numeric score (already 0-100 from V5RubricEngine)
-    return measured(Math.round(rawScore));
-  };
-
-  const subfactors = {};
-
-  // AI Readability - V5 engine returns subfactors directly on 0-100 scale
-  if (v5Categories.aiReadability) {
-    const ar = v5Categories.aiReadability;
-    const subs = ar.subfactors || {};
-    subfactors.aiReadability = {
-      altTextScore: toTriState(subs.altTextScore, 'altText'),
-      captionsTranscriptsScore: toTriState(subs.captionsTranscriptsScore, 'captions'),
-      interactiveAccessScore: toTriState(subs.interactiveAccessScore, 'interactive'),
-      crossMediaScore: toTriState(subs.crossMediaScore, 'crossMedia')
-    };
-  }
-
-  // AI Search Readiness - V5 engine returns subfactors directly on 0-100 scale
-  if (v5Categories.aiSearchReadiness) {
-    const asr = v5Categories.aiSearchReadiness;
-    const subs = asr.subfactors || {};
-    subfactors.aiSearchReadiness = {
-      questionHeadingsScore: toTriState(subs.questionHeadingsScore, 'questionHeadings'),
-      scannabilityScore: toTriState(subs.scannabilityScore, 'scannability'),
-      readabilityScore: toTriState(subs.readabilityScore, 'readability'),
-      // V5 engine uses faqScore, issue detector expects faqSchemaScore and faqContentScore
-      faqSchemaScore: toTriState(subs.faqScore, 'faqSchema'),
-      faqContentScore: toTriState(subs.faqScore, 'faqContent'),
-      snippetEligibleScore: toTriState(subs.snippetEligibleScore, 'snippetEligible'),
-      pillarPagesScore: toTriState(subs.pillarPagesScore, 'pillarPages'),
-      linkedSubpagesScore: toTriState(subs.linkedSubpagesScore, 'linkedSubpages'),
-      painPointsScore: toTriState(subs.painPointsScore, 'painPoints'),
-      geoContentScore: toTriState(subs.geoContentScore, 'geoContent')
-    };
-  }
-
-  // Content Freshness - V5 engine returns subfactors directly on 0-100 scale
-  if (v5Categories.contentFreshness) {
-    const cf = v5Categories.contentFreshness;
-    const subs = cf.subfactors || {};
-    subfactors.contentFreshness = {
-      lastUpdatedScore: toTriState(subs.lastUpdatedScore, 'lastUpdated'),
-      versioningScore: toTriState(subs.versioningScore, 'versioning'),
-      timeSensitiveScore: toTriState(subs.timeSensitiveScore, 'timeSensitive'),
-      auditProcessScore: toTriState(subs.auditProcessScore, 'auditProcess'),
-      liveDataScore: toTriState(subs.liveDataScore, 'liveData'),
-      httpFreshnessScore: toTriState(subs.httpFreshnessScore, 'httpFreshness'),
-      editorialCalendarScore: toTriState(subs.editorialCalendarScore, 'editorialCalendar')
-    };
-  }
-
-  // Content Structure - V5 engine returns subfactors directly on 0-100 scale
-  if (v5Categories.contentStructure) {
-    const cs = v5Categories.contentStructure;
-    const subs = cs.subfactors || {};
-    subfactors.contentStructure = {
-      headingHierarchyScore: toTriState(subs.headingHierarchyScore, 'headingHierarchy'),
-      navigationScore: toTriState(subs.navigationScore, 'navigation'),
-      entityCuesScore: toTriState(subs.entityCuesScore, 'entityCues'),
-      accessibilityScore: toTriState(subs.accessibilityScore, 'accessibility'),
-      geoMetaScore: toTriState(subs.geoMetaScore, 'geoMeta')
-    };
-  }
-
-  // Speed & UX - V5 engine returns subfactors directly on 0-100 scale
-  if (v5Categories.speedUX) {
-    const su = v5Categories.speedUX;
-    const subs = su.subfactors || {};
-    subfactors.speedUX = {
-      lcpScore: toTriState(subs.lcpScore, 'lcp'),
-      clsScore: toTriState(subs.clsScore, 'cls'),
-      inpScore: toTriState(subs.inpScore, 'inp'),
-      mobileScore: toTriState(subs.mobileScore, 'mobile'),
-      crawlerResponseScore: toTriState(subs.crawlerResponseScore, 'crawlerResponse')
-    };
-  }
-
-  // Technical Setup - V5 engine returns subfactors directly on 0-100 scale
-  if (v5Categories.technicalSetup) {
-    const ts = v5Categories.technicalSetup;
-    const subs = ts.subfactors || {};
-    subfactors.technicalSetup = {
-      crawlerAccessScore: toTriState(subs.crawlerAccessScore, 'crawlerAccess'),
-      structuredDataScore: toTriState(subs.structuredDataScore, 'structuredData'),
-      canonicalHreflangScore: toTriState(subs.canonicalHreflangScore, 'canonicalHreflang'),
-      openGraphScore: toTriState(subs.openGraphScore, 'openGraph'),
-      sitemapScore: toTriState(subs.sitemapScore, 'sitemap'),
-      indexNowScore: toTriState(subs.indexNowScore, 'indexNow'),
-      rssFeedScore: toTriState(subs.rssFeedScore, 'rssFeed')
-    };
-  }
-
-  // Trust & Authority - V5 engine returns subfactors directly on 0-100 scale
-  if (v5Categories.trustAuthority) {
-    const ta = v5Categories.trustAuthority;
-    const subs = ta.subfactors || {};
-    subfactors.trustAuthority = {
-      authorBiosScore: toTriState(subs.authorBiosScore, 'authorBios'),
-      certificationsScore: toTriState(subs.certificationsScore, 'certifications'),
-      professionalCertifications: toTriState(subs.professionalCertifications, 'professionalCerts'),
-      teamCredentials: toTriState(subs.teamCredentials, 'teamCreds'),
-      industryMemberships: toTriState(subs.industryMemberships, 'industryMemberships'),
-      domainAuthorityScore: toTriState(subs.domainAuthorityScore, 'domainAuthority'),
-      thoughtLeadershipScore: toTriState(subs.thoughtLeadershipScore, 'thoughtLeadership'),
-      thirdPartyProfilesScore: toTriState(subs.thirdPartyProfilesScore, 'thirdPartyProfiles')
-    };
-  }
-
-  // Voice Optimization - V5 engine returns subfactors directly on 0-100 scale
-  if (v5Categories.voiceOptimization) {
-    const vo = v5Categories.voiceOptimization;
-    const subs = vo.subfactors || {};
-    subfactors.voiceOptimization = {
-      longTailScore: toTriState(subs.longTailScore, 'longTail'),
-      localIntentScore: toTriState(subs.localIntentScore, 'localIntent'),
-      conversationalTermsScore: toTriState(subs.conversationalTermsScore, 'conversationalTerms'),
-      snippetFormatScore: toTriState(subs.snippetFormatScore, 'snippetFormat'),
-      multiTurnScore: toTriState(subs.multiTurnScore, 'multiTurn')
-    };
-  }
-
-  return subfactors;
-}
-
-async function performV5Scan(url, plan, pages = null, userProgress = null, userIndustry = null, mode = 'optimization', skipRecommendationGeneration = false) {
+async function performV5Scan(url, plan, pages = null, userProgress = null, userIndustry = null) {
   console.log('🔬 Starting V5 rubric analysis for:', url);
-  console.log(`🎯 Recommendation mode: ${mode}`);
-  if (skipRecommendationGeneration) {
-    console.log(`📎 Recommendation generation will be SKIPPED (reusing from active context)`);
-  }
 
   try {
-    // Step 1: Create V5 Rubric Engine instance and run analysis
+    // Create V5 Rubric Engine instance and run analysis
     // RULEBOOK v1.2 Step C7: Pass tier for headless rendering budget
     console.log('📊 Running V5 Rubric Engine...');
     const engine = new V5RubricEngine(url, {
@@ -2230,10 +1034,6 @@ async function performV5Scan(url, plan, pages = null, userProgress = null, userI
       allowHeadless: plan !== 'guest' && plan !== 'free'  // Only paid tiers get headless
     });
     const v5Results = await engine.analyze();
-
-    // Debug: Log sitemap detection from crawler
-    console.log('[DEBUG] Sitemap detected:', engine.evidence?.technical?.sitemapDetected || engine.evidence?.technical?.hasSitemap);
-    console.log('[DEBUG] Technical Setup category:', JSON.stringify(v5Results.categories.technicalSetup, null, 2));
 
     // Extract scores from category results
     const categories = {
@@ -2250,91 +1050,13 @@ async function performV5Scan(url, plan, pages = null, userProgress = null, userI
     const totalScore = v5Results.totalScore;
     const scanEvidence = engine.evidence;
 
-    // Add certification data to scanEvidence for recommendation generation
+    // Add certification data to scanEvidence
     if (v5Results.certificationData) {
       scanEvidence.certificationData = v5Results.certificationData;
-      console.log(`🏆 Certification data added to scanEvidence:`, {
-        detected: v5Results.certificationData.detected?.length || 0,
-        missing: v5Results.certificationData.missing?.length || 0,
-        coverage: v5Results.certificationData.overallCoverage || 0
-      });
     }
 
-    // Transform V5 categories structure to flat subfactor scores for issue detection
-    // The V5 engine returns nested structures, but issue detector expects flat key-value pairs
-    const subfactorScores = transformV5ToSubfactors(v5Results.categories);
-    console.log('[V5Transform] Transformed subfactor scores for issue detection');
-    console.log('[V5Transform] Technical Setup subfactors:', JSON.stringify(subfactorScores.technicalSetup, null, 2));
-    console.log('[V5Transform] AI Search Readiness subfactors:', JSON.stringify(subfactorScores.aiSearchReadiness, null, 2));
-    console.log('[V5Transform] Trust Authority subfactors:', JSON.stringify(subfactorScores.trustAuthority, null, 2));
-    console.log('[V5Transform] Content Structure subfactors:', JSON.stringify(subfactorScores.contentStructure, null, 2));
-
-    // Determine industry: Prioritize user-selected > auto-detected > fallback
+    // Determine industry
     const finalIndustry = userIndustry || v5Results.industry || 'General';
-    const industrySource = userIndustry ? 'user-selected' : (v5Results.industry ? 'auto-detected' : 'default');
-
-    console.log(`🏢 Industry for recommendations: ${finalIndustry} (${industrySource})`);
-
-    // Step 2: Generate recommendations based on mode (UNLESS skipped for context reuse)
-    let recommendationResults = null;
-
-    if (skipRecommendationGeneration) {
-      // Skip recommendation generation - will be fetched from existing context
-      console.log('📎 Skipping recommendation generation (active context will provide recommendations)');
-      recommendationResults = {
-        data: {
-          recommendations: [], // Will be populated from context
-          faq: null,
-          upgrade: null
-        },
-        summary: null
-      };
-    } else {
-      // Generate new recommendations
-      console.log('🤖 Generating recommendations...');
-
-      recommendationResults = await generateCompleteRecommendations(
-        {
-          v5Scores: subfactorScores,
-          scanEvidence: scanEvidence
-        },
-        plan,
-        finalIndustry,
-        userProgress, // Pass userProgress for progressive unlock
-        mode // Pass mode for strategy selection
-      );
-
-      const recCount = recommendationResults.data.recommendations.length;
-      console.log(`📊 Generated ${recCount} recommendations`);
-
-      // ============================================
-      // INSTRUMENTATION: Log when paid plans get 0 recommendations
-      // This helps debug the entitlement leakage issue
-      // ============================================
-      const isPaidPlan = ['diy', 'pro', 'agency', 'enterprise'].includes(plan?.toLowerCase());
-      if (recCount === 0 && isPaidPlan && !skipRecommendationGeneration) {
-        console.warn(`⚠️ [ZERO_RECS] Paid plan "${plan}" got 0 recommendations!`);
-        console.warn(`   Mode: ${mode}, Industry: ${finalIndustry}`);
-
-        // Log diagnostic info without sensitive data
-        const diagnostics = {
-          hasV5Scores: !!subfactorScores && Object.keys(subfactorScores).length > 0,
-          hasEvidence: !!scanEvidence && Object.keys(scanEvidence).length > 0,
-          categoryCount: Object.keys(subfactorScores || {}).length,
-          measuredScoreCount: countMeasuredScores(subfactorScores)
-        };
-        console.warn(`   Diagnostics:`, JSON.stringify(diagnostics));
-
-        // ============================================
-        // BASELINE FALLBACK: Guarantee recommendations for paid plans
-        // If generator returned 0 recs, use baseline set
-        // ============================================
-        console.log(`🛡️ Activating baseline fallback for paid plan "${plan}"`);
-        const baselineRecs = generateBaselineRecommendations(url, scanEvidence, finalIndustry);
-        recommendationResults.data.recommendations = baselineRecs;
-        console.log(`✅ Baseline fallback injected ${baselineRecs.length} recommendations`);
-      }
-    }
 
     console.log(`✅ V5 scan complete. Total score: ${totalScore}/100 (${finalIndustry})`);
 
@@ -2342,29 +1064,27 @@ async function performV5Scan(url, plan, pages = null, userProgress = null, userI
     let industryPrompt = null;
     if (!userIndustry && v5Results.certificationData && v5Results.certificationData.industry === 'Generic') {
       industryPrompt = {
-        message: "💡 Set your industry in settings for tailored certification recommendations",
+        message: "Set your industry in settings for tailored certification recommendations",
         actionUrl: "/settings.html#industry",
         actionLabel: "Set Industry"
       };
-      console.log(`💡 Industry prompt added (using Generic certification library)`);
     }
 
     return {
       totalScore,
       categories,
-      recommendations: recommendationResults.data.recommendations,
-      faq: recommendationResults.data.faq || null,
-      upgrade: recommendationResults.data.upgrade || null,
+      recommendations: [], // Recommendation generation removed (Phase 2 pack engine)
+      faq: null,
+      upgrade: null,
       industry: v5Results.industry || 'General',
-      industryPrompt: industryPrompt, // UI prompt to set industry
+      industryPrompt,
       detailedAnalysis: {
         url,
         scannedAt: new Date().toISOString(),
         rubricVersion: 'V5',
         categoryBreakdown: categories,
-        summary: recommendationResults.summary,
         metadata: v5Results.metadata,
-        scanEvidence: scanEvidence // Add evidence for validation
+        scanEvidence: scanEvidence
       }
     };
 
@@ -2374,145 +1094,6 @@ async function performV5Scan(url, plan, pages = null, userProgress = null, userI
   }
 }
 
-// ============================================
-// RECOMMENDATION DELIVERY SYSTEM ENDPOINTS
-// ============================================
-
-// ============================================
-// GET /api/scan/notifications - Get user notifications
-// ============================================
-router.get('/notifications', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
-    const { unreadOnly } = req.query;
-
-    let query = `
-      SELECT id, notification_type, category, priority, title, message,
-             action_label, action_url, scan_id, recommendation_id,
-             is_read, read_at, created_at, expires_at
-      FROM user_notifications
-      WHERE user_id = $1 AND is_dismissed = false
-    `;
-
-    if (unreadOnly === 'true') {
-      query += ` AND is_read = false`;
-    }
-
-    query += ` ORDER BY created_at DESC LIMIT 100`;
-
-    const result = await db.query(query, [userId]);
-
-    res.json({
-      success: true,
-      notifications: result.rows,
-      unreadCount: result.rows.filter(n => !n.is_read).length
-    });
-
-  } catch (error) {
-    console.error('❌ Get notifications error:', error);
-    res.status(500).json({ error: 'Failed to fetch notifications' });
-  }
-});
-
-// ============================================
-// POST /api/scan/notifications/:id/read - Mark notification as read
-// ============================================
-router.post('/notifications/:id/read', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
-    const notificationId = req.params.id;
-
-    await db.query(
-      `UPDATE user_notifications
-       SET is_read = true, read_at = CURRENT_TIMESTAMP
-       WHERE id = $1 AND user_id = $2`,
-      [notificationId, userId]
-    );
-
-    res.json({ success: true, message: 'Notification marked as read' });
-
-  } catch (error) {
-    console.error('❌ Mark notification read error:', error);
-    res.status(500).json({ error: 'Failed to mark notification as read' });
-  }
-});
-
-// ============================================
-// POST /api/scan/notifications/:id/dismiss - Dismiss notification
-// ============================================
-router.post('/notifications/:id/dismiss', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
-    const notificationId = req.params.id;
-
-    await db.query(
-      `UPDATE user_notifications
-       SET is_dismissed = true, dismissed_at = CURRENT_TIMESTAMP
-       WHERE id = $1 AND user_id = $2`,
-      [notificationId, userId]
-    );
-
-    res.json({ success: true, message: 'Notification dismissed' });
-
-  } catch (error) {
-    console.error('❌ Dismiss notification error:', error);
-    res.status(500).json({ error: 'Failed to dismiss notification' });
-  }
-});
-
-// ============================================
-// GET /api/scan/mode - Get user mode details
-// ============================================
-router.get('/mode', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
-
-    const result = await db.query(
-      `SELECT * FROM user_modes WHERE user_id = $1`,
-      [userId]
-    );
-
-    if (result.rows.length === 0) {
-      // Create default mode for user
-      const insertResult = await db.query(
-        `INSERT INTO user_modes (user_id, current_mode, current_score, score_at_mode_entry, highest_score_achieved)
-         VALUES ($1, 'optimization', 0, 0, 0)
-         RETURNING *`,
-        [userId]
-      );
-      return res.json({ success: true, userMode: insertResult.rows[0] });
-    }
-
-    res.json({ success: true, userMode: result.rows[0] });
-
-  } catch (error) {
-    console.error('❌ Get mode error:', error);
-    res.status(500).json({ error: 'Failed to fetch user mode' });
-  }
-});
-
-// ============================================
-// GET /api/scan/mode/history - Get mode transition history
-// ============================================
-router.get('/mode/history', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
-
-    const result = await db.query(
-      `SELECT * FROM mode_transition_history
-       WHERE user_id = $1
-       ORDER BY transitioned_at DESC
-       LIMIT 50`,
-      [userId]
-    );
-
-    res.json({ success: true, transitions: result.rows });
-
-  } catch (error) {
-    console.error('❌ Get mode history error:', error);
-    res.status(500).json({ error: 'Failed to fetch mode history' });
-  }
-});
 
 // ============================================
 // GET /api/scan/competitive - Get competitive tracking data
@@ -2631,181 +1212,5 @@ router.get('/competitive/alerts', authenticateToken, async (req, res) => {
   }
 });
 
-// ============================================
-// POST /api/scan/:id/detection/:detectionId/confirm - Confirm auto-detection
-// ============================================
-router.post('/:id/detection/:detectionId/confirm', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
-    const { id: scanId, detectionId } = req.params;
-    const { confirmed, feedback } = req.body;
-
-    // Update detection
-    await db.query(
-      `UPDATE implementation_detections
-       SET user_confirmed = $1, user_feedback = $2, user_notified = true
-       WHERE id = $3 AND user_id = $4`,
-      [confirmed, feedback, detectionId, userId]
-    );
-
-    // If confirmed, mark recommendation as implemented
-    if (confirmed) {
-      const detectionResult = await db.query(
-        `SELECT recommendation_id FROM implementation_detections WHERE id = $1`,
-        [detectionId]
-      );
-
-      if (detectionResult.rows.length > 0) {
-        const recommendationId = detectionResult.rows[0].recommendation_id;
-        await db.query(
-          `UPDATE scan_recommendations
-           SET status = 'implemented', implemented_at = CURRENT_TIMESTAMP, auto_detected_at = CURRENT_TIMESTAMP
-           WHERE id = $1`,
-          [recommendationId]
-        );
-      }
-    }
-
-    res.json({ success: true, message: 'Detection confirmed' });
-
-  } catch (error) {
-    console.error('❌ Confirm detection error:', error);
-    res.status(500).json({ error: 'Failed to confirm detection' });
-  }
-});
-
-/**
- * Update recommendation findings based on current scan evidence
- * Recommendations stay the same, but findings reflect current detected state
- */
-async function updateRecommendationFindings(recommendations, scanEvidence, currentScanId) {
-  const { extractSiteFacts } = require('../analyzers/recommendation-engine/fact-extractor');
-
-  // Extract current facts from scan evidence
-  const { detected_profile } = extractSiteFacts(scanEvidence);
-
-  const updatedRecs = [];
-
-  for (const rec of recommendations) {
-    const updated = { ...rec, findingsUpdated: false };
-    const subfactor = rec.category?.toLowerCase() || '';
-
-    // Determine current detection status based on subfactor
-    let currentlyDetected = false;
-    let detectionDetails = {};
-
-    // Check detection status for each subfactor type
-    if (subfactor.includes('faq') || rec.recommendation_text?.toLowerCase().includes('faq')) {
-      const faqCount = scanEvidence.content?.faqs?.length || 0;
-      const hasFaqSchema = scanEvidence.technical?.hasFAQSchema || false;
-      currentlyDetected = faqCount > 0 || hasFaqSchema;
-      detectionDetails = {
-        faqCount,
-        hasFaqSchema,
-        source: hasFaqSchema ? 'schema' : (faqCount > 0 ? 'html' : 'none')
-      };
-    }
-    else if (subfactor.includes('blog') || subfactor.includes('pillar') || rec.recommendation_text?.toLowerCase().includes('blog')) {
-      const hasBlogNav = scanEvidence.navigation?.keyPages?.blog || scanEvidence.navigation?.hasBlogLink;
-      const hasArticleSchema = scanEvidence.technical?.hasArticleSchema;
-      const crawlerFoundBlog = scanEvidence.siteMetrics?.discoveredSections?.hasBlogUrl;
-      currentlyDetected = hasBlogNav || hasArticleSchema || crawlerFoundBlog;
-      detectionDetails = {
-        hasBlogNav,
-        hasArticleSchema,
-        crawlerFoundBlog
-      };
-    }
-    else if (subfactor.includes('sitemap') || rec.recommendation_text?.toLowerCase().includes('sitemap')) {
-      currentlyDetected = scanEvidence.siteMetrics?.sitemapDetected ||
-                          scanEvidence.technical?.hasSitemapLink || false;
-      detectionDetails = {
-        sitemapDetected: currentlyDetected,
-        sitemapLocation: scanEvidence.siteMetrics?.sitemapLocation || null
-      };
-    }
-    else if (subfactor.includes('schema') || subfactor.includes('structured')) {
-      const schemaCount = scanEvidence.technical?.structuredData?.length || 0;
-      currentlyDetected = schemaCount > 0;
-      detectionDetails = {
-        schemaCount,
-        types: scanEvidence.technical?.structuredData?.map(s => s.type) || []
-      };
-    }
-    else if (subfactor.includes('geo') || subfactor.includes('local')) {
-      currentlyDetected = scanEvidence.technical?.hasLocalBusinessSchema ||
-                          scanEvidence.metadata?.geoRegion || false;
-      detectionDetails = {
-        hasLocalSchema: scanEvidence.technical?.hasLocalBusinessSchema,
-        geoRegion: scanEvidence.metadata?.geoRegion
-      };
-    }
-    else if (subfactor.includes('thought') || subfactor.includes('authority') || subfactor.includes('author')) {
-      const hasAuthorSchema = scanEvidence.technical?.structuredData?.some(s => s.type === 'Person');
-      const hasArticleSchema = scanEvidence.technical?.hasArticleSchema;
-      currentlyDetected = hasAuthorSchema || hasArticleSchema;
-      detectionDetails = {
-        hasAuthorSchema,
-        hasArticleSchema
-      };
-    }
-    else if (subfactor.includes('linked') || subfactor.includes('internal')) {
-      const internalLinks = scanEvidence.structure?.internalLinks || 0;
-      currentlyDetected = internalLinks >= 5;
-      detectionDetails = {
-        internalLinkCount: internalLinks,
-        threshold: 5
-      };
-    }
-
-    // Update finding status if detection changed
-    if (currentlyDetected) {
-      // Update the findings field to reflect current state
-      const originalFindings = rec.findings || '';
-
-      // Create updated findings text
-      let updatedFindings = originalFindings;
-      if (originalFindings.toLowerCase().includes('missing') ||
-          originalFindings.toLowerCase().includes('not detected') ||
-          originalFindings.toLowerCase().includes('no ')) {
-
-        updatedFindings = `✅ **Status: Now Detected**\n\nThis item has been implemented since the recommendation was created.\n\n**Detection Details:**\n${JSON.stringify(detectionDetails, null, 2)}\n\n---\n**Original Finding:**\n${originalFindings}`;
-        updated.findingsUpdated = true;
-        updated.autoDetectedAt = new Date().toISOString();
-
-        console.log(`   🔍 Updated finding for ${rec.category}: Missing → Detected`);
-      }
-
-      updated.findings = updatedFindings;
-      updated.currentDetectionStatus = 'detected';
-      updated.detectionDetails = detectionDetails;
-    } else {
-      updated.currentDetectionStatus = 'missing';
-      updated.detectionDetails = detectionDetails;
-    }
-
-    updatedRecs.push(updated);
-  }
-
-  // Persist updated findings to database
-  for (const rec of updatedRecs) {
-    if (rec.findingsUpdated) {
-      try {
-        await db.query(
-          `UPDATE scan_recommendations
-           SET findings = $1,
-               auto_detected_at = $2,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $3`,
-          [rec.findings, rec.autoDetectedAt, rec.id]
-        );
-      } catch (err) {
-        console.error(`Failed to update finding for rec ${rec.id}:`, err.message);
-      }
-    }
-  }
-
-  return updatedRecs;
-}
 
 module.exports = router;
