@@ -1,0 +1,600 @@
+{
+  "certification_library": {
+    "industry": "Telecom / CSP / BSS-OSS",
+    "industry_id": "telecom-csp",
+    "version": "1.0",
+    "last_updated": "2025-11-14",
+    "metadata": {
+      "total_certifications": 25,
+      "detection_enabled": true,
+      "schema_generation": true,
+      "applies_to_subverticals": ["telecom", "telecommunications", "csp", "communication service provider", "bss", "oss", "mobile network operator", "carrier"]
+    },
+    "certifications": [
+      {
+        "id": "cert_telecom_001",
+        "name": "TM Forum Member",
+        "full_name": "TM Forum (TeleManagement Forum) Member",
+        "priority": "critical",
+        "category": "association",
+        "expected_impact": "+28 points",
+        "detection_patterns": [
+          "tm forum member",
+          "tmforum",
+          "telemanagement forum",
+          "member of tm forum",
+          "tm forum catalyst"
+        ],
+        "schema_fields": ["memberOf", "organizationCredential"],
+        "badge_patterns": ["tm-forum-badge", "tmforum-member"],
+        "display_recommendation": {
+          "title": "Display TM Forum Membership",
+          "why_it_matters": "TM Forum is the leading global association for telecommunications. Membership signals commitment to industry standards, best practices, and digital transformation frameworks like ODA.",
+          "impact_areas": ["Trust & Authority", "Industry Standards", "Digital Transformation"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_002",
+        "name": "MEF Member",
+        "full_name": "MEF (Mobile Ecosystem Forum) Member",
+        "priority": "critical",
+        "category": "association",
+        "expected_impact": "+26 points",
+        "detection_patterns": [
+          "mef member",
+          "mobile ecosystem forum",
+          "mef certified",
+          "member of mef",
+          "mef 3.0"
+        ],
+        "schema_fields": ["memberOf", "organizationCredential"],
+        "badge_patterns": ["mef-badge", "mef-member"],
+        "display_recommendation": {
+          "title": "Display MEF Membership",
+          "why_it_matters": "MEF membership demonstrates expertise in carrier Ethernet, SD-WAN, and automated services. Critical for CSPs offering enterprise connectivity solutions.",
+          "impact_areas": ["Trust & Authority", "Network Services", "Service Automation"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_003",
+        "name": "GSMA Member",
+        "full_name": "GSMA (Global System for Mobile Communications) Member",
+        "priority": "critical",
+        "category": "association",
+        "expected_impact": "+27 points",
+        "detection_patterns": [
+          "gsma member",
+          "gsma",
+          "global system for mobile communications",
+          "member of gsma",
+          "gsma association"
+        ],
+        "schema_fields": ["memberOf", "organizationCredential"],
+        "badge_patterns": ["gsma-badge", "gsma-member"],
+        "display_recommendation": {
+          "title": "Display GSMA Membership",
+          "why_it_matters": "GSMA represents mobile network operators worldwide. Membership validates mobile expertise and compliance with global mobile standards.",
+          "impact_areas": ["Trust & Authority", "Mobile Standards", "Global Network"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_004",
+        "name": "IETF Liaison",
+        "full_name": "IETF (Internet Engineering Task Force) Liaison",
+        "priority": "important",
+        "category": "association",
+        "expected_impact": "+24 points",
+        "detection_patterns": [
+          "ietf liaison",
+          "ietf member",
+          "internet engineering task force",
+          "ietf participant",
+          "ietf contributor"
+        ],
+        "schema_fields": ["memberOf", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Display IETF Participation",
+          "why_it_matters": "IETF participation demonstrates technical leadership in internet protocols and standards development. Shows deep technical expertise in network infrastructure.",
+          "impact_areas": ["Trust & Authority", "Technical Leadership", "Protocol Standards"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_005",
+        "name": "CableLabs Member",
+        "full_name": "CableLabs Member",
+        "priority": "important",
+        "category": "association",
+        "expected_impact": "+23 points",
+        "detection_patterns": [
+          "cablelabs member",
+          "cablelabs",
+          "cable television laboratories",
+          "member of cablelabs"
+        ],
+        "schema_fields": ["memberOf", "organizationCredential"],
+        "badge_patterns": ["cablelabs-badge"],
+        "display_recommendation": {
+          "title": "Display CableLabs Membership",
+          "why_it_matters": "CableLabs membership is essential for cable operators and demonstrates expertise in cable broadband technologies like DOCSIS.",
+          "impact_areas": ["Trust & Authority", "Cable Technology", "Broadband Innovation"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_006",
+        "name": "ISO 27001",
+        "full_name": "ISO 27001 Information Security Management",
+        "priority": "critical",
+        "category": "security",
+        "expected_impact": "+30 points",
+        "detection_patterns": [
+          "iso 27001",
+          "iso/iec 27001",
+          "iso 27001 certified",
+          "information security management",
+          "isms certified"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "badge_patterns": ["iso-27001-badge", "iso27001-certified"],
+        "display_recommendation": {
+          "title": "Display ISO 27001 Certification",
+          "why_it_matters": "ISO 27001 is the international standard for information security management. Essential for telecom providers handling sensitive customer data and network infrastructure.",
+          "impact_areas": ["Trust & Authority", "Security", "Compliance"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_007",
+        "name": "ISO 9001",
+        "full_name": "ISO 9001 Quality Management",
+        "priority": "important",
+        "category": "security",
+        "expected_impact": "+25 points",
+        "detection_patterns": [
+          "iso 9001",
+          "iso/iec 9001",
+          "iso 9001 certified",
+          "quality management system",
+          "qms certified"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "badge_patterns": ["iso-9001-badge", "iso9001-certified"],
+        "display_recommendation": {
+          "title": "Display ISO 9001 Certification",
+          "why_it_matters": "ISO 9001 demonstrates commitment to quality management and continuous improvement. Shows operational excellence in service delivery.",
+          "impact_areas": ["Trust & Authority", "Quality", "Operational Excellence"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_008",
+        "name": "SOC 2 Type II",
+        "full_name": "SOC 2 Type II Compliance",
+        "priority": "critical",
+        "category": "security",
+        "expected_impact": "+29 points",
+        "detection_patterns": [
+          "soc 2 type ii",
+          "soc 2 type 2",
+          "soc2 type ii",
+          "aicpa soc 2",
+          "soc 2 compliant"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "badge_patterns": ["soc2-badge", "aicpa-soc2"],
+        "display_recommendation": {
+          "title": "Display SOC 2 Type II Certification",
+          "why_it_matters": "SOC 2 Type II validates security, availability, and confidentiality controls. Critical for BSS/OSS providers and cloud-based telecom services.",
+          "impact_areas": ["Trust & Authority", "Security Controls", "Vendor Trust"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_009",
+        "name": "PCI DSS",
+        "full_name": "PCI DSS Compliance (Payment Card Industry Data Security Standard)",
+        "priority": "critical",
+        "category": "security",
+        "expected_impact": "+28 points",
+        "detection_patterns": [
+          "pci dss",
+          "pci compliant",
+          "payment card industry",
+          "pci dss certified",
+          "pci-dss"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "badge_patterns": ["pci-dss-badge", "pci-compliant"],
+        "display_recommendation": {
+          "title": "Display PCI DSS Compliance",
+          "why_it_matters": "PCI DSS is mandatory for CSPs handling payment card transactions. Demonstrates secure payment processing and billing systems.",
+          "impact_areas": ["Trust & Authority", "Payment Security", "Compliance"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_010",
+        "name": "CSA STAR",
+        "full_name": "CSA STAR (Cloud Security Alliance Security, Trust, Assurance, and Risk)",
+        "priority": "important",
+        "category": "security",
+        "expected_impact": "+26 points",
+        "detection_patterns": [
+          "csa star",
+          "cloud security alliance star",
+          "csa star certified",
+          "csa security trust assurance"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "badge_patterns": ["csa-star-badge"],
+        "display_recommendation": {
+          "title": "Display CSA STAR Certification",
+          "why_it_matters": "CSA STAR demonstrates cloud security best practices. Essential for telecom cloud services and virtualized network functions (VNF/CNF).",
+          "impact_areas": ["Trust & Authority", "Cloud Security", "Transparency"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_011",
+        "name": "TM Forum Catalyst Participation",
+        "full_name": "TM Forum Catalyst Program Participation",
+        "priority": "important",
+        "category": "award",
+        "expected_impact": "+25 points",
+        "detection_patterns": [
+          "tm forum catalyst",
+          "catalyst project",
+          "tmforum catalyst",
+          "catalyst participant",
+          "catalyst winner"
+        ],
+        "schema_fields": ["award", "organizationCredential"],
+        "badge_patterns": ["catalyst-badge", "tm-forum-catalyst"],
+        "display_recommendation": {
+          "title": "Display TM Forum Catalyst Participation",
+          "why_it_matters": "Catalyst projects demonstrate innovation and thought leadership in telecom digital transformation. Shows active participation in industry innovation.",
+          "impact_areas": ["Trust & Authority", "Innovation", "Industry Leadership"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_012",
+        "name": "GSMA Member Directory",
+        "full_name": "Listed in GSMA Member Directory",
+        "priority": "important",
+        "category": "content",
+        "expected_impact": "+23 points",
+        "detection_patterns": [
+          "gsma member directory",
+          "gsma directory",
+          "gsma member list",
+          "listed in gsma"
+        ],
+        "schema_fields": ["memberOf", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Ensure GSMA Directory Listing",
+          "why_it_matters": "GSMA directory listing provides verifiable membership validation. AI systems can cross-reference your membership through official directories.",
+          "impact_areas": ["Trust & Authority", "Verification", "Industry Recognition"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_013",
+        "name": "MEF Member Directory",
+        "full_name": "Listed in MEF Member Directory",
+        "priority": "important",
+        "category": "content",
+        "expected_impact": "+22 points",
+        "detection_patterns": [
+          "mef member directory",
+          "mef directory",
+          "mef member list",
+          "listed in mef"
+        ],
+        "schema_fields": ["memberOf", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Ensure MEF Directory Listing",
+          "why_it_matters": "MEF directory listing validates your carrier Ethernet and SD-WAN expertise. Provides third-party verification of membership.",
+          "impact_areas": ["Trust & Authority", "Verification", "Service Validation"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_014",
+        "name": "Global Telecoms Awards",
+        "full_name": "Global Telecoms Awards Winner/Finalist",
+        "priority": "important",
+        "category": "award",
+        "expected_impact": "+27 points",
+        "detection_patterns": [
+          "global telecoms awards",
+          "telecoms award",
+          "global telecoms winner",
+          "telecoms awards finalist"
+        ],
+        "schema_fields": ["award", "organizationCredential"],
+        "badge_patterns": ["telecoms-award-badge"],
+        "display_recommendation": {
+          "title": "Display Global Telecoms Awards",
+          "why_it_matters": "Global Telecoms Awards recognize excellence and innovation in telecommunications. Provides strong third-party validation and industry recognition.",
+          "impact_areas": ["Trust & Authority", "Industry Recognition", "Excellence"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_015",
+        "name": "TMF Excellence Awards",
+        "full_name": "TM Forum Excellence Awards Winner",
+        "priority": "important",
+        "category": "award",
+        "expected_impact": "+26 points",
+        "detection_patterns": [
+          "tmf excellence awards",
+          "tm forum excellence",
+          "tmf award",
+          "excellence award winner"
+        ],
+        "schema_fields": ["award", "organizationCredential"],
+        "badge_patterns": ["tmf-excellence-badge"],
+        "display_recommendation": {
+          "title": "Display TM Forum Excellence Awards",
+          "why_it_matters": "TM Forum Excellence Awards recognize industry-leading digital transformation initiatives. Demonstrates innovation and best practice implementation.",
+          "impact_areas": ["Trust & Authority", "Digital Transformation", "Best Practices"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_016",
+        "name": "Light Reading Awards",
+        "full_name": "Light Reading Innovation Awards",
+        "priority": "relevant",
+        "category": "award",
+        "expected_impact": "+24 points",
+        "detection_patterns": [
+          "light reading award",
+          "light reading innovation",
+          "light reading leading lights",
+          "leading lights award"
+        ],
+        "schema_fields": ["award", "organizationCredential"],
+        "badge_patterns": ["light-reading-badge", "leading-lights"],
+        "display_recommendation": {
+          "title": "Display Light Reading Awards",
+          "why_it_matters": "Light Reading awards recognize innovation in network infrastructure and telecom technology. Validates technical leadership and innovation.",
+          "impact_areas": ["Trust & Authority", "Technology Innovation", "Industry Recognition"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_017",
+        "name": "5G Certification",
+        "full_name": "5G Network Certification/Deployment",
+        "priority": "important",
+        "category": "partner",
+        "expected_impact": "+28 points",
+        "detection_patterns": [
+          "5g certified",
+          "5g network",
+          "5g deployment",
+          "5g technology",
+          "5g ready"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "display_recommendation": {
+          "title": "Highlight 5G Capabilities",
+          "why_it_matters": "5G certification demonstrates next-generation network capabilities. Critical for modern CSPs and shows technological advancement.",
+          "impact_areas": ["Trust & Authority", "Technology Leadership", "Network Capability"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_018",
+        "name": "Network Equipment Provider Partnership",
+        "full_name": "Partnership with Major Network Equipment Providers",
+        "priority": "important",
+        "category": "partner",
+        "expected_impact": "+25 points",
+        "detection_patterns": [
+          "ericsson partner",
+          "nokia partner",
+          "huawei partner",
+          "cisco partner",
+          "juniper partner",
+          "equipment partner"
+        ],
+        "schema_fields": ["hasCredential", "award"],
+        "display_recommendation": {
+          "title": "Display Equipment Vendor Partnerships",
+          "why_it_matters": "Partnerships with leading equipment vendors validate technical expertise and network infrastructure quality. Shows strategic vendor relationships.",
+          "impact_areas": ["Trust & Authority", "Technical Expertise", "Vendor Relationships"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_019",
+        "name": "BSS/OSS Platform Certification",
+        "full_name": "BSS/OSS Platform Certification (Amdocs, Oracle, etc.)",
+        "priority": "important",
+        "category": "team_credential",
+        "expected_impact": "+24 points",
+        "detection_patterns": [
+          "amdocs certified",
+          "oracle communications certified",
+          "ericsson bss certified",
+          "netcracker certified",
+          "bss certified",
+          "oss certified"
+        ],
+        "schema_fields": ["hasCredential", "educationalCredential"],
+        "display_recommendation": {
+          "title": "Highlight BSS/OSS Platform Expertise",
+          "why_it_matters": "BSS/OSS platform certifications demonstrate deep technical expertise in billing, provisioning, and service management systems. Critical for telecom IT vendors.",
+          "impact_areas": ["Team Expertise", "Platform Knowledge", "System Integration"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_020",
+        "name": "Telecom Network Certifications",
+        "full_name": "Professional Telecom Network Certifications (CCNA/CCNP, etc.)",
+        "priority": "relevant",
+        "category": "team_credential",
+        "expected_impact": "+22 points",
+        "detection_patterns": [
+          "ccna",
+          "ccnp",
+          "ccie",
+          "cisco certified",
+          "network certified",
+          "telecommunications certified"
+        ],
+        "schema_fields": ["hasCredential", "educationalCredential"],
+        "display_recommendation": {
+          "title": "Highlight Team Network Certifications",
+          "why_it_matters": "Professional network certifications demonstrate qualified technical staff. Cisco and other vendor certifications validate hands-on expertise.",
+          "impact_areas": ["Team Expertise", "Network Engineering", "Technical Skills"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_021",
+        "name": "GDPR Compliance",
+        "full_name": "GDPR Compliance for Telecom",
+        "priority": "critical",
+        "category": "security",
+        "expected_impact": "+27 points",
+        "detection_patterns": [
+          "gdpr compliant",
+          "gdpr",
+          "general data protection regulation",
+          "data protection compliant",
+          "eu data protection"
+        ],
+        "schema_fields": ["hasCredential", "privacyPolicy"],
+        "display_recommendation": {
+          "title": "Display GDPR Compliance",
+          "why_it_matters": "GDPR compliance is mandatory for telecom operators handling EU customer data. Demonstrates commitment to data privacy and regulatory compliance.",
+          "impact_areas": ["Trust & Authority", "Legal Compliance", "Data Privacy"],
+          "difficulty": "easy",
+          "estimated_time": "30 minutes"
+        }
+      },
+      {
+        "id": "cert_telecom_022",
+        "name": "Industry Case Studies",
+        "full_name": "Published Telecom Case Studies",
+        "priority": "important",
+        "category": "content",
+        "expected_impact": "+26 points",
+        "detection_patterns": [
+          "case study",
+          "case studies",
+          "customer success",
+          "deployment case study",
+          "network deployment"
+        ],
+        "schema_fields": ["workExample", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Publish Detailed Case Studies",
+          "why_it_matters": "Telecom case studies with deployment details and results build practical credibility. AI uses operator co-mentions to infer reliability and expertise.",
+          "impact_areas": ["Trust & Authority", "Proven Results", "Customer Validation"],
+          "difficulty": "medium",
+          "estimated_time": "3-5 hours per case study"
+        }
+      },
+      {
+        "id": "cert_telecom_023",
+        "name": "White Papers & Research",
+        "full_name": "Published White Papers and Industry Research",
+        "priority": "relevant",
+        "category": "content",
+        "expected_impact": "+23 points",
+        "detection_patterns": [
+          "white paper",
+          "research paper",
+          "industry research",
+          "technical paper",
+          "thought leadership"
+        ],
+        "schema_fields": ["workExample", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Publish Technical White Papers",
+          "why_it_matters": "White papers and research publications establish thought leadership and technical expertise. AI systems recognize published research as authority signals.",
+          "impact_areas": ["Trust & Authority", "Thought Leadership", "Technical Expertise"],
+          "difficulty": "medium",
+          "estimated_time": "4-8 hours per white paper"
+        }
+      },
+      {
+        "id": "cert_telecom_024",
+        "name": "SLA Documentation",
+        "full_name": "Published Service Level Agreements",
+        "priority": "important",
+        "category": "content",
+        "expected_impact": "+24 points",
+        "detection_patterns": [
+          "service level agreement",
+          "sla",
+          "uptime guarantee",
+          "service guarantee",
+          "99.9% uptime"
+        ],
+        "schema_fields": ["serviceOutput", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Publish SLA Commitments",
+          "why_it_matters": "Published SLAs demonstrate service commitment and transparency. Shows confidence in service quality and provides measurable guarantees.",
+          "impact_areas": ["Trust & Authority", "Service Quality", "Transparency"],
+          "difficulty": "easy",
+          "estimated_time": "1-2 hours"
+        }
+      },
+      {
+        "id": "cert_telecom_025",
+        "name": "Network Coverage Maps",
+        "full_name": "Interactive Network Coverage Maps",
+        "priority": "relevant",
+        "category": "content",
+        "expected_impact": "+21 points",
+        "detection_patterns": [
+          "coverage map",
+          "network coverage",
+          "service area map",
+          "availability map",
+          "network footprint"
+        ],
+        "schema_fields": ["areaServed", "serviceArea"],
+        "display_recommendation": {
+          "title": "Publish Network Coverage Information",
+          "why_it_matters": "Coverage maps provide transparent service availability information. Helps AI systems understand geographic service capabilities.",
+          "impact_areas": ["Trust & Authority", "Transparency", "Service Scope"],
+          "difficulty": "medium",
+          "estimated_time": "2-4 hours"
+        }
+      }
+    ]
+  }
+}

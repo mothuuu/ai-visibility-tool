@@ -1,0 +1,241 @@
+{
+  "certification_library": {
+    "industry": "Cybersecurity",
+    "industry_id": "cybersecurity",
+    "version": "1.0",
+    "last_updated": "2025-11-13",
+    "metadata": {
+      "total_certifications": 10,
+      "detection_enabled": true,
+      "schema_generation": true
+    },
+    "certifications": [
+      {
+        "id": "cert_cybersec_001",
+        "name": "SOC 2 Type II",
+        "full_name": "Service Organization Control 2 Type II",
+        "priority": "critical",
+        "category": "security",
+        "expected_impact": "+25 points",
+        "detection_patterns": [
+          "soc 2",
+          "soc2",
+          "soc 2 type ii",
+          "soc 2 type 2",
+          "aicpa soc 2"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["soc2-badge", "soc-2-certified"],
+        "display_recommendation": {
+          "title": "Display SOC 2 Type II Certification",
+          "why_it_matters": "SOC 2 Type II is the gold standard for security service providers. Demonstrates your security controls are continuously audited and effective over time.",
+          "impact_areas": ["Trust & Authority", "Security Compliance", "Client Confidence"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_cybersec_002",
+        "name": "ISO 27001",
+        "full_name": "ISO/IEC 27001 Information Security Management",
+        "priority": "critical",
+        "category": "security",
+        "expected_impact": "+24 points",
+        "detection_patterns": [
+          "iso 27001",
+          "iso/iec 27001",
+          "iso27001",
+          "isms certified"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["iso27001-badge", "iso-27001-certified"],
+        "display_recommendation": {
+          "title": "Display ISO 27001 Certification",
+          "why_it_matters": "ISO 27001 is the international standard for ISMS. Essential for cybersecurity companies serving global clients and demonstrating systematic security management.",
+          "impact_areas": ["Trust & Authority", "International Recognition", "Systematic Security"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_cybersec_003",
+        "name": "CISSP",
+        "full_name": "Certified Information Systems Security Professional",
+        "priority": "important",
+        "category": "professional",
+        "expected_impact": "+18 points",
+        "detection_patterns": [
+          "cissp",
+          "certified information systems security professional",
+          "isc2 cissp"
+        ],
+        "schema_fields": ["hasCredential", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Display Team CISSP Certifications",
+          "why_it_matters": "CISSP is the most recognized cybersecurity certification. Highlighting CISSP-certified team members demonstrates deep security expertise and commitment to professional standards.",
+          "impact_areas": ["E-E-A-T", "Professional Expertise", "Credibility"],
+          "difficulty": "easy",
+          "estimated_time": "25 minutes"
+        }
+      },
+      {
+        "id": "cert_cybersec_004",
+        "name": "CEH",
+        "full_name": "Certified Ethical Hacker",
+        "priority": "important",
+        "category": "professional",
+        "expected_impact": "+16 points",
+        "detection_patterns": [
+          "ceh",
+          "certified ethical hacker",
+          "ec-council ceh"
+        ],
+        "schema_fields": ["hasCredential", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Display Team CEH Certifications",
+          "why_it_matters": "CEH certification demonstrates offensive security skills and ethical hacking expertise. Valuable for penetration testing and security assessment services.",
+          "impact_areas": ["E-E-A-T", "Penetration Testing Expertise", "Offensive Security"],
+          "difficulty": "easy",
+          "estimated_time": "25 minutes"
+        }
+      },
+      {
+        "id": "cert_cybersec_005",
+        "name": "CISA",
+        "full_name": "Certified Information Systems Auditor",
+        "priority": "important",
+        "category": "professional",
+        "expected_impact": "+17 points",
+        "detection_patterns": [
+          "cisa",
+          "certified information systems auditor",
+          "isaca cisa"
+        ],
+        "schema_fields": ["hasCredential", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Display Team CISA Certifications",
+          "why_it_matters": "CISA demonstrates expertise in auditing, control, and security assessment. Essential for compliance and audit services.",
+          "impact_areas": ["E-E-A-T", "Audit Expertise", "Compliance Knowledge"],
+          "difficulty": "easy",
+          "estimated_time": "25 minutes"
+        }
+      },
+      {
+        "id": "cert_cybersec_006",
+        "name": "Bug Bounty Program",
+        "full_name": "Active Bug Bounty or Vulnerability Disclosure Program",
+        "priority": "relevant",
+        "category": "security_practice",
+        "expected_impact": "+14 points",
+        "detection_patterns": [
+          "bug bounty",
+          "vulnerability disclosure",
+          "responsible disclosure",
+          "security researcher",
+          "hackerone",
+          "bugcrowd"
+        ],
+        "schema_fields": ["organizationCredential"],
+        "display_recommendation": {
+          "title": "Display Bug Bounty Program",
+          "why_it_matters": "Running a bug bounty program demonstrates transparency, security maturity, and confidence in your product. Shows you actively work with the security community.",
+          "impact_areas": ["Trust & Authority", "Security Maturity", "Transparency"],
+          "difficulty": "medium",
+          "estimated_time": "30 minutes"
+        }
+      },
+      {
+        "id": "cert_cybersec_007",
+        "name": "PCI DSS",
+        "full_name": "Payment Card Industry Data Security Standard",
+        "priority": "important",
+        "category": "security",
+        "expected_impact": "+20 points",
+        "detection_patterns": [
+          "pci dss",
+          "pci-dss",
+          "pci compliant",
+          "payment card industry"
+        ],
+        "schema_fields": ["organizationCredential", "accreditation"],
+        "badge_patterns": ["pci-badge", "pci-dss-compliant"],
+        "display_recommendation": {
+          "title": "Display PCI DSS Compliance",
+          "why_it_matters": "PCI DSS compliance is mandatory for handling payment card data. Demonstrates rigorous security controls and commitment to payment security.",
+          "impact_areas": ["Trust & Authority", "Payment Security", "Compliance"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_cybersec_008",
+        "name": "FedRAMP",
+        "full_name": "Federal Risk and Authorization Management Program",
+        "priority": "relevant",
+        "category": "government",
+        "expected_impact": "+22 points",
+        "detection_patterns": [
+          "fedramp",
+          "fedramp authorized",
+          "fedramp certified",
+          "fedramp moderate",
+          "fedramp high"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["fedramp-badge", "fedramp-authorized"],
+        "display_recommendation": {
+          "title": "Display FedRAMP Authorization",
+          "why_it_matters": "FedRAMP authorization enables federal government cloud services. Demonstrates highest level of security controls and government trust.",
+          "impact_areas": ["Trust & Authority", "Government Sector", "Enterprise Security"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_cybersec_009",
+        "name": "OSCP",
+        "full_name": "Offensive Security Certified Professional",
+        "priority": "relevant",
+        "category": "professional",
+        "expected_impact": "+15 points",
+        "detection_patterns": [
+          "oscp",
+          "offensive security certified professional",
+          "pwk certified"
+        ],
+        "schema_fields": ["hasCredential", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Display Team OSCP Certifications",
+          "why_it_matters": "OSCP is highly respected for hands-on penetration testing skills. Demonstrates practical offensive security capabilities through rigorous practical examination.",
+          "impact_areas": ["E-E-A-T", "Penetration Testing", "Practical Skills"],
+          "difficulty": "easy",
+          "estimated_time": "25 minutes"
+        }
+      },
+      {
+        "id": "cert_cybersec_010",
+        "name": "GIAC Security Certifications",
+        "full_name": "Global Information Assurance Certification",
+        "priority": "relevant",
+        "category": "professional",
+        "expected_impact": "+16 points",
+        "detection_patterns": [
+          "giac",
+          "gpen",
+          "gcih",
+          "gcia",
+          "gsec",
+          "sans giac"
+        ],
+        "schema_fields": ["hasCredential", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Display Team GIAC Certifications",
+          "why_it_matters": "GIAC certifications from SANS Institute demonstrate specialized technical skills across various security domains. Highly technical and respected certifications.",
+          "impact_areas": ["E-E-A-T", "Technical Depth", "Specialized Expertise"],
+          "difficulty": "easy",
+          "estimated_time": "25 minutes"
+        }
+      }
+    ]
+  }
+}

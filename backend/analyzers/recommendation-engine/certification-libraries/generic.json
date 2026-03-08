@@ -1,0 +1,298 @@
+{
+  "certification_library": {
+    "industry": "Generic",
+    "industry_id": "generic",
+    "version": "1.0",
+    "last_updated": "2025-11-22",
+    "metadata": {
+      "total_certifications": 12,
+      "detection_enabled": true,
+      "schema_generation": true,
+      "description": "Generic certifications applicable across all industries"
+    },
+    "certifications": [
+      {
+        "id": "cert_generic_001",
+        "name": "ISO 27001",
+        "full_name": "ISO/IEC 27001 Information Security Management",
+        "priority": "critical",
+        "category": "security",
+        "expected_impact": "+22 points",
+        "detection_patterns": [
+          "iso 27001",
+          "iso/iec 27001",
+          "iso27001",
+          "isms certified",
+          "iso 27001 certified"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["iso27001-badge", "iso-27001-certified", "iso27001"],
+        "display_recommendation": {
+          "title": "Display ISO 27001 Certification",
+          "why_it_matters": "ISO 27001 is the international standard for information security management. Demonstrates systematic security controls and builds trust with clients worldwide.",
+          "impact_areas": ["Trust & Authority", "Security Compliance", "International Recognition"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_generic_002",
+        "name": "SOC 2",
+        "full_name": "Service Organization Control 2",
+        "priority": "critical",
+        "category": "security",
+        "expected_impact": "+24 points",
+        "detection_patterns": [
+          "soc 2",
+          "soc2",
+          "soc 2 type ii",
+          "soc 2 type i",
+          "aicpa soc 2",
+          "soc 2 certified"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["soc2-badge", "soc-2-certified", "soc2"],
+        "display_recommendation": {
+          "title": "Display SOC 2 Certification",
+          "why_it_matters": "SOC 2 demonstrates your security controls meet AICPA standards. Critical for B2B services handling sensitive data.",
+          "impact_areas": ["Trust & Authority", "Security Compliance", "Client Confidence"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_generic_003",
+        "name": "GDPR Compliant",
+        "full_name": "General Data Protection Regulation Compliant",
+        "priority": "important",
+        "category": "privacy",
+        "expected_impact": "+18 points",
+        "detection_patterns": [
+          "gdpr compliant",
+          "gdpr certified",
+          "gdpr compliance",
+          "general data protection"
+        ],
+        "schema_fields": ["organizationCredential"],
+        "badge_patterns": ["gdpr-badge", "gdpr-certified", "gdpr-compliant"],
+        "display_recommendation": {
+          "title": "Display GDPR Compliance",
+          "why_it_matters": "GDPR compliance is essential for serving European customers. Demonstrates commitment to data privacy and protection.",
+          "impact_areas": ["Trust & Authority", "Privacy", "EU Market Access"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_generic_004",
+        "name": "Google Partner",
+        "full_name": "Google Partner Certification",
+        "priority": "important",
+        "category": "technology",
+        "expected_impact": "+16 points",
+        "detection_patterns": [
+          "google partner",
+          "google certified partner",
+          "google ads certified",
+          "google premier partner"
+        ],
+        "schema_fields": ["award", "memberOf"],
+        "badge_patterns": ["google-partner-badge", "google-partner", "google-certified"],
+        "display_recommendation": {
+          "title": "Display Google Partner Certification",
+          "why_it_matters": "Google Partner status demonstrates expertise in Google's ecosystem and validates your technical capabilities.",
+          "impact_areas": ["Trust & Authority", "Technical Expertise", "Platform Integration"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_generic_005",
+        "name": "Microsoft Partner",
+        "full_name": "Microsoft Certified Partner",
+        "priority": "important",
+        "category": "technology",
+        "expected_impact": "+16 points",
+        "detection_patterns": [
+          "microsoft partner",
+          "microsoft certified partner",
+          "microsoft gold partner",
+          "microsoft silver partner",
+          "microsoft cloud partner"
+        ],
+        "schema_fields": ["award", "memberOf"],
+        "badge_patterns": ["microsoft-partner-badge", "microsoft-partner", "microsoft-certified"],
+        "display_recommendation": {
+          "title": "Display Microsoft Partner Certification",
+          "why_it_matters": "Microsoft Partner certification demonstrates expertise in Microsoft technologies and enterprise solutions.",
+          "impact_areas": ["Trust & Authority", "Technical Expertise", "Enterprise Credibility"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_generic_006",
+        "name": "AWS Partner",
+        "full_name": "AWS Certified Partner",
+        "priority": "important",
+        "category": "technology",
+        "expected_impact": "+15 points",
+        "detection_patterns": [
+          "aws partner",
+          "aws certified",
+          "amazon web services partner",
+          "aws advanced partner",
+          "aws select partner"
+        ],
+        "schema_fields": ["award", "memberOf"],
+        "badge_patterns": ["aws-partner-badge", "aws-partner", "aws-certified"],
+        "display_recommendation": {
+          "title": "Display AWS Partner Certification",
+          "why_it_matters": "AWS Partner status demonstrates cloud infrastructure expertise and validates your ability to deliver cloud solutions.",
+          "impact_areas": ["Trust & Authority", "Cloud Expertise", "Technical Credibility"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_generic_007",
+        "name": "PCI DSS",
+        "full_name": "Payment Card Industry Data Security Standard",
+        "priority": "important",
+        "category": "security",
+        "expected_impact": "+20 points",
+        "detection_patterns": [
+          "pci dss",
+          "pci-dss",
+          "pci compliant",
+          "pci dss compliant",
+          "payment card industry"
+        ],
+        "schema_fields": ["organizationCredential"],
+        "badge_patterns": ["pci-dss-badge", "pci-compliant", "pci-certified"],
+        "display_recommendation": {
+          "title": "Display PCI DSS Compliance",
+          "why_it_matters": "PCI DSS compliance is mandatory for handling payment card data. Critical for e-commerce and payment processing services.",
+          "impact_areas": ["Trust & Authority", "Payment Security", "Regulatory Compliance"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_generic_008",
+        "name": "BBB Accredited",
+        "full_name": "Better Business Bureau Accredited Business",
+        "priority": "relevant",
+        "category": "business",
+        "expected_impact": "+12 points",
+        "detection_patterns": [
+          "bbb accredited",
+          "better business bureau",
+          "bbb certified",
+          "bbb a+ rating"
+        ],
+        "schema_fields": ["award", "memberOf"],
+        "badge_patterns": ["bbb-badge", "bbb-accredited", "better-business-bureau"],
+        "display_recommendation": {
+          "title": "Display BBB Accreditation",
+          "why_it_matters": "BBB accreditation demonstrates commitment to ethical business practices and customer satisfaction.",
+          "impact_areas": ["Trust & Authority", "Business Ethics", "Customer Confidence"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_generic_009",
+        "name": "ISO 9001",
+        "full_name": "ISO 9001 Quality Management",
+        "priority": "relevant",
+        "category": "quality",
+        "expected_impact": "+14 points",
+        "detection_patterns": [
+          "iso 9001",
+          "iso9001",
+          "iso 9001 certified",
+          "quality management certified"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["iso9001-badge", "iso-9001-certified"],
+        "display_recommendation": {
+          "title": "Display ISO 9001 Certification",
+          "why_it_matters": "ISO 9001 demonstrates systematic quality management and continuous improvement processes.",
+          "impact_areas": ["Trust & Authority", "Quality Assurance", "Process Excellence"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_generic_010",
+        "name": "HIPAA Compliant",
+        "full_name": "Health Insurance Portability and Accountability Act Compliant",
+        "priority": "important",
+        "category": "healthcare",
+        "expected_impact": "+20 points",
+        "detection_patterns": [
+          "hipaa compliant",
+          "hipaa certified",
+          "hipaa compliance",
+          "health information portability"
+        ],
+        "schema_fields": ["organizationCredential"],
+        "badge_patterns": ["hipaa-badge", "hipaa-compliant", "hipaa-certified"],
+        "display_recommendation": {
+          "title": "Display HIPAA Compliance",
+          "why_it_matters": "HIPAA compliance is mandatory for handling protected health information. Essential for healthcare-related services.",
+          "impact_areas": ["Trust & Authority", "Healthcare Security", "Regulatory Compliance"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_generic_011",
+        "name": "Professional Licenses",
+        "full_name": "State/Professional Licenses",
+        "priority": "relevant",
+        "category": "professional",
+        "expected_impact": "+12 points",
+        "detection_patterns": [
+          "licensed",
+          "state licensed",
+          "professionally licensed",
+          "license number",
+          "license #"
+        ],
+        "schema_fields": ["hasCredential", "credential"],
+        "display_recommendation": {
+          "title": "Display Professional Licenses",
+          "why_it_matters": "Professional licenses demonstrate legal authorization and regulatory compliance for your services.",
+          "impact_areas": ["Trust & Authority", "Legal Compliance", "Professional Standards"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_generic_012",
+        "name": "Industry Association Memberships",
+        "full_name": "Professional Industry Association Memberships",
+        "priority": "relevant",
+        "category": "professional",
+        "expected_impact": "+10 points",
+        "detection_patterns": [
+          "member of",
+          "association member",
+          "professional association",
+          "industry association",
+          "trade association"
+        ],
+        "schema_fields": ["memberOf"],
+        "display_recommendation": {
+          "title": "Display Industry Association Memberships",
+          "why_it_matters": "Industry association memberships demonstrate professional engagement and commitment to industry standards.",
+          "impact_areas": ["Trust & Authority", "Industry Engagement", "Professional Network"],
+          "difficulty": "easy",
+          "estimated_time": "25 minutes"
+        }
+      }
+    ]
+  }
+}

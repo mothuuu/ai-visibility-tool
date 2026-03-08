@@ -1,0 +1,590 @@
+{
+  "certification_library": {
+    "industry": "Marketing & Advertising Agencies",
+    "industry_id": "marketing-agencies",
+    "version": "1.0",
+    "last_updated": "2025-11-13",
+    "metadata": {
+      "total_certifications": 25,
+      "detection_enabled": true,
+      "schema_generation": true,
+      "applies_to_subverticals": ["marketing", "marketing agency", "digital marketing", "advertising agency"]
+    },
+    "certifications": [
+      {
+        "id": "cert_marketing_001",
+        "name": "Google Partner",
+        "full_name": "Google Partner / Premier Partner",
+        "priority": "critical",
+        "category": "partner",
+        "expected_impact": "+28 points",
+        "detection_patterns": [
+          "google partner",
+          "google premier partner",
+          "google ads partner",
+          "google certified partner",
+          "premier google partner"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["google-partner-badge", "google-premier-badge"],
+        "display_recommendation": {
+          "title": "Display Google Partner Certification",
+          "why_it_matters": "Google Partner status verifies expertise in Google Ads and demonstrates recognized authority in digital advertising. AI systems strongly associate this with marketing credibility.",
+          "impact_areas": ["Trust & Authority", "Platform Expertise", "Advertising Credibility"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_002",
+        "name": "Meta Business Partner",
+        "full_name": "Meta Business Partner",
+        "priority": "critical",
+        "category": "partner",
+        "expected_impact": "+26 points",
+        "detection_patterns": [
+          "meta business partner",
+          "facebook marketing partner",
+          "meta partner",
+          "facebook business partner",
+          "meta certified partner"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["meta-partner-badge", "facebook-partner-badge"],
+        "display_recommendation": {
+          "title": "Display Meta Business Partner Status",
+          "why_it_matters": "Meta Business Partner certification demonstrates expertise in Facebook and Instagram advertising. Essential credential for social media marketing authority.",
+          "impact_areas": ["Trust & Authority", "Social Media Expertise", "Platform Authority"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_003",
+        "name": "HubSpot Solutions Partner",
+        "full_name": "HubSpot Solutions Partner / Certified Agency",
+        "priority": "critical",
+        "category": "partner",
+        "expected_impact": "+25 points",
+        "detection_patterns": [
+          "hubspot partner",
+          "hubspot solutions partner",
+          "hubspot certified agency",
+          "hubspot gold partner",
+          "hubspot platinum partner",
+          "hubspot diamond partner"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["hubspot-partner-badge", "hubspot-certified"],
+        "display_recommendation": {
+          "title": "Display HubSpot Partner Certification",
+          "why_it_matters": "HubSpot Partner status validates inbound marketing and CRM expertise. Highly recognized in B2B marketing and demonstrates platform proficiency.",
+          "impact_areas": ["Trust & Authority", "Inbound Marketing Expertise", "CRM Integration"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_004",
+        "name": "LinkedIn Marketing Partner",
+        "full_name": "LinkedIn Marketing Partner",
+        "priority": "important",
+        "category": "partner",
+        "expected_impact": "+24 points",
+        "detection_patterns": [
+          "linkedin marketing partner",
+          "linkedin partner",
+          "linkedin certified partner",
+          "linkedin marketing solutions partner"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["linkedin-partner-badge"],
+        "display_recommendation": {
+          "title": "Display LinkedIn Marketing Partner Status",
+          "why_it_matters": "LinkedIn Partner certification validates B2B marketing expertise and professional networking capabilities. Critical for B2B-focused agencies.",
+          "impact_areas": ["Trust & Authority", "B2B Marketing", "Professional Networks"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_005",
+        "name": "Semrush Certified Agency",
+        "full_name": "Semrush Certified Agency Partner",
+        "priority": "important",
+        "category": "partner",
+        "expected_impact": "+22 points",
+        "detection_patterns": [
+          "semrush certified",
+          "semrush partner",
+          "semrush certified agency",
+          "semrush agency partner"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["semrush-certified-badge", "semrush-partner"],
+        "display_recommendation": {
+          "title": "Display Semrush Certification",
+          "why_it_matters": "Semrush certification demonstrates SEO and content marketing expertise. Shows proficiency in data-driven marketing strategies.",
+          "impact_areas": ["Trust & Authority", "SEO Expertise", "Content Strategy"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_006",
+        "name": "Microsoft Advertising Accredited",
+        "full_name": "Microsoft Advertising Accredited Professional",
+        "priority": "important",
+        "category": "partner",
+        "expected_impact": "+21 points",
+        "detection_patterns": [
+          "microsoft advertising accredited",
+          "microsoft ads certified",
+          "bing ads certified",
+          "microsoft advertising partner"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["microsoft-advertising-badge", "bing-certified"],
+        "display_recommendation": {
+          "title": "Display Microsoft Advertising Certification",
+          "why_it_matters": "Microsoft Advertising accreditation demonstrates expertise in Bing and Microsoft advertising platforms. Important for comprehensive paid search strategies.",
+          "impact_areas": ["Trust & Authority", "Search Advertising", "Platform Diversity"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_007",
+        "name": "Adobe Solution Partner",
+        "full_name": "Adobe Solution Partner",
+        "priority": "important",
+        "category": "partner",
+        "expected_impact": "+23 points",
+        "detection_patterns": [
+          "adobe solution partner",
+          "adobe partner",
+          "adobe certified partner",
+          "adobe experience cloud partner"
+        ],
+        "schema_fields": ["organizationCredential", "award"],
+        "badge_patterns": ["adobe-partner-badge", "adobe-certified"],
+        "display_recommendation": {
+          "title": "Display Adobe Solution Partner Status",
+          "why_it_matters": "Adobe Partner status demonstrates enterprise marketing technology expertise. Shows capability with Adobe Experience Cloud solutions.",
+          "impact_areas": ["Trust & Authority", "Enterprise Marketing Tech", "Creative Solutions"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_008",
+        "name": "HubSpot Inbound Marketing Certification",
+        "full_name": "HubSpot Inbound Marketing Certification",
+        "priority": "relevant",
+        "category": "team_credential",
+        "expected_impact": "+18 points",
+        "detection_patterns": [
+          "hubspot inbound certified",
+          "inbound marketing certification",
+          "hubspot inbound marketing",
+          "certified inbound marketer"
+        ],
+        "schema_fields": ["organizationCredential", "educationalCredential"],
+        "display_recommendation": {
+          "title": "Highlight Team's HubSpot Inbound Certification",
+          "why_it_matters": "Team-level certifications show qualified practitioners behind the brand. Adds human expertise signals that AI systems value.",
+          "impact_areas": ["Team Expertise", "Inbound Marketing", "Professional Development"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_009",
+        "name": "Google Analytics 4 Certification",
+        "full_name": "Google Analytics 4 Certification",
+        "priority": "relevant",
+        "category": "team_credential",
+        "expected_impact": "+19 points",
+        "detection_patterns": [
+          "google analytics certified",
+          "ga4 certified",
+          "google analytics 4 certification",
+          "analytics certified"
+        ],
+        "schema_fields": ["organizationCredential", "educationalCredential"],
+        "display_recommendation": {
+          "title": "Highlight Team's Google Analytics Certification",
+          "why_it_matters": "GA4 certification demonstrates data analytics expertise and ability to measure marketing performance effectively.",
+          "impact_areas": ["Team Expertise", "Data Analytics", "Performance Measurement"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_010",
+        "name": "Content Marketing Institute Certified",
+        "full_name": "Content Marketing Institute Certified Strategist",
+        "priority": "relevant",
+        "category": "team_credential",
+        "expected_impact": "+17 points",
+        "detection_patterns": [
+          "content marketing institute certified",
+          "cmi certified",
+          "certified content strategist",
+          "content marketing certified"
+        ],
+        "schema_fields": ["organizationCredential", "educationalCredential"],
+        "display_recommendation": {
+          "title": "Highlight Content Marketing Certification",
+          "why_it_matters": "CMI certification validates strategic content marketing expertise. Shows commitment to content marketing best practices.",
+          "impact_areas": ["Team Expertise", "Content Strategy", "Thought Leadership"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_011",
+        "name": "Chartered Marketer",
+        "full_name": "Chartered Marketer (CIM UK / CMA Canada)",
+        "priority": "relevant",
+        "category": "team_credential",
+        "expected_impact": "+20 points",
+        "detection_patterns": [
+          "chartered marketer",
+          "cim chartered",
+          "cma chartered marketer",
+          "fcim",
+          "chartered institute of marketing"
+        ],
+        "schema_fields": ["organizationCredential", "educationalCredential"],
+        "display_recommendation": {
+          "title": "Highlight Chartered Marketer Credentials",
+          "why_it_matters": "Chartered Marketer status represents the highest professional marketing qualification. Demonstrates senior-level expertise and commitment to professional standards.",
+          "impact_areas": ["Team Expertise", "Professional Excellence", "International Recognition"],
+          "difficulty": "easy",
+          "estimated_time": "20 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_012",
+        "name": "AMA Member",
+        "full_name": "American Marketing Association Member",
+        "priority": "relevant",
+        "category": "association",
+        "expected_impact": "+15 points",
+        "detection_patterns": [
+          "ama member",
+          "american marketing association",
+          "ama certified",
+          "member of ama"
+        ],
+        "schema_fields": ["organizationCredential", "memberOf"],
+        "display_recommendation": {
+          "title": "Display AMA Membership",
+          "why_it_matters": "AMA membership confirms legitimacy and commitment to professional marketing standards. Recognized professional body affiliation.",
+          "impact_areas": ["Professional Associations", "Industry Legitimacy", "Best Practices"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_013",
+        "name": "IAB Member",
+        "full_name": "Interactive Advertising Bureau Member",
+        "priority": "relevant",
+        "category": "association",
+        "expected_impact": "+16 points",
+        "detection_patterns": [
+          "iab member",
+          "interactive advertising bureau",
+          "iab certified",
+          "member of iab"
+        ],
+        "schema_fields": ["organizationCredential", "memberOf"],
+        "display_recommendation": {
+          "title": "Display IAB Membership",
+          "why_it_matters": "IAB membership demonstrates compliance with digital advertising standards and industry best practices. Important for programmatic and display advertising.",
+          "impact_areas": ["Professional Associations", "Digital Standards", "Ad Tech Credibility"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_014",
+        "name": "CMA Member",
+        "full_name": "Canadian Marketing Association Member",
+        "priority": "relevant",
+        "category": "association",
+        "expected_impact": "+14 points",
+        "detection_patterns": [
+          "cma member",
+          "canadian marketing association",
+          "member of cma",
+          "cma certified"
+        ],
+        "schema_fields": ["organizationCredential", "memberOf"],
+        "display_recommendation": {
+          "title": "Display CMA Membership",
+          "why_it_matters": "CMA membership confirms compliance with Canadian marketing standards and privacy regulations. Important for Canadian market credibility.",
+          "impact_areas": ["Professional Associations", "Canadian Market", "Compliance"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_015",
+        "name": "TM Forum Member",
+        "full_name": "TM Forum Member (Telecom-Focused)",
+        "priority": "relevant",
+        "category": "association",
+        "expected_impact": "+16 points",
+        "detection_patterns": [
+          "tm forum member",
+          "tmforum",
+          "telemanagement forum",
+          "member of tm forum"
+        ],
+        "schema_fields": ["organizationCredential", "memberOf"],
+        "display_recommendation": {
+          "title": "Display TM Forum Membership",
+          "why_it_matters": "TM Forum membership demonstrates expertise in telecom sector marketing. Important for agencies serving telecommunications clients.",
+          "impact_areas": ["Professional Associations", "Telecom Expertise", "Industry Specialization"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_016",
+        "name": "Clutch Top Agency",
+        "full_name": "Clutch Top Marketing Agency Recognition",
+        "priority": "important",
+        "category": "award",
+        "expected_impact": "+22 points",
+        "detection_patterns": [
+          "clutch top agency",
+          "clutch top marketing agency",
+          "top clutch agency",
+          "clutch leader",
+          "clutch 1000"
+        ],
+        "schema_fields": ["award", "organizationCredential"],
+        "badge_patterns": ["clutch-badge", "clutch-top-agency"],
+        "display_recommendation": {
+          "title": "Display Clutch Recognition",
+          "why_it_matters": "Clutch awards are based on verified client reviews and provide strong third-party validation. AI systems heavily weight these external endorsements.",
+          "impact_areas": ["Trust & Authority", "Client Validation", "Industry Recognition"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_017",
+        "name": "G2 High Performer",
+        "full_name": "G2 High Performer Recognition",
+        "priority": "important",
+        "category": "award",
+        "expected_impact": "+21 points",
+        "detection_patterns": [
+          "g2 high performer",
+          "g2 leader",
+          "g2 top performer",
+          "g2 award",
+          "g2 badge"
+        ],
+        "schema_fields": ["award", "organizationCredential"],
+        "badge_patterns": ["g2-badge", "g2-high-performer"],
+        "display_recommendation": {
+          "title": "Display G2 High Performer Badge",
+          "why_it_matters": "G2 awards are based on user reviews and satisfaction scores. Provides credible third-party validation that AI systems trust.",
+          "impact_areas": ["Trust & Authority", "User Satisfaction", "Performance Validation"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_018",
+        "name": "MarTech Breakthrough Award",
+        "full_name": "MarTech Breakthrough Award Winner",
+        "priority": "important",
+        "category": "award",
+        "expected_impact": "+23 points",
+        "detection_patterns": [
+          "martech breakthrough",
+          "martech award",
+          "martech breakthrough winner",
+          "marketing technology award"
+        ],
+        "schema_fields": ["award", "organizationCredential"],
+        "badge_patterns": ["martech-breakthrough-badge"],
+        "display_recommendation": {
+          "title": "Display MarTech Breakthrough Award",
+          "why_it_matters": "MarTech Breakthrough Awards recognize innovation and excellence in marketing technology. Demonstrates thought leadership and innovation.",
+          "impact_areas": ["Trust & Authority", "Innovation", "Industry Leadership"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_019",
+        "name": "Communicator Awards",
+        "full_name": "Communicator / Stevie Awards Winner",
+        "priority": "relevant",
+        "category": "award",
+        "expected_impact": "+19 points",
+        "detection_patterns": [
+          "communicator award",
+          "stevie award",
+          "communicator awards winner",
+          "stevie awards winner"
+        ],
+        "schema_fields": ["award", "organizationCredential"],
+        "badge_patterns": ["communicator-award-badge", "stevie-award"],
+        "display_recommendation": {
+          "title": "Display Communicator/Stevie Awards",
+          "why_it_matters": "Communicator and Stevie Awards recognize excellence in marketing and business communications. Provides external validation of creative excellence.",
+          "impact_areas": ["Trust & Authority", "Creative Excellence", "Industry Recognition"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_020",
+        "name": "Local Business Excellence",
+        "full_name": "Local Business Excellence Awards",
+        "priority": "relevant",
+        "category": "award",
+        "expected_impact": "+16 points",
+        "detection_patterns": [
+          "local business award",
+          "local excellence award",
+          "best local business",
+          "local business recognition"
+        ],
+        "schema_fields": ["award", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Display Local Business Awards",
+          "why_it_matters": "Local business awards demonstrate community recognition and regional expertise. Important for local market credibility.",
+          "impact_areas": ["Trust & Authority", "Local Presence", "Community Recognition"],
+          "difficulty": "easy",
+          "estimated_time": "15 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_021",
+        "name": "Client Case Studies",
+        "full_name": "Published Client Case Studies with Results",
+        "priority": "important",
+        "category": "content",
+        "expected_impact": "+24 points",
+        "detection_patterns": [
+          "case study",
+          "case studies",
+          "client success story",
+          "client results",
+          "portfolio"
+        ],
+        "schema_fields": ["workExample", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Publish Structured Case Studies",
+          "why_it_matters": "Case studies with quantifiable results build practical credibility. AI uses brand co-mentions to infer reliability and expertise.",
+          "impact_areas": ["Trust & Authority", "Proven Results", "Client Validation"],
+          "difficulty": "medium",
+          "estimated_time": "2-4 hours per case study"
+        }
+      },
+      {
+        "id": "cert_marketing_022",
+        "name": "Named Client Logos",
+        "full_name": "Named Client Logos with Permission",
+        "priority": "relevant",
+        "category": "content",
+        "expected_impact": "+20 points",
+        "detection_patterns": [
+          "clients",
+          "client logos",
+          "trusted by",
+          "brands we work with",
+          "our clients"
+        ],
+        "schema_fields": ["client", "organizationCredential"],
+        "display_recommendation": {
+          "title": "Display Client Logos Prominently",
+          "why_it_matters": "Named clients with brand recognition transfer trust to your agency. AI systems recognize brand associations and infer credibility.",
+          "impact_areas": ["Trust & Authority", "Brand Association", "Social Proof"],
+          "difficulty": "easy",
+          "estimated_time": "30 minutes"
+        }
+      },
+      {
+        "id": "cert_marketing_023",
+        "name": "SSL Certificate",
+        "full_name": "SSL/TLS Security Certificate (HTTPS)",
+        "priority": "critical",
+        "category": "security",
+        "expected_impact": "+15 points",
+        "detection_patterns": [
+          "https://",
+          "ssl certificate",
+          "secure connection",
+          "tls certificate"
+        ],
+        "schema_fields": ["securityCredential"],
+        "display_recommendation": {
+          "title": "Ensure HTTPS Implementation",
+          "why_it_matters": "SSL/HTTPS is a foundational trust and authenticity check. Required by all major browsers and search engines. Missing HTTPS significantly harms credibility.",
+          "impact_areas": ["Trust & Authority", "Security", "Search Rankings"],
+          "difficulty": "easy",
+          "estimated_time": "1 hour (if not already implemented)"
+        }
+      },
+      {
+        "id": "cert_marketing_024",
+        "name": "GDPR / CCPA Compliance",
+        "full_name": "Data Privacy Compliance (GDPR/CCPA)",
+        "priority": "important",
+        "category": "security",
+        "expected_impact": "+20 points",
+        "detection_patterns": [
+          "gdpr compliant",
+          "ccpa compliant",
+          "privacy policy",
+          "data protection",
+          "gdpr",
+          "ccpa"
+        ],
+        "schema_fields": ["organizationCredential", "privacyPolicy"],
+        "display_recommendation": {
+          "title": "Display Data Privacy Compliance",
+          "why_it_matters": "GDPR/CCPA compliance demonstrates commitment to data privacy and legal compliance. Essential for trust and required for EU/California markets.",
+          "impact_areas": ["Trust & Authority", "Legal Compliance", "Data Protection"],
+          "difficulty": "easy",
+          "estimated_time": "30 minutes (if policies already exist)"
+        }
+      },
+      {
+        "id": "cert_marketing_025",
+        "name": "Verified Reviews",
+        "full_name": "Verified Client Reviews (Google/Clutch/G2)",
+        "priority": "important",
+        "category": "review",
+        "expected_impact": "+25 points",
+        "detection_patterns": [
+          "google reviews",
+          "verified reviews",
+          "client reviews",
+          "clutch reviews",
+          "g2 reviews",
+          "testimonials"
+        ],
+        "schema_fields": ["review", "aggregateRating"],
+        "display_recommendation": {
+          "title": "Implement Review Schema Markup",
+          "why_it_matters": "Verified reviews provide external validation and social proof. AI systems heavily weight verified third-party reviews for trust signals.",
+          "impact_areas": ["Trust & Authority", "Social Proof", "Client Satisfaction"],
+          "difficulty": "easy",
+          "estimated_time": "1-2 hours"
+        }
+      }
+    ]
+  }
+}
