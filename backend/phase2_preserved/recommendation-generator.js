@@ -7,7 +7,7 @@ const { detectIssues, detectPageIssues, detectMultiPageIssues } = require('./rec
 const { generateRecommendations } = require('./recommendation-engine/rec-generator');
 const { generateCustomizedFAQ } = require('./recommendation-engine/faq-customizer');
 const { filterByTier, formatForAPI } = require('./recommendation-engine/tier-filter');
-const { generateEliteRecommendations, prioritizeEliteRecommendations } = require('../utils/elite-recommendation-generator');
+const { generateEliteRecommendations, prioritizeEliteRecommendations } = require('./elite-recommendation-generator');
 const { extractSiteFacts } = require('./recommendation-engine/fact-extractor');
 const { buildScanEvidence } = require('./evidence-builder');
 
