@@ -15,9 +15,12 @@
  */
 
 const path = require('path');
-const { Pool } = require('pg');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-require('dotenv').config({ path: path.join(__dirname, '..', 'backend', '.env') });
+
+// `pg` and `dotenv` are installed under backend/node_modules in this monorepo.
+// Reuse the backend's already-configured pool so this script works regardless
+// of where node is invoked from.
+const db = require(path.join(__dirname, '..', 'backend', 'db', 'database'));
+const pool = db.pool;
 
 // ---------------------------------------------------------------------------
 // Config
@@ -26,16 +29,10 @@ const DRY_RUN = process.env.DRY_RUN === 'true';
 const BATCH_SIZE = 50;
 const SAMPLE_SIZE = 3;
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
+if (!process.env.DATABASE_URL) {
   console.error('FATAL: DATABASE_URL not set.');
   process.exit(1);
 }
-const isLocalDB = connectionString.includes('localhost') || connectionString.includes('127.0.0.1');
-const pool = new Pool({
-  connectionString,
-  ssl: isLocalDB ? false : { rejectUnauthorized: false }
-});
 
 // ---------------------------------------------------------------------------
 // Mappings (per spec)
