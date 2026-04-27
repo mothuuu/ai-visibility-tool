@@ -134,18 +134,32 @@ function parseJsonb(value) {
 }
 
 // ---------------------------------------------------------------------------
-// Extraction — produces an array of finding rows from a single scan_data blob.
-// Targets the documented scan_data shape: { url?, scores: {...}, metrics: {...} }.
-// Defensive: gracefully ignores missing sections.
+// Extraction — routes to the right shape-specific extractor based on which
+// JSONB blob is present on the scan row. Supports two shapes:
+//   1. scan_data         { url?, scores: {...}, metrics: {...} }   (legacy)
+//   2. detailed_analysis { categoryBreakdown, scanEvidence: {...} } (modern)
 // ---------------------------------------------------------------------------
 function extractFindings(scan) {
   const findings = [];
-  const sd = parseJsonb(scan.scan_data);
-  if (!sd || typeof sd !== 'object') return findings;
+  const scanScore = (typeof scan.total_score === 'number') ? scan.total_score : null;
 
+  const sd = ('scan_data' in scan) ? parseJsonb(scan.scan_data) : null;
+  const da = ('detailed_analysis' in scan) ? parseJsonb(scan.detailed_analysis) : null;
+
+  if (sd && typeof sd === 'object' && (sd.scores || sd.metrics)) {
+    extractFromScanData(scan, sd, scanScore, findings);
+  } else if (da && typeof da === 'object') {
+    extractFromDetailedAnalysis(scan, da, scanScore, findings);
+  } else if (sd && typeof sd === 'object') {
+    // scan_data present but doesn't match expected shape — try detailed_analysis fallback
+    if (da) extractFromDetailedAnalysis(scan, da, scanScore, findings);
+  }
+  return findings;
+}
+
+function extractFromScanData(scan, sd, scanScore, findings) {
   const url = sd.url || scan.url || null;
   const urls = url ? [url] : [];
-  const scanScore = (typeof scan.total_score === 'number') ? scan.total_score : null;
 
   const scores = (sd.scores && typeof sd.scores === 'object') ? sd.scores : {};
   const metrics = (sd.metrics && typeof sd.metrics === 'object') ? sd.metrics : {};
@@ -288,8 +302,161 @@ function extractFindings(scan) {
       'No blog or news section found. Regular content publishing signals freshness to AI engines.',
       { hasBlogUrl: false });
   }
+}
 
-  return findings;
+// Modern shape: detailed_analysis = { categoryBreakdown: {...}, scanEvidence: {...} }
+function extractFromDetailedAnalysis(scan, da, scanScore, findings) {
+  const url = da.url || scan.url || null;
+  const urls = url ? [url] : [];
+  const breakdown = (da.categoryBreakdown && typeof da.categoryBreakdown === 'object') ? da.categoryBreakdown : {};
+  const evidence  = (da.scanEvidence && typeof da.scanEvidence === 'object') ? da.scanEvidence : {};
+  const tech      = evidence.technical  || {};
+  const content   = evidence.content    || {};
+  const structure = evidence.structure  || {};
+  const nav       = evidence.navigation || {};
+  const crawler   = evidence.crawler    || {};
+
+  // Pillar score lookup for severity fallback
+  const pillarScores = {};
+  for (const [cat, score] of Object.entries(breakdown)) {
+    if (typeof score !== 'number') continue;
+    const pillar = CATEGORY_TO_PILLAR[cat];
+    if (!pillar) continue;
+    if (pillarScores[pillar] == null || score < pillarScores[pillar]) {
+      pillarScores[pillar] = score;
+    }
+  }
+
+  // Pillar-level findings
+  for (const [cat, rawScore] of Object.entries(breakdown)) {
+    if (typeof rawScore !== 'number') continue;
+    if (rawScore >= 81) continue;
+    const pillar = resolvePillar(CATEGORY_TO_PILLAR[cat], scan.id, `categoryBreakdown.${cat}`);
+    const score = Math.round(rawScore);
+    const severity = severityForFinding({ subfactorScore: score, pillarScore: score, scanScore });
+    const display = CATEGORY_DISPLAY[cat] || cat;
+    findings.push({
+      scan_id:       scan.id,
+      pillar,
+      subfactor_key: cat,
+      severity,
+      title:         `${display}: Score ${score}/100`,
+      description:   `The ${display} pillar scored ${score}/100. ${severityBlurb(severity)}`,
+      impacted_urls: urls,
+      evidence_data: { level: 'pillar', category: cat, score, source: 'detailed_analysis.categoryBreakdown' },
+      suggested_pack_type: packForPillar(pillar)
+    });
+  }
+
+  const sub = (key, pillar, parentCat, title, description, evidenceBlob) => {
+    const resolved = resolvePillar(pillar, scan.id, `scanEvidence.${key}`);
+    const severity = severityForFinding({
+      subfactorScore: null,
+      pillarScore: pillarScores[resolved],
+      scanScore
+    });
+    findings.push({
+      scan_id:       scan.id,
+      pillar:        resolved,
+      subfactor_key: key,
+      severity,
+      title,
+      description,
+      impacted_urls: urls,
+      evidence_data: { level: 'subfactor', source: 'detailed_analysis.scanEvidence', ...evidenceBlob },
+      suggested_pack_type: packForPillar(resolved)
+    });
+  };
+
+  if (tech.hasOrganizationSchema === false) {
+    sub('organization_schema_missing', 'schema', 'technicalSetup',
+      'Missing Organization Schema',
+      'No Organization JSON-LD detected. Adding it helps AI engines understand brand identity.',
+      { signal: 'hasOrganizationSchema', value: false });
+  }
+  if (tech.hasArticleSchema === false) {
+    sub('article_schema_missing', 'schema', 'technicalSetup',
+      'Missing Article Schema',
+      'No Article JSON-LD detected. Article schema helps AI engines parse authored content.',
+      { signal: 'hasArticleSchema', value: false });
+  }
+  if (tech.hasFAQSchema === false) {
+    sub('faq_schema_missing', 'schema', 'aiSearchReadiness',
+      'Missing FAQ Schema',
+      'No FAQPage JSON-LD detected. FAQ schema improves visibility in AI-generated answers.',
+      { signal: 'hasFAQSchema', value: false });
+  }
+  if (tech.hasBreadcrumbSchema === false) {
+    sub('breadcrumb_schema_missing', 'schema', 'technicalSetup',
+      'Missing Breadcrumb Schema',
+      'No BreadcrumbList JSON-LD detected. Breadcrumbs help AI understand site hierarchy.',
+      { signal: 'hasBreadcrumbSchema', value: false });
+  }
+  if (tech.hasSitemap === false && tech.sitemapDetected !== true) {
+    sub('sitemap_missing', 'crawlability', 'technicalSetup',
+      'No Sitemap Detected',
+      'No XML sitemap was found. Sitemaps help AI crawlers discover and index all pages.',
+      { signal: 'hasSitemap', value: false });
+  }
+  if (tech.robotsTxtFound === false) {
+    sub('robots_txt_missing', 'crawlability', 'technicalSetup',
+      'No robots.txt Found',
+      'No robots.txt file detected. A robots.txt helps guide AI crawlers to important content.',
+      { signal: 'robotsTxtFound', value: false });
+  }
+  if (tech.hasCanonical === false) {
+    sub('canonical_missing', 'crawlability', 'technicalSetup',
+      'Missing Canonical Tag',
+      'No canonical link tag detected. Canonicals prevent duplicate content issues for AI indexing.',
+      { signal: 'hasCanonical', value: false });
+  }
+  if (tech.hasOpenGraph === false) {
+    sub('open_graph_missing', 'crawlability', 'technicalSetup',
+      'Missing Open Graph Tags',
+      'No Open Graph meta tags detected. OG tags improve content representation in AI platforms.',
+      { signal: 'hasOpenGraph', value: false });
+  }
+  const faqs = Array.isArray(content.faqs) ? content.faqs : [];
+  if (faqs.length === 0) {
+    sub('no_faq_content', 'faqs', 'aiSearchReadiness',
+      'No FAQ Content Found',
+      'No FAQ question-answer pairs detected on the page. FAQ content is highly cited by AI engines.',
+      { faqCount: 0 });
+  }
+  const headings = content.headings || {};
+  const h1s = Array.isArray(headings.h1) ? headings.h1 : [];
+  const h2s = Array.isArray(headings.h2) ? headings.h2 : [];
+  if (h1s.length === 0) {
+    sub('missing_h1', 'entities', 'contentStructure',
+      'No H1 Heading Found',
+      'No H1 tag detected. A clear H1 anchors the page topic for AI comprehension.',
+      { h1Count: 0 });
+  }
+  if (h2s.length === 0) {
+    sub('missing_h2', 'entities', 'contentStructure',
+      'No H2 Headings Found',
+      'No H2 subheadings detected. H2s provide topical structure that AI engines rely on.',
+      { h2Count: 0 });
+  }
+  if (structure.hasNav === false && nav.hasSemanticNav !== true) {
+    sub('no_semantic_nav', 'entities', 'contentStructure',
+      'No Semantic Navigation',
+      'No <nav> element detected. Semantic navigation helps AI map site structure.',
+      { hasNav: structure.hasNav, hasSemanticNav: nav.hasSemanticNav });
+  }
+  if (typeof content.wordCount === 'number' && content.wordCount < 300) {
+    sub('thin_content', 'aeo', 'aiReadability',
+      'Thin Content Detected',
+      `Page has only ${content.wordCount} words. AI engines favour pages with 800+ words of substantive content.`,
+      { wordCount: content.wordCount });
+  }
+  const sections = (crawler.discoveredSections && typeof crawler.discoveredSections === 'object') ? crawler.discoveredSections : {};
+  if (sections.hasBlogUrl === false) {
+    sub('no_blog_section', 'citations', 'contentFreshness',
+      'No Blog Section Discovered',
+      'No blog or news section found. Regular content publishing signals freshness to AI engines.',
+      { hasBlogUrl: false });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -318,30 +485,50 @@ async function runDiscovery() {
   }
   console.log(`[A] Using completedStatus = "${completedStatus}"\n`);
 
-  // B) sample 3 scans
+  // A.5) Detect which JSONB source columns exist on `scans`.
+  const colsRes = await pool.query(
+    `SELECT column_name
+       FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name   = 'scans'
+        AND column_name IN ('scan_data', 'detailed_analysis')`
+  );
+  const presentCols = colsRes.rows.map(r => r.column_name);
+  console.log('[A.5] JSONB source columns present on scans:', presentCols);
+  if (presentCols.length === 0) {
+    console.error('ERROR: Neither scan_data nor detailed_analysis exist on the scans table. Cannot extract findings.');
+    process.exit(1);
+  }
+  const projection = ['id', 'url', 'total_score', ...presentCols].join(', ');
+
+  // B) sample 3 scans — log the actual JSONB shape
   const sampleRes = await pool.query(
-    `SELECT id, scan_data
-     FROM scans
-     WHERE status = $1
-     ORDER BY id ASC
-     LIMIT $2`,
+    `SELECT ${projection}
+       FROM scans
+      WHERE status = $1
+      ORDER BY id ASC
+      LIMIT $2`,
     [completedStatus, SAMPLE_SIZE]
   );
 
-  console.log(`[B] Sample of ${sampleRes.rows.length} completed scans (id, scan_data):\n`);
+  console.log(`[B] Sample of ${sampleRes.rows.length} completed scans (id, ${presentCols.join(', ')}):\n`);
   for (const row of sampleRes.rows) {
     console.log(`  --- scan id=${row.id} ---`);
-    if (row.scan_data == null) {
-      console.log('    scan_data: NULL');
-    } else {
-      const parsed = parseJsonb(row.scan_data);
+    for (const col of presentCols) {
+      if (row[col] == null) {
+        console.log(`    ${col}: NULL`);
+        continue;
+      }
+      const parsed = parseJsonb(row[col]);
       if (parsed && typeof parsed === 'object') {
-        console.log('    top-level keys:', Object.keys(parsed));
-        if (parsed.scores)  console.log('    scores:', JSON.stringify(parsed.scores));
-        if (parsed.metrics) console.log('    metrics keys:', Object.keys(parsed.metrics));
+        console.log(`    ${col} top-level keys:`, Object.keys(parsed));
+        if (parsed.scores)            console.log(`    ${col}.scores:`, JSON.stringify(parsed.scores));
+        if (parsed.metrics)           console.log(`    ${col}.metrics keys:`, Object.keys(parsed.metrics));
+        if (parsed.categoryBreakdown) console.log(`    ${col}.categoryBreakdown:`, JSON.stringify(parsed.categoryBreakdown));
+        if (parsed.scanEvidence)      console.log(`    ${col}.scanEvidence keys:`, Object.keys(parsed.scanEvidence));
       }
       const preview = JSON.stringify(parsed).slice(0, 600);
-      console.log(`    preview: ${preview}${preview.length >= 600 ? '…' : ''}`);
+      console.log(`    ${col} preview: ${preview}${preview.length >= 600 ? '…' : ''}`);
     }
     console.log();
   }
@@ -353,17 +540,18 @@ async function runDiscovery() {
   const totalScans = countRes.rows[0].total;
   console.log(`[Discovery] Total scans with status="${completedStatus}": ${totalScans}\n`);
 
-  return { completedStatus, totalScans };
+  return { completedStatus, totalScans, presentCols };
 }
 
 // ---------------------------------------------------------------------------
 // PHASE 2 — Backfill
 // ---------------------------------------------------------------------------
-async function runBackfill(completedStatus, totalScans) {
+async function runBackfill(completedStatus, totalScans, presentCols) {
   console.log('='.repeat(70));
   console.log(`PHASE 2: BACKFILL  ${DRY_RUN ? '(DRY RUN — no writes)' : '(LIVE)'}`);
   console.log('='.repeat(70));
 
+  const projection = ['id', 'url', 'total_score', ...presentCols].join(', ');
   let lastId = 0;
   let scansSeen = 0;
   let scansProcessed = 0;
@@ -374,7 +562,7 @@ async function runBackfill(completedStatus, totalScans) {
 
   while (true) {
     const batchRes = await pool.query(
-      `SELECT id, url, total_score, scan_data
+      `SELECT ${projection}
          FROM scans
         WHERE status = $1
           AND id > $2
@@ -488,12 +676,12 @@ async function runBackfill(completedStatus, totalScans) {
 async function main() {
   console.log(`\nbackfill-findings.js ${DRY_RUN ? '[DRY RUN]' : '[LIVE]'}\n`);
   try {
-    const { completedStatus, totalScans } = await runDiscovery();
+    const { completedStatus, totalScans, presentCols } = await runDiscovery();
     if (totalScans === 0) {
       console.log('No completed scans to process. Exiting.');
       return;
     }
-    await runBackfill(completedStatus, totalScans);
+    await runBackfill(completedStatus, totalScans, presentCols);
   } catch (err) {
     console.error('FATAL:', err);
     process.exitCode = 1;
