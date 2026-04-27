@@ -1,3 +1,7 @@
+> ⚠️ **ARCHIVED (Pre-Pivot)** — This document describes the old recommendation lifecycle system that was removed in Phase 1. It does not reflect the current production architecture. For current documentation, see DOCS_INDEX.md at repo root.
+
+---
+
 # Visible2AI Database Audit Report
 
 **Generated:** 2026-01-04
