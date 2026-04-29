@@ -580,7 +580,10 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
     );
     
 
-    // Generate findings for the scan
+    // Generate findings for the scan.
+    // Replaced by findingsService — Phase 1 pivot. Runs once per
+    // scan transition (right after the UPDATE that flips status to
+    // 'completed' and persists scores + detailed_analysis).
     try {
       await generateFindings(scan.id);
     } catch (findingsErr) {
