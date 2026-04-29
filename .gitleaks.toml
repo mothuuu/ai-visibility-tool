@@ -1,0 +1,42 @@
+title = "ai-visibility-tool gitleaks config"
+
+# Extends the default gitleaks ruleset and adds project-specific rules.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "postgres-connection-string-with-credentials"
+description = "PostgreSQL connection string containing inline credentials"
+regex = '''postgres(?:ql)?:\/\/[^\s"'<>{}\/]+:[^\s"'<>{}\/@]+@[^\s"'<>{}\/]+'''
+tags = ["database", "credentials"]
+
+[[rules]]
+id = "render-postgres-host"
+description = "Render-managed Postgres hostname (dpg-*)"
+regex = '''dpg-[a-z0-9]+-[a-z0-9]+\.[a-z0-9.-]*postgres[a-z0-9.-]*'''
+tags = ["database", "render"]
+
+# Allow placeholder examples in docs / .env.example
+[allowlist]
+description = "Documented placeholder values"
+regexes = [
+  '''<user>:<password>@<host>''',
+  '''postgresql:\/\/localhost''',
+  '''postgres:\/\/someuser:somepassword@somehost''',
+  '''postgres:\/\/username@localhost''',
+  '''postgres:\/\/yourusername@localhost''',
+  '''postgres:\/\/DBuser:secret@DBHost''',
+  '''postgresql:\/\/user:pass@host\/db''',
+  '''sk-your-openai-api-key-here''',
+  '''sk-ant-your-anthropic-key-here''',
+  '''whsec_your_test_webhook_secret_here''',
+  '''pk_test_your_test_key_here''',
+  '''sk_test_your_test_key_here''',
+]
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)\.git/''',
+  '''(^|/)archived_docs/''',
+  '''\.lock$''',
+  '''package-lock\.json$''',
+]

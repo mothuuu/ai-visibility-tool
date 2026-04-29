@@ -20,11 +20,22 @@ Run the migration script to add the required columns.
 
 ### Option 2: Using PostgreSQL Client Locally
 1. Make sure you have PostgreSQL client installed
-2. Run:
+2. Export `DATABASE_URL` from your secret manager / environment (never hardcode it):
+   ```bash
+   # Example placeholder — replace with the value sourced from your secret manager
+   export DATABASE_URL="postgresql://<user>:<password>@<host>:<port>/<db>?sslmode=require"
+   cd backend/db
+   node migrate-historic-comparison.js
+   ```
+
+   Or, using a one-off shell that reads the URL from your environment:
    ```bash
    cd backend/db
-   DATABASE_URL="postgresql://ai_visibility_et3s_user:qFGk5hj5rdWU7fA5ZFVoEqOLHHmJWl0u@dpg-d3g5ath5pdvs73e7k4mg-a.oregon-postgres.render.com/ai_visibility_et3s" node migrate-historic-comparison.js
+   DATABASE_URL="${DATABASE_URL:?set DATABASE_URL via your secret manager before running}" \
+     node migrate-historic-comparison.js
    ```
+
+> ⚠️ **Never commit a real connection string.** See the “Secure Setup” section below.
 
 ### Option 3: Manual SQL (if above don't work)
 Connect to your database and run:
@@ -101,3 +112,30 @@ WHERE domain IS NULL AND url IS NOT NULL;
 
 ## After Migration
 Once the migration completes, your scans should work immediately without any code changes.
+
+## Secure Setup: Sourcing `DATABASE_URL`
+
+Never paste real database credentials into source files, docs, or chat logs.
+Use one of the following approaches and rotate the credential immediately if it
+is ever exposed.
+
+### Local development
+1. Copy `.env.example` to `.env` (already gitignored).
+2. Set `DATABASE_URL` to your **local** Postgres instance only.
+3. Source the file before running scripts (`set -a; . ./.env; set +a`) or use
+   `dotenv` / your shell's env loader.
+
+### Production (Render / AWS / GCP / Azure / Fly / Heroku / Vercel)
+- Store `DATABASE_URL` as a managed environment variable / secret:
+  - **Render:** Service → *Environment* → add `DATABASE_URL`.
+  - **AWS:** Secrets Manager or SSM Parameter Store; inject via task definition.
+  - **GCP:** Secret Manager; mount as env var on Cloud Run / GKE.
+  - **Azure:** Key Vault; reference from App Service config.
+  - **Fly.io:** `fly secrets set DATABASE_URL=...`.
+  - **Vercel:** Project → *Settings* → *Environment Variables*.
+- The application reads `process.env.DATABASE_URL` — no value is hardcoded.
+- Restrict who can read production secrets (least privilege).
+- Rotate credentials on a schedule and immediately on any suspected exposure.
+
+See [SECURITY.md](./SECURITY.md) for the secret-handling policy and the
+remediation checklist used when a credential is leaked.
