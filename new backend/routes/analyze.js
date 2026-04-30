@@ -4,7 +4,7 @@
 // ---------------------------------------------------------
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../db/connect');
+const { getPool } = require('../db/connect');
 const { URL } = require('url');
 const { runRubricScoring } = require('../services/scorer');
 const { generateRecommendations } = require('../services/recommender');
@@ -18,6 +18,16 @@ function extractDomain(inputUrl) {
   }
 }
 
+// Resolve the pool lazily so an uninitialized DB returns a clean
+// 503 with a stable error code instead of crashing on `pool.query`.
+function resolvePool() {
+  try {
+    return getPool();
+  } catch {
+    return null;
+  }
+}
+
 router.post('/', async (req, res) => {
   const { url, vertical } = req.body;
 
@@ -25,6 +35,15 @@ router.post('/', async (req, res) => {
 
   const domain = extractDomain(url);
   if (!domain) return res.status(400).json({ error: 'Invalid URL format.' });
+
+  const pool = resolvePool();
+  if (!pool) {
+    console.error('❌ Analyze error: database pool unavailable');
+    return res.status(503).json({
+      error: 'Database unavailable',
+      code: 'DB_UNAVAILABLE',
+    });
+  }
 
   try {
     // 1) Score using Rubric V5 via OpenAI
