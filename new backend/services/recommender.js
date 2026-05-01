@@ -51,7 +51,7 @@ Guardrails:
 `;
 }
 
-async function llmComposeRecommendations({ rubric, vertical, domain, faqs }) {
+async function llmComposeRecommendations({ rubric, vertical, domain, faqs, signal }) {
   const messages = [
     { role: 'system', content: recommenderSystemPrompt() },
     {
@@ -67,12 +67,15 @@ async function llmComposeRecommendations({ rubric, vertical, domain, faqs }) {
     }
   ];
 
-  const resp = await client.chat.completions.create({
-    model: 'gpt-4o',
-    temperature: 0.3,
-    response_format: { type: 'json_object' }, // we will wrap array inside an object for safety
-    messages
-  });
+  const resp = await client.chat.completions.create(
+    {
+      model: 'gpt-4o',
+      temperature: 0.3,
+      response_format: { type: 'json_object' }, // we will wrap array inside an object for safety
+      messages
+    },
+    { signal }
+  );
 
   const content = resp.choices[0]?.message?.content || '{}';
   // Accept either {"recommendations":[...]} or [...] directly
@@ -91,11 +94,12 @@ async function llmComposeRecommendations({ rubric, vertical, domain, faqs }) {
  * @param {object} rubric - result from scorer (overall, categories, evidence, extracted)
  * @param {string} vertical - detected or user-selected, else 'default'
  * @param {string} domain
+ * @param {{signal?: AbortSignal}} [opts]
  * @returns {Array} recommendations
  */
-async function generateRecommendations(rubric, vertical, domain) {
+async function generateRecommendations(rubric, vertical, domain, { signal } = {}) {
   const faqs = await loadFaqs(vertical);
-  const recs = await llmComposeRecommendations({ rubric, vertical, domain, faqs });
+  const recs = await llmComposeRecommendations({ rubric, vertical, domain, faqs, signal });
 
   // If LLM returned nothing, create a safe minimal rec fallback
   if (!recs || recs.length === 0) {

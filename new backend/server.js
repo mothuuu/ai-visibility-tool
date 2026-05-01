@@ -10,6 +10,7 @@ const cors = require('cors');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const db = require('./db/connect'); // ✅ Single import, use namespace
+const requireInternalAccess = require('./middleware/requireInternalAccess');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -104,8 +105,10 @@ app.get('/health', async (req, res) => {
 
 // ----------------------------------
 // Pool Statistics (monitoring endpoint)
+// Restricted: requires the `x-metrics-key` header matching
+// INTERNAL_METRICS_KEY. Fail-closed if the env var is unset.
 // ----------------------------------
-app.get('/pool-stats', (req, res) => {
+app.get('/pool-stats', requireInternalAccess, (req, res) => {
   try {
     const stats = db.getPoolStats();
     if (!stats) {

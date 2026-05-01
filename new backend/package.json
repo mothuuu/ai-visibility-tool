@@ -4,7 +4,7 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "test": "node tests/analyze.smoke.test.js",
+    "test": "node tests/analyze.smoke.test.js && node tests/analyze.timeout.test.js && node tests/poolStats.access.test.js",
     "start": "node server.js"
   },
   "keywords": [],
