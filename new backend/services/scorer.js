@@ -3,20 +3,36 @@
 // ---------------------------------------------------------
 const { pool } = require('../db/connect');
 const OpenAI = require('openai');
+const { TIMEOUTS, isAbortError } = require('../utils/withTimeout');
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Simple fetch with timeout
-async function fetchWithTimeout(url, ms = 15000) {
+// Fetch with a hard timeout. Honours an optional parent `signal` so the
+// request-level deadline can abort an in-flight page fetch.
+async function fetchWithTimeout(url, { ms = TIMEOUTS.FETCH_MS, signal } = {}) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), ms);
+
+  const onParentAbort = () => controller.abort(signal && signal.reason);
+  if (signal) {
+    if (signal.aborted) controller.abort(signal.reason);
+    else signal.addEventListener('abort', onParentAbort, { once: true });
+  }
+
   try {
-    const res = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'AOME-Scanner/1.0' } });
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'AOME-Scanner/1.0' },
+    });
     const text = await res.text();
     return { ok: true, status: res.status, html: text };
   } catch (err) {
+    // Propagate aborts so the caller can map them to UPSTREAM_TIMEOUT.
+    // Network errors continue to surface as a graceful fallback object.
+    if (isAbortError(err)) throw err;
     return { ok: false, status: 0, error: err.message };
   } finally {
     clearTimeout(id);
+    if (signal) signal.removeEventListener('abort', onParentAbort);
   }
 }
 
@@ -86,7 +102,7 @@ Return ONLY that JSON.
 `;
 }
 
-async function llmScorePage({ url, signals, htmlSample }) {
+async function llmScorePage({ url, signals, htmlSample, signal }) {
   const prompt = [
     {
       role: 'system',
@@ -102,12 +118,17 @@ async function llmScorePage({ url, signals, htmlSample }) {
     }
   ];
 
-  const resp = await client.chat.completions.create({
-    model: 'gpt-4o-mini',
-    temperature: 0.2,
-    response_format: { type: 'json_object' },
-    messages: prompt
-  });
+  const resp = await client.chat.completions.create(
+    {
+      model: 'gpt-4o-mini',
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+      messages: prompt
+    },
+    // SDK request options: forward the abort signal so a request-level
+    // deadline cancels the in-flight HTTPS request.
+    { signal }
+  );
 
   return resp.choices[0]?.message?.content || '{}';
 }
@@ -119,10 +140,11 @@ function safeJsonParse(str) {
 /**
  * Main entry
  * @param {string} url
+ * @param {{signal?: AbortSignal}} [opts]
  * @returns { overall_score, categories, evidence, extracted }
  */
-async function runRubricScoring(url) {
-  const fetched = await fetchWithTimeout(url);
+async function runRubricScoring(url, { signal } = {}) {
+  const fetched = await fetchWithTimeout(url, { signal });
   if (!fetched.ok) {
     // Graceful fallback if fetch fails
     return {
@@ -155,7 +177,7 @@ async function runRubricScoring(url) {
   const signals = extractSignals(html);
   const htmlSample = html.slice(0, 8000); // keep token usage sane
 
-  const raw = await llmScorePage({ url, signals, htmlSample });
+  const raw = await llmScorePage({ url, signals, htmlSample, signal });
   const parsed = safeJsonParse(raw);
 
   if (!parsed || !parsed.categories) {
