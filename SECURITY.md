@@ -18,6 +18,28 @@ PRs, screenshots, or chat logs:
 
 Use placeholders in examples, e.g. `postgresql://<user>:<password>@<host>:<port>/<db>`.
 
+### Internal metrics endpoint
+
+The new backend exposes `GET /pool-stats` for ops monitoring. Because it
+reveals connection-pool internals, it is gated by a shared key:
+
+- Set `INTERNAL_METRICS_KEY` (≥16 chars, ≥32 random bytes recommended) in
+  the production secret manager. **Do not commit it.**
+- Callers must send `x-metrics-key: <value>`.
+- Fail-closed: if `INTERNAL_METRICS_KEY` is unset, every request to
+  `/pool-stats` returns `401 { code: "UNAUTHORIZED" }`.
+- Comparison is constant-time; the key is never logged.
+
+Example:
+
+```bash
+curl -H "x-metrics-key: $INTERNAL_METRICS_KEY" \
+  https://<host>/pool-stats
+```
+
+If/when admin auth lands in the new backend, replace this middleware with
+a `requireAdmin` guard.
+
 ### How we store secrets
 
 | Environment | Mechanism |
