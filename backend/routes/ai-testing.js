@@ -5,6 +5,9 @@ const { authenticateToken, authenticateTokenOptional } = require('../middleware/
 const db = require('../db/database');
 const { PLAN_LIMITS } = require('../middleware/usageLimits');
 const UsageTrackerService = require('../services/usage-tracker-service');
+const {
+  persistCitationRun,
+} = require('../services/citationMonitoringService');
 
 /* eslint-disable no-console */
 const express = require('express');
@@ -1072,18 +1075,52 @@ router.post('/analyze-website', authenticateTokenOptional, async (req, res) => {
   }
 });
 
-/* ============== AI visibility harness (unchanged contract) ============== */
-router.post('/test-ai-visibility', async (req, res) => {
+/* ============== AI visibility harness ==============
+ * Back-compat: when no `clusterId` is supplied, behaviour is unchanged
+ * (run engines, return results, no DB writes).
+ *
+ * Phase 3 persistence: when `clusterId` is supplied, the run is persisted
+ * to citation_test_runs / citation_evidence and a 30d benchmark rollup
+ * is updated. Engine output is recorded per (engine, prompt) pair.
+ */
+router.post('/test-ai-visibility', authenticateTokenOptional, async (req, res) => {
   try {
-    const { url, industry, queries } = req.body || {};
-    if (!url || !Array.isArray(queries)) return res.status(400).json({ error: 'URL and queries array are required' });
+    const { url, industry, queries, clusterId } = req.body || {};
+    if (!url || !Array.isArray(queries)) {
+      return res
+        .status(400)
+        .json({ error: 'URL and queries array are required' });
+    }
+
     const results = await testAIVisibility(url, industry, queries);
-    return res.json({ success: true, data: results });
+
+    if (!clusterId) {
+      return res.json({ success: true, data: results });
+    }
+
+    // Persistence path. Failures here MUST NOT mask the engine results
+    // for the caller — surface them in `persistence.error` instead.
+    const persistence = await persistCitationRun({
+      clusterId,
+      url,
+      queries,
+      results,
+      initiatedByUserId: req.user?.id || null,
+      initiatedByOrgId: req.user?.org_id || null,
+    });
+
+    return res.json({ success: true, data: results, persistence });
   } catch (error) {
-    console.error('AI visibility testing failed:', error);
-    return res.status(500).json({ error: 'AI visibility testing failed', message: error.message });
+    console.error('AI visibility testing failed:', error.message);
+    return res
+      .status(500)
+      .json({ error: 'AI visibility testing failed' });
   }
 });
+
+// persistCitationRun + buildEvidenceRows live in
+// services/citationMonitoringService.js so they can be unit-tested without
+// loading Express / DB middleware.
 
 async function testAIVisibility(url, industry, queries) {
   const domain = new URL(url).hostname;

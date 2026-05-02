@@ -115,7 +115,8 @@ app.use('/api/support-chat', supportChatRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/admin', adminRoutes); // Admin org/plan routes
 app.use('/api/admin', adminControlCenterRoutes); // Admin control center routes (overview, users, curation, etc.)
-app.use('/api/citation-network', citationNetworkRoutes); // AI Citation Network
+app.use('/api/citation-network', citationNetworkRoutes); // AI Citation Network (directory submissions)
+app.use('/api', require('./routes/citation-monitoring')); // Phase 3: Citation Monitoring (separate from citation-network)
 app.use('/api/org', organizationRoutes); // Phase 3B: Organization/Team management
 app.use('/api/tokens', tokenRoutes); // Token balance and purchase
 app.use('/api/test', require('./routes/test-routes'));
