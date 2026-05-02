@@ -331,12 +331,17 @@ router.post('/', async (req, res) => {
         });
 
         // Call Claude API
-        const response = await anthropic.messages.create({
-            model: 'claude-3-7-sonnet-20250219',
-            max_tokens: 1024,
-            system: `${systemPrompt}\n\nKNOWLEDGE BASE:\n${JSON.stringify(knowledgeBase, null, 2)}`,
-            messages: messages
-        });
+        // 30s per-request timeout prevents worker starvation under
+        // upstream slowness; the SDK's default is ~10 minutes.
+        const response = await anthropic.messages.create(
+            {
+                model: 'claude-3-7-sonnet-20250219',
+                max_tokens: 1024,
+                system: `${systemPrompt}\n\nKNOWLEDGE BASE:\n${JSON.stringify(knowledgeBase, null, 2)}`,
+                messages: messages
+            },
+            { timeout: 30000 }
+        );
 
         const aiMessage = response.content[0].text;
 
@@ -350,6 +355,18 @@ router.post('/', async (req, res) => {
         });
 
     } catch (error) {
+        const isTimeout =
+            error?.name === 'APIConnectionTimeoutError' ||
+            error?.code === 'ETIMEDOUT' ||
+            error?.code === 'ECONNABORTED';
+        if (isTimeout) {
+            console.error('Support chat upstream timeout');
+            return res.status(504).json({
+                success: false,
+                error: 'Upstream timeout',
+                message: 'I apologize, but the assistant is taking too long to respond. Please try again in a moment, or email us at aivisibility@xeo.marketing for immediate assistance.'
+            });
+        }
         console.error('Support chat error:', error);
         res.status(500).json({
             success: false,
