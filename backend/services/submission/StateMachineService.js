@@ -14,7 +14,7 @@
 
 'use strict';
 
-const pool = require('../../db/database');
+const db = require('../../db/database');
 const {
   SUBMISSION_STATUS,
   SUBMISSION_STATUS_META,
@@ -75,7 +75,7 @@ class StateMachineService {
     this._validateTransitionInputs(toStatus, reason, meta);
 
     // Use external client or acquire our own
-    const client = externalClient || await pool.connect();
+    const client = externalClient || await db.getClient();
     const isOwnTransaction = !externalClient;
 
     try {
@@ -479,7 +479,7 @@ class StateMachineService {
    * Acknowledge changes for a run (required before retry from NEEDS_CHANGES/REJECTED)
    */
   async acknowledgeChanges(runId, userId) {
-    const client = await pool.connect();
+    const client = await db.getClient();
 
     try {
       await client.query('BEGIN');
@@ -541,7 +541,7 @@ class StateMachineService {
       correlationId = null
     } = options;
 
-    const client = await pool.connect();
+    const client = await db.getClient();
 
     try {
       await client.query('BEGIN');
