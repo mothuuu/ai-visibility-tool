@@ -17,6 +17,7 @@
 
 const path = require('path');
 const faqLibraryLoader = require('../phase2_preserved/recommendation-engine/faq-library-loader');
+const { generateAuditPdf } = require('../services/auditPdfGenerator');
 
 const SYSTEM_PROMPT_BASE =
   "You are an AI visibility optimization expert. You help website owners " +
@@ -319,7 +320,132 @@ function faqPackPostProcess(parsed) {
 }
 
 // ---------------------------------------------------------------------------
-// Placeholder for the remaining 12 packs (Step 2.4)
+// REFRESH (cost: 20) — AI-generated comparison vs previous scan
+// ---------------------------------------------------------------------------
+const REFRESH_SYSTEM =
+  "You are an AI visibility analyst producing progress reports. You compare " +
+  "two scans of the same website and identify what improved, what regressed, " +
+  "and what to prioritize next. Your output must be specific and data-driven — " +
+  "reference actual score changes and findings. Respond in valid JSON format only.";
+
+/**
+ * Loads the previous completed scan for the same domain and merges
+ * { previousScan, previousFindings } into the context. Throws BEFORE
+ * the AI call / token debit when no previous scan exists.
+ */
+async function refreshBuildExtraContext(context, db) {
+  const domain = context.domain;
+  const currentScanId = context._scanId; // stamped below in userPrompt path; safe access
+  if (!domain) throw new Error('Refresh pack requires a domain on the current scan.');
+
+  // Look up previous completed scan for this domain (oldest-first ID excluded; pick latest)
+  const prev = await db.query(
+    `SELECT id, primary_domain, score, pillar_scores, page_count, pages_analyzed, created_at
+     FROM scans
+     WHERE primary_domain = $1
+       AND id != $2
+       AND status = 'completed'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [domain, currentScanId || -1]
+  );
+
+  if (prev.rows.length === 0) {
+    const err = new Error('Refresh pack requires at least 2 completed scans for this domain. Run another scan first.');
+    err.code = 'no_previous_scan';
+    throw err;
+  }
+
+  const previousScan = prev.rows[0];
+  const findings = await db.query(
+    `SELECT id, pillar, subfactor_key, severity, title, description, impacted_urls, evidence_data
+     FROM findings WHERE scan_id = $1`,
+    [previousScan.id]
+  );
+
+  const previousFindings = findings.rows.map(f => ({
+    ...f,
+    impacted_urls: f.impacted_urls || [],
+    impacted_url_count: Array.isArray(f.impacted_urls) ? f.impacted_urls.length : 0
+  }));
+
+  return { previousScan, previousFindings };
+}
+
+function refreshUserPrompt(context) {
+  const fmtDate = (d) => {
+    if (!d) return 'unknown';
+    if (d instanceof Date) return d.toISOString();
+    try { return new Date(d).toISOString(); } catch { return String(d); }
+  };
+  const cs = {
+    score: context.scanScore,
+    pillarScores: context.pillarScores || {},
+    created_at: fmtDate(context.scanCreatedAt)
+  };
+  const ps = context.previousScan || {};
+  const psDate = fmtDate(ps.created_at);
+  const cf = context.findings || [];
+  const pf = context.previousFindings || [];
+  const critHigh = cf.filter(f => f.severity === 'critical' || f.severity === 'high').length;
+
+  return [
+    `Compare these two scans and produce a progress report.`,
+    ``,
+    `Domain: ${context.domain || 'unknown'}`,
+    ``,
+    `CURRENT SCAN (date: ${cs.created_at}):`,
+    `- Overall Score: ${cs.score ?? 'n/a'}/1000`,
+    `- Pillar Scores: ${JSON.stringify(cs.pillarScores)}`,
+    `- Findings count: ${cf.length}`,
+    `- Critical/High findings: ${critHigh}`,
+    ``,
+    `PREVIOUS SCAN (date: ${psDate}):`,
+    `- Overall Score: ${ps.score ?? 'n/a'}/1000`,
+    `- Pillar Scores: ${JSON.stringify(ps.pillar_scores || {})}`,
+    `- Findings count: ${pf.length}`,
+    ``,
+    `CURRENT FINDINGS:`,
+    JSON.stringify(cf, null, 2),
+    ``,
+    `PREVIOUS FINDINGS:`,
+    JSON.stringify(pf, null, 2),
+    ``,
+    `Produce a progress report with:`,
+    `- overall_change: { score_delta, direction ('improved'/'regressed'/'stable'), summary sentence }`,
+    `- pillar_changes: array of { pillar, previous_score, current_score, delta, direction, explanation }`,
+    `- resolved_issues: findings present in previous but absent/improved in current`,
+    `- new_issues: findings in current that weren't in previous`,
+    `- regressions: areas that got worse`,
+    `- priority_actions: top 3-5 things to do next, ordered by impact`,
+    `- time_period: days between scans`,
+    ``,
+    `Return ONLY valid JSON.`
+  ].join('\n');
+}
+
+function refreshPostProcess(parsed) {
+  if (parsed && parsed.parse_error) return parsed;
+  if (parsed && typeof parsed === 'object') {
+    return {
+      ...parsed,
+      _has_previous_scan: true
+    };
+  }
+  return { unexpected_shape: true, original: parsed };
+}
+
+// ---------------------------------------------------------------------------
+// AUDIT PDF (cost: 10) — formatting only, no AI call
+// ---------------------------------------------------------------------------
+async function auditPdfGenerate(context) {
+  // Delegates to the dedicated PDF generator. Returns a JSONB-safe object
+  // containing the base64-encoded PDF, the executive summary, and metadata.
+  return await generateAuditPdf(context);
+}
+
+// ---------------------------------------------------------------------------
+// Placeholder for the remaining packs (Step 2.4)
 // ---------------------------------------------------------------------------
 function placeholderTemplate(packType) {
   return function (context) {
@@ -339,13 +465,18 @@ function placeholderTemplate(packType) {
 const TEMPLATES = {
   quick_wins:  { systemPrompt: QUICK_WINS_SYSTEM,  userPrompt: quickWinsUserPrompt,  postProcess: quickWinsPostProcess,  implemented: true },
   schema_pack: { systemPrompt: SCHEMA_PACK_SYSTEM, userPrompt: schemaPackUserPrompt, postProcess: schemaPackPostProcess, implemented: true },
-  faq_pack:    { systemPrompt: FAQ_PACK_SYSTEM,    userPrompt: faqPackUserPrompt,    postProcess: faqPackPostProcess,    implemented: true }
+  faq_pack:    { systemPrompt: FAQ_PACK_SYSTEM,    userPrompt: faqPackUserPrompt,    postProcess: faqPackPostProcess,    implemented: true },
+  refresh:     { systemPrompt: REFRESH_SYSTEM,     userPrompt: refreshUserPrompt,    postProcess: refreshPostProcess,
+                 buildExtraContext: refreshBuildExtraContext, implemented: true },
+  // audit_pdf has no Claude prompts — generate() produces the artifact directly.
+  audit_pdf:   { systemPrompt: null,               userPrompt: null,                 generate: auditPdfGenerate,
+                 implemented: true }
 };
 
 const PLACEHOLDER_PACKS = [
   'evidence_trust', 'entity_clarity',
   'content_brief', 'comparison', 'ai_ready_draft',
-  'audit_pdf', 'refresh', 'citation_lift', 'query_refresh',
+  'citation_lift', 'query_refresh',
   'narrative_repair', 'query_baseline_starter', 'query_baseline_pro'
 ];
 for (const pt of PLACEHOLDER_PACKS) {

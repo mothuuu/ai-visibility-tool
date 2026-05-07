@@ -119,11 +119,28 @@ async function generate(userId, packType, scanId, params = {}) {
       // Should never happen — catalog and template registry must stay in sync
       throw new Error(`No template registered for pack type ${packType}`);
     }
-    const userPrompt = tpl.userPrompt(context);
-    const aiResponseText = await callAnthropic(tpl.systemPrompt, userPrompt);
+
+    // Optional pre-AI extra context (e.g. refresh pack loads previous scan).
+    // Templates can throw here to abort BEFORE the AI call / token debit.
+    if (typeof tpl.buildExtraContext === 'function') {
+      const extra = await tpl.buildExtraContext(context, db);
+      if (extra && typeof extra === 'object') Object.assign(context, extra);
+    }
+
+    let parsed;
+    let modelUsed;
+    if (pack.requiresAI === false && typeof tpl.generate === 'function') {
+      // Non-AI pack (e.g. audit_pdf): template produces output directly.
+      parsed = await tpl.generate(context);
+      modelUsed = null;
+    } else {
+      const userPrompt = tpl.userPrompt(context);
+      const aiResponseText = await callAnthropic(tpl.systemPrompt, userPrompt);
+      modelUsed = DEFAULT_MODEL;
+      parsed = parseAiResponse(aiResponseText);
+    }
 
     // ---- Step 5: STORE ARTIFACTS ----
-    let parsed = parseAiResponse(aiResponseText);
     // Optional per-template post-processing (validation, counting, normalization).
     // Templates without postProcess are unaffected.
     if (typeof tpl.postProcess === 'function') {
@@ -144,7 +161,7 @@ async function generate(userId, packType, scanId, params = {}) {
 
     await db.query(
       `UPDATE pack_runs SET status = 'complete', completed_at = NOW(), ai_model_used = $1 WHERE id = $2`,
-      [DEFAULT_MODEL, packRunId]
+      [modelUsed, packRunId]
     );
 
     // ---- Step 6: DEBIT TOKENS (last) ----
@@ -202,7 +219,7 @@ async function loadUserPlan(userId) {
 
 async function loadScanForUser(scanId, userId) {
   const r = await db.query(
-    `SELECT id, user_id, primary_domain, score, pillar_scores, page_count, pages_analyzed
+    `SELECT id, user_id, primary_domain, score, pillar_scores, page_count, pages_analyzed, created_at
      FROM scans WHERE id = $1 AND user_id = $2`,
     [scanId, userId]
   );
@@ -237,13 +254,17 @@ async function buildContext(scan) {
   const pageUrls = evidenceRes.rows.map(e => e.page_url).filter(Boolean);
 
   return {
+    scanId: scan.id,
     domain: scan.primary_domain,
     scanScore: scan.score,
+    scanCreatedAt: scan.created_at,
     pillarScores: scan.pillar_scores || {},
     pageCount: scan.page_count,
     findings,
     evidence: evidenceRes.rows,
-    pageUrls
+    pageUrls,
+    // Internal fields (prefixed with _) for templates that need them
+    _scanId: scan.id
   };
 }
 
@@ -289,6 +310,11 @@ function parseAiResponse(text) {
 }
 
 function makePreview(parsed) {
+  // If the template provided a human-readable preview field, use it directly.
+  if (parsed && typeof parsed === 'object' && typeof parsed.executive_summary === 'string') {
+    const s = parsed.executive_summary;
+    return s.length > PREVIEW_LEN ? s.slice(0, PREVIEW_LEN) : s;
+  }
   let s;
   try { s = JSON.stringify(parsed); } catch { s = String(parsed); }
   return s.length > PREVIEW_LEN ? s.slice(0, PREVIEW_LEN) : s;
