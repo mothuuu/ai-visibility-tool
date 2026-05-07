@@ -123,7 +123,16 @@ async function generate(userId, packType, scanId, params = {}) {
     const aiResponseText = await callAnthropic(tpl.systemPrompt, userPrompt);
 
     // ---- Step 5: STORE ARTIFACTS ----
-    const parsed = parseAiResponse(aiResponseText);
+    let parsed = parseAiResponse(aiResponseText);
+    // Optional per-template post-processing (validation, counting, normalization).
+    // Templates without postProcess are unaffected.
+    if (typeof tpl.postProcess === 'function') {
+      try { parsed = tpl.postProcess(parsed); }
+      catch (ppErr) {
+        console.error(`[PackEngine] postProcess for ${packType} threw:`, ppErr.message);
+        parsed = { ...parsed, post_process_error: ppErr.message };
+      }
+    }
     const artifactType = getArtifactType(packType);
     const preview = makePreview(parsed);
 
@@ -261,10 +270,19 @@ function parseAiResponse(text) {
   try {
     return JSON.parse(trimmed);
   } catch {
-    // Try to extract a JSON object from the response (model may wrap it in fences)
-    const m = trimmed.match(/\{[\s\S]*\}/);
-    if (m) {
-      try { return JSON.parse(m[0]); } catch { /* fall through */ }
+    // Strip markdown fences if present
+    const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced) {
+      try { return JSON.parse(fenced[1].trim()); } catch { /* fall through */ }
+    }
+    // Try to extract the largest top-level object or array
+    const obj = trimmed.match(/\{[\s\S]*\}/);
+    if (obj) {
+      try { return JSON.parse(obj[0]); } catch { /* fall through */ }
+    }
+    const arr = trimmed.match(/\[[\s\S]*\]/);
+    if (arr) {
+      try { return JSON.parse(arr[0]); } catch { /* fall through */ }
     }
     return { raw: trimmed, parse_error: true };
   }
