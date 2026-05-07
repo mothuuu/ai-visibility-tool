@@ -1174,6 +1174,8 @@ function navigateToSection(sectionId) {
     // Load section-specific data
     if (sectionId === 'billing-subscription') {
         loadBillingData();
+    } else if (sectionId === 'execution-packs') {
+        if (typeof loadPackCatalog === 'function') loadPackCatalog();
     }
 
     // Update URL without reload
@@ -5657,3 +5659,498 @@ window.addEventListener('DOMContentLoaded', initCitationNetwork);
 window.addEventListener('DOMContentLoaded', initBusinessProfileForm);
 window.addEventListener('DOMContentLoaded', loadExistingProfile);
 window.addEventListener('DOMContentLoaded', initTokenBalanceWidget);
+
+// ============================================================================
+// EXECUTION PACKS MARKETPLACE
+// ============================================================================
+
+let packCatalogData = null;
+let packRecentScans = null;
+let packPendingPurchase = null; // { packKey, scanId } during modal flow
+
+function authHeaders() {
+    const t = localStorage.getItem('authToken');
+    return t ? { 'Authorization': 'Bearer ' + t } : {};
+}
+
+async function loadPackCatalog() {
+    const loadingEl = document.getElementById('packsLoading');
+    const errorEl = document.getElementById('packsCatalogError');
+    const containerEl = document.getElementById('packsCatalogContainer');
+    if (loadingEl) loadingEl.style.display = 'flex';
+    if (errorEl)   errorEl.style.display = 'none';
+    if (containerEl) containerEl.style.display = 'none';
+
+    // Hide detail view, show catalog
+    const detail = document.getElementById('packsDetailView');
+    const catalog = document.getElementById('packsCatalogView');
+    if (detail) detail.style.display = 'none';
+    if (catalog) catalog.style.display = '';
+
+    try {
+        const resp = await fetch(`${API_BASE_URL}/packs/catalog`, { headers: authHeaders() });
+        if (!resp.ok) throw new Error('Catalog request failed: ' + resp.status);
+        const data = await resp.json();
+        packCatalogData = data;
+
+        // Sync the global token balance state with what /catalog returned
+        if (data.token_balance) {
+            tokenBalanceData = {
+                ...(tokenBalanceData || {}),
+                ...data.token_balance
+            };
+            renderTokenBalance(tokenBalanceData);
+        }
+
+        renderPackCatalog(data);
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (containerEl) containerEl.style.display = '';
+    } catch (err) {
+        console.error('[Packs] loadPackCatalog error:', err.message);
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (errorEl) {
+            errorEl.style.display = 'flex';
+            errorEl.innerHTML = `<div>Could not load packs.</div><div style="font-size:0.75rem;">${escapeHtml(err.message)}</div>`;
+        }
+    }
+}
+
+function renderPackCatalog(data) {
+    const balance = data.token_balance || {};
+    document.getElementById('packsBalanceTotal').textContent =
+        balance.total_available != null ? balance.total_available : '—';
+
+    const buyBtn = document.getElementById('packsBuyTokensBtn');
+    if (buyBtn) {
+        buyBtn.onclick = () => {
+            if (typeof toggleBundleSelector === 'function') toggleBundleSelector();
+            else window.location.href = ROUTES.PLANS;
+        };
+    }
+
+    const cats = data.categories || {};
+    renderPackGrid('packsGridFix', cats.fix || []);
+    renderPackGrid('packsGridCreate', cats.create || []);
+    renderPackGrid('packsGridResearch', cats.research || []);
+
+    // Affordable badge in nav
+    const allPacks = [...(cats.fix||[]), ...(cats.create||[]), ...(cats.research||[])];
+    const affordableCount = allPacks.filter(p => p.available && p.affordable).length;
+    const badge = document.getElementById('packsAffordableBadge');
+    if (badge) {
+        if (affordableCount > 0) {
+            badge.textContent = affordableCount;
+            badge.style.display = '';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+}
+
+function renderPackGrid(elId, packs) {
+    const grid = document.getElementById(elId);
+    if (!grid) return;
+    if (packs.length === 0) {
+        grid.innerHTML = '<div style="grid-column:1/-1; color:var(--gray-400); font-size:0.875rem;">No packs in this category.</div>';
+        return;
+    }
+    // Sort: available+affordable, then available+unaffordable, then locked
+    const sorted = [...packs].sort((a, b) => {
+        const score = (p) => p.available && p.affordable ? 0 : (p.available ? 1 : 2);
+        return score(a) - score(b);
+    });
+    grid.innerHTML = sorted.map(packCardHtml).join('');
+
+    // Bind events
+    grid.querySelectorAll('.pack-buy-btn[data-pack-key]').forEach(btn => {
+        btn.addEventListener('click', () => openPackPurchaseModal(btn.getAttribute('data-pack-key')));
+    });
+    grid.querySelectorAll('.pack-shortfall-link[data-pack-key]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (typeof toggleBundleSelector === 'function') toggleBundleSelector();
+            else window.location.href = ROUTES.PLANS;
+        });
+    });
+}
+
+function packCardHtml(pack) {
+    const balance = (packCatalogData && packCatalogData.token_balance) || {};
+    const total = balance.total_available || 0;
+    const shortfall = Math.max(0, pack.cost - total);
+
+    let footer;
+    if (!pack.available) {
+        const label = pack.minPlan === 'pro' ? 'Pro only' : 'Upgrade';
+        footer = `<span class="pack-upgrade-label"><i class="fas fa-lock"></i> ${escapeHtml(label)}</span>`;
+    } else if (!pack.affordable) {
+        footer = `
+            <button class="pack-buy-btn" disabled>Buy</button>
+            <button class="pack-shortfall-link" data-pack-key="${escapeAttr(pack.key)}">
+                Need ${shortfall} more tokens
+            </button>`;
+    } else {
+        footer = `<button class="pack-buy-btn" data-pack-key="${escapeAttr(pack.key)}">Buy</button>`;
+    }
+
+    const lockIcon = !pack.available
+        ? '<i class="fas fa-lock pack-lock-icon"></i>'
+        : '';
+
+    return `
+        <div class="pack-card${pack.available ? '' : ' locked'}">
+            <h3 class="pack-card-name">${lockIcon}${escapeHtml(pack.name)}</h3>
+            <div class="pack-card-desc">${escapeHtml(pack.description || '')}</div>
+            <div class="pack-card-cost">
+                <span class="num">${pack.cost}</span><span class="unit">tokens</span>
+            </div>
+            <div class="pack-card-footer">
+                <span class="pack-card-meta">${escapeHtml(pack.category || '')}${pack.requiresAI === false ? ' · no AI' : ''}</span>
+                <div style="display:flex; align-items:center; gap:0.5rem;">${footer}</div>
+            </div>
+        </div>`;
+}
+
+// --------------------------------------------------------------------------
+// Purchase modal
+// --------------------------------------------------------------------------
+async function openPackPurchaseModal(packKey) {
+    if (!packCatalogData) return;
+    const pack = findPackInCatalog(packKey);
+    if (!pack || !pack.available) return;
+
+    const modal = document.getElementById('packPurchaseModal');
+    document.getElementById('packPurchasePackName').textContent = pack.name;
+    document.getElementById('packPurchaseDescription').textContent = pack.description || '';
+    document.getElementById('packPurchaseCost').textContent = String(pack.cost);
+
+    const balance = (packCatalogData.token_balance && packCatalogData.token_balance.total_available) || 0;
+    document.getElementById('packPurchaseBalanceNow').textContent = balance + ' tokens';
+    document.getElementById('packPurchaseBalanceAfter').textContent = (balance - pack.cost) + ' tokens';
+
+    document.getElementById('packPurchaseError').style.display = 'none';
+    packPendingPurchase = { packKey };
+    modal.style.display = 'flex';
+
+    // Populate scan dropdown
+    await populateScanSelector();
+
+    const confirmBtn = document.getElementById('packPurchaseConfirmBtn');
+    confirmBtn.disabled = false;
+    confirmBtn.onclick = onConfirmPackPurchase;
+}
+
+function closePackPurchaseModal() {
+    const modal = document.getElementById('packPurchaseModal');
+    if (modal) modal.style.display = 'none';
+    packPendingPurchase = null;
+}
+
+async function populateScanSelector() {
+    const select = document.getElementById('packPurchaseScanSelect');
+    select.innerHTML = '<option value="">Loading scans…</option>';
+
+    try {
+        // Reuse existing scan history endpoint
+        const resp = await fetch(`${API_BASE_URL}/scans/history?limit=10`, { headers: authHeaders() });
+        if (resp.ok) {
+            const data = await resp.json();
+            packRecentScans = (data.scans || data.results || data || []).filter(s =>
+                (s.status || 'completed') === 'completed'
+            );
+        } else {
+            packRecentScans = [];
+        }
+    } catch (err) {
+        console.warn('[Packs] scan history fetch failed:', err.message);
+        packRecentScans = [];
+    }
+
+    if (!packRecentScans || packRecentScans.length === 0) {
+        select.innerHTML = '<option value="">No completed scans found</option>';
+        document.getElementById('packPurchaseConfirmBtn').disabled = true;
+        return;
+    }
+
+    select.innerHTML = packRecentScans.map((s, i) => {
+        const label = (s.primary_domain || s.domain || 'scan') +
+            ' · ' + (s.created_at ? new Date(s.created_at).toLocaleDateString() : '') +
+            (s.score != null ? ` · ${s.score}/1000` : '');
+        return `<option value="${escapeAttr(s.id)}"${i === 0 ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+    }).join('');
+}
+
+async function onConfirmPackPurchase() {
+    const select = document.getElementById('packPurchaseScanSelect');
+    const scanId = parseInt(select.value, 10);
+    if (!packPendingPurchase || !scanId) return;
+    const packKey = packPendingPurchase.packKey;
+
+    closePackPurchaseModal();
+
+    // Show generating modal
+    const genModal = document.getElementById('packGeneratingModal');
+    if (genModal) genModal.style.display = 'flex';
+
+    try {
+        const resp = await fetch(`${API_BASE_URL}/packs/purchase`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({ pack_type: packKey, scan_id: scanId })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (genModal) genModal.style.display = 'none';
+
+        if (!resp.ok) {
+            handlePackPurchaseError(resp.status, data, packKey, scanId);
+            return;
+        }
+
+        // Success — update balance + open detail view
+        if (data.balance_remaining) {
+            tokenBalanceData = { ...(tokenBalanceData || {}), ...data.balance_remaining };
+            renderTokenBalance(tokenBalanceData);
+        }
+        await openPackDetail(data.pack_purchase_id);
+        // Refresh catalog so affordable flags reflect the new balance
+        loadPackCatalog();
+    } catch (err) {
+        if (genModal) genModal.style.display = 'none';
+        alert('Purchase failed: ' + err.message);
+    }
+}
+
+function handlePackPurchaseError(status, data, packKey, scanId) {
+    if (status === 400 && data && data.error === 'Insufficient tokens') {
+        const shortfall = Math.max(0, (data.required || 0) - (data.available || 0));
+        const msg = `You're ${shortfall} tokens short (need ${data.required}, have ${data.available}).`;
+        const useBundle = confirm(msg + '\n\nBuy more tokens now?');
+        if (useBundle && typeof toggleBundleSelector === 'function') toggleBundleSelector();
+        else if (useBundle) window.location.href = ROUTES.PLANS;
+        return;
+    }
+    if (status === 403) {
+        alert((data && data.error) || 'Upgrade required for this pack.');
+        return;
+    }
+    alert((data && data.error) || `Pack purchase failed (status ${status}).`);
+}
+
+// --------------------------------------------------------------------------
+// Detail view
+// --------------------------------------------------------------------------
+async function openPackDetail(purchaseId) {
+    const detail = document.getElementById('packsDetailView');
+    const catalog = document.getElementById('packsCatalogView');
+    const content = document.getElementById('packsDetailContent');
+    content.innerHTML = '<div class="packs-loading"><div class="packs-spinner"></div><span>Loading…</span></div>';
+    if (detail) detail.style.display = '';
+    if (catalog) catalog.style.display = 'none';
+
+    try {
+        const resp = await fetch(`${API_BASE_URL}/packs/${purchaseId}`, { headers: authHeaders() });
+        if (!resp.ok) throw new Error('Pack fetch failed: ' + resp.status);
+        const pack = await resp.json();
+        renderPackDetail(pack);
+    } catch (err) {
+        content.innerHTML = `<div class="packs-error">Could not load pack: ${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function closePackDetail() {
+    const detail = document.getElementById('packsDetailView');
+    const catalog = document.getElementById('packsCatalogView');
+    if (detail) detail.style.display = 'none';
+    if (catalog) catalog.style.display = '';
+}
+
+// Keyed stores so we don't shove giant strings into HTML attributes.
+window.__packArtifactStore = window.__packArtifactStore || {};   // id -> text/json string
+window.__packPdfStore = window.__packPdfStore || {};              // id -> base64
+
+function renderPackDetail(pack) {
+    const content = document.getElementById('packsDetailContent');
+    const created = pack.created_at ? new Date(pack.created_at).toLocaleString() : '—';
+    const statusClass = pack.status === 'complete' ? 'complete' : (pack.status === 'failed' ? 'failed' : '');
+
+    const headerHtml = `
+        <div class="pack-detail-header">
+            <div>
+                <h2 style="margin:0;">${escapeHtml(pack.pack_name || pack.pack_type)}</h2>
+                <div class="pack-detail-meta">
+                    ${pack.tokens_spent} tokens · scan #${pack.scan_id || '—'} · generated ${escapeHtml(created)}
+                    ${pack.run && pack.run.ai_model_used ? ' · ' + escapeHtml(pack.run.ai_model_used) : ''}
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+                <span class="pack-detail-status ${statusClass}">${escapeHtml(pack.status || '')}</span>
+                <button class="pack-buy-btn" id="packGenAgainBtn">Generate again</button>
+            </div>
+        </div>`;
+
+    const artifactsHtml = (pack.artifacts || []).map(renderPackArtifact).join('') ||
+        '<div class="packs-loading">No artifacts produced.</div>';
+
+    content.innerHTML = headerHtml + artifactsHtml;
+
+    // Bind "Generate again"
+    const genBtn = document.getElementById('packGenAgainBtn');
+    if (genBtn) genBtn.addEventListener('click', () =>
+        generatePackAgain(pack.pack_type, pack.scan_id, pack.tokens_spent));
+
+    // Bind artifact actions
+    for (const a of (pack.artifacts || [])) {
+        bindArtifactActions(a);
+    }
+}
+
+function renderPackArtifact(a) {
+    const type = a.artifact_type;
+    const bodyId = 'packArtifactBody' + a.id;
+    const actionsId = 'packArtifactActions' + a.id;
+
+    let bodyHtml;
+    if (type === 'json_ld') {
+        const json = JSON.stringify(a.content_full, null, 2);
+        window.__packArtifactStore[a.id] = json;
+        bodyHtml = `<pre class="pack-artifact-code" id="${bodyId}">${highlightJson(json)}</pre>`;
+    } else if (type === 'pdf') {
+        const base64 = a.content_full && a.content_full.pdf_base64;
+        const summary = a.content_full && a.content_full.executive_summary;
+        if (base64) window.__packPdfStore[a.id] = base64;
+        bodyHtml = `<div class="pack-artifact-text" id="${bodyId}">${escapeHtml(summary || a.content_preview || '(PDF generated)')}</div>`;
+    } else if (type === 'checklist') {
+        const items = (a.content_full && (a.content_full.items || a.content_full.checklist)) || [];
+        bodyHtml = `<ul class="pack-artifact-checklist" id="${bodyId}">` +
+            items.map((it, i) =>
+                `<li><input type="checkbox" id="cl${a.id}_${i}"><label for="cl${a.id}_${i}">${escapeHtml(it.title || it.text || JSON.stringify(it))}</label></li>`
+            ).join('') + `</ul>`;
+    } else {
+        const text = (a.content_full && typeof a.content_full === 'object')
+            ? JSON.stringify(a.content_full, null, 2)
+            : (a.content_preview || '');
+        window.__packArtifactStore[a.id] = text;
+        bodyHtml = `<pre class="pack-artifact-text" id="${bodyId}">${escapeHtml(text)}</pre>`;
+    }
+
+    return `
+        <div class="pack-artifact" id="packArtifact${a.id}">
+            <div class="pack-artifact-header">
+                <span class="pack-artifact-type">${escapeHtml(type || '')}</span>
+                <div class="pack-artifact-actions" id="${actionsId}"></div>
+            </div>
+            ${bodyHtml}
+        </div>`;
+}
+
+function bindArtifactActions(a) {
+    const container = document.getElementById('packArtifactActions' + a.id);
+    if (!container) return;
+    const type = a.artifact_type;
+
+    if (type === 'json_ld' || (type !== 'pdf' && type !== 'checklist')) {
+        const btn = document.createElement('button');
+        btn.className = 'pack-artifact-action-btn primary';
+        btn.textContent = type === 'json_ld' ? 'Copy to clipboard' : 'Copy';
+        btn.addEventListener('click', () => {
+            const text = window.__packArtifactStore[a.id] || '';
+            navigator.clipboard.writeText(text).then(
+                () => flashCopySuccess('packArtifactBody' + a.id),
+                err => alert('Copy failed: ' + err.message)
+            );
+        });
+        container.appendChild(btn);
+    }
+
+    if (type === 'pdf' && window.__packPdfStore[a.id]) {
+        const btn = document.createElement('button');
+        btn.className = 'pack-artifact-action-btn primary';
+        btn.textContent = 'Download PDF';
+        btn.addEventListener('click', () => downloadPackPdf(a.id));
+        container.appendChild(btn);
+    }
+}
+function flashCopySuccess(target) {
+    const node = typeof target === 'string' ? document.getElementById(target) : null;
+    if (node) {
+        const orig = node.style.boxShadow;
+        node.style.boxShadow = '0 0 0 2px var(--good-green)';
+        setTimeout(() => { node.style.boxShadow = orig; }, 700);
+    }
+}
+
+function downloadPackPdf(artifactId) {
+    const base64 = window.__packPdfStore && window.__packPdfStore[artifactId];
+    if (!base64) return alert('PDF data unavailable.');
+    try {
+        const bin = atob(base64);
+        const len = bin.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `audit-${artifactId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+        alert('Download failed: ' + e.message);
+    }
+}
+
+function generatePackAgain(packType, scanId, cost) {
+    if (!confirm(`Re-running this pack will cost another ${cost} tokens. Continue?`)) return;
+    packPendingPurchase = { packKey: packType };
+    // Reuse the purchase flow with this scanId pre-selected — bypass modal
+    closePackPurchaseModal();
+    const genModal = document.getElementById('packGeneratingModal');
+    if (genModal) genModal.style.display = 'flex';
+    fetch(`${API_BASE_URL}/packs/purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ pack_type: packType, scan_id: scanId })
+    })
+    .then(async resp => {
+        const data = await resp.json().catch(() => ({}));
+        if (genModal) genModal.style.display = 'none';
+        if (!resp.ok) return handlePackPurchaseError(resp.status, data, packType, scanId);
+        if (data.balance_remaining) {
+            tokenBalanceData = { ...(tokenBalanceData || {}), ...data.balance_remaining };
+            renderTokenBalance(tokenBalanceData);
+        }
+        return openPackDetail(data.pack_purchase_id);
+    })
+    .catch(err => {
+        if (genModal) genModal.style.display = 'none';
+        alert('Re-generation failed: ' + err.message);
+    });
+}
+
+// --------------------------------------------------------------------------
+// Helpers
+// --------------------------------------------------------------------------
+function findPackInCatalog(key) {
+    if (!packCatalogData || !packCatalogData.categories) return null;
+    for (const cat of Object.values(packCatalogData.categories)) {
+        const hit = cat.find(p => p.key === key);
+        if (hit) return hit;
+    }
+    return null;
+}
+
+function escapeHtml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+function highlightJson(json) {
+    return escapeHtml(json)
+        .replace(/(&quot;[^&]*?&quot;)(\s*:)/g, '<span class="json-key">$1</span>$2')
+        .replace(/:\s*(&quot;[^&]*?&quot;)/g, ': <span class="json-string">$1</span>')
+        .replace(/:\s*(-?\d+(?:\.\d+)?)/g, ': <span class="json-number">$1</span>')
+        .replace(/:\s*(true|false|null)/g, ': <span class="json-bool">$1</span>');
+}

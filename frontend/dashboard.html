@@ -1293,6 +1293,181 @@
             padding: 0.25rem 0;
         }
 
+        /* =========================================================
+           Execution Packs marketplace
+           ========================================================= */
+        .packs-header {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;
+        }
+        .packs-balance-pill {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-purple) 100%);
+            color: #fff; padding: 0.5rem 1rem; border-radius: 999px;
+            font-weight: 700; box-shadow: 0 4px 14px rgba(0,185,218,0.25);
+        }
+        .packs-balance-label { font-weight: 500; opacity: 0.85; }
+        .packs-buy-tokens-btn {
+            background: rgba(255,255,255,0.2); color: #fff; border: none;
+            padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem;
+            cursor: pointer; font-weight: 600; margin-left: 0.5rem;
+        }
+        .packs-buy-tokens-btn:hover { background: rgba(255,255,255,0.35); }
+
+        .packs-loading, .packs-error {
+            display: flex; align-items: center; justify-content: center;
+            gap: 0.75rem; padding: 3rem; color: var(--gray-500);
+        }
+        .packs-error { color: var(--brand-pink); flex-direction: column; }
+
+        .packs-spinner {
+            width: 28px; height: 28px;
+            border: 3px solid var(--gray-200); border-top-color: var(--brand-cyan);
+            border-radius: 50%; animation: packs-spin 1s linear infinite;
+        }
+        .packs-spinner.large { width: 56px; height: 56px; border-width: 4px; margin: 0 auto; }
+        @keyframes packs-spin { to { transform: rotate(360deg); } }
+
+        .packs-category-block { margin-bottom: 2.5rem; }
+        .packs-category-header {
+            display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;
+            padding-bottom: 0.75rem; border-bottom: 2px solid var(--gray-100);
+        }
+        .packs-category-header i {
+            font-size: 1.25rem; color: var(--brand-cyan);
+            width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center;
+            background: rgba(0,185,218,0.1); border-radius: 8px;
+        }
+        .packs-category-block[data-category="create"] .packs-category-header i { color: var(--brand-pink); background: rgba(243,28,126,0.1); }
+        .packs-category-block[data-category="research"] .packs-category-header i { color: var(--brand-purple); background: rgba(125,65,165,0.1); }
+        .packs-category-header h2 { font-size: 1.25rem; font-weight: 700; color: var(--gray-900); margin: 0; }
+        .packs-category-sub { font-size: 0.875rem; color: var(--gray-500); margin-left: auto; }
+
+        .packs-grid {
+            display: grid; gap: 1rem;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        }
+        .pack-card {
+            background: white; border: 1px solid var(--gray-200); border-radius: 12px;
+            padding: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem;
+            transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+            position: relative; min-height: 180px;
+        }
+        .pack-card:not(.locked):hover {
+            transform: translateY(-2px); box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+            border-color: var(--brand-cyan);
+        }
+        .pack-card.locked {
+            background: var(--gray-50); border-style: dashed; border-color: var(--gray-300);
+        }
+        .pack-card-name {
+            font-size: 1.05rem; font-weight: 700; color: var(--gray-900); margin: 0;
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        .pack-card-name .pack-lock-icon { color: var(--gray-400); }
+        .pack-card-desc {
+            font-size: 0.875rem; color: var(--gray-600); flex: 1; line-height: 1.4;
+        }
+        .pack-card-cost {
+            display: inline-flex; align-items: baseline; gap: 0.25rem;
+            font-weight: 700; color: var(--gray-900);
+        }
+        .pack-card-cost .num { font-size: 1.5rem; }
+        .pack-card-cost .unit { font-size: 0.875rem; color: var(--gray-500); }
+        .pack-card-footer {
+            display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+            margin-top: auto;
+        }
+        .pack-card-meta {
+            font-size: 0.75rem; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .pack-buy-btn {
+            background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-purple) 100%);
+            color: #fff; border: none; padding: 0.5rem 1rem; border-radius: 8px;
+            font-weight: 600; cursor: pointer; font-size: 0.875rem;
+        }
+        .pack-buy-btn:hover { box-shadow: 0 6px 16px rgba(0,185,218,0.3); }
+        .pack-buy-btn:disabled {
+            background: var(--gray-200); color: var(--gray-500); cursor: not-allowed; box-shadow: none;
+        }
+        .pack-shortfall-link {
+            font-size: 0.75rem; color: var(--brand-pink); text-decoration: underline;
+            cursor: pointer; background: none; border: none; padding: 0;
+        }
+        .pack-upgrade-label {
+            font-size: 0.75rem; font-weight: 700; color: var(--brand-purple);
+            background: rgba(125,65,165,0.1); padding: 0.25rem 0.6rem; border-radius: 999px;
+        }
+
+        /* Detail view */
+        .packs-back-btn {
+            background: none; border: none; color: var(--gray-600); cursor: pointer;
+            font-size: 0.875rem; padding: 0.5rem 0; margin-bottom: 1rem;
+        }
+        .packs-back-btn:hover { color: var(--brand-cyan); }
+        .pack-detail-header {
+            background: white; border: 1px solid var(--gray-200); border-radius: 12px;
+            padding: 1.5rem; margin-bottom: 1.5rem;
+            display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;
+        }
+        .pack-detail-meta { font-size: 0.875rem; color: var(--gray-500); margin-top: 0.25rem; }
+        .pack-detail-status {
+            font-size: 0.75rem; font-weight: 700; text-transform: uppercase; padding: 0.25rem 0.6rem;
+            border-radius: 999px;
+        }
+        .pack-detail-status.complete { background: rgba(16,185,129,0.1); color: var(--good-green); }
+        .pack-detail-status.failed { background: rgba(243,28,126,0.1); color: var(--brand-pink); }
+        .pack-artifact {
+            background: white; border: 1px solid var(--gray-200); border-radius: 12px;
+            padding: 1.25rem; margin-bottom: 1rem;
+        }
+        .pack-artifact-header {
+            display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;
+        }
+        .pack-artifact-type {
+            font-size: 0.7rem; font-weight: 700; text-transform: uppercase; padding: 0.2rem 0.5rem;
+            border-radius: 4px; background: var(--gray-100); color: var(--gray-700); letter-spacing: 0.05em;
+        }
+        .pack-artifact-actions { display: flex; gap: 0.5rem; }
+        .pack-artifact-action-btn {
+            background: var(--gray-100); border: none; color: var(--gray-700);
+            padding: 0.4rem 0.75rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer;
+        }
+        .pack-artifact-action-btn:hover { background: var(--gray-200); }
+        .pack-artifact-action-btn.primary {
+            background: var(--brand-cyan); color: #fff;
+        }
+        .pack-artifact-action-btn.primary:hover { background: var(--brand-purple); }
+        .pack-artifact-code {
+            background: var(--gray-900); color: #f8f8f2; padding: 1rem; border-radius: 8px;
+            font-family: ui-monospace, "SF Mono", Menlo, Monaco, "Cascadia Code", monospace;
+            font-size: 0.8rem; overflow-x: auto; white-space: pre; max-height: 500px;
+        }
+        .pack-artifact-code .json-key { color: #f31c7e; }
+        .pack-artifact-code .json-string { color: #00B9DA; }
+        .pack-artifact-code .json-number { color: #4DACA6; }
+        .pack-artifact-code .json-bool { color: #7D41A5; }
+        .pack-artifact-text { color: var(--gray-700); font-size: 0.9rem; line-height: 1.6; white-space: pre-wrap; }
+        .pack-artifact-checklist { list-style: none; padding: 0; margin: 0; }
+        .pack-artifact-checklist li {
+            display: flex; gap: 0.6rem; padding: 0.5rem 0; border-bottom: 1px solid var(--gray-100);
+        }
+        .pack-artifact-checklist li:last-child { border-bottom: none; }
+        .pack-artifact-checklist input[type="checkbox"] { margin-top: 4px; }
+
+        /* Modal-specific */
+        .packs-modal-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0.6rem 0; border-bottom: 1px solid var(--gray-100); gap: 1rem;
+        }
+        .packs-modal-row:last-of-type { border-bottom: none; }
+        .packs-modal-label { font-size: 0.875rem; color: var(--gray-500); }
+        .packs-modal-value { font-size: 0.95rem; color: var(--gray-900); text-align: right; }
+        .packs-modal-select {
+            width: 100%; padding: 0.6rem; border: 1px solid var(--gray-300); border-radius: 8px;
+            font-size: 0.9rem; margin-top: 0.4rem; background: #fff;
+        }
+
         .scan-type-features li:before {
             content: "✓ ";
             color: var(--good-green);
@@ -3468,6 +3643,11 @@
 
                 <div class="nav-section">
                     <div class="nav-section-title">Growth</div>
+                    <div class="nav-item" data-section="execution-packs">
+                        <i class="fas fa-bolt"></i>
+                        <span>Execution Packs</span>
+                        <span class="badge" id="packsAffordableBadge" style="display:none;"></span>
+                    </div>
                     <div class="nav-item" data-section="citation-network">
                         <i class="fas fa-project-diagram"></i>
                         <span>AI Citation Network</span>
@@ -5433,7 +5613,128 @@
                 </div>
 
             </section>
+
+            <!-- ============================================================
+                 EXECUTION PACKS (marketplace + detail view)
+                 ============================================================ -->
+            <section class="section" id="execution-packs">
+                <div class="packs-header">
+                    <div>
+                        <h1 class="section-title">Execution Packs</h1>
+                        <p class="section-subtitle">Purpose-built deliverables that turn findings into action.</p>
+                    </div>
+                    <div class="packs-balance-pill" id="packsBalancePill">
+                        <i class="fas fa-coins"></i>
+                        <span id="packsBalanceTotal">—</span>
+                        <span class="packs-balance-label">tokens</span>
+                        <button class="packs-buy-tokens-btn" id="packsBuyTokensBtn" type="button">Buy more</button>
+                    </div>
+                </div>
+
+                <div id="packsCatalogView">
+                    <div id="packsLoading" class="packs-loading">
+                        <div class="packs-spinner"></div>
+                        <span>Loading packs…</span>
+                    </div>
+                    <div id="packsCatalogError" class="packs-error" style="display:none;"></div>
+                    <div id="packsCatalogContainer" style="display:none;">
+                        <div class="packs-category-block" data-category="fix">
+                            <div class="packs-category-header">
+                                <i class="fas fa-tools"></i>
+                                <h2>Fix</h2>
+                                <span class="packs-category-sub">Address findings in your scan</span>
+                            </div>
+                            <div class="packs-grid" id="packsGridFix"></div>
+                        </div>
+                        <div class="packs-category-block" data-category="create">
+                            <div class="packs-category-header">
+                                <i class="fas fa-pen-nib"></i>
+                                <h2>Create</h2>
+                                <span class="packs-category-sub">Net-new content optimized for AI</span>
+                            </div>
+                            <div class="packs-grid" id="packsGridCreate"></div>
+                        </div>
+                        <div class="packs-category-block" data-category="research">
+                            <div class="packs-category-header">
+                                <i class="fas fa-microscope"></i>
+                                <h2>Research &amp; Optimize</h2>
+                                <span class="packs-category-sub">Reports, comparisons, baselines</span>
+                            </div>
+                            <div class="packs-grid" id="packsGridResearch"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="packsDetailView" style="display:none;">
+                    <button class="packs-back-btn" type="button" onclick="closePackDetail()">
+                        <i class="fas fa-arrow-left"></i> Back to marketplace
+                    </button>
+                    <div id="packsDetailContent"></div>
+                </div>
+            </section>
+
         </main>
+    </div>
+
+    <!-- Pack Purchase Modal -->
+    <div id="packPurchaseModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 560px;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="packPurchaseTitle">Confirm Purchase</h2>
+            </div>
+            <div id="packPurchaseBody">
+                <div class="packs-modal-row">
+                    <span class="packs-modal-label">Pack</span>
+                    <span class="packs-modal-value" id="packPurchasePackName">—</span>
+                </div>
+                <div class="packs-modal-row">
+                    <span class="packs-modal-label">Description</span>
+                    <span class="packs-modal-value" id="packPurchaseDescription">—</span>
+                </div>
+                <div class="packs-modal-row">
+                    <span class="packs-modal-label">Cost</span>
+                    <span class="packs-modal-value">
+                        <strong id="packPurchaseCost">—</strong> tokens
+                    </span>
+                </div>
+                <div class="packs-modal-row">
+                    <span class="packs-modal-label">Balance now</span>
+                    <span class="packs-modal-value" id="packPurchaseBalanceNow">—</span>
+                </div>
+                <div class="packs-modal-row">
+                    <span class="packs-modal-label">After purchase</span>
+                    <span class="packs-modal-value" id="packPurchaseBalanceAfter">—</span>
+                </div>
+                <div class="packs-modal-row" style="flex-direction: column; align-items: stretch;">
+                    <label class="packs-modal-label" for="packPurchaseScanSelect">
+                        Run against scan
+                    </label>
+                    <select id="packPurchaseScanSelect" class="packs-modal-select">
+                        <option value="">Loading scans…</option>
+                    </select>
+                </div>
+                <div id="packPurchaseError" class="packs-error" style="display:none; margin-top:1rem;"></div>
+            </div>
+            <div class="modal-actions" style="margin-top: 1.5rem;">
+                <button class="btn btn-secondary" style="flex: 1;" type="button" onclick="closePackPurchaseModal()">
+                    Cancel
+                </button>
+                <button class="btn btn-primary" style="flex: 1;" type="button" id="packPurchaseConfirmBtn">
+                    Confirm purchase
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pack Generating Modal (shown during POST /purchase) -->
+    <div id="packGeneratingModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 460px; text-align: center;">
+            <div class="packs-spinner large"></div>
+            <h2 class="modal-title" style="margin-top: 1rem;">Generating your pack…</h2>
+            <p style="color: var(--gray-600); margin-top: 0.5rem;">
+                This usually takes 10–30 seconds. Please don't close the page.
+            </p>
+        </div>
     </div>
 
     <!-- Logout Modal -->
