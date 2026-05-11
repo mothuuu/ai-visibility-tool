@@ -1176,6 +1176,8 @@ function navigateToSection(sectionId) {
         loadBillingData();
     } else if (sectionId === 'execution-packs') {
         if (typeof loadPackCatalog === 'function') loadPackCatalog();
+    } else if (sectionId === 'my-packs') {
+        if (typeof loadPackHistory === 'function') loadPackHistory();
     }
 
     // Update URL without reload
@@ -6033,6 +6035,7 @@ async function onConfirmPackPurchase() {
             tokenBalanceData = { ...(tokenBalanceData || {}), ...data.balance_remaining };
             renderTokenBalance(tokenBalanceData);
         }
+        packHistoryDirty = true; // refresh My Packs next time it's opened
         await openPackDetail(data.pack_purchase_id);
         // Refresh catalog so affordable flags reflect the new balance
         loadPackCatalog();
@@ -6061,7 +6064,21 @@ function handlePackPurchaseError(status, data, packKey, scanId) {
 // --------------------------------------------------------------------------
 // Detail view
 // --------------------------------------------------------------------------
-async function openPackDetail(purchaseId) {
+let packsDetailOrigin = 'marketplace';   // 'marketplace' | 'history'
+let packsDetailPollTimer = null;
+let packsDetailCurrentId = null;
+
+async function openPackDetail(purchaseId, origin) {
+    packsDetailOrigin = origin === 'history' ? 'history' : 'marketplace';
+    packsDetailCurrentId = purchaseId;
+    if (packsDetailPollTimer) { clearInterval(packsDetailPollTimer); packsDetailPollTimer = null; }
+
+    // The detail view lives inside the execution-packs section.
+    // When opened from My Packs we need to switch sections first.
+    if (packsDetailOrigin === 'history' && typeof navigateToSection === 'function') {
+        navigateToSection('execution-packs');
+    }
+
     const detail = document.getElementById('packsDetailView');
     const catalog = document.getElementById('packsCatalogView');
     const content = document.getElementById('packsDetailContent');
@@ -6074,12 +6091,56 @@ async function openPackDetail(purchaseId) {
         if (!resp.ok) throw new Error('Pack fetch failed: ' + resp.status);
         const pack = await resp.json();
         renderPackDetail(pack);
+
+        // If still generating, start polling
+        if (pack.status === 'pending' || pack.status === 'generating' ||
+            (pack.run && (pack.run.status === 'pending' || pack.run.status === 'generating'))) {
+            startPackDetailPolling(purchaseId);
+        }
     } catch (err) {
         content.innerHTML = `<div class="packs-error">Could not load pack: ${escapeHtml(err.message)}</div>`;
     }
 }
 
+function startPackDetailPolling(purchaseId) {
+    if (packsDetailPollTimer) clearInterval(packsDetailPollTimer);
+    packsDetailPollTimer = setInterval(async () => {
+        if (packsDetailCurrentId !== purchaseId) {
+            clearInterval(packsDetailPollTimer);
+            packsDetailPollTimer = null;
+            return;
+        }
+        try {
+            const resp = await fetch(`${API_BASE_URL}/packs/${purchaseId}`, { headers: authHeaders() });
+            if (!resp.ok) return;
+            const pack = await resp.json();
+            const stillGenerating = pack.status === 'pending' || pack.status === 'generating' ||
+                (pack.run && (pack.run.status === 'pending' || pack.run.status === 'generating'));
+            if (!stillGenerating) {
+                clearInterval(packsDetailPollTimer);
+                packsDetailPollTimer = null;
+                renderPackDetail(pack);
+                packHistoryDirty = true; // surface new status next time history is viewed
+            }
+        } catch (e) {
+            // swallow — next tick will retry
+        }
+    }, 3000);
+}
+
 function closePackDetail() {
+    if (packsDetailPollTimer) { clearInterval(packsDetailPollTimer); packsDetailPollTimer = null; }
+    packsDetailCurrentId = null;
+
+    if (packsDetailOrigin === 'history' && typeof navigateToSection === 'function') {
+        // Hide detail first so re-entering the marketplace section doesn't briefly show it
+        const detail = document.getElementById('packsDetailView');
+        const catalog = document.getElementById('packsCatalogView');
+        if (detail) detail.style.display = 'none';
+        if (catalog) catalog.style.display = '';
+        navigateToSection('my-packs');
+        return;
+    }
     const detail = document.getElementById('packsDetailView');
     const catalog = document.getElementById('packsCatalogView');
     if (detail) detail.style.display = 'none';
@@ -6093,36 +6154,84 @@ window.__packPdfStore = window.__packPdfStore || {};              // id -> base6
 function renderPackDetail(pack) {
     const content = document.getElementById('packsDetailContent');
     const created = pack.created_at ? new Date(pack.created_at).toLocaleString() : '—';
-    const statusClass = pack.status === 'complete' ? 'complete' : (pack.status === 'failed' ? 'failed' : '');
+    const status = pack.status || (pack.run && pack.run.status) || '';
+    const statusClass = status === 'complete' ? 'complete' :
+                        (status === 'failed' ? 'failed' :
+                         (status === 'pending' || status === 'generating' ? 'generating' : ''));
+    const isGenerating = status === 'pending' || status === 'generating';
+    const isFailed = status === 'failed';
+    const version = pack.run && pack.run.version;
+
+    // Sync back-button label to origin
+    const backLabelEl = document.getElementById('packsBackBtnLabel');
+    if (backLabelEl) {
+        backLabelEl.textContent = packsDetailOrigin === 'history' ? 'Back to My Packs' : 'Back to marketplace';
+    }
+
+    const versionBadge = (version && version > 1)
+        ? `<span class="pack-version-badge">Version ${version} · Generated ${escapeHtml(created)}</span>`
+        : '';
+
+    const actionBtnHtml = isFailed
+        ? `<button class="pack-buy-btn" id="packTryAgainBtn">Try Again</button>`
+        : (isGenerating
+           ? ''
+           : `<button class="pack-buy-btn" id="packGenAgainBtn">Generate again</button>`);
 
     const headerHtml = `
         <div class="pack-detail-header">
             <div>
-                <h2 style="margin:0;">${escapeHtml(pack.pack_name || pack.pack_type)}</h2>
+                <h2 style="margin:0;">
+                    ${escapeHtml(pack.pack_name || pack.pack_type)}
+                    ${versionBadge}
+                </h2>
                 <div class="pack-detail-meta">
                     ${pack.tokens_spent} tokens · scan #${pack.scan_id || '—'} · generated ${escapeHtml(created)}
                     ${pack.run && pack.run.ai_model_used ? ' · ' + escapeHtml(pack.run.ai_model_used) : ''}
                 </div>
             </div>
             <div style="display:flex; align-items:center; gap:0.75rem;">
-                <span class="pack-detail-status ${statusClass}">${escapeHtml(pack.status || '')}</span>
-                <button class="pack-buy-btn" id="packGenAgainBtn">Generate again</button>
+                <span class="pack-detail-status ${statusClass}">${escapeHtml(status)}</span>
+                ${actionBtnHtml}
             </div>
         </div>`;
 
-    const artifactsHtml = (pack.artifacts || []).map(renderPackArtifact).join('') ||
-        '<div class="packs-loading">No artifacts produced.</div>';
+    let bodyHtml;
+    if (isGenerating) {
+        bodyHtml = `
+            <div class="pack-polling-state">
+                <div class="packs-spinner large"></div>
+                <h3 style="color: var(--gray-700); margin-bottom: 0.5rem;">Your pack is being generated…</h3>
+                <p>This usually takes 10–30 seconds. We'll update automatically when it's ready.</p>
+            </div>`;
+    } else if (isFailed) {
+        const errMsg = (pack.run && pack.run.error_message) || 'Pack generation failed.';
+        bodyHtml = `
+            <div class="packs-error" style="padding:2rem; flex-direction:column; gap:0.5rem;">
+                <div style="font-weight:700; color: var(--brand-pink);">Generation failed</div>
+                <div style="color: var(--gray-600); font-size:0.875rem;">${escapeHtml(errMsg)}</div>
+            </div>`;
+    } else {
+        bodyHtml = (pack.artifacts || []).map(renderPackArtifact).join('') ||
+            '<div class="packs-loading">No artifacts produced.</div>';
+    }
 
-    content.innerHTML = headerHtml + artifactsHtml;
+    content.innerHTML = headerHtml + bodyHtml;
 
-    // Bind "Generate again"
+    // Bind action buttons
     const genBtn = document.getElementById('packGenAgainBtn');
     if (genBtn) genBtn.addEventListener('click', () =>
         generatePackAgain(pack.pack_type, pack.scan_id, pack.tokens_spent));
 
-    // Bind artifact actions
-    for (const a of (pack.artifacts || [])) {
-        bindArtifactActions(a);
+    const tryBtn = document.getElementById('packTryAgainBtn');
+    if (tryBtn) tryBtn.addEventListener('click', () =>
+        generatePackAgain(pack.pack_type, pack.scan_id, pack.tokens_spent));
+
+    // Bind artifact actions only when artifacts are visible (i.e. complete status)
+    if (!isGenerating && !isFailed) {
+        for (const a of (pack.artifacts || [])) {
+            bindArtifactActions(a);
+        }
     }
 }
 
@@ -6243,6 +6352,7 @@ function generatePackAgain(packType, scanId, cost) {
             tokenBalanceData = { ...(tokenBalanceData || {}), ...data.balance_remaining };
             renderTokenBalance(tokenBalanceData);
         }
+        packHistoryDirty = true; // refresh My Packs next time it's opened
         return openPackDetail(data.pack_purchase_id);
     })
     .catch(err => {
@@ -6276,4 +6386,222 @@ function highlightJson(json) {
         .replace(/:\s*(&quot;[^&]*?&quot;)/g, ': <span class="json-string">$1</span>')
         .replace(/:\s*(-?\d+(?:\.\d+)?)/g, ': <span class="json-number">$1</span>')
         .replace(/:\s*(true|false|null)/g, ': <span class="json-bool">$1</span>');
+}
+
+// ============================================================================
+// MY PACKS — purchased pack history
+// ============================================================================
+
+let packHistoryItems = [];     // accumulated purchases across pages
+let packHistoryPage = 1;
+let packHistoryTotal = 0;
+let packHistoryHasMore = false;
+let packHistoryLoading = false;
+let packHistoryDirty = true;   // first visit forces a fetch; new purchases also flip this true
+const PACK_HISTORY_PAGE_SIZE = 20;
+
+async function loadPackHistory(forceReload) {
+    if (packHistoryLoading) return;
+    // If we already have items and history isn't dirty, just re-render
+    if (!forceReload && !packHistoryDirty && packHistoryItems.length > 0) {
+        renderPackHistory();
+        return;
+    }
+    packHistoryLoading = true;
+    packHistoryPage = 1;
+    packHistoryItems = [];
+
+    const loadingEl = document.getElementById('myPacksLoading');
+    const errorEl = document.getElementById('myPacksError');
+    const emptyEl = document.getElementById('myPacksEmpty');
+    const containerEl = document.getElementById('myPacksContainer');
+    if (loadingEl) loadingEl.style.display = 'flex';
+    if (errorEl)   errorEl.style.display = 'none';
+    if (emptyEl)   emptyEl.style.display = 'none';
+    if (containerEl) containerEl.style.display = 'none';
+
+    try {
+        await fetchPackHistoryPage(1);
+        packHistoryDirty = false;
+        renderPackHistory();
+    } catch (err) {
+        console.error('[MyPacks] load error:', err.message);
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (errorEl) {
+            errorEl.style.display = 'flex';
+            errorEl.innerHTML = `<div>Could not load your packs.</div><div style="font-size:0.75rem;">${escapeHtml(err.message)}</div>`;
+        }
+    } finally {
+        packHistoryLoading = false;
+    }
+}
+
+async function loadMorePackHistory() {
+    if (packHistoryLoading || !packHistoryHasMore) return;
+    packHistoryLoading = true;
+    const loadMoreBtn = document.getElementById('myPacksLoadMoreBtn');
+    if (loadMoreBtn) { loadMoreBtn.disabled = true; loadMoreBtn.textContent = 'Loading…'; }
+    try {
+        await fetchPackHistoryPage(packHistoryPage + 1);
+        renderPackHistory();
+    } catch (err) {
+        console.error('[MyPacks] load more error:', err.message);
+        if (loadMoreBtn) { loadMoreBtn.disabled = false; loadMoreBtn.textContent = 'Load more'; }
+    } finally {
+        packHistoryLoading = false;
+    }
+}
+
+async function fetchPackHistoryPage(page) {
+    const resp = await fetch(
+        `${API_BASE_URL}/packs/history?page=${page}&limit=${PACK_HISTORY_PAGE_SIZE}`,
+        { headers: authHeaders() }
+    );
+    if (!resp.ok) throw new Error('history request failed: ' + resp.status);
+    const data = await resp.json();
+    packHistoryPage = data.page;
+    packHistoryTotal = data.total;
+    packHistoryHasMore = !!data.hasMore;
+    packHistoryItems = packHistoryItems.concat(data.purchases || []);
+}
+
+function renderPackHistory() {
+    const loadingEl = document.getElementById('myPacksLoading');
+    const emptyEl = document.getElementById('myPacksEmpty');
+    const containerEl = document.getElementById('myPacksContainer');
+    const listEl = document.getElementById('myPacksList');
+    const counterEl = document.getElementById('myPacksCounter');
+    const shownEl = document.getElementById('myPacksShown');
+    const totalEl = document.getElementById('myPacksTotal');
+    const loadMoreBtn = document.getElementById('myPacksLoadMoreBtn');
+    const badge = document.getElementById('myPacksCountBadge');
+
+    if (loadingEl) loadingEl.style.display = 'none';
+
+    if (badge) {
+        if (packHistoryTotal > 0) {
+            badge.textContent = packHistoryTotal;
+            badge.style.display = '';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    if (packHistoryTotal === 0) {
+        if (emptyEl) emptyEl.style.display = 'block';
+        if (containerEl) containerEl.style.display = 'none';
+        if (counterEl) counterEl.style.display = 'none';
+        return;
+    }
+
+    if (containerEl) containerEl.style.display = '';
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (counterEl) counterEl.style.display = '';
+    if (shownEl) shownEl.textContent = packHistoryItems.length;
+    if (totalEl) totalEl.textContent = packHistoryTotal;
+
+    if (loadMoreBtn) {
+        if (packHistoryHasMore) {
+            loadMoreBtn.style.display = '';
+            loadMoreBtn.disabled = false;
+            loadMoreBtn.textContent = 'Load more';
+            loadMoreBtn.onclick = loadMorePackHistory;
+        } else {
+            loadMoreBtn.style.display = 'none';
+        }
+    }
+
+    if (!listEl) return;
+    listEl.innerHTML = packHistoryItems.map(packHistoryRowHtml).join('');
+
+    // Bind row + button clicks
+    listEl.querySelectorAll('.my-packs-row[data-purchase-id]').forEach(row => {
+        const id = parseInt(row.getAttribute('data-purchase-id'), 10);
+        row.addEventListener('click', (e) => {
+            // If user clicked the View button directly, let its handler run
+            if (e.target.closest('.view-btn')) return;
+            openPackDetail(id, 'history');
+        });
+    });
+    listEl.querySelectorAll('.my-packs-row .view-btn[data-purchase-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = parseInt(btn.getAttribute('data-purchase-id'), 10);
+            openPackDetail(id, 'history');
+        });
+    });
+}
+
+function packHistoryRowHtml(p) {
+    const cat = getPackCategoryForKey(p.pack_type);
+    const status = (p.status || '').toLowerCase();
+    const statusHtml = renderHistoryStatusBadge(status);
+    const date = p.created_at ? formatPackDate(p.created_at) : '—';
+    const scanLabel = p.scan_id ? `scan #${p.scan_id}` : '—';
+    const artifactCountLabel = (p.artifact_count != null)
+        ? `${p.artifact_count} artifact${p.artifact_count !== 1 ? 's' : ''}`
+        : '—';
+
+    return `
+        <div class="my-packs-row" data-purchase-id="${p.id}">
+            <div class="cell-name">
+                <span class="name">${escapeHtml(p.pack_name || p.pack_type || '')}</span>
+                <span class="meta">${escapeHtml(scanLabel)}</span>
+            </div>
+            <div><span class="cell-category ${escapeHtml(cat || '')}">${escapeHtml(cat || '')}</span></div>
+            <div class="cell-value">${p.tokens_spent != null ? p.tokens_spent + ' tokens' : '—'}</div>
+            <div>${statusHtml}</div>
+            <div class="cell-value" title="${escapeHtml(p.created_at || '')}">
+                ${escapeHtml(date)}<br>
+                <span class="cell-label">${escapeHtml(artifactCountLabel)}</span>
+            </div>
+            <div>
+                <button class="view-btn" data-purchase-id="${p.id}" type="button">View</button>
+            </div>
+        </div>`;
+}
+
+function renderHistoryStatusBadge(status) {
+    if (status === 'complete') {
+        return `<span class="my-packs-status complete"><i class="fas fa-check"></i> Complete</span>`;
+    }
+    if (status === 'failed') {
+        return `<span class="my-packs-status failed"><i class="fas fa-times"></i> Failed</span>`;
+    }
+    if (status === 'pending' || status === 'generating') {
+        return `<span class="my-packs-status generating"><span class="mini-spinner"></span> Generating</span>`;
+    }
+    return `<span class="my-packs-status">${escapeHtml(status || 'unknown')}</span>`;
+}
+
+function getPackCategoryForKey(packKey) {
+    if (!packKey) return '';
+    if (packCatalogData && packCatalogData.categories) {
+        for (const [catName, packs] of Object.entries(packCatalogData.categories)) {
+            if (packs.some(p => p.key === packKey)) return catName;
+        }
+    }
+    // Fallback table (mirrors backend packCatalog categories)
+    const fallback = {
+        quick_wins: 'fix', faq_pack: 'fix', evidence_trust: 'fix',
+        entity_clarity: 'fix', schema_pack: 'fix',
+        content_brief: 'create', comparison: 'create', ai_ready_draft: 'create',
+        audit_pdf: 'research', refresh: 'research', citation_lift: 'research',
+        query_refresh: 'research', narrative_repair: 'research',
+        query_baseline_starter: 'research', query_baseline_pro: 'research'
+    };
+    return fallback[packKey] || '';
+}
+
+function formatPackDate(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    const now = new Date();
+    const diffMs = now - d;
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    // Older: explicit date
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }

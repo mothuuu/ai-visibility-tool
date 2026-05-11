@@ -1468,6 +1468,110 @@
             font-size: 0.9rem; margin-top: 0.4rem; background: #fff;
         }
 
+        /* My Packs list */
+        .my-packs-counter {
+            font-size: 0.875rem; color: var(--gray-500);
+        }
+        .my-packs-empty {
+            text-align: center; padding: 4rem 2rem;
+            background: white; border: 1px dashed var(--gray-300); border-radius: 12px;
+        }
+        .my-packs-empty i {
+            font-size: 3rem; color: var(--gray-400); margin-bottom: 1rem;
+        }
+        .my-packs-empty h2 { color: var(--gray-700); margin-bottom: 0.5rem; }
+        .my-packs-empty p { color: var(--gray-500); margin-bottom: 1.5rem; }
+
+        .my-packs-list {
+            display: flex; flex-direction: column; gap: 0.5rem;
+        }
+        .my-packs-row {
+            display: grid;
+            grid-template-columns: minmax(180px,2fr) 1fr 1fr 1fr 1fr auto;
+            gap: 1rem; align-items: center;
+            background: white; border: 1px solid var(--gray-200); border-radius: 10px;
+            padding: 0.9rem 1.1rem; cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+        }
+        .my-packs-row:hover {
+            transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+            border-color: var(--brand-cyan);
+        }
+        .my-packs-row .cell-name {
+            display: flex; flex-direction: column; gap: 0.15rem;
+        }
+        .my-packs-row .cell-name .name {
+            font-weight: 700; color: var(--gray-900); font-size: 0.95rem;
+        }
+        .my-packs-row .cell-name .meta {
+            font-size: 0.75rem; color: var(--gray-500);
+        }
+        .my-packs-row .cell-label {
+            font-size: 0.75rem; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.04em;
+        }
+        .my-packs-row .cell-value { font-weight: 600; color: var(--gray-800); font-size: 0.875rem; }
+
+        .my-packs-row .my-packs-status {
+            display: inline-flex; align-items: center; gap: 0.35rem;
+            font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+            padding: 0.2rem 0.6rem; border-radius: 999px;
+        }
+        .my-packs-status.complete { background: rgba(16,185,129,0.12); color: var(--good-green); }
+        .my-packs-status.failed { background: rgba(243,28,126,0.12); color: var(--brand-pink); }
+        .my-packs-status.generating, .my-packs-status.pending {
+            background: rgba(245,158,11,0.12); color: var(--high-yellow);
+        }
+        .my-packs-status .mini-spinner {
+            width: 10px; height: 10px;
+            border: 2px solid var(--high-yellow); border-top-color: transparent;
+            border-radius: 50%; animation: packs-spin 0.9s linear infinite;
+        }
+
+        .my-packs-row .cell-category {
+            font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+            padding: 0.2rem 0.6rem; border-radius: 4px;
+            background: rgba(0,185,218,0.1); color: var(--brand-cyan);
+            display: inline-block; max-width: max-content;
+        }
+        .my-packs-row .cell-category.create { background: rgba(243,28,126,0.1); color: var(--brand-pink); }
+        .my-packs-row .cell-category.research { background: rgba(125,65,165,0.1); color: var(--brand-purple); }
+
+        .my-packs-row .view-btn {
+            background: var(--gray-100); border: none; color: var(--gray-700);
+            padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.8rem;
+            cursor: pointer;
+        }
+        .my-packs-row:hover .view-btn { background: var(--brand-cyan); color: white; }
+
+        .my-packs-footer {
+            text-align: center; padding: 1.5rem 0;
+        }
+
+        @media (max-width: 768px) {
+            .my-packs-row {
+                grid-template-columns: 1fr;
+                gap: 0.5rem;
+            }
+            .my-packs-row .cell-label { display: inline; margin-right: 0.5rem; }
+            .my-packs-row .view-btn { width: 100%; }
+        }
+
+        /* Version badge in detail view */
+        .pack-version-badge {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            font-size: 0.75rem; font-weight: 700;
+            background: rgba(0,185,218,0.12); color: var(--brand-cyan);
+            padding: 0.25rem 0.7rem; border-radius: 999px; margin-left: 0.5rem;
+        }
+
+        /* Polling state */
+        .pack-polling-state {
+            text-align: center; padding: 3rem 2rem;
+            background: white; border-radius: 12px; border: 1px solid var(--gray-200);
+        }
+        .pack-polling-state .packs-spinner.large { margin-bottom: 1rem; }
+        .pack-polling-state p { color: var(--gray-600); }
+
         .scan-type-features li:before {
             content: "✓ ";
             color: var(--good-green);
@@ -3682,6 +3786,11 @@
                         <span>Execution Packs</span>
                         <span class="badge" id="packsAffordableBadge" style="display:none;"></span>
                     </div>
+                    <div class="nav-item" data-section="my-packs">
+                        <i class="fas fa-box-archive"></i>
+                        <span>My Packs</span>
+                        <span class="badge" id="myPacksCountBadge" style="display:none;"></span>
+                    </div>
                     <div class="nav-item" data-section="citation-network">
                         <i class="fas fa-project-diagram"></i>
                         <span>AI Citation Network</span>
@@ -5700,10 +5809,49 @@
                 </div>
 
                 <div id="packsDetailView" style="display:none;">
-                    <button class="packs-back-btn" type="button" onclick="closePackDetail()">
-                        <i class="fas fa-arrow-left"></i> Back to marketplace
+                    <button class="packs-back-btn" type="button" id="packsBackBtn" onclick="closePackDetail()">
+                        <i class="fas fa-arrow-left"></i> <span id="packsBackBtnLabel">Back to marketplace</span>
                     </button>
                     <div id="packsDetailContent"></div>
+                </div>
+            </section>
+
+            <!-- ============================================================
+                 MY PACKS (purchased pack history)
+                 ============================================================ -->
+            <section class="section" id="my-packs">
+                <div class="packs-header">
+                    <div>
+                        <h1 class="section-title">My Packs</h1>
+                        <p class="section-subtitle">Every pack you've purchased. Click to view artifacts or re-generate.</p>
+                    </div>
+                    <div class="my-packs-counter" id="myPacksCounter" style="display:none;">
+                        Showing <span id="myPacksShown">0</span> of <span id="myPacksTotal">0</span>
+                    </div>
+                </div>
+
+                <div id="myPacksLoading" class="packs-loading">
+                    <div class="packs-spinner"></div>
+                    <span>Loading your packs…</span>
+                </div>
+                <div id="myPacksError" class="packs-error" style="display:none;"></div>
+
+                <div id="myPacksEmpty" class="my-packs-empty" style="display:none;">
+                    <i class="fas fa-box-open"></i>
+                    <h2>No packs purchased yet</h2>
+                    <p>Visit the Marketplace to generate your first pack.</p>
+                    <button class="pack-buy-btn" type="button" onclick="navigateToSection('execution-packs')">
+                        Browse Marketplace
+                    </button>
+                </div>
+
+                <div id="myPacksContainer" style="display:none;">
+                    <div class="my-packs-list" id="myPacksList"></div>
+                    <div class="my-packs-footer">
+                        <button class="pack-buy-btn" type="button" id="myPacksLoadMoreBtn" style="display:none;">
+                            Load more
+                        </button>
+                    </div>
                 </div>
             </section>
 
