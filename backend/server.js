@@ -29,6 +29,7 @@ const handleStripeWebhook = require('./routes/stripe-webhook');
 const { getWorker } = require('./jobs/submissionWorker');
 const { sendActionReminders } = require('./jobs/citationNetworkReminders');
 const { startTokenExpiryCron } = require('./jobs/tokenExpiry');
+const { startCitationMonitoringCron } = require('./jobs/citationMonitoring');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -191,4 +192,7 @@ app.listen(PORT, () => {
 
   // Schedule token expiry safety-net job (daily at midnight UTC)
   startTokenExpiryCron();
+
+  // Schedule citation monitoring job (daily at 2 AM UTC)
+  startCitationMonitoringCron();
 });
