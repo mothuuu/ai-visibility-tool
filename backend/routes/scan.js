@@ -8,6 +8,7 @@ const { computePageSetHash } = require('../utils/page-context');
 const UsageTrackerService = require('../services/usage-tracker-service');
 const GuestScanCacheService = require('../services/guest-scan-cache-service');
 const { generateFindings } = require('../services/findingsService');
+const citationSnapshotService = require('../services/citationSnapshotService');
 const { createGuestRateLimiter } = require('../middleware/guestRateLimit');
 const { loadOrgContext } = require('../middleware/orgContext');
 
@@ -590,6 +591,24 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
       console.error(`[Findings] Error generating findings for scan ${scan.id}:`, findingsErr.message);
       // Non-critical: do not fail the scan completion
     }
+
+    // Citation snapshot — fire-and-forget. Plan-gated query count + engines.
+    // MUST NOT delay scan completion, MUST NOT fail the scan on error.
+    // citation_test_runs.status starts as 'running' and flips to 'complete'/'failed'
+    // when the background suite finishes; the frontend can poll for results.
+    Promise.resolve()
+      .then(() => citationSnapshotService.runScanTimeCitation(scan.id, userId, scanDomain))
+      .then(result => {
+        if (result && result.skipped) {
+          console.log(`[CitationSnapshot] scan ${scan.id} skipped: ${result.reason}`);
+        } else if (result) {
+          console.log(`[CitationSnapshot] scan ${scan.id} run ${result.testRunId} queued (queries=${result.queriesRun})`);
+        }
+      })
+      .catch(citationErr => {
+        console.error(`[CitationSnapshot] error for scan ${scan.id}: ${citationErr.message}`);
+        // Best-effort: scan still succeeds
+      });
 
     // 🔥 Save FAQ schema if available
     if (scanResult.faq && scanResult.faq.length > 0) {
