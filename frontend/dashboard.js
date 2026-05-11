@@ -1482,21 +1482,51 @@ async function loadTrackedPages() {
     if (dashboardPagesTracked) dashboardPagesTracked.textContent = '0';
 }
 
-// Pack catalog — maps suggested_pack_type to display name and token cost
+// Pack catalog — fallback map used only before the marketplace catalog loads.
+// The canonical source is packCatalogData (fetched from /api/packs/catalog).
 const PACK_CATALOG = {
     schema_pack:        { name: 'Schema Pack',        tokens: 60 },
-    faq_pack:           { name: 'FAQ Pack',           tokens: 40 },
-    evidence_trust:     { name: 'Trust Pack',         tokens: 50 },
-    entity_clarity:     { name: 'Entity Pack',        tokens: 45 },
-    citation_pack:      { name: 'Citation Pack',      tokens: 55 },
-    performance_pack:   { name: 'Performance Pack',   tokens: 50 },
-    technical_seo_pack: { name: 'Technical SEO Pack', tokens: 60 },
-    aeo_pack:           { name: 'AEO Pack',           tokens: 50 },
-    quick_wins:         { name: 'Quick Wins Pack',    tokens: 30 }
+    faq_pack:           { name: 'FAQ Pack',           tokens: 35 },
+    evidence_trust:     { name: 'Evidence / Trust',   tokens: 40 },
+    entity_clarity:     { name: 'Entity Clarity',     tokens: 45 },
+    quick_wins:         { name: 'Quick Wins',         tokens: 15 },
+    content_brief:      { name: 'Content Brief',      tokens: 30 },
+    comparison:         { name: 'Comparison/Counter', tokens: 70 },
+    ai_ready_draft:     { name: 'AI-Ready Draft',     tokens: 80 },
+    audit_pdf:          { name: 'Audit PDF',          tokens: 10 },
+    refresh:            { name: 'Refresh',            tokens: 20 },
+    citation_lift:      { name: 'Citation Lift',      tokens: 45 }
 };
+
+// Returns { key, name, cost, available, affordable, minPlan } for a finding's
+// suggested_pack_type, preferring the marketplace catalog when it's loaded.
+// Returns null if suggested_pack_type is unknown — the Fix This button should
+// be hidden in that case.
+function lookupPackForFinding(suggestedType) {
+    if (!suggestedType) return null;
+    if (typeof packCatalogData !== 'undefined' && packCatalogData && packCatalogData.categories) {
+        for (const cat of Object.values(packCatalogData.categories)) {
+            const hit = cat.find(p => p.key === suggestedType);
+            if (hit) return {
+                key: hit.key, name: hit.name, cost: hit.cost,
+                available: hit.available, affordable: hit.affordable,
+                minPlan: hit.minPlan
+            };
+        }
+    }
+    const local = PACK_CATALOG[suggestedType];
+    if (local) {
+        // Without catalog data we can't compute available/affordable accurately;
+        // mark as available+affordable optimistically — the purchase modal will
+        // re-validate and show the correct error if not.
+        return { key: suggestedType, name: local.name, cost: local.tokens, available: true, affordable: true, minPlan: null };
+    }
+    return null;
+}
 
 // Findings state
 let findingsData = null;
+let currentFindingsScanId = null;
 let activeSeverityFilters = new Set();
 
 // Load findings for the latest scan
@@ -1527,6 +1557,16 @@ async function loadFindings() {
         if (scans.length === 0) return;
 
         const scanId = scans[0].id;
+        currentFindingsScanId = scanId;
+
+        // Kick off marketplace catalog load in the background so Fix This buttons
+        // can render accurate available/affordable state. Re-render findings once
+        // it returns. Safe to fire-and-forget if it fails — falls back to optimistic state.
+        if (typeof loadPackCatalog === 'function' && !packCatalogData) {
+            loadPackCatalog().then(() => {
+                if (findingsData) renderFindings(findingsData.findings);
+            }).catch(() => { /* silent — buttons stay optimistic */ });
+        }
 
         // Show loading
         if (loadingEl) loadingEl.style.display = 'block';
@@ -1661,7 +1701,7 @@ function renderFindings(findings) {
     }
 
     container.innerHTML = filtered.map((f, idx) => {
-        const pack = f.suggested_pack_type ? PACK_CATALOG[f.suggested_pack_type] : null;
+        const pack = lookupPackForFinding(f.suggested_pack_type);
         const urlCount = f.impacted_url_count || 0;
         const desc = f.description || '';
 
@@ -1680,16 +1720,86 @@ function renderFindings(findings) {
                     <div class="finding-meta">
                         ${urlCount > 0 ? `<span><i class="fas fa-link"></i> ${urlCount} page${urlCount !== 1 ? 's' : ''} affected</span>` : ''}
                     </div>
-                    ${pack ? `
-                        <button class="fix-this-btn" disabled>
-                            Fix with ${escapeHtml(pack.name)} &middot; ${pack.tokens} tokens
-                            <span class="fix-tooltip">Execution Packs coming soon</span>
-                        </button>
-                    ` : ''}
+                    ${renderFixThisButton(pack)}
                 </div>
             </div>
         `;
     }).join('');
+
+    // Bind click handlers to all live (non-locked/non-unaffordable) Fix This buttons.
+    // Unaffordable buttons get a separate click (open bundle selector / suggest top-up).
+    container.querySelectorAll('.fix-this-btn[data-pack-key]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const packKey = btn.getAttribute('data-pack-key');
+            const scanId = parseInt(btn.getAttribute('data-scan-id'), 10);
+            const state = btn.getAttribute('data-state');
+            if (state === 'locked') return; // styled as disabled — no action
+            if (state === 'unaffordable') {
+                // Open token bundle selector / point to upgrade
+                if (typeof toggleBundleSelector === 'function') toggleBundleSelector();
+                else window.location.href = ROUTES && ROUTES.PLANS ? ROUTES.PLANS : 'plans.html';
+                return;
+            }
+            navigateToPackPurchase(packKey, scanId);
+        });
+    });
+}
+
+// Returns the HTML for a Fix This button given a pack lookup result.
+// Returns empty string if pack is null (unknown suggested_pack_type → hide button).
+function renderFixThisButton(pack) {
+    if (!pack) return '';
+    const scanId = currentFindingsScanId;
+    if (!scanId) return ''; // no scan context = can't purchase
+
+    const tooltipText = `Generate a ${pack.name} for this scan`;
+    const baseDataAttrs =
+        `data-pack-key="${escapeHtml(pack.key)}" data-scan-id="${scanId}"`;
+
+    if (pack.available === false) {
+        const label = pack.minPlan === 'pro' ? 'Pro only' : 'Upgrade';
+        return `
+            <button class="fix-this-btn locked" ${baseDataAttrs} data-state="locked" disabled aria-disabled="true">
+                <span class="fix-lock-label"><i class="fas fa-lock"></i> ${escapeHtml(label)}</span>
+                <span class="fix-tooltip">${escapeHtml(tooltipText)}</span>
+            </button>
+        `;
+    }
+
+    if (pack.affordable === false) {
+        const balance = (typeof tokenBalanceData !== 'undefined' && tokenBalanceData && tokenBalanceData.total_available) || 0;
+        const shortfall = Math.max(0, pack.cost - balance);
+        return `
+            <button class="fix-this-btn unaffordable" ${baseDataAttrs} data-state="unaffordable">
+                Fix with ${escapeHtml(pack.name)} &middot; ${pack.cost} tokens
+                <span class="fix-shortfall">Need ${shortfall} more tokens</span>
+                <span class="fix-tooltip">${escapeHtml(tooltipText)}</span>
+            </button>
+        `;
+    }
+
+    return `
+        <button class="fix-this-btn" ${baseDataAttrs} data-state="ready">
+            Fix with ${escapeHtml(pack.name)} &middot; ${pack.cost} tokens
+            <span class="fix-tooltip">${escapeHtml(tooltipText)}</span>
+        </button>
+    `;
+}
+
+// Triggered from "Fix This" → navigate to marketplace and open purchase modal.
+// Handles the case where the marketplace catalog hasn't been loaded yet.
+async function navigateToPackPurchase(packKey, scanId) {
+    if (typeof navigateToSection === 'function') {
+        navigateToSection('execution-packs');
+    }
+    // Ensure marketplace catalog is loaded so openPackPurchaseModal has data.
+    if (!packCatalogData && typeof loadPackCatalog === 'function') {
+        try { await loadPackCatalog(); }
+        catch (e) { console.warn('[Packs] catalog load failed during Fix This:', e.message); }
+    }
+    if (typeof openPackPurchaseModal === 'function') {
+        await openPackPurchaseModal(packKey, scanId);
+    }
 }
 
 function toggleFindingDesc(idx) {
@@ -5813,7 +5923,7 @@ function packCardHtml(pack) {
 // --------------------------------------------------------------------------
 // Purchase modal
 // --------------------------------------------------------------------------
-async function openPackPurchaseModal(packKey) {
+async function openPackPurchaseModal(packKey, preselectScanId) {
     if (!packCatalogData) return;
     const pack = findPackInCatalog(packKey);
     if (!pack || !pack.available) return;
@@ -5831,8 +5941,8 @@ async function openPackPurchaseModal(packKey) {
     packPendingPurchase = { packKey };
     modal.style.display = 'flex';
 
-    // Populate scan dropdown
-    await populateScanSelector();
+    // Populate scan dropdown, optionally pre-selecting a specific scan
+    await populateScanSelector(preselectScanId);
 
     const confirmBtn = document.getElementById('packPurchaseConfirmBtn');
     confirmBtn.disabled = false;
@@ -5845,7 +5955,7 @@ function closePackPurchaseModal() {
     packPendingPurchase = null;
 }
 
-async function populateScanSelector() {
+async function populateScanSelector(preselectScanId) {
     const select = document.getElementById('packPurchaseScanSelect');
     select.innerHTML = '<option value="">Loading scans…</option>';
 
@@ -5865,18 +5975,31 @@ async function populateScanSelector() {
         packRecentScans = [];
     }
 
+    // If a specific scan was requested but the history endpoint didn't return it
+    // (e.g. it's beyond the recent-10 window or the endpoint failed), inject a
+    // minimal entry so the user can still complete the Fix This flow.
+    if (preselectScanId && !packRecentScans.some(s => String(s.id) === String(preselectScanId))) {
+        packRecentScans = [{ id: preselectScanId, primary_domain: 'current scan', created_at: null }, ...packRecentScans];
+    }
+
     if (!packRecentScans || packRecentScans.length === 0) {
         select.innerHTML = '<option value="">No completed scans found</option>';
         document.getElementById('packPurchaseConfirmBtn').disabled = true;
         return;
     }
 
-    select.innerHTML = packRecentScans.map((s, i) => {
+    select.innerHTML = packRecentScans.map((s) => {
+        const isPreselected = preselectScanId && String(s.id) === String(preselectScanId);
         const label = (s.primary_domain || s.domain || 'scan') +
-            ' · ' + (s.created_at ? new Date(s.created_at).toLocaleDateString() : '') +
+            (s.created_at ? ' · ' + new Date(s.created_at).toLocaleDateString() : '') +
             (s.score != null ? ` · ${s.score}/1000` : '');
-        return `<option value="${escapeAttr(s.id)}"${i === 0 ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+        return `<option value="${escapeAttr(s.id)}"${isPreselected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
     }).join('');
+
+    // If no explicit pre-select, default to the first option (most recent)
+    if (!preselectScanId && select.options.length > 0) {
+        select.options[0].selected = true;
+    }
 }
 
 async function onConfirmPackPurchase() {
