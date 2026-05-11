@@ -19,6 +19,7 @@ const citationNetworkRoutes = require('./routes/citationNetwork');
 const organizationRoutes = require('./routes/organization');
 const findingsRoutes = require('./routes/findings');
 const tokenRoutes = require('./routes/tokens');
+const packRoutes = require('./routes/packs');
 
 // Stripe webhook handler - imported directly for raw body mounting
 // P0: Export as function, not object
@@ -119,6 +120,7 @@ app.use('/api/citation-network', citationNetworkRoutes); // AI Citation Network 
 app.use('/api', require('./routes/citation-monitoring')); // Phase 3: Citation Monitoring (separate from citation-network)
 app.use('/api/org', organizationRoutes); // Phase 3B: Organization/Team management
 app.use('/api/tokens', tokenRoutes); // Token balance and purchase
+app.use('/api/packs', packRoutes); // Phase 2: Pack purchase / catalog / history
 app.use('/api/test', require('./routes/test-routes'));
 
 // Health check
