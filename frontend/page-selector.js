@@ -276,7 +276,7 @@ async function startAnalysis() {
         const scanId = data.scan?.id || data.scanId || data.id;
         
         if (scanId) {
-            window.location.href = `dashboard.html?section=findings&scanId=${scanId}`;
+            window.location.href = `results.html?scanId=${scanId}`;
         } else {
             console.error('Full response:', data);
             throw new Error('No scan ID received');
