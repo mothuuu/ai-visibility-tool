@@ -13,6 +13,9 @@ const {
 const express = require('express');
 const axios = require('axios');
 const router = express.Router();
+const openaiAdapter = require('../services/engines/openaiAdapter');
+const anthropicAdapter = require('../services/engines/anthropicAdapter');
+const perplexityAdapter = require('../services/engines/perplexityAdapter');
 const usageTracker = new UsageTrackerService(db);
 
 // Import enhanced industries configuration
@@ -178,23 +181,6 @@ async function fetchMultiPageSample(startUrl, userPlan = 'free', selectedPages =
     planUsed: 'free'
   };
 }
-/* ================================
-   AI API CONFIGS (visibility tests)
-================================ */
-const AI_CONFIGS = {
-  openai: {
-    endpoint: 'https://api.openai.com/v1/chat/completions',
-    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }
-  },
-  anthropic: {
-    endpoint: 'https://api.anthropic.com/v1/messages',
-    headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' }
-  },
-  perplexity: {
-    endpoint: 'https://api.perplexity.ai/chat/completions',
-    headers: { Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}` }
-  }
-};
 
 /* =======================
    V5 CATEGORY WEIGHTS
@@ -1127,7 +1113,7 @@ async function testAIVisibility(url, industry, queries) {
   const companyName = extractCompanyName(domain);
   const results = { overall: { mentionRate:0, recommendationRate:0, citationRate:0 }, assistants: {}, testedQueries: queries.length };
 
-  for (const [k, cfg] of Object.entries(AI_CONFIGS)) {
+  for (const k of ['openai', 'anthropic', 'perplexity']) {
     const envKey = process.env[k.toUpperCase() + '_API_KEY'];
     if (!envKey) { results.assistants[k] = { name: k, tested:false, reason:'API key not configured' }; continue; }
     try { results.assistants[k] = await testSingleAssistant(k, queries, companyName, domain); }
@@ -1146,7 +1132,6 @@ async function testSingleAssistant(assistantKey, queries, companyName, domain) {
       const a = analyzeResponse(txt, companyName, domain);
       out.queries.push({ query:q, mentioned:a.mentioned, recommended:a.recommended, cited:a.cited });
       if (a.mentioned) m++; if (a.recommended) r++; if (a.cited) c++;
-      await new Promise(done=>setTimeout(done, 1200));
     } catch (e) {
       out.queries.push({ query:q, error:e.message, mentioned:false, recommended:false, cited:false });
     }
@@ -1158,23 +1143,11 @@ async function testSingleAssistant(assistantKey, queries, companyName, domain) {
 }
 
 async function queryAIAssistant(assistant, query) {
-  const cfg = AI_CONFIGS[assistant];
-  let body;
   switch (assistant) {
-    case 'openai':
-      body = { model: 'gpt-4o-mini', messages: [{ role:'user', content: query }], max_tokens: 500, temperature: 0.7 }; break;
-    case 'anthropic':
-      body = { model: 'claude-3-sonnet-20240229', max_tokens: 500, messages: [{ role:'user', content: [{ type:'text', text: query }] }] }; break;
-    case 'perplexity':
-      body = { model: 'llama-3.1-sonar-small-128k-online', messages: [{ role:'user', content: query }] }; break;
+    case 'openai':     return (await openaiAdapter.runQuery(query)).response;
+    case 'anthropic':  return (await anthropicAdapter.runQuery(query)).response;
+    case 'perplexity': return (await perplexityAdapter.runQuery(query)).response;
     default: throw new Error(`Unsupported assistant: ${assistant}`);
-  }
-  const resp = await axios.post(cfg.endpoint, body, { headers: { ...cfg.headers, 'Content-Type':'application/json' }, timeout: 30000 });
-  switch (assistant) {
-    case 'openai':
-    case 'perplexity': return resp.data?.choices?.[0]?.message?.content || '';
-    case 'anthropic':  return resp.data?.content?.[0]?.text || '';
-    default: throw new Error(`Unknown response format for ${assistant}`);
   }
 }
 
