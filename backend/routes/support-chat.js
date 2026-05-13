@@ -335,7 +335,7 @@ router.post('/', async (req, res) => {
         // upstream slowness; the SDK's default is ~10 minutes.
         const response = await anthropic.messages.create(
             {
-                model: 'claude-3-7-sonnet-20250219',
+                model: process.env.SUPPORT_CHAT_MODEL || 'claude-sonnet-4-20250514',
                 max_tokens: 1024,
                 system: `${systemPrompt}\n\nKNOWLEDGE BASE:\n${JSON.stringify(knowledgeBase, null, 2)}`,
                 messages: messages

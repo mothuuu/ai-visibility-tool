@@ -227,27 +227,15 @@ function displayResults(scan, quota) {
         displayCategoryScores(scan.categoryBreakdown, scan.recommendations || [], scan.categoryWeights || {});
     }
 
-    // Update recommendations count — show active count only (not implemented/skipped)
-    const meta = scan.recommendations_meta;
-    const recs = scan.recommendations || [];
-    const activeCount = meta?.active_returned ?? recs.filter(r => !r.status || r.status === 'pending' || r.status === 'active').length;
-    const recCountEl = document.getElementById('recCount');
-    if (recCountEl) {
-        recCountEl.textContent = `${activeCount} recommendation${activeCount !== 1 ? 's' : ''} found`;
-    }
-
-    // Display recommendations based on tier and scan type
+    // Replaces legacy "Detailed Recommendations" with Findings (Phase 1.4 model).
+    // The container, severity filters, upgrade banner and empty state are
+    // rendered into the same .recommendations-section frame.
     if (scan.is_competitor || scan.domain_type === 'competitor') {
-        // Competitor scan - show info message instead of recommendations
+        // Competitor scans don't get findings — keep the existing courtesy message
+        // in the legacy markup (the dashboard handles this separately).
         displayCompetitorScanMessage(scan);
-    } else if (userTier === 'guest') {
-        // Guest: Show NO recommendations, only signup CTA
-        displayGuestRecommendations(scan);
-    } else if (scan.recommendations && scan.recommendations.length > 0) {
-        // Authenticated: Show recommendations based on plan
-        displayRecommendations(scan.recommendations, userTier, scan.userProgress, scan.nextBatchUnlock, scan.batchesUnlocked);
     } else {
-        document.getElementById('recommendationsList').innerHTML = '<p style="text-align: center; padding: 32px 0; color: #718096;">No recommendations available for this scan.</p>';
+        loadFindingsForResults(scan.id || (new URLSearchParams(window.location.search)).get('scanId'), userTier);
     }
 
     // Display FAQ section (DIY+ only)
@@ -436,7 +424,15 @@ function animateScoreRing(score) {
 
 // Guest recommendations - show signup CTA instead of recommendations
 function displayCompetitorScanMessage(scan) {
-    const container = document.getElementById('recommendationsList');
+    // The legacy "recommendationsList" element is gone; reuse the findings
+    // container so the courtesy message still renders for competitor scans.
+    const container = document.getElementById('findingsContainer') ||
+                      document.getElementById('recommendationsList');
+    const summaryEl = document.getElementById('findingsSummary');
+    if (summaryEl) summaryEl.style.display = 'none';
+    const filtersEl = document.getElementById('resultsSeverityFilters');
+    if (filtersEl) filtersEl.style.display = 'none';
+    if (!container) return;
     container.innerHTML = `
         <div class="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg p-12 text-center border-2 border-orange-300">
             <div class="text-6xl mb-4">🔍</div>
@@ -2183,6 +2179,212 @@ window.toggleNotifications = function() {
     // You could implement a modal or expand/collapse here
     alert('Full notification center coming soon!');
 };
+
+// =========================================================================
+// FINDINGS (replaces legacy Detailed Recommendations section)
+// =========================================================================
+// Mirrors the dashboard's Findings sidebar tab but is self-contained so
+// results.html can render without dashboard.js. Plan gating + "Fix This"
+// data flow match dashboard renderFindings exactly; clicking "Fix This"
+// deep-links into dashboard.html with the marketplace pre-opened.
+
+const RESULTS_PACK_CATALOG = {
+    schema_pack:        { name: 'Schema Pack',        tokens: 60, minPlan: 'starter' },
+    faq_pack:           { name: 'FAQ Pack',           tokens: 35, minPlan: 'starter' },
+    evidence_trust:     { name: 'Evidence / Trust',   tokens: 40, minPlan: 'starter' },
+    entity_clarity:     { name: 'Entity Clarity',     tokens: 45, minPlan: 'starter' },
+    quick_wins:         { name: 'Quick Wins',         tokens: 15, minPlan: 'starter' },
+    content_brief:      { name: 'Content Brief',      tokens: 30, minPlan: 'starter' },
+    comparison:         { name: 'Comparison/Counter', tokens: 70, minPlan: 'pro'     },
+    ai_ready_draft:     { name: 'AI-Ready Draft',     tokens: 80, minPlan: 'starter' },
+    audit_pdf:          { name: 'Audit PDF',          tokens: 10, minPlan: 'starter' },
+    refresh:            { name: 'Refresh',            tokens: 20, minPlan: 'starter' },
+    citation_lift:      { name: 'Citation Lift',      tokens: 45, minPlan: 'starter' }
+};
+
+let resultsFindingsData = null;
+let resultsActiveFilters = new Set();
+let resultsScanId = null;
+let resultsUserTier = 'free';
+
+async function loadFindingsForResults(scanId, userTier) {
+    if (!scanId) return;
+    resultsScanId = scanId;
+    resultsUserTier = (userTier || 'free').toLowerCase();
+    const summaryEl = document.getElementById('findingsSummary');
+
+    try {
+        const authToken = localStorage.getItem('authToken') || '';
+        const headers = authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
+        const resp = await fetch(`${API_BASE_URL}/scans/${scanId}/findings`, { headers });
+        if (!resp.ok) throw new Error('findings request failed: ' + resp.status);
+        const data = await resp.json();
+        resultsFindingsData = data;
+
+        const total = data.total_count || 0;
+        if (summaryEl) {
+            summaryEl.textContent = total === 0
+                ? 'No findings for this scan.'
+                : `${total} finding${total !== 1 ? 's' : ''} across ${Object.keys(data.severity_counts || {}).length} severity levels`;
+        }
+
+        updateResultsFilterCounts(data.severity_counts || {});
+        setupResultsSeverityFilters();
+        renderResultsFindings(data.findings || []);
+        renderUpgradeBannerIfNeeded(data);
+    } catch (err) {
+        console.error('[Results/Findings] load error:', err.message);
+        if (summaryEl) summaryEl.textContent = 'Could not load findings.';
+        const container = document.getElementById('findingsContainer');
+        if (container) container.innerHTML = '';
+    }
+}
+
+function updateResultsFilterCounts(counts) {
+    const filtersEl = document.getElementById('resultsSeverityFilters');
+    if (filtersEl) filtersEl.style.display = 'flex';
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v || 0; };
+    set('resFilterCriticalCount', counts.critical);
+    set('resFilterHighCount',     counts.high);
+    set('resFilterMediumCount',   counts.medium);
+    set('resFilterLowCount',      counts.low);
+}
+
+function setupResultsSeverityFilters() {
+    const buttons = document.querySelectorAll('#resultsSeverityFilters .severity-filter-btn');
+    buttons.forEach(btn => {
+        btn.onclick = () => {
+            const severity = btn.getAttribute('data-severity');
+            if (severity === 'all') {
+                resultsActiveFilters.clear();
+                buttons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            } else {
+                const allBtn = document.querySelector('#resultsSeverityFilters .severity-filter-btn[data-severity="all"]');
+                if (allBtn) allBtn.classList.remove('active');
+                if (resultsActiveFilters.has(severity)) {
+                    resultsActiveFilters.delete(severity);
+                    btn.classList.remove('active');
+                } else {
+                    resultsActiveFilters.add(severity);
+                    btn.classList.add('active');
+                }
+                if (resultsActiveFilters.size === 0 && allBtn) allBtn.classList.add('active');
+            }
+            if (resultsFindingsData) renderResultsFindings(resultsFindingsData.findings || []);
+        };
+    });
+}
+
+function renderResultsFindings(findings) {
+    const container = document.getElementById('findingsContainer');
+    const emptyEl = document.getElementById('findingsEmpty');
+    if (!container) return;
+
+    let filtered = findings;
+    if (resultsActiveFilters.size > 0) {
+        filtered = findings.filter(f => resultsActiveFilters.has(f.severity));
+    }
+
+    if (filtered.length === 0) {
+        container.innerHTML = '';
+        if (emptyEl) {
+            emptyEl.style.display = 'block';
+            emptyEl.textContent = resultsActiveFilters.size > 0
+                ? 'No findings match the selected filters.'
+                : 'No findings for this scan.';
+        }
+        return;
+    }
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    container.innerHTML = filtered.map((f) => {
+        const pack = lookupPackForResults(f.suggested_pack_type);
+        const urlCount = f.impacted_url_count || 0;
+        const desc = f.description || '';
+        return `
+            <div class="finding-card" data-severity="${escapeAttrR(f.severity)}">
+                <div class="finding-card-header">
+                    <span class="severity-badge ${escapeAttrR(f.severity)}">${escapeHtmlR(f.severity)}</span>
+                    <span class="finding-title">${escapeHtmlR(f.title || '')}</span>
+                    <span class="pillar-tag">${escapeHtmlR(f.pillar || '')}</span>
+                </div>
+                ${desc ? `<div class="finding-description">${escapeHtmlR(desc)}</div>` : ''}
+                <div class="finding-card-footer">
+                    <div class="finding-meta">
+                        ${urlCount > 0 ? `${urlCount} page${urlCount !== 1 ? 's' : ''} affected` : ''}
+                    </div>
+                    ${renderFixThisButtonForResults(pack)}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.querySelectorAll('.fix-this-btn[data-pack-key]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const state = btn.getAttribute('data-state');
+            const packKey = btn.getAttribute('data-pack-key');
+            if (state === 'locked') {
+                window.location.href = 'plans.html';
+                return;
+            }
+            // Deep-link to dashboard's marketplace with the purchase modal pre-opened
+            window.location.href = `dashboard.html?section=execution-packs&autoPurchase=${encodeURIComponent(packKey)}&scanId=${encodeURIComponent(resultsScanId)}`;
+        });
+    });
+}
+
+function renderFixThisButtonForResults(pack) {
+    if (!pack || !resultsScanId) return '';
+
+    const tier = resultsUserTier;
+    const planRank = { free: 0, guest: 0, diy: 1, starter: 1, pro: 2 };
+    const minRank = planRank[pack.minPlan] || 1;
+    const userRank = planRank[tier] !== undefined ? planRank[tier] : 0;
+    const available = userRank >= minRank;
+    const tooltip = `Generate a ${pack.name} for this scan`;
+    const baseAttrs = `data-pack-key="${escapeAttrR(pack.key)}" data-scan-id="${escapeAttrR(resultsScanId)}"`;
+
+    if (!available) {
+        const label = pack.minPlan === 'pro' ? 'Pro only' : 'Upgrade';
+        return `
+            <button class="fix-this-btn locked" ${baseAttrs} data-state="locked" title="${escapeAttrR(tooltip)}">
+                <span class="fix-lock-label">🔒 ${escapeHtmlR(label)}</span>
+            </button>`;
+    }
+    return `
+        <button class="fix-this-btn" ${baseAttrs} data-state="ready" title="${escapeAttrR(tooltip)}">
+            Fix with ${escapeHtmlR(pack.name)} · ${pack.tokens} tokens
+        </button>`;
+}
+
+function lookupPackForResults(suggestedType) {
+    if (!suggestedType) return null;
+    const cfg = RESULTS_PACK_CATALOG[suggestedType];
+    if (!cfg) return null;
+    return { key: suggestedType, ...cfg };
+}
+
+function renderUpgradeBannerIfNeeded(data) {
+    const banner = document.getElementById('findingsUpgradeBanner');
+    if (!banner) return;
+    if (data.plan_limited && data.total_count > (data.findings ? data.findings.length : 0)) {
+        const shown = document.getElementById('findingsTeaserShown');
+        const total = document.getElementById('findingsTeaserTotal');
+        if (shown) shown.textContent = data.findings.length;
+        if (total) total.textContent = data.total_count;
+        banner.style.display = 'block';
+    } else {
+        banner.style.display = 'none';
+    }
+}
+
+function escapeHtmlR(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function escapeAttrR(s) { return escapeHtmlR(s); }
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', loadScanResults);

@@ -341,6 +341,21 @@ async function initDashboard() {
             navigateToSection(section);
         }
 
+        // Deep-link from results.html "Fix This" → marketplace pre-opens
+        // the purchase modal with the originating scan pre-selected.
+        const autoPurchase = urlParams.get('autoPurchase');
+        const autoScanId = parseInt(urlParams.get('scanId'), 10);
+        if (autoPurchase && Number.isFinite(autoScanId) && autoScanId > 0) {
+            // navigateToPackPurchase handles "section not yet active" + lazy
+            // catalog load + modal open. Fire after current tick so other
+            // section loaders have a chance to schedule first.
+            setTimeout(() => {
+                if (typeof navigateToPackPurchase === 'function') {
+                    navigateToPackPurchase(autoPurchase, autoScanId);
+                }
+            }, 0);
+        }
+
         // Check for ?url= param to auto-populate and trigger scan
         const urlParam = urlParams.get('url');
         if (urlParam) {
@@ -1295,7 +1310,7 @@ async function loadRecentScans() {
                         : '<span class="badge badge-high">Pending</span>';
 
                     return `
-                        <tr style="cursor: pointer;" onclick="window.location.href='dashboard.html?section=findings&scanId=${scan.id}'">
+                        <tr style="cursor: pointer;" onclick="window.location.href='results.html?scanId=${scan.id}'">
                             <td>${date}</td>
                             <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${scan.url}</td>
                             <td><strong>${displayScore}/1000</strong></td>
@@ -1344,7 +1359,7 @@ async function loadRecentScans() {
                             <td>~3 min</td>
                             <td>${statusBadge}</td>
                             <td>
-                                <button class="btn btn-ghost" style="padding: 0.5rem 1rem;" onclick="window.location.href='dashboard.html?section=findings&scanId=${scan.id}'">
+                                <button class="btn btn-ghost" style="padding: 0.5rem 1rem;" onclick="window.location.href='results.html?scanId=${scan.id}'">
                                     View
                                 </button>
                             </td>
@@ -1880,9 +1895,9 @@ function startNewScan() {
         .then(data => {
             hideLoading();
             if (data.scan && data.scan.id) {
-                window.location.href = `dashboard.html?section=findings&scanId=${data.scan.id}`;
+                window.location.href = `results.html?scanId=${data.scan.id}`;
             } else if (data.scanId) {
-                window.location.href = `dashboard.html?section=findings&scanId=${data.scanId}`;
+                window.location.href = `results.html?scanId=${data.scanId}`;
             } else {
                 throw new Error('No scan ID in response');
             }
@@ -1924,9 +1939,9 @@ function startNewScan() {
         .then(data => {
             hideLoading();
             if (data.scan && data.scan.id) {
-                window.location.href = `dashboard.html?section=findings&scanId=${data.scan.id}`;
+                window.location.href = `results.html?scanId=${data.scan.id}`;
             } else if (data.scanId) {
-                window.location.href = `dashboard.html?section=findings&scanId=${data.scanId}`;
+                window.location.href = `results.html?scanId=${data.scanId}`;
             } else {
                 throw new Error('No scan ID in response');
             }
