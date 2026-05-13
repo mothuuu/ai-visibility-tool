@@ -6,6 +6,31 @@
     <title>Scan Results - AI Visibility Score</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
     <link rel="shortcut icon" href="/favicon.ico?v=2">
+    <!--
+        results.html is legacy. The new Findings view lives in dashboard.html.
+        Preserve any scanId/share params and redirect immediately so bookmarked
+        or emailed links land on the new view. This runs BEFORE any other script
+        so the legacy DOM never paints.
+    -->
+    <script>
+        (function () {
+            try {
+                var params = new URLSearchParams(window.location.search);
+                var scanId = params.get('scanId');
+                var target = 'dashboard.html?section=findings';
+                if (scanId) target += '&scanId=' + encodeURIComponent(scanId);
+                // Preserve any 'share' / 'shareToken' params if present so guest-link
+                // flows still work.
+                ['share', 'shareToken', 'token'].forEach(function (k) {
+                    var v = params.get(k);
+                    if (v) target += '&' + k + '=' + encodeURIComponent(v);
+                });
+                window.location.replace(target);
+            } catch (e) {
+                window.location.replace('dashboard.html?section=findings');
+            }
+        })();
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
