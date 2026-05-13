@@ -1295,7 +1295,7 @@ async function loadRecentScans() {
                         : '<span class="badge badge-high">Pending</span>';
 
                     return `
-                        <tr style="cursor: pointer;" onclick="window.location.href='results.html?scanId=${scan.id}'">
+                        <tr style="cursor: pointer;" onclick="window.location.href='dashboard.html?section=findings&scanId=${scan.id}'">
                             <td>${date}</td>
                             <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${scan.url}</td>
                             <td><strong>${displayScore}/1000</strong></td>
@@ -1344,7 +1344,7 @@ async function loadRecentScans() {
                             <td>~3 min</td>
                             <td>${statusBadge}</td>
                             <td>
-                                <button class="btn btn-ghost" style="padding: 0.5rem 1rem;" onclick="window.location.href='results.html?scanId=${scan.id}'">
+                                <button class="btn btn-ghost" style="padding: 0.5rem 1rem;" onclick="window.location.href='dashboard.html?section=findings&scanId=${scan.id}'">
                                     View
                                 </button>
                             </td>
@@ -1548,17 +1548,27 @@ async function loadFindings() {
 
     if (!authToken) return;
 
-    // Get latest scan ID
+    // Get scan ID — prefer ?scanId= URL param, fall back to most recent completed scan.
+    // This lets us deep-link to a specific scan's findings (e.g. from post-scan
+    // redirects, scan history, or a results.html bookmark redirect).
+    let scanId = null;
     try {
-        const scansRes = await fetch(`${API_BASE_URL}/scan/list/recent`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        if (!scansRes.ok) return;
-        const scansData = await scansRes.json();
-        const scans = scansData.scans || [];
-        if (scans.length === 0) return;
+        const urlParams = new URLSearchParams(window.location.search);
+        const requested = parseInt(urlParams.get('scanId'), 10);
+        if (Number.isFinite(requested) && requested > 0) scanId = requested;
+    } catch (_) { /* ignore — fall through to recent lookup */ }
 
-        const scanId = scans[0].id;
+    try {
+        if (!scanId) {
+            const scansRes = await fetch(`${API_BASE_URL}/scan/list/recent`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            if (!scansRes.ok) return;
+            const scansData = await scansRes.json();
+            const scans = scansData.scans || [];
+            if (scans.length === 0) return;
+            scanId = scans[0].id;
+        }
         currentFindingsScanId = scanId;
 
         // Kick off marketplace catalog load in the background so Fix This buttons
@@ -1870,9 +1880,9 @@ function startNewScan() {
         .then(data => {
             hideLoading();
             if (data.scan && data.scan.id) {
-                window.location.href = `results.html?scanId=${data.scan.id}`;
+                window.location.href = `dashboard.html?section=findings&scanId=${data.scan.id}`;
             } else if (data.scanId) {
-                window.location.href = `results.html?scanId=${data.scanId}`;
+                window.location.href = `dashboard.html?section=findings&scanId=${data.scanId}`;
             } else {
                 throw new Error('No scan ID in response');
             }
@@ -1914,9 +1924,9 @@ function startNewScan() {
         .then(data => {
             hideLoading();
             if (data.scan && data.scan.id) {
-                window.location.href = `results.html?scanId=${data.scan.id}`;
+                window.location.href = `dashboard.html?section=findings&scanId=${data.scan.id}`;
             } else if (data.scanId) {
-                window.location.href = `results.html?scanId=${data.scanId}`;
+                window.location.href = `dashboard.html?section=findings&scanId=${data.scanId}`;
             } else {
                 throw new Error('No scan ID in response');
             }
