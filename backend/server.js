@@ -30,6 +30,7 @@ const { getWorker } = require('./jobs/submissionWorker');
 const { sendActionReminders } = require('./jobs/citationNetworkReminders');
 const { startTokenExpiryCron } = require('./jobs/tokenExpiry');
 const { startCitationMonitoringCron } = require('./jobs/citationMonitoring');
+const { startBenchmarkCron } = require('./jobs/benchmarkAggregation');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -195,4 +196,7 @@ app.listen(PORT, () => {
 
   // Schedule citation monitoring job (daily at 2 AM UTC)
   startCitationMonitoringCron();
+
+  // Schedule benchmark aggregation job (weekly Sun 3 AM UTC)
+  startBenchmarkCron();
 });
