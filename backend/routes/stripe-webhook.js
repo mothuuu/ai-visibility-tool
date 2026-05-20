@@ -211,12 +211,13 @@ async function handleSubscriptionDeleted(subscription, client) {
 
   console.log(`✅ User ${user.email} downgraded from ${oldPlan} to free`);
 
-  // Phase 1.8: Expire all tokens on subscription cancellation
+  // Cancellation only expires monthly tokens. Purchased tokens persist
+  // until their 12-month rolling window elapses (handled by the cron).
   try {
-    await TokenService.expireAllTokens(user.id);
-    console.log(`[Token] Expired all tokens for user ${user.id} on subscription cancellation`);
+    await TokenService.expireOnCancellation(user.id);
+    console.log(`[Token] Expired monthly tokens for user ${user.id} on subscription cancellation (purchased preserved)`);
   } catch (tokenErr) {
-    console.error(`[Token] Failed to expire tokens for user ${user.id}:`, tokenErr.message);
+    console.error(`[Token] Failed to expire monthly tokens for user ${user.id}:`, tokenErr.message);
     // Don't break subscription handling — token expiry failure is non-fatal
   }
 

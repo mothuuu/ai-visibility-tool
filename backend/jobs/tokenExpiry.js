@@ -1,15 +1,19 @@
 /**
  * Token Expiry Cron Job
  *
- * Safety-net job that runs daily at midnight UTC to expire tokens for users
- * whose billing cycle has ended. Catches edge cases where webhook-based
- * cycle handling was delayed or missed.
+ * Safety-net job that runs daily at midnight UTC.
+ *
+ * Sweep 1 (monthly): expires monthly_remaining for users whose billing
+ * cycle has ended. Purchased tokens are NOT touched here.
+ *
+ * Sweep 2 (purchased): expires purchased_balance for users whose
+ * 12-month rolling window (purchased_expires_at) has elapsed.
  *
  * Schedule: '0 0 * * *' (midnight UTC)
  * Disable: DISABLE_TOKEN_EXPIRY_CRON=true
  *
- * Idempotent: safe to run repeatedly. If balances are already 0,
- * TokenService.expireAllTokens no-ops.
+ * Idempotent: each TokenService.expire* method no-ops when the
+ * relevant balance is already 0.
  */
 
 const cron = require('node-cron');
@@ -38,14 +42,14 @@ async function runTokenExpiryJob() {
   try {
     console.log('[TokenExpiry] Starting token expiry sweep...');
 
-    // Process in batches to avoid memory spikes
+    // ----- Sweep 1: monthly tokens whose cycle has ended -----
     let hasMore = true;
     while (hasMore) {
       const result = await db.query(`
-        SELECT user_id, monthly_remaining, purchased_balance, cycle_end_date
+        SELECT user_id, monthly_remaining, cycle_end_date
         FROM token_balances
         WHERE cycle_end_date < NOW()
-          AND (monthly_remaining > 0 OR purchased_balance > 0)
+          AND monthly_remaining > 0
         ORDER BY cycle_end_date ASC
         LIMIT $1
       `, [BATCH_SIZE]);
@@ -58,20 +62,57 @@ async function runTokenExpiryJob() {
 
       for (const row of rows) {
         try {
-          await TokenService.expireAllTokens(row.user_id);
+          await TokenService.expireMonthlyTokens(row.user_id);
           totalProcessed++;
           console.log(
-            `[TokenExpiry] Expired tokens for user ${row.user_id} ` +
+            `[TokenExpiry] Expired monthly tokens for user ${row.user_id} ` +
             `(cycle ended ${row.cycle_end_date.toISOString()}, ` +
-            `prev monthly=${row.monthly_remaining}, prev purchased=${row.purchased_balance})`
+            `prev monthly=${row.monthly_remaining})`
           );
         } catch (err) {
           totalErrors++;
-          console.error(`[TokenExpiry] Error expiring tokens for user ${row.user_id}:`, err.message);
+          console.error(`[TokenExpiry] Error expiring monthly tokens for user ${row.user_id}:`, err.message);
         }
       }
 
-      // If we got fewer than BATCH_SIZE, we're done
+      if (rows.length < BATCH_SIZE) {
+        hasMore = false;
+      }
+    }
+
+    // ----- Sweep 2: purchased tokens whose 12-month window has elapsed -----
+    hasMore = true;
+    while (hasMore) {
+      const result = await db.query(`
+        SELECT user_id, purchased_balance, purchased_expires_at
+        FROM token_balances
+        WHERE purchased_expires_at IS NOT NULL
+          AND purchased_expires_at < NOW()
+          AND purchased_balance > 0
+        ORDER BY purchased_expires_at ASC
+        LIMIT $1
+      `, [BATCH_SIZE]);
+
+      const rows = result.rows;
+      if (rows.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      for (const row of rows) {
+        try {
+          await TokenService.expirePurchasedTokens(row.user_id);
+          totalProcessed++;
+          console.log(
+            `Expired purchased tokens for user ${row.user_id} ` +
+            `(expired at ${row.purchased_expires_at.toISOString()})`
+          );
+        } catch (err) {
+          totalErrors++;
+          console.error(`[TokenExpiry] Error expiring purchased tokens for user ${row.user_id}:`, err.message);
+        }
+      }
+
       if (rows.length < BATCH_SIZE) {
         hasMore = false;
       }

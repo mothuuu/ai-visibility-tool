@@ -37,9 +37,9 @@ const mockTokenService = {
     tokenServiceCalls.grantMonthlyTokens.push(args);
     return { monthly_remaining: args[1], purchased_balance: 0, total_available: args[1] };
   },
-  expireAllTokens: async (...args) => {
-    tokenServiceCalls.expireAllTokens = (tokenServiceCalls.expireAllTokens || []);
-    tokenServiceCalls.expireAllTokens.push(args);
+  expireOnCancellation: async (...args) => {
+    tokenServiceCalls.expireOnCancellation = (tokenServiceCalls.expireOnCancellation || []);
+    tokenServiceCalls.expireOnCancellation.push(args);
   }
 };
 
@@ -490,7 +490,7 @@ describe('Phase 1.8: Stripe Webhook Token Handlers', () => {
 
   describe('Token Expiry on Cancellation (customer.subscription.deleted)', () => {
 
-    it('should expire all tokens when subscription is deleted', async () => {
+    it('should expire monthly tokens when subscription is deleted (purchased preserved)', async () => {
       dbQueryResults.userByCustomer = [{ id: 5, email: 'cancel@test.com', plan: 'pro' }];
 
       const event = {
@@ -509,18 +509,18 @@ describe('Phase 1.8: Stripe Webhook Token Handlers', () => {
       const res = makeRes();
       await handleStripeWebhook(req, res);
 
-      assert.ok(tokenServiceCalls.expireAllTokens, 'expireAllTokens should be called');
-      assert.strictEqual(tokenServiceCalls.expireAllTokens[0][0], 5);
+      assert.ok(tokenServiceCalls.expireOnCancellation, 'expireOnCancellation should be called');
+      assert.strictEqual(tokenServiceCalls.expireOnCancellation[0][0], 5);
     });
 
     it('should still downgrade plan even if token expiry fails', async () => {
       dbQueryResults.userByCustomer = [{ id: 5, email: 'cancel@test.com', plan: 'pro' }];
 
-      // Make expireAllTokens throw
-      const originalExpire = mockTokenService.expireAllTokens;
-      mockTokenService.expireAllTokens = async () => {
-        tokenServiceCalls.expireAllTokens = (tokenServiceCalls.expireAllTokens || []);
-        tokenServiceCalls.expireAllTokens.push([5]);
+      // Make expireOnCancellation throw
+      const originalExpire = mockTokenService.expireOnCancellation;
+      mockTokenService.expireOnCancellation = async () => {
+        tokenServiceCalls.expireOnCancellation = (tokenServiceCalls.expireOnCancellation || []);
+        tokenServiceCalls.expireOnCancellation.push([5]);
         throw new Error('DB connection failed');
       };
 
@@ -545,7 +545,7 @@ describe('Phase 1.8: Stripe Webhook Token Handlers', () => {
       assert.ok(body.received, 'Should still return received: true');
 
       // Restore
-      mockTokenService.expireAllTokens = originalExpire;
+      mockTokenService.expireOnCancellation = originalExpire;
     });
   });
 });
