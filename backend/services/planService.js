@@ -904,34 +904,52 @@ async function setOrgPlanOverride(orgId, planOverride, setByUserId, reason) {
  */
 const PLAN_ENTITLEMENTS = Object.freeze({
   free: Object.freeze({
-    scansPerMonth:     1,
+    scansPerMonth:     2,
     pagesPerScan:      1,
     tokensPerCycle:    0,
-    canPurchaseTokens: false,
+    canPurchaseTokens: true,
     hasFindings:       'teaser',
     hasCitation:       'teaser',
     hasCompetitor:     false,
-    hasExports:        false
+    hasExports:        false,
+    maxDomains:        1,
+    scanHistoryDays:   30
   }),
   starter: Object.freeze({
-    scansPerMonth:     4,
+    scansPerMonth:     10,
     pagesPerScan:      3,
-    tokensPerCycle:    60,
+    tokensPerCycle:    50,
     canPurchaseTokens: true,
     hasFindings:       'full',
     hasCitation:       'standard',
     hasCompetitor:     false,
-    hasExports:        false
+    hasExports:        false,
+    maxDomains:        1,
+    scanHistoryDays:   90
   }),
   pro: Object.freeze({
-    scansPerMonth:     -1,
+    scansPerMonth:     100,
     pagesPerScan:      10,
-    tokensPerCycle:    200,
+    tokensPerCycle:    150,
     canPurchaseTokens: true,
     hasFindings:       'full',
     hasCitation:       'pro',
     hasCompetitor:     true,
-    hasExports:        true
+    hasExports:        true,
+    maxDomains:        3,
+    scanHistoryDays:   365
+  }),
+  enterprise: Object.freeze({
+    scansPerMonth:     500,
+    pagesPerScan:      25,
+    tokensPerCycle:    500,
+    canPurchaseTokens: true,
+    hasFindings:       'full',
+    hasCitation:       'pro',
+    hasCompetitor:     true,
+    hasExports:        true,
+    maxDomains:        10,
+    scanHistoryDays:   365
   })
 });
 
