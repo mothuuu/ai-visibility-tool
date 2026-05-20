@@ -1784,7 +1784,9 @@ function renderFixThisButton(pack) {
         `data-pack-key="${escapeHtml(pack.key)}" data-scan-id="${scanId}"`;
 
     if (pack.available === false) {
-        const label = pack.minPlan === 'pro' ? 'Pro only' : 'Upgrade';
+        // After P4 the only restricted tier is 'pro'; keep the ternary in case
+        // future packs gate behind other tiers.
+        const label = pack.minPlan === 'pro' ? 'Pro Only' : `${pack.minPlan} Only`;
         return `
             <button class="fix-this-btn locked" ${baseDataAttrs} data-state="locked" disabled aria-disabled="true">
                 <span class="fix-lock-label"><i class="fas fa-lock"></i> ${escapeHtml(label)}</span>
@@ -5486,15 +5488,15 @@ const PLANS_CONFIG = {
         price: '$0',
         priceNote: 'forever',
         monthlyTokens: 0,
-        canPurchaseTokens: false,
+        canPurchaseTokens: true,
         features: {
-            scansPerMonth: '1',
+            scansPerMonth: '2',
             pagesPerScan: '1',
             findings: 'Top 3 teaser',
             citationMonitoring: 'Snapshot only',
             competitorScanning: '\u2014',
             monthlyTokens: '\u2014',
-            tokenTopUps: '\u2014',
+            tokenTopUps: 'Available',
             benchmarking: '\u2014',
             exports: '\u2014',
             citationAlerts: '\u2014'
@@ -5505,16 +5507,16 @@ const PLANS_CONFIG = {
         planKey: 'diy',           // backend plan name sent to checkout endpoint
         price: '$29',
         priceNote: '/mo',
-        monthlyTokens: 60,
+        monthlyTokens: 50,
         canPurchaseTokens: true,
         highlight: 'Most Popular',
         features: {
-            scansPerMonth: '4',
+            scansPerMonth: '10',
             pagesPerScan: '3',
             findings: 'Full with evidence',
             citationMonitoring: 'Biweekly, 1\u20132 engines',
             competitorScanning: '\u2014',
-            monthlyTokens: '60',
+            monthlyTokens: '50',
             tokenTopUps: 'Available',
             benchmarking: 'Vertical percentile',
             exports: '\u2014',
@@ -5526,16 +5528,16 @@ const PLANS_CONFIG = {
         planKey: 'pro',
         price: '$99',
         priceNote: '/mo',
-        monthlyTokens: 200,
+        monthlyTokens: 150,
         canPurchaseTokens: true,
         highlight: 'Best Value',
         features: {
-            scansPerMonth: 'Unlimited',
+            scansPerMonth: '100',
             pagesPerScan: '10',
             findings: 'Full with evidence',
             citationMonitoring: 'Weekly, 3+ engines, full context',
             competitorScanning: 'Up to 5 domains',
-            monthlyTokens: '200',
+            monthlyTokens: '150',
             tokenTopUps: 'Available',
             benchmarking: 'Vertical percentile',
             exports: 'PDF + CSV',
@@ -5658,13 +5660,19 @@ function renderTokenBalance(balance) {
         cycleEndLine.style.display = 'none';
     }
 
-    // Action button: "Upgrade" for free users, "Buy Tokens" for paid users
+    // Primary action: "Buy Tokens" whenever the plan permits token purchases.
+    // Free users also see a secondary "View Plans" link so the upgrade path
+    // stays visible without being the only friction-laden option.
     const actionBtn = document.getElementById('tokenActionBtn');
+    const viewPlansLink = document.getElementById('tokenViewPlansLink');
+    const planKey = resolvePlanKey(plan);
+
     if (entitlements.canPurchaseTokens) {
         actionBtn.style.display = '';
         actionBtn.textContent = '🪙 Buy Tokens';
         actionBtn.className = 'token-action-btn buy-tokens';
         actionBtn.onclick = toggleBundleSelector;
+        if (viewPlansLink) viewPlansLink.style.display = (planKey === 'free') ? '' : 'none';
     } else {
         actionBtn.style.display = '';
         actionBtn.textContent = '✨ Upgrade';
@@ -5672,6 +5680,7 @@ function renderTokenBalance(balance) {
         actionBtn.onclick = function () {
             window.location.href = ROUTES.PLANS;
         };
+        if (viewPlansLink) viewPlansLink.style.display = 'none';
     }
 }
 
@@ -5917,7 +5926,7 @@ function packCardHtml(pack) {
 
     let footer;
     if (!pack.available) {
-        const label = pack.minPlan === 'pro' ? 'Pro only' : 'Upgrade';
+        const label = pack.minPlan === 'pro' ? 'Pro Only' : `${pack.minPlan} Only`;
         footer = `<span class="pack-upgrade-label"><i class="fas fa-lock"></i> ${escapeHtml(label)}</span>`;
     } else if (!pack.affordable) {
         footer = `

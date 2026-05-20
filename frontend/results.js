@@ -2189,17 +2189,17 @@ window.toggleNotifications = function() {
 // deep-links into dashboard.html with the marketplace pre-opened.
 
 const RESULTS_PACK_CATALOG = {
-    schema_pack:        { name: 'Schema Pack',        tokens: 60, minPlan: 'starter' },
-    faq_pack:           { name: 'FAQ Pack',           tokens: 35, minPlan: 'starter' },
-    evidence_trust:     { name: 'Evidence / Trust',   tokens: 40, minPlan: 'starter' },
-    entity_clarity:     { name: 'Entity Clarity',     tokens: 45, minPlan: 'starter' },
-    quick_wins:         { name: 'Quick Wins',         tokens: 15, minPlan: 'starter' },
-    content_brief:      { name: 'Content Brief',      tokens: 30, minPlan: 'starter' },
-    comparison:         { name: 'Comparison/Counter', tokens: 70, minPlan: 'pro'     },
-    ai_ready_draft:     { name: 'AI-Ready Draft',     tokens: 80, minPlan: 'starter' },
-    audit_pdf:          { name: 'Audit PDF',          tokens: 10, minPlan: 'starter' },
-    refresh:            { name: 'Refresh',            tokens: 20, minPlan: 'starter' },
-    citation_lift:      { name: 'Citation Lift',      tokens: 45, minPlan: 'starter' }
+    schema_pack:        { name: 'Schema Pack',        tokens: 60, minPlan: 'free' },
+    faq_pack:           { name: 'FAQ Pack',           tokens: 35, minPlan: 'free' },
+    evidence_trust:     { name: 'Evidence / Trust',   tokens: 40, minPlan: 'free' },
+    entity_clarity:     { name: 'Entity Clarity',     tokens: 45, minPlan: 'free' },
+    quick_wins:         { name: 'Quick Wins',         tokens: 15, minPlan: 'free' },
+    content_brief:      { name: 'Content Brief',      tokens: 30, minPlan: 'free' },
+    comparison:         { name: 'Comparison/Counter', tokens: 70, minPlan: 'pro'  },
+    ai_ready_draft:     { name: 'AI-Ready Draft',     tokens: 80, minPlan: 'free' },
+    audit_pdf:          { name: 'Audit PDF',          tokens: 10, minPlan: 'free' },
+    refresh:            { name: 'Refresh',            tokens: 20, minPlan: 'free' },
+    citation_lift:      { name: 'Citation Lift',      tokens: 45, minPlan: 'free' }
 };
 
 let resultsFindingsData = null;
@@ -2346,7 +2346,7 @@ function renderFixThisButtonForResults(pack) {
     const baseAttrs = `data-pack-key="${escapeAttrR(pack.key)}" data-scan-id="${escapeAttrR(resultsScanId)}"`;
 
     if (!available) {
-        const label = pack.minPlan === 'pro' ? 'Pro only' : 'Upgrade';
+        const label = pack.minPlan === 'pro' ? 'Pro Only' : `${pack.minPlan} Only`;
         return `
             <button class="fix-this-btn locked" ${baseAttrs} data-state="locked" title="${escapeAttrR(tooltip)}">
                 <span class="fix-lock-label">🔒 ${escapeHtmlR(label)}</span>

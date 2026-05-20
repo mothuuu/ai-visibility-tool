@@ -1100,6 +1100,20 @@
             box-shadow: 0 3px 10px rgba(243, 28, 126, 0.35);
         }
 
+        .token-view-plans-link {
+            display: block;
+            text-align: center;
+            margin-top: 0.4rem;
+            font-size: 0.75rem;
+            color: var(--gray-300);
+            text-decoration: none;
+        }
+
+        .token-view-plans-link:hover {
+            color: var(--cyan);
+            text-decoration: underline;
+        }
+
         /* Bundle selector */
         .token-bundle-selector {
             display: none;
@@ -3842,6 +3856,7 @@
                         <span class="detail-value" id="tokenCycleEndDetail">—</span>
                     </div>
                     <button class="token-action-btn" id="tokenActionBtn" style="display:none;"></button>
+                    <a href="plans.html" class="token-view-plans-link" id="tokenViewPlansLink" style="display:none;">View Plans</a>
                     <div class="token-bundle-selector" id="tokenBundleSelector">
                         <div class="token-bundle-option" data-bundle="20">
                             <span class="bundle-tokens">20 tokens</span>
