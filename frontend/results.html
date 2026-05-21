@@ -420,6 +420,81 @@
             margin-bottom: 30px;
         }
 
+        /* Findings (replaces legacy Detailed Recommendations) */
+        .findings-severity-filters {
+            display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px;
+        }
+        .severity-filter-btn {
+            background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb;
+            padding: 6px 14px; border-radius: 20px; cursor: pointer;
+            font-size: 13px; font-weight: 500; transition: all .15s;
+        }
+        .severity-filter-btn:hover { background: #e5e7eb; }
+        .severity-filter-btn.active { color: #fff; border-color: transparent; }
+        .severity-filter-btn[data-severity="all"].active     { background: #1f2937; }
+        .severity-filter-btn[data-severity="critical"].active { background: #dc2626; }
+        .severity-filter-btn[data-severity="high"].active     { background: #ea580c; }
+        .severity-filter-btn[data-severity="medium"].active   { background: #ca8a04; }
+        .severity-filter-btn[data-severity="low"].active      { background: #16a34a; }
+
+        .finding-card {
+            border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px 20px;
+            margin-bottom: 12px; background: #fff;
+            transition: box-shadow .15s, transform .15s;
+        }
+        .finding-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
+        .finding-card-header {
+            display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px;
+        }
+        .finding-card .severity-badge {
+            display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+            padding: 3px 9px; border-radius: 999px; text-transform: uppercase;
+        }
+        .finding-card .severity-badge.critical { background: rgba(220,38,38,0.12); color: #b91c1c; }
+        .finding-card .severity-badge.high     { background: rgba(234,88,12,0.12); color: #c2410c; }
+        .finding-card .severity-badge.medium   { background: rgba(202,138,4,0.14); color: #a16207; }
+        .finding-card .severity-badge.low      { background: rgba(22,163,74,0.12); color: #15803d; }
+        .finding-card .finding-title {
+            font-weight: 700; color: #111827; font-size: 15px; flex: 1; min-width: 200px;
+        }
+        .finding-card .pillar-tag {
+            font-size: 11px; color: #6b7280; background: #f3f4f6; padding: 3px 8px;
+            border-radius: 4px; text-transform: uppercase; letter-spacing: 0.04em;
+        }
+        .finding-card .finding-description {
+            color: #4b5563; font-size: 14px; line-height: 1.5; margin: 6px 0 10px;
+        }
+        .finding-card-footer {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            flex-wrap: wrap;
+        }
+        .finding-card .finding-meta {
+            color: #6b7280; font-size: 13px;
+        }
+        .finding-card .fix-this-btn {
+            background: linear-gradient(135deg, #00B9DA 0%, #7D41A5 100%);
+            color: #fff; border: none; padding: 8px 16px; border-radius: 8px;
+            font-weight: 600; font-size: 13px; cursor: pointer;
+            transition: transform .15s, box-shadow .15s;
+        }
+        .finding-card .fix-this-btn:hover {
+            transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,185,218,0.3);
+        }
+        .finding-card .fix-this-btn.locked,
+        .finding-card .fix-this-btn.unaffordable {
+            background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb;
+            cursor: not-allowed;
+        }
+        .finding-card .fix-this-btn.locked:hover,
+        .finding-card .fix-this-btn.unaffordable:hover { transform: none; box-shadow: none; }
+        .finding-card .fix-shortfall {
+            display: block; font-size: 11px; color: #f31c7e; font-weight: 600; margin-top: 2px;
+        }
+        .finding-card .fix-lock-label {
+            display: inline-flex; align-items: center; gap: 4px;
+            color: #7D41A5; font-weight: 700;
+        }
+
         .recommendations-header {
             display: flex;
             justify-content: space-between;
@@ -1381,21 +1456,37 @@
         </div>
     </div>
 
-    <!-- Recommendations Section -->
-    <div class="recommendations-section">
+    <!-- Findings Section (replaces legacy "Detailed Recommendations") -->
+    <div class="recommendations-section" id="findingsSection">
         <div class="recommendations-header">
             <div>
-                <h2 class="section-title">Detailed Recommendations</h2>
-                <p style="color: #718096; font-size: 14px; margin-top: 5px;" id="recCount">Loading recommendations...</p>
-            </div>
-            <div class="expand-controls">
-                <button class="expand-btn" onclick="expandAll()">Expand All</button>
-                <button class="expand-btn" onclick="collapseAll()">Collapse All</button>
+                <h2 class="section-title">Findings</h2>
+                <p style="color: #718096; font-size: 14px; margin-top: 5px;" id="findingsSummary">Loading findings…</p>
             </div>
         </div>
 
-        <div id="recommendationsList">
-            <!-- Recommendation cards will be inserted here by JavaScript -->
+        <div class="findings-severity-filters" id="resultsSeverityFilters" style="display:none;">
+            <button class="severity-filter-btn active" data-severity="all">All</button>
+            <button class="severity-filter-btn" data-severity="critical">Critical (<span id="resFilterCriticalCount">0</span>)</button>
+            <button class="severity-filter-btn" data-severity="high">High (<span id="resFilterHighCount">0</span>)</button>
+            <button class="severity-filter-btn" data-severity="medium">Medium (<span id="resFilterMediumCount">0</span>)</button>
+            <button class="severity-filter-btn" data-severity="low">Low (<span id="resFilterLowCount">0</span>)</button>
+        </div>
+
+        <div id="findingsContainer">
+            <!-- Finding cards rendered by results.js -->
+        </div>
+
+        <div id="findingsUpgradeBanner" style="display:none; margin-top:20px; padding:24px; background:linear-gradient(135deg, rgba(0,185,218,0.08) 0%, rgba(125,65,165,0.08) 100%); border:1px dashed rgba(125,65,165,0.4); border-radius:12px; text-align:center;">
+            <div style="font-weight:700; color:#1f2937; margin-bottom:6px;">
+                You're seeing <span id="findingsTeaserShown">3</span> of <span id="findingsTeaserTotal">0</span> findings
+            </div>
+            <div style="color:#6b7280; font-size:14px; margin-bottom:14px;">Upgrade to Starter or Pro to see every finding with full evidence and "Fix This" recommendations.</div>
+            <a href="plans.html" class="expand-btn" style="background:linear-gradient(135deg,#00B9DA 0%, #7D41A5 100%); color:#fff; padding:10px 22px; text-decoration:none; font-weight:600;">View plans</a>
+        </div>
+
+        <div id="findingsEmpty" style="display:none; padding:32px; text-align:center; color:#6b7280;">
+            No findings for this scan.
         </div>
     </div>
 

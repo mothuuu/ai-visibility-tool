@@ -19,6 +19,9 @@ const citationNetworkRoutes = require('./routes/citationNetwork');
 const organizationRoutes = require('./routes/organization');
 const findingsRoutes = require('./routes/findings');
 const tokenRoutes = require('./routes/tokens');
+const packRoutes = require('./routes/packs');
+const citationRoutes = require('./routes/citations');
+const benchmarkRoutes = require('./routes/benchmarks');
 
 // Stripe webhook handler - imported directly for raw body mounting
 // P0: Export as function, not object
@@ -28,6 +31,8 @@ const handleStripeWebhook = require('./routes/stripe-webhook');
 const { getWorker } = require('./jobs/submissionWorker');
 const { sendActionReminders } = require('./jobs/citationNetworkReminders');
 const { startTokenExpiryCron } = require('./jobs/tokenExpiry');
+const { startCitationMonitoringCron } = require('./jobs/citationMonitoring');
+const { startBenchmarkCron } = require('./jobs/benchmarkAggregation');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -119,6 +124,9 @@ app.use('/api/citation-network', citationNetworkRoutes); // AI Citation Network 
 app.use('/api', require('./routes/citation-monitoring')); // Phase 3: Citation Monitoring (separate from citation-network)
 app.use('/api/org', organizationRoutes); // Phase 3B: Organization/Team management
 app.use('/api/tokens', tokenRoutes); // Token balance and purchase
+app.use('/api/packs', packRoutes); // Phase 2: Pack purchase / catalog / history
+app.use('/api/citations', citationRoutes); // Phase 3: Citation latest/history/detail
+app.use('/api/benchmarks', benchmarkRoutes); // Phase 3: Vertical benchmarks
 app.use('/api/test', require('./routes/test-routes'));
 
 // Health check
@@ -189,4 +197,10 @@ app.listen(PORT, () => {
 
   // Schedule token expiry safety-net job (daily at midnight UTC)
   startTokenExpiryCron();
+
+  // Schedule citation monitoring job (daily at 2 AM UTC)
+  startCitationMonitoringCron();
+
+  // Schedule benchmark aggregation job (weekly Sun 3 AM UTC)
+  startBenchmarkCron();
 });

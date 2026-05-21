@@ -341,6 +341,21 @@ async function initDashboard() {
             navigateToSection(section);
         }
 
+        // Deep-link from results.html "Fix This" → marketplace pre-opens
+        // the purchase modal with the originating scan pre-selected.
+        const autoPurchase = urlParams.get('autoPurchase');
+        const autoScanId = parseInt(urlParams.get('scanId'), 10);
+        if (autoPurchase && Number.isFinite(autoScanId) && autoScanId > 0) {
+            // navigateToPackPurchase handles "section not yet active" + lazy
+            // catalog load + modal open. Fire after current tick so other
+            // section loaders have a chance to schedule first.
+            setTimeout(() => {
+                if (typeof navigateToPackPurchase === 'function') {
+                    navigateToPackPurchase(autoPurchase, autoScanId);
+                }
+            }, 0);
+        }
+
         // Check for ?url= param to auto-populate and trigger scan
         const urlParam = urlParams.get('url');
         if (urlParam) {
@@ -1174,6 +1189,10 @@ function navigateToSection(sectionId) {
     // Load section-specific data
     if (sectionId === 'billing-subscription') {
         loadBillingData();
+    } else if (sectionId === 'execution-packs') {
+        if (typeof loadPackCatalog === 'function') loadPackCatalog();
+    } else if (sectionId === 'my-packs') {
+        if (typeof loadPackHistory === 'function') loadPackHistory();
     }
 
     // Update URL without reload
@@ -1480,21 +1499,51 @@ async function loadTrackedPages() {
     if (dashboardPagesTracked) dashboardPagesTracked.textContent = '0';
 }
 
-// Pack catalog — maps suggested_pack_type to display name and token cost
+// Pack catalog — fallback map used only before the marketplace catalog loads.
+// The canonical source is packCatalogData (fetched from /api/packs/catalog).
 const PACK_CATALOG = {
     schema_pack:        { name: 'Schema Pack',        tokens: 60 },
-    faq_pack:           { name: 'FAQ Pack',           tokens: 40 },
-    evidence_trust:     { name: 'Trust Pack',         tokens: 50 },
-    entity_clarity:     { name: 'Entity Pack',        tokens: 45 },
-    citation_pack:      { name: 'Citation Pack',      tokens: 55 },
-    performance_pack:   { name: 'Performance Pack',   tokens: 50 },
-    technical_seo_pack: { name: 'Technical SEO Pack', tokens: 60 },
-    aeo_pack:           { name: 'AEO Pack',           tokens: 50 },
-    quick_wins:         { name: 'Quick Wins Pack',    tokens: 30 }
+    faq_pack:           { name: 'FAQ Pack',           tokens: 35 },
+    evidence_trust:     { name: 'Evidence / Trust',   tokens: 40 },
+    entity_clarity:     { name: 'Entity Clarity',     tokens: 45 },
+    quick_wins:         { name: 'Quick Wins',         tokens: 15 },
+    content_brief:      { name: 'Content Brief',      tokens: 30 },
+    comparison:         { name: 'Comparison/Counter', tokens: 70 },
+    ai_ready_draft:     { name: 'AI-Ready Draft',     tokens: 80 },
+    audit_pdf:          { name: 'Audit PDF',          tokens: 10 },
+    refresh:            { name: 'Refresh',            tokens: 20 },
+    citation_lift:      { name: 'Citation Lift',      tokens: 45 }
 };
+
+// Returns { key, name, cost, available, affordable, minPlan } for a finding's
+// suggested_pack_type, preferring the marketplace catalog when it's loaded.
+// Returns null if suggested_pack_type is unknown — the Fix This button should
+// be hidden in that case.
+function lookupPackForFinding(suggestedType) {
+    if (!suggestedType) return null;
+    if (typeof packCatalogData !== 'undefined' && packCatalogData && packCatalogData.categories) {
+        for (const cat of Object.values(packCatalogData.categories)) {
+            const hit = cat.find(p => p.key === suggestedType);
+            if (hit) return {
+                key: hit.key, name: hit.name, cost: hit.cost,
+                available: hit.available, affordable: hit.affordable,
+                minPlan: hit.minPlan
+            };
+        }
+    }
+    const local = PACK_CATALOG[suggestedType];
+    if (local) {
+        // Without catalog data we can't compute available/affordable accurately;
+        // mark as available+affordable optimistically — the purchase modal will
+        // re-validate and show the correct error if not.
+        return { key: suggestedType, name: local.name, cost: local.tokens, available: true, affordable: true, minPlan: null };
+    }
+    return null;
+}
 
 // Findings state
 let findingsData = null;
+let currentFindingsScanId = null;
 let activeSeverityFilters = new Set();
 
 // Load findings for the latest scan
@@ -1514,17 +1563,37 @@ async function loadFindings() {
 
     if (!authToken) return;
 
-    // Get latest scan ID
+    // Get scan ID — prefer ?scanId= URL param, fall back to most recent completed scan.
+    // This lets us deep-link to a specific scan's findings (e.g. from post-scan
+    // redirects, scan history, or a results.html bookmark redirect).
+    let scanId = null;
     try {
-        const scansRes = await fetch(`${API_BASE_URL}/scan/list/recent`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        if (!scansRes.ok) return;
-        const scansData = await scansRes.json();
-        const scans = scansData.scans || [];
-        if (scans.length === 0) return;
+        const urlParams = new URLSearchParams(window.location.search);
+        const requested = parseInt(urlParams.get('scanId'), 10);
+        if (Number.isFinite(requested) && requested > 0) scanId = requested;
+    } catch (_) { /* ignore — fall through to recent lookup */ }
 
-        const scanId = scans[0].id;
+    try {
+        if (!scanId) {
+            const scansRes = await fetch(`${API_BASE_URL}/scan/list/recent`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            if (!scansRes.ok) return;
+            const scansData = await scansRes.json();
+            const scans = scansData.scans || [];
+            if (scans.length === 0) return;
+            scanId = scans[0].id;
+        }
+        currentFindingsScanId = scanId;
+
+        // Kick off marketplace catalog load in the background so Fix This buttons
+        // can render accurate available/affordable state. Re-render findings once
+        // it returns. Safe to fire-and-forget if it fails — falls back to optimistic state.
+        if (typeof loadPackCatalog === 'function' && !packCatalogData) {
+            loadPackCatalog().then(() => {
+                if (findingsData) renderFindings(findingsData.findings);
+            }).catch(() => { /* silent — buttons stay optimistic */ });
+        }
 
         // Show loading
         if (loadingEl) loadingEl.style.display = 'block';
@@ -1659,7 +1728,7 @@ function renderFindings(findings) {
     }
 
     container.innerHTML = filtered.map((f, idx) => {
-        const pack = f.suggested_pack_type ? PACK_CATALOG[f.suggested_pack_type] : null;
+        const pack = lookupPackForFinding(f.suggested_pack_type);
         const urlCount = f.impacted_url_count || 0;
         const desc = f.description || '';
 
@@ -1678,16 +1747,86 @@ function renderFindings(findings) {
                     <div class="finding-meta">
                         ${urlCount > 0 ? `<span><i class="fas fa-link"></i> ${urlCount} page${urlCount !== 1 ? 's' : ''} affected</span>` : ''}
                     </div>
-                    ${pack ? `
-                        <button class="fix-this-btn" disabled>
-                            Fix with ${escapeHtml(pack.name)} &middot; ${pack.tokens} tokens
-                            <span class="fix-tooltip">Execution Packs coming soon</span>
-                        </button>
-                    ` : ''}
+                    ${renderFixThisButton(pack)}
                 </div>
             </div>
         `;
     }).join('');
+
+    // Bind click handlers to all live (non-locked/non-unaffordable) Fix This buttons.
+    // Unaffordable buttons get a separate click (open bundle selector / suggest top-up).
+    container.querySelectorAll('.fix-this-btn[data-pack-key]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const packKey = btn.getAttribute('data-pack-key');
+            const scanId = parseInt(btn.getAttribute('data-scan-id'), 10);
+            const state = btn.getAttribute('data-state');
+            if (state === 'locked') return; // styled as disabled — no action
+            if (state === 'unaffordable') {
+                // Open token bundle selector / point to upgrade
+                if (typeof toggleBundleSelector === 'function') toggleBundleSelector();
+                else window.location.href = ROUTES && ROUTES.PLANS ? ROUTES.PLANS : 'plans.html';
+                return;
+            }
+            navigateToPackPurchase(packKey, scanId);
+        });
+    });
+}
+
+// Returns the HTML for a Fix This button given a pack lookup result.
+// Returns empty string if pack is null (unknown suggested_pack_type → hide button).
+function renderFixThisButton(pack) {
+    if (!pack) return '';
+    const scanId = currentFindingsScanId;
+    if (!scanId) return ''; // no scan context = can't purchase
+
+    const tooltipText = `Generate a ${pack.name} for this scan`;
+    const baseDataAttrs =
+        `data-pack-key="${escapeHtml(pack.key)}" data-scan-id="${scanId}"`;
+
+    if (pack.available === false) {
+        const label = pack.minPlan === 'pro' ? 'Pro only' : 'Upgrade';
+        return `
+            <button class="fix-this-btn locked" ${baseDataAttrs} data-state="locked" disabled aria-disabled="true">
+                <span class="fix-lock-label"><i class="fas fa-lock"></i> ${escapeHtml(label)}</span>
+                <span class="fix-tooltip">${escapeHtml(tooltipText)}</span>
+            </button>
+        `;
+    }
+
+    if (pack.affordable === false) {
+        const balance = (typeof tokenBalanceData !== 'undefined' && tokenBalanceData && tokenBalanceData.total_available) || 0;
+        const shortfall = Math.max(0, pack.cost - balance);
+        return `
+            <button class="fix-this-btn unaffordable" ${baseDataAttrs} data-state="unaffordable">
+                Fix with ${escapeHtml(pack.name)} &middot; ${pack.cost} tokens
+                <span class="fix-shortfall">Need ${shortfall} more tokens</span>
+                <span class="fix-tooltip">${escapeHtml(tooltipText)}</span>
+            </button>
+        `;
+    }
+
+    return `
+        <button class="fix-this-btn" ${baseDataAttrs} data-state="ready">
+            Fix with ${escapeHtml(pack.name)} &middot; ${pack.cost} tokens
+            <span class="fix-tooltip">${escapeHtml(tooltipText)}</span>
+        </button>
+    `;
+}
+
+// Triggered from "Fix This" → navigate to marketplace and open purchase modal.
+// Handles the case where the marketplace catalog hasn't been loaded yet.
+async function navigateToPackPurchase(packKey, scanId) {
+    if (typeof navigateToSection === 'function') {
+        navigateToSection('execution-packs');
+    }
+    // Ensure marketplace catalog is loaded so openPackPurchaseModal has data.
+    if (!packCatalogData && typeof loadPackCatalog === 'function') {
+        try { await loadPackCatalog(); }
+        catch (e) { console.warn('[Packs] catalog load failed during Fix This:', e.message); }
+    }
+    if (typeof openPackPurchaseModal === 'function') {
+        await openPackPurchaseModal(packKey, scanId);
+    }
 }
 
 function toggleFindingDesc(idx) {
@@ -5657,3 +5796,837 @@ window.addEventListener('DOMContentLoaded', initCitationNetwork);
 window.addEventListener('DOMContentLoaded', initBusinessProfileForm);
 window.addEventListener('DOMContentLoaded', loadExistingProfile);
 window.addEventListener('DOMContentLoaded', initTokenBalanceWidget);
+
+// ============================================================================
+// EXECUTION PACKS MARKETPLACE
+// ============================================================================
+
+let packCatalogData = null;
+let packRecentScans = null;
+let packPendingPurchase = null; // { packKey, scanId } during modal flow
+
+function authHeaders() {
+    const t = localStorage.getItem('authToken');
+    return t ? { 'Authorization': 'Bearer ' + t } : {};
+}
+
+async function loadPackCatalog() {
+    const loadingEl = document.getElementById('packsLoading');
+    const errorEl = document.getElementById('packsCatalogError');
+    const containerEl = document.getElementById('packsCatalogContainer');
+    if (loadingEl) loadingEl.style.display = 'flex';
+    if (errorEl)   errorEl.style.display = 'none';
+    if (containerEl) containerEl.style.display = 'none';
+
+    // Hide detail view, show catalog
+    const detail = document.getElementById('packsDetailView');
+    const catalog = document.getElementById('packsCatalogView');
+    if (detail) detail.style.display = 'none';
+    if (catalog) catalog.style.display = '';
+
+    try {
+        const resp = await fetch(`${API_BASE_URL}/packs/catalog`, { headers: authHeaders() });
+        if (!resp.ok) throw new Error('Catalog request failed: ' + resp.status);
+        const data = await resp.json();
+        packCatalogData = data;
+
+        // Sync the global token balance state with what /catalog returned
+        if (data.token_balance) {
+            tokenBalanceData = {
+                ...(tokenBalanceData || {}),
+                ...data.token_balance
+            };
+            renderTokenBalance(tokenBalanceData);
+        }
+
+        renderPackCatalog(data);
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (containerEl) containerEl.style.display = '';
+    } catch (err) {
+        console.error('[Packs] loadPackCatalog error:', err.message);
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (errorEl) {
+            errorEl.style.display = 'flex';
+            errorEl.innerHTML = `<div>Could not load packs.</div><div style="font-size:0.75rem;">${escapeHtml(err.message)}</div>`;
+        }
+    }
+}
+
+function renderPackCatalog(data) {
+    const balance = data.token_balance || {};
+    document.getElementById('packsBalanceTotal').textContent =
+        balance.total_available != null ? balance.total_available : '—';
+
+    const buyBtn = document.getElementById('packsBuyTokensBtn');
+    if (buyBtn) {
+        buyBtn.onclick = () => {
+            if (typeof toggleBundleSelector === 'function') toggleBundleSelector();
+            else window.location.href = ROUTES.PLANS;
+        };
+    }
+
+    const cats = data.categories || {};
+    renderPackGrid('packsGridFix', cats.fix || []);
+    renderPackGrid('packsGridCreate', cats.create || []);
+    renderPackGrid('packsGridResearch', cats.research || []);
+
+    // Affordable badge in nav
+    const allPacks = [...(cats.fix||[]), ...(cats.create||[]), ...(cats.research||[])];
+    const affordableCount = allPacks.filter(p => p.available && p.affordable).length;
+    const badge = document.getElementById('packsAffordableBadge');
+    if (badge) {
+        if (affordableCount > 0) {
+            badge.textContent = affordableCount;
+            badge.style.display = '';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+}
+
+function renderPackGrid(elId, packs) {
+    const grid = document.getElementById(elId);
+    if (!grid) return;
+    if (packs.length === 0) {
+        grid.innerHTML = '<div style="grid-column:1/-1; color:var(--gray-400); font-size:0.875rem;">No packs in this category.</div>';
+        return;
+    }
+    // Sort: available+affordable, then available+unaffordable, then locked
+    const sorted = [...packs].sort((a, b) => {
+        const score = (p) => p.available && p.affordable ? 0 : (p.available ? 1 : 2);
+        return score(a) - score(b);
+    });
+    grid.innerHTML = sorted.map(packCardHtml).join('');
+
+    // Bind events
+    grid.querySelectorAll('.pack-buy-btn[data-pack-key]').forEach(btn => {
+        btn.addEventListener('click', () => openPackPurchaseModal(btn.getAttribute('data-pack-key')));
+    });
+    grid.querySelectorAll('.pack-shortfall-link[data-pack-key]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (typeof toggleBundleSelector === 'function') toggleBundleSelector();
+            else window.location.href = ROUTES.PLANS;
+        });
+    });
+}
+
+function packCardHtml(pack) {
+    const balance = (packCatalogData && packCatalogData.token_balance) || {};
+    const total = balance.total_available || 0;
+    const shortfall = Math.max(0, pack.cost - total);
+
+    let footer;
+    if (!pack.available) {
+        const label = pack.minPlan === 'pro' ? 'Pro only' : 'Upgrade';
+        footer = `<span class="pack-upgrade-label"><i class="fas fa-lock"></i> ${escapeHtml(label)}</span>`;
+    } else if (!pack.affordable) {
+        footer = `
+            <button class="pack-buy-btn" disabled>Buy</button>
+            <button class="pack-shortfall-link" data-pack-key="${escapeAttr(pack.key)}">
+                Need ${shortfall} more tokens
+            </button>`;
+    } else {
+        footer = `<button class="pack-buy-btn" data-pack-key="${escapeAttr(pack.key)}">Buy</button>`;
+    }
+
+    const lockIcon = !pack.available
+        ? '<i class="fas fa-lock pack-lock-icon"></i>'
+        : '';
+
+    return `
+        <div class="pack-card${pack.available ? '' : ' locked'}">
+            <h3 class="pack-card-name">${lockIcon}${escapeHtml(pack.name)}</h3>
+            <div class="pack-card-desc">${escapeHtml(pack.description || '')}</div>
+            <div class="pack-card-cost">
+                <span class="num">${pack.cost}</span><span class="unit">tokens</span>
+            </div>
+            <div class="pack-card-footer">
+                <span class="pack-card-meta">${escapeHtml(pack.category || '')}${pack.requiresAI === false ? ' · no AI' : ''}</span>
+                <div style="display:flex; align-items:center; gap:0.5rem;">${footer}</div>
+            </div>
+        </div>`;
+}
+
+// --------------------------------------------------------------------------
+// Purchase modal
+// --------------------------------------------------------------------------
+async function openPackPurchaseModal(packKey, preselectScanId) {
+    if (!packCatalogData) return;
+    const pack = findPackInCatalog(packKey);
+    if (!pack || !pack.available) return;
+
+    const modal = document.getElementById('packPurchaseModal');
+    document.getElementById('packPurchasePackName').textContent = pack.name;
+    document.getElementById('packPurchaseDescription').textContent = pack.description || '';
+    document.getElementById('packPurchaseCost').textContent = String(pack.cost);
+
+    const balance = (packCatalogData.token_balance && packCatalogData.token_balance.total_available) || 0;
+    document.getElementById('packPurchaseBalanceNow').textContent = balance + ' tokens';
+    document.getElementById('packPurchaseBalanceAfter').textContent = (balance - pack.cost) + ' tokens';
+
+    document.getElementById('packPurchaseError').style.display = 'none';
+    packPendingPurchase = { packKey };
+    modal.style.display = 'flex';
+
+    // Populate scan dropdown, optionally pre-selecting a specific scan
+    await populateScanSelector(preselectScanId);
+
+    const confirmBtn = document.getElementById('packPurchaseConfirmBtn');
+    confirmBtn.disabled = false;
+    confirmBtn.onclick = onConfirmPackPurchase;
+}
+
+function closePackPurchaseModal() {
+    const modal = document.getElementById('packPurchaseModal');
+    if (modal) modal.style.display = 'none';
+    packPendingPurchase = null;
+}
+
+async function populateScanSelector(preselectScanId) {
+    const select = document.getElementById('packPurchaseScanSelect');
+    select.innerHTML = '<option value="">Loading scans…</option>';
+
+    try {
+        // Reuse existing scan history endpoint
+        const resp = await fetch(`${API_BASE_URL}/scans/history?limit=10`, { headers: authHeaders() });
+        if (resp.ok) {
+            const data = await resp.json();
+            packRecentScans = (data.scans || data.results || data || []).filter(s =>
+                (s.status || 'completed') === 'completed'
+            );
+        } else {
+            packRecentScans = [];
+        }
+    } catch (err) {
+        console.warn('[Packs] scan history fetch failed:', err.message);
+        packRecentScans = [];
+    }
+
+    // If a specific scan was requested but the history endpoint didn't return it
+    // (e.g. it's beyond the recent-10 window or the endpoint failed), inject a
+    // minimal entry so the user can still complete the Fix This flow.
+    if (preselectScanId && !packRecentScans.some(s => String(s.id) === String(preselectScanId))) {
+        packRecentScans = [{ id: preselectScanId, primary_domain: 'current scan', created_at: null }, ...packRecentScans];
+    }
+
+    if (!packRecentScans || packRecentScans.length === 0) {
+        select.innerHTML = '<option value="">No completed scans found</option>';
+        document.getElementById('packPurchaseConfirmBtn').disabled = true;
+        return;
+    }
+
+    select.innerHTML = packRecentScans.map((s) => {
+        const isPreselected = preselectScanId && String(s.id) === String(preselectScanId);
+        const label = (s.primary_domain || s.domain || 'scan') +
+            (s.created_at ? ' · ' + new Date(s.created_at).toLocaleDateString() : '') +
+            (s.score != null ? ` · ${s.score}/1000` : '');
+        return `<option value="${escapeAttr(s.id)}"${isPreselected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+    }).join('');
+
+    // If no explicit pre-select, default to the first option (most recent)
+    if (!preselectScanId && select.options.length > 0) {
+        select.options[0].selected = true;
+    }
+}
+
+async function onConfirmPackPurchase() {
+    const select = document.getElementById('packPurchaseScanSelect');
+    const scanId = parseInt(select.value, 10);
+    if (!packPendingPurchase || !scanId) return;
+    const packKey = packPendingPurchase.packKey;
+
+    closePackPurchaseModal();
+
+    // Show generating modal
+    const genModal = document.getElementById('packGeneratingModal');
+    if (genModal) genModal.style.display = 'flex';
+
+    try {
+        const resp = await fetch(`${API_BASE_URL}/packs/purchase`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({ pack_type: packKey, scan_id: scanId })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (genModal) genModal.style.display = 'none';
+
+        if (!resp.ok) {
+            handlePackPurchaseError(resp.status, data, packKey, scanId);
+            return;
+        }
+
+        // Success — update balance + open detail view
+        if (data.balance_remaining) {
+            tokenBalanceData = { ...(tokenBalanceData || {}), ...data.balance_remaining };
+            renderTokenBalance(tokenBalanceData);
+        }
+        packHistoryDirty = true; // refresh My Packs next time it's opened
+        await openPackDetail(data.pack_purchase_id);
+        // Refresh catalog so affordable flags reflect the new balance
+        loadPackCatalog();
+    } catch (err) {
+        if (genModal) genModal.style.display = 'none';
+        alert('Purchase failed: ' + err.message);
+    }
+}
+
+function handlePackPurchaseError(status, data, packKey, scanId) {
+    if (status === 400 && data && data.error === 'Insufficient tokens') {
+        const shortfall = Math.max(0, (data.required || 0) - (data.available || 0));
+        const msg = `You're ${shortfall} tokens short (need ${data.required}, have ${data.available}).`;
+        const useBundle = confirm(msg + '\n\nBuy more tokens now?');
+        if (useBundle && typeof toggleBundleSelector === 'function') toggleBundleSelector();
+        else if (useBundle) window.location.href = ROUTES.PLANS;
+        return;
+    }
+    if (status === 403) {
+        alert((data && data.error) || 'Upgrade required for this pack.');
+        return;
+    }
+    alert((data && data.error) || `Pack purchase failed (status ${status}).`);
+}
+
+// --------------------------------------------------------------------------
+// Detail view
+// --------------------------------------------------------------------------
+let packsDetailOrigin = 'marketplace';   // 'marketplace' | 'history'
+let packsDetailPollTimer = null;
+let packsDetailCurrentId = null;
+
+async function openPackDetail(purchaseId, origin) {
+    packsDetailOrigin = origin === 'history' ? 'history' : 'marketplace';
+    packsDetailCurrentId = purchaseId;
+    if (packsDetailPollTimer) { clearInterval(packsDetailPollTimer); packsDetailPollTimer = null; }
+
+    // The detail view lives inside the execution-packs section.
+    // When opened from My Packs we need to switch sections first.
+    if (packsDetailOrigin === 'history' && typeof navigateToSection === 'function') {
+        navigateToSection('execution-packs');
+    }
+
+    const detail = document.getElementById('packsDetailView');
+    const catalog = document.getElementById('packsCatalogView');
+    const content = document.getElementById('packsDetailContent');
+    content.innerHTML = '<div class="packs-loading"><div class="packs-spinner"></div><span>Loading…</span></div>';
+    if (detail) detail.style.display = '';
+    if (catalog) catalog.style.display = 'none';
+
+    try {
+        const resp = await fetch(`${API_BASE_URL}/packs/${purchaseId}`, { headers: authHeaders() });
+        if (!resp.ok) throw new Error('Pack fetch failed: ' + resp.status);
+        const pack = await resp.json();
+        renderPackDetail(pack);
+
+        // If still generating, start polling
+        if (pack.status === 'pending' || pack.status === 'generating' ||
+            (pack.run && (pack.run.status === 'pending' || pack.run.status === 'generating'))) {
+            startPackDetailPolling(purchaseId);
+        }
+    } catch (err) {
+        content.innerHTML = `<div class="packs-error">Could not load pack: ${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function startPackDetailPolling(purchaseId) {
+    if (packsDetailPollTimer) clearInterval(packsDetailPollTimer);
+    packsDetailPollTimer = setInterval(async () => {
+        if (packsDetailCurrentId !== purchaseId) {
+            clearInterval(packsDetailPollTimer);
+            packsDetailPollTimer = null;
+            return;
+        }
+        try {
+            const resp = await fetch(`${API_BASE_URL}/packs/${purchaseId}`, { headers: authHeaders() });
+            if (!resp.ok) return;
+            const pack = await resp.json();
+            const stillGenerating = pack.status === 'pending' || pack.status === 'generating' ||
+                (pack.run && (pack.run.status === 'pending' || pack.run.status === 'generating'));
+            if (!stillGenerating) {
+                clearInterval(packsDetailPollTimer);
+                packsDetailPollTimer = null;
+                renderPackDetail(pack);
+                packHistoryDirty = true; // surface new status next time history is viewed
+            }
+        } catch (e) {
+            // swallow — next tick will retry
+        }
+    }, 3000);
+}
+
+function closePackDetail() {
+    if (packsDetailPollTimer) { clearInterval(packsDetailPollTimer); packsDetailPollTimer = null; }
+    packsDetailCurrentId = null;
+
+    if (packsDetailOrigin === 'history' && typeof navigateToSection === 'function') {
+        // Hide detail first so re-entering the marketplace section doesn't briefly show it
+        const detail = document.getElementById('packsDetailView');
+        const catalog = document.getElementById('packsCatalogView');
+        if (detail) detail.style.display = 'none';
+        if (catalog) catalog.style.display = '';
+        navigateToSection('my-packs');
+        return;
+    }
+    const detail = document.getElementById('packsDetailView');
+    const catalog = document.getElementById('packsCatalogView');
+    if (detail) detail.style.display = 'none';
+    if (catalog) catalog.style.display = '';
+}
+
+// Keyed stores so we don't shove giant strings into HTML attributes.
+window.__packArtifactStore = window.__packArtifactStore || {};   // id -> text/json string
+window.__packPdfStore = window.__packPdfStore || {};              // id -> base64
+
+function renderPackDetail(pack) {
+    const content = document.getElementById('packsDetailContent');
+    const created = pack.created_at ? new Date(pack.created_at).toLocaleString() : '—';
+    const status = pack.status || (pack.run && pack.run.status) || '';
+    const statusClass = status === 'complete' ? 'complete' :
+                        (status === 'failed' ? 'failed' :
+                         (status === 'pending' || status === 'generating' ? 'generating' : ''));
+    const isGenerating = status === 'pending' || status === 'generating';
+    const isFailed = status === 'failed';
+    const version = pack.run && pack.run.version;
+
+    // Sync back-button label to origin
+    const backLabelEl = document.getElementById('packsBackBtnLabel');
+    if (backLabelEl) {
+        backLabelEl.textContent = packsDetailOrigin === 'history' ? 'Back to My Packs' : 'Back to marketplace';
+    }
+
+    const versionBadge = (version && version > 1)
+        ? `<span class="pack-version-badge">Version ${version} · Generated ${escapeHtml(created)}</span>`
+        : '';
+
+    const actionBtnHtml = isFailed
+        ? `<button class="pack-buy-btn" id="packTryAgainBtn">Try Again</button>`
+        : (isGenerating
+           ? ''
+           : `<button class="pack-buy-btn" id="packGenAgainBtn">Generate again</button>`);
+
+    const headerHtml = `
+        <div class="pack-detail-header">
+            <div>
+                <h2 style="margin:0;">
+                    ${escapeHtml(pack.pack_name || pack.pack_type)}
+                    ${versionBadge}
+                </h2>
+                <div class="pack-detail-meta">
+                    ${pack.tokens_spent} tokens · scan #${pack.scan_id || '—'} · generated ${escapeHtml(created)}
+                    ${pack.run && pack.run.ai_model_used ? ' · ' + escapeHtml(pack.run.ai_model_used) : ''}
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+                <span class="pack-detail-status ${statusClass}">${escapeHtml(status)}</span>
+                ${actionBtnHtml}
+            </div>
+        </div>`;
+
+    let bodyHtml;
+    if (isGenerating) {
+        bodyHtml = `
+            <div class="pack-polling-state">
+                <div class="packs-spinner large"></div>
+                <h3 style="color: var(--gray-700); margin-bottom: 0.5rem;">Your pack is being generated…</h3>
+                <p>This usually takes 10–30 seconds. We'll update automatically when it's ready.</p>
+            </div>`;
+    } else if (isFailed) {
+        const errMsg = (pack.run && pack.run.error_message) || 'Pack generation failed.';
+        bodyHtml = `
+            <div class="packs-error" style="padding:2rem; flex-direction:column; gap:0.5rem;">
+                <div style="font-weight:700; color: var(--brand-pink);">Generation failed</div>
+                <div style="color: var(--gray-600); font-size:0.875rem;">${escapeHtml(errMsg)}</div>
+            </div>`;
+    } else {
+        bodyHtml = (pack.artifacts || []).map(renderPackArtifact).join('') ||
+            '<div class="packs-loading">No artifacts produced.</div>';
+    }
+
+    content.innerHTML = headerHtml + bodyHtml;
+
+    // Bind action buttons
+    const genBtn = document.getElementById('packGenAgainBtn');
+    if (genBtn) genBtn.addEventListener('click', () =>
+        generatePackAgain(pack.pack_type, pack.scan_id, pack.tokens_spent));
+
+    const tryBtn = document.getElementById('packTryAgainBtn');
+    if (tryBtn) tryBtn.addEventListener('click', () =>
+        generatePackAgain(pack.pack_type, pack.scan_id, pack.tokens_spent));
+
+    // Bind artifact actions only when artifacts are visible (i.e. complete status)
+    if (!isGenerating && !isFailed) {
+        for (const a of (pack.artifacts || [])) {
+            bindArtifactActions(a);
+        }
+    }
+}
+
+function renderPackArtifact(a) {
+    const type = a.artifact_type;
+    const bodyId = 'packArtifactBody' + a.id;
+    const actionsId = 'packArtifactActions' + a.id;
+
+    let bodyHtml;
+    if (type === 'json_ld') {
+        const json = JSON.stringify(a.content_full, null, 2);
+        window.__packArtifactStore[a.id] = json;
+        bodyHtml = `<pre class="pack-artifact-code" id="${bodyId}">${highlightJson(json)}</pre>`;
+    } else if (type === 'pdf') {
+        const base64 = a.content_full && a.content_full.pdf_base64;
+        const summary = a.content_full && a.content_full.executive_summary;
+        if (base64) window.__packPdfStore[a.id] = base64;
+        bodyHtml = `<div class="pack-artifact-text" id="${bodyId}">${escapeHtml(summary || a.content_preview || '(PDF generated)')}</div>`;
+    } else if (type === 'checklist') {
+        const items = (a.content_full && (a.content_full.items || a.content_full.checklist)) || [];
+        bodyHtml = `<ul class="pack-artifact-checklist" id="${bodyId}">` +
+            items.map((it, i) =>
+                `<li><input type="checkbox" id="cl${a.id}_${i}"><label for="cl${a.id}_${i}">${escapeHtml(it.title || it.text || JSON.stringify(it))}</label></li>`
+            ).join('') + `</ul>`;
+    } else {
+        const text = (a.content_full && typeof a.content_full === 'object')
+            ? JSON.stringify(a.content_full, null, 2)
+            : (a.content_preview || '');
+        window.__packArtifactStore[a.id] = text;
+        bodyHtml = `<pre class="pack-artifact-text" id="${bodyId}">${escapeHtml(text)}</pre>`;
+    }
+
+    return `
+        <div class="pack-artifact" id="packArtifact${a.id}">
+            <div class="pack-artifact-header">
+                <span class="pack-artifact-type">${escapeHtml(type || '')}</span>
+                <div class="pack-artifact-actions" id="${actionsId}"></div>
+            </div>
+            ${bodyHtml}
+        </div>`;
+}
+
+function bindArtifactActions(a) {
+    const container = document.getElementById('packArtifactActions' + a.id);
+    if (!container) return;
+    const type = a.artifact_type;
+
+    if (type === 'json_ld' || (type !== 'pdf' && type !== 'checklist')) {
+        const btn = document.createElement('button');
+        btn.className = 'pack-artifact-action-btn primary';
+        btn.textContent = type === 'json_ld' ? 'Copy to clipboard' : 'Copy';
+        btn.addEventListener('click', () => {
+            const text = window.__packArtifactStore[a.id] || '';
+            navigator.clipboard.writeText(text).then(
+                () => flashCopySuccess('packArtifactBody' + a.id),
+                err => alert('Copy failed: ' + err.message)
+            );
+        });
+        container.appendChild(btn);
+    }
+
+    if (type === 'pdf' && window.__packPdfStore[a.id]) {
+        const btn = document.createElement('button');
+        btn.className = 'pack-artifact-action-btn primary';
+        btn.textContent = 'Download PDF';
+        btn.addEventListener('click', () => downloadPackPdf(a.id));
+        container.appendChild(btn);
+    }
+}
+function flashCopySuccess(target) {
+    const node = typeof target === 'string' ? document.getElementById(target) : null;
+    if (node) {
+        const orig = node.style.boxShadow;
+        node.style.boxShadow = '0 0 0 2px var(--good-green)';
+        setTimeout(() => { node.style.boxShadow = orig; }, 700);
+    }
+}
+
+function downloadPackPdf(artifactId) {
+    const base64 = window.__packPdfStore && window.__packPdfStore[artifactId];
+    if (!base64) return alert('PDF data unavailable.');
+    try {
+        const bin = atob(base64);
+        const len = bin.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `audit-${artifactId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+        alert('Download failed: ' + e.message);
+    }
+}
+
+function generatePackAgain(packType, scanId, cost) {
+    if (!confirm(`Re-running this pack will cost another ${cost} tokens. Continue?`)) return;
+    packPendingPurchase = { packKey: packType };
+    // Reuse the purchase flow with this scanId pre-selected — bypass modal
+    closePackPurchaseModal();
+    const genModal = document.getElementById('packGeneratingModal');
+    if (genModal) genModal.style.display = 'flex';
+    fetch(`${API_BASE_URL}/packs/purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ pack_type: packType, scan_id: scanId })
+    })
+    .then(async resp => {
+        const data = await resp.json().catch(() => ({}));
+        if (genModal) genModal.style.display = 'none';
+        if (!resp.ok) return handlePackPurchaseError(resp.status, data, packType, scanId);
+        if (data.balance_remaining) {
+            tokenBalanceData = { ...(tokenBalanceData || {}), ...data.balance_remaining };
+            renderTokenBalance(tokenBalanceData);
+        }
+        packHistoryDirty = true; // refresh My Packs next time it's opened
+        return openPackDetail(data.pack_purchase_id);
+    })
+    .catch(err => {
+        if (genModal) genModal.style.display = 'none';
+        alert('Re-generation failed: ' + err.message);
+    });
+}
+
+// --------------------------------------------------------------------------
+// Helpers
+// --------------------------------------------------------------------------
+function findPackInCatalog(key) {
+    if (!packCatalogData || !packCatalogData.categories) return null;
+    for (const cat of Object.values(packCatalogData.categories)) {
+        const hit = cat.find(p => p.key === key);
+        if (hit) return hit;
+    }
+    return null;
+}
+
+function escapeHtml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+function highlightJson(json) {
+    return escapeHtml(json)
+        .replace(/(&quot;[^&]*?&quot;)(\s*:)/g, '<span class="json-key">$1</span>$2')
+        .replace(/:\s*(&quot;[^&]*?&quot;)/g, ': <span class="json-string">$1</span>')
+        .replace(/:\s*(-?\d+(?:\.\d+)?)/g, ': <span class="json-number">$1</span>')
+        .replace(/:\s*(true|false|null)/g, ': <span class="json-bool">$1</span>');
+}
+
+// ============================================================================
+// MY PACKS — purchased pack history
+// ============================================================================
+
+let packHistoryItems = [];     // accumulated purchases across pages
+let packHistoryPage = 1;
+let packHistoryTotal = 0;
+let packHistoryHasMore = false;
+let packHistoryLoading = false;
+let packHistoryDirty = true;   // first visit forces a fetch; new purchases also flip this true
+const PACK_HISTORY_PAGE_SIZE = 20;
+
+async function loadPackHistory(forceReload) {
+    if (packHistoryLoading) return;
+    // If we already have items and history isn't dirty, just re-render
+    if (!forceReload && !packHistoryDirty && packHistoryItems.length > 0) {
+        renderPackHistory();
+        return;
+    }
+    packHistoryLoading = true;
+    packHistoryPage = 1;
+    packHistoryItems = [];
+
+    const loadingEl = document.getElementById('myPacksLoading');
+    const errorEl = document.getElementById('myPacksError');
+    const emptyEl = document.getElementById('myPacksEmpty');
+    const containerEl = document.getElementById('myPacksContainer');
+    if (loadingEl) loadingEl.style.display = 'flex';
+    if (errorEl)   errorEl.style.display = 'none';
+    if (emptyEl)   emptyEl.style.display = 'none';
+    if (containerEl) containerEl.style.display = 'none';
+
+    try {
+        await fetchPackHistoryPage(1);
+        packHistoryDirty = false;
+        renderPackHistory();
+    } catch (err) {
+        console.error('[MyPacks] load error:', err.message);
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (errorEl) {
+            errorEl.style.display = 'flex';
+            errorEl.innerHTML = `<div>Could not load your packs.</div><div style="font-size:0.75rem;">${escapeHtml(err.message)}</div>`;
+        }
+    } finally {
+        packHistoryLoading = false;
+    }
+}
+
+async function loadMorePackHistory() {
+    if (packHistoryLoading || !packHistoryHasMore) return;
+    packHistoryLoading = true;
+    const loadMoreBtn = document.getElementById('myPacksLoadMoreBtn');
+    if (loadMoreBtn) { loadMoreBtn.disabled = true; loadMoreBtn.textContent = 'Loading…'; }
+    try {
+        await fetchPackHistoryPage(packHistoryPage + 1);
+        renderPackHistory();
+    } catch (err) {
+        console.error('[MyPacks] load more error:', err.message);
+        if (loadMoreBtn) { loadMoreBtn.disabled = false; loadMoreBtn.textContent = 'Load more'; }
+    } finally {
+        packHistoryLoading = false;
+    }
+}
+
+async function fetchPackHistoryPage(page) {
+    const resp = await fetch(
+        `${API_BASE_URL}/packs/history?page=${page}&limit=${PACK_HISTORY_PAGE_SIZE}`,
+        { headers: authHeaders() }
+    );
+    if (!resp.ok) throw new Error('history request failed: ' + resp.status);
+    const data = await resp.json();
+    packHistoryPage = data.page;
+    packHistoryTotal = data.total;
+    packHistoryHasMore = !!data.hasMore;
+    packHistoryItems = packHistoryItems.concat(data.purchases || []);
+}
+
+function renderPackHistory() {
+    const loadingEl = document.getElementById('myPacksLoading');
+    const emptyEl = document.getElementById('myPacksEmpty');
+    const containerEl = document.getElementById('myPacksContainer');
+    const listEl = document.getElementById('myPacksList');
+    const counterEl = document.getElementById('myPacksCounter');
+    const shownEl = document.getElementById('myPacksShown');
+    const totalEl = document.getElementById('myPacksTotal');
+    const loadMoreBtn = document.getElementById('myPacksLoadMoreBtn');
+    const badge = document.getElementById('myPacksCountBadge');
+
+    if (loadingEl) loadingEl.style.display = 'none';
+
+    if (badge) {
+        if (packHistoryTotal > 0) {
+            badge.textContent = packHistoryTotal;
+            badge.style.display = '';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    if (packHistoryTotal === 0) {
+        if (emptyEl) emptyEl.style.display = 'block';
+        if (containerEl) containerEl.style.display = 'none';
+        if (counterEl) counterEl.style.display = 'none';
+        return;
+    }
+
+    if (containerEl) containerEl.style.display = '';
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (counterEl) counterEl.style.display = '';
+    if (shownEl) shownEl.textContent = packHistoryItems.length;
+    if (totalEl) totalEl.textContent = packHistoryTotal;
+
+    if (loadMoreBtn) {
+        if (packHistoryHasMore) {
+            loadMoreBtn.style.display = '';
+            loadMoreBtn.disabled = false;
+            loadMoreBtn.textContent = 'Load more';
+            loadMoreBtn.onclick = loadMorePackHistory;
+        } else {
+            loadMoreBtn.style.display = 'none';
+        }
+    }
+
+    if (!listEl) return;
+    listEl.innerHTML = packHistoryItems.map(packHistoryRowHtml).join('');
+
+    // Bind row + button clicks
+    listEl.querySelectorAll('.my-packs-row[data-purchase-id]').forEach(row => {
+        const id = parseInt(row.getAttribute('data-purchase-id'), 10);
+        row.addEventListener('click', (e) => {
+            // If user clicked the View button directly, let its handler run
+            if (e.target.closest('.view-btn')) return;
+            openPackDetail(id, 'history');
+        });
+    });
+    listEl.querySelectorAll('.my-packs-row .view-btn[data-purchase-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = parseInt(btn.getAttribute('data-purchase-id'), 10);
+            openPackDetail(id, 'history');
+        });
+    });
+}
+
+function packHistoryRowHtml(p) {
+    const cat = getPackCategoryForKey(p.pack_type);
+    const status = (p.status || '').toLowerCase();
+    const statusHtml = renderHistoryStatusBadge(status);
+    const date = p.created_at ? formatPackDate(p.created_at) : '—';
+    const scanLabel = p.scan_id ? `scan #${p.scan_id}` : '—';
+    const artifactCountLabel = (p.artifact_count != null)
+        ? `${p.artifact_count} artifact${p.artifact_count !== 1 ? 's' : ''}`
+        : '—';
+
+    return `
+        <div class="my-packs-row" data-purchase-id="${p.id}">
+            <div class="cell-name">
+                <span class="name">${escapeHtml(p.pack_name || p.pack_type || '')}</span>
+                <span class="meta">${escapeHtml(scanLabel)}</span>
+            </div>
+            <div><span class="cell-category ${escapeHtml(cat || '')}">${escapeHtml(cat || '')}</span></div>
+            <div class="cell-value">${p.tokens_spent != null ? p.tokens_spent + ' tokens' : '—'}</div>
+            <div>${statusHtml}</div>
+            <div class="cell-value" title="${escapeHtml(p.created_at || '')}">
+                ${escapeHtml(date)}<br>
+                <span class="cell-label">${escapeHtml(artifactCountLabel)}</span>
+            </div>
+            <div>
+                <button class="view-btn" data-purchase-id="${p.id}" type="button">View</button>
+            </div>
+        </div>`;
+}
+
+function renderHistoryStatusBadge(status) {
+    if (status === 'complete') {
+        return `<span class="my-packs-status complete"><i class="fas fa-check"></i> Complete</span>`;
+    }
+    if (status === 'failed') {
+        return `<span class="my-packs-status failed"><i class="fas fa-times"></i> Failed</span>`;
+    }
+    if (status === 'pending' || status === 'generating') {
+        return `<span class="my-packs-status generating"><span class="mini-spinner"></span> Generating</span>`;
+    }
+    return `<span class="my-packs-status">${escapeHtml(status || 'unknown')}</span>`;
+}
+
+function getPackCategoryForKey(packKey) {
+    if (!packKey) return '';
+    if (packCatalogData && packCatalogData.categories) {
+        for (const [catName, packs] of Object.entries(packCatalogData.categories)) {
+            if (packs.some(p => p.key === packKey)) return catName;
+        }
+    }
+    // Fallback table (mirrors backend packCatalog categories)
+    const fallback = {
+        quick_wins: 'fix', faq_pack: 'fix', evidence_trust: 'fix',
+        entity_clarity: 'fix', schema_pack: 'fix',
+        content_brief: 'create', comparison: 'create', ai_ready_draft: 'create',
+        audit_pdf: 'research', refresh: 'research', citation_lift: 'research',
+        query_refresh: 'research', narrative_repair: 'research',
+        query_baseline_starter: 'research', query_baseline_pro: 'research'
+    };
+    return fallback[packKey] || '';
+}
+
+function formatPackDate(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    const now = new Date();
+    const diffMs = now - d;
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    // Older: explicit date
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
