@@ -2189,17 +2189,17 @@ window.toggleNotifications = function() {
 // deep-links into dashboard.html with the marketplace pre-opened.
 
 const RESULTS_PACK_CATALOG = {
-    schema_pack:        { name: 'Schema Pack',        tokens: 60, minPlan: 'free' },
-    faq_pack:           { name: 'FAQ Pack',           tokens: 35, minPlan: 'free' },
-    evidence_trust:     { name: 'Evidence / Trust',   tokens: 40, minPlan: 'free' },
-    entity_clarity:     { name: 'Entity Clarity',     tokens: 45, minPlan: 'free' },
-    quick_wins:         { name: 'Quick Wins',         tokens: 15, minPlan: 'free' },
-    content_brief:      { name: 'Content Brief',      tokens: 30, minPlan: 'free' },
-    comparison:         { name: 'Comparison/Counter', tokens: 70, minPlan: 'pro'  },
-    ai_ready_draft:     { name: 'AI-Ready Draft',     tokens: 80, minPlan: 'free' },
-    audit_pdf:          { name: 'Audit PDF',          tokens: 10, minPlan: 'free' },
-    refresh:            { name: 'Refresh',            tokens: 20, minPlan: 'free' },
-    citation_lift:      { name: 'Citation Lift',      tokens: 45, minPlan: 'free' }
+    schema_pack:        { name: 'Schema Pack',        tokens: 60, minPlan: 'free', live: true  },
+    faq_pack:           { name: 'FAQ Pack',           tokens: 35, minPlan: 'free', live: true  },
+    evidence_trust:     { name: 'Evidence / Trust',   tokens: 40, minPlan: 'free', live: false },
+    entity_clarity:     { name: 'Entity Clarity',     tokens: 45, minPlan: 'free', live: false },
+    quick_wins:         { name: 'Quick Wins',         tokens: 15, minPlan: 'free', live: true  },
+    content_brief:      { name: 'Content Brief',      tokens: 30, minPlan: 'free', live: false },
+    comparison:         { name: 'Comparison/Counter', tokens: 70, minPlan: 'pro',  live: false },
+    ai_ready_draft:     { name: 'AI-Ready Draft',     tokens: 80, minPlan: 'free', live: false },
+    audit_pdf:          { name: 'Audit PDF',          tokens: 10, minPlan: 'free', live: true  },
+    refresh:            { name: 'Refresh',            tokens: 20, minPlan: 'free', live: true  },
+    citation_lift:      { name: 'Citation Lift',      tokens: 45, minPlan: 'free', live: false }
 };
 
 let resultsFindingsData = null;
@@ -2336,6 +2336,7 @@ function renderResultsFindings(findings) {
 
 function renderFixThisButtonForResults(pack) {
     if (!pack || !resultsScanId) return '';
+    if (pack.live === false) return ''; // roadmap pack — hide Fix-This entirely
 
     const tier = resultsUserTier;
     const planRank = { free: 0, guest: 0, diy: 1, starter: 1, pro: 2 };

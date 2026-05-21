@@ -1501,18 +1501,19 @@ async function loadTrackedPages() {
 
 // Pack catalog — fallback map used only before the marketplace catalog loads.
 // The canonical source is packCatalogData (fetched from /api/packs/catalog).
+// `live` mirrors the backend live flag — non-live packs are roadmap, not purchasable.
 const PACK_CATALOG = {
-    schema_pack:        { name: 'Schema Pack',        tokens: 60 },
-    faq_pack:           { name: 'FAQ Pack',           tokens: 35 },
-    evidence_trust:     { name: 'Evidence / Trust',   tokens: 40 },
-    entity_clarity:     { name: 'Entity Clarity',     tokens: 45 },
-    quick_wins:         { name: 'Quick Wins',         tokens: 15 },
-    content_brief:      { name: 'Content Brief',      tokens: 30 },
-    comparison:         { name: 'Comparison/Counter', tokens: 70 },
-    ai_ready_draft:     { name: 'AI-Ready Draft',     tokens: 80 },
-    audit_pdf:          { name: 'Audit PDF',          tokens: 10 },
-    refresh:            { name: 'Refresh',            tokens: 20 },
-    citation_lift:      { name: 'Citation Lift',      tokens: 45 }
+    schema_pack:        { name: 'Schema Pack',        tokens: 60, live: true  },
+    faq_pack:           { name: 'FAQ Pack',           tokens: 35, live: true  },
+    evidence_trust:     { name: 'Evidence / Trust',   tokens: 40, live: false },
+    entity_clarity:     { name: 'Entity Clarity',     tokens: 45, live: false },
+    quick_wins:         { name: 'Quick Wins',         tokens: 15, live: true  },
+    content_brief:      { name: 'Content Brief',      tokens: 30, live: false },
+    comparison:         { name: 'Comparison/Counter', tokens: 70, live: false },
+    ai_ready_draft:     { name: 'AI-Ready Draft',     tokens: 80, live: false },
+    audit_pdf:          { name: 'Audit PDF',          tokens: 10, live: true  },
+    refresh:            { name: 'Refresh',            tokens: 20, live: true  },
+    citation_lift:      { name: 'Citation Lift',      tokens: 45, live: false }
 };
 
 // Returns { key, name, cost, available, affordable, minPlan } for a finding's
@@ -1527,7 +1528,7 @@ function lookupPackForFinding(suggestedType) {
             if (hit) return {
                 key: hit.key, name: hit.name, cost: hit.cost,
                 available: hit.available, affordable: hit.affordable,
-                minPlan: hit.minPlan
+                minPlan: hit.minPlan, live: hit.live !== false
             };
         }
     }
@@ -1536,7 +1537,7 @@ function lookupPackForFinding(suggestedType) {
         // Without catalog data we can't compute available/affordable accurately;
         // mark as available+affordable optimistically — the purchase modal will
         // re-validate and show the correct error if not.
-        return { key: suggestedType, name: local.name, cost: local.tokens, available: true, affordable: true, minPlan: null };
+        return { key: suggestedType, name: local.name, cost: local.tokens, available: true, affordable: true, minPlan: null, live: local.live !== false };
     }
     return null;
 }
@@ -1776,6 +1777,7 @@ function renderFindings(findings) {
 // Returns empty string if pack is null (unknown suggested_pack_type → hide button).
 function renderFixThisButton(pack) {
     if (!pack) return '';
+    if (pack.live === false) return ''; // roadmap pack — hide button entirely
     const scanId = currentFindingsScanId;
     if (!scanId) return ''; // no scan context = can't purchase
 
@@ -5923,9 +5925,15 @@ function packCardHtml(pack) {
     const balance = (packCatalogData && packCatalogData.token_balance) || {};
     const total = balance.total_available || 0;
     const shortfall = Math.max(0, pack.cost - total);
+    const comingSoon = pack.live === false;
 
     let footer;
-    if (!pack.available) {
+    let badge = '';
+    if (comingSoon) {
+        // Coming Soon takes precedence over plan/tokens — pack genuinely doesn't exist yet.
+        footer = `<button class="pack-buy-btn" disabled>Buy</button>`;
+        badge = `<span class="pack-coming-soon-badge">Coming Soon</span>`;
+    } else if (!pack.available) {
         const label = pack.minPlan === 'pro' ? 'Pro Only' : `${pack.minPlan} Only`;
         footer = `<span class="pack-upgrade-label"><i class="fas fa-lock"></i> ${escapeHtml(label)}</span>`;
     } else if (!pack.affordable) {
@@ -5938,12 +5946,14 @@ function packCardHtml(pack) {
         footer = `<button class="pack-buy-btn" data-pack-key="${escapeAttr(pack.key)}">Buy</button>`;
     }
 
-    const lockIcon = !pack.available
+    const lockIcon = (!comingSoon && !pack.available)
         ? '<i class="fas fa-lock pack-lock-icon"></i>'
         : '';
+    const cardClass = comingSoon ? ' coming-soon' : (pack.available ? '' : ' locked');
 
     return `
-        <div class="pack-card${pack.available ? '' : ' locked'}">
+        <div class="pack-card${cardClass}">
+            ${badge}
             <h3 class="pack-card-name">${lockIcon}${escapeHtml(pack.name)}</h3>
             <div class="pack-card-desc">${escapeHtml(pack.description || '')}</div>
             <div class="pack-card-cost">

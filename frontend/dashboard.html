@@ -1374,6 +1374,22 @@
         .pack-card.locked {
             background: var(--gray-50); border-style: dashed; border-color: var(--gray-300);
         }
+        .pack-card.coming-soon {
+            background: var(--gray-50); border-style: dashed; border-color: var(--gray-300);
+            opacity: 0.78;
+        }
+        .pack-card.coming-soon .pack-card-name,
+        .pack-card.coming-soon .pack-card-desc,
+        .pack-card.coming-soon .pack-card-cost {
+            color: var(--gray-500);
+        }
+        .pack-coming-soon-badge {
+            position: absolute; top: 0.6rem; right: 0.6rem;
+            font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--gray-700); background: var(--gray-200);
+            padding: 0.2rem 0.5rem; border-radius: 999px;
+        }
         .pack-card-name {
             font-size: 1.05rem; font-weight: 700; color: var(--gray-900); margin: 0;
             display: flex; align-items: center; gap: 0.5rem;

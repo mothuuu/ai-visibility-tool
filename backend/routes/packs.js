@@ -58,6 +58,11 @@ router.post('/purchase', authenticateToken, purchaseRateLimiter, async (req, res
       });
     }
 
+    // ---- Reject roadmap packs (no working template yet) ----
+    if (pack.live !== true) {
+      return res.status(400).json({ error: 'This pack is not yet available' });
+    }
+
     // ---- Validate scan_id format ----
     const scanIdNum = parseInt(scanId, 10);
     if (!scanIdNum || Number.isNaN(scanIdNum)) {
@@ -168,6 +173,7 @@ router.get('/catalog', authenticateToken, async (req, res) => {
         category: cfg.category,
         minPlan: cfg.minPlan,
         requiresAI: cfg.requiresAI !== false,
+        live: cfg.live === true,
         available,
         affordable
       };
