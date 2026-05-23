@@ -37,9 +37,9 @@ const mockTokenService = {
     tokenServiceCalls.grantMonthlyTokens.push(args);
     return { monthly_remaining: args[1], purchased_balance: 0, total_available: args[1] };
   },
-  expireAllTokens: async (...args) => {
-    tokenServiceCalls.expireAllTokens = (tokenServiceCalls.expireAllTokens || []);
-    tokenServiceCalls.expireAllTokens.push(args);
+  expireOnCancellation: async (...args) => {
+    tokenServiceCalls.expireOnCancellation = (tokenServiceCalls.expireOnCancellation || []);
+    tokenServiceCalls.expireOnCancellation.push(args);
   }
 };
 
@@ -49,13 +49,24 @@ const mockPlanService = {
   upsertOrgStripeFields: async () => ({ success: false }),
   clearOrgStripeFields: async () => ({ success: false }),
   getEntitlements: (planName) => {
+    // Mirrors PLAN_ENTITLEMENTS post-P2 (50 for Starter/diy, 150 for Pro).
     const entitlements = {
-      free: { tokensPerCycle: 0 },
-      starter: { tokensPerCycle: 60 },
-      diy: { tokensPerCycle: 60 },
-      pro: { tokensPerCycle: 200 }
+      free:    { tokensPerCycle: 0 },
+      starter: { tokensPerCycle: 50 },
+      diy:     { tokensPerCycle: 50 },
+      pro:     { tokensPerCycle: 150 }
     };
     return entitlements[planName] || entitlements.free;
+  },
+  // Test stub: maps price IDs to plan names. The fixtures below pass these.
+  resolvePlanFromStripeFields: (row) => {
+    if (!row || !row.stripe_price_id) return null;
+    if (!['active', 'trialing'].includes(row.stripe_subscription_status)) return null;
+    const map = {
+      price_test_diy: 'diy',
+      price_test_pro: 'pro'
+    };
+    return map[row.stripe_price_id] || null;
   }
 };
 
@@ -401,7 +412,7 @@ describe('Phase 1.8: Stripe Webhook Token Handlers', () => {
       assert.ok(tokenServiceCalls.grantMonthlyTokens, 'grantMonthlyTokens should be called');
       const [userId, tokensPerCycle, startDate, endDate] = tokenServiceCalls.grantMonthlyTokens[0];
       assert.strictEqual(userId, 10);
-      assert.strictEqual(tokensPerCycle, 200); // pro plan
+      assert.strictEqual(tokensPerCycle, 150); // pro plan, post-P2
       assert.ok(startDate instanceof Date);
       assert.ok(endDate instanceof Date);
     });
@@ -485,12 +496,84 @@ describe('Phase 1.8: Stripe Webhook Token Handlers', () => {
   });
 
   // =========================================================================
+  // INITIAL TOKEN GRANT: customer.subscription.created
+  // =========================================================================
+
+  describe('Initial Token Grant (customer.subscription.created)', () => {
+
+    function makeCreatedEvent({ status = 'active', priceId = 'price_test_diy', subId = 'sub_new_1' } = {}) {
+      return {
+        id: 'evt_created_' + subId,
+        type: 'customer.subscription.created',
+        data: {
+          object: {
+            id: subId,
+            customer: 'cus_new_user',
+            status,
+            items: { data: [{ price: { id: priceId } }] },
+            current_period_start: 1700000000,
+            current_period_end:   1702592000
+          }
+        }
+      };
+    }
+
+    it('should grant 50 monthly tokens on new Starter (diy) subscription', async () => {
+      dbQueryResults.userByCustomer = [{ id: 20, email: 'new@starter.test', plan: 'free' }];
+
+      const req = makeReq(makeCreatedEvent({ priceId: 'price_test_diy' }));
+      const res = makeRes();
+      await handleStripeWebhook(req, res);
+
+      assert.ok(tokenServiceCalls.grantMonthlyTokens, 'grantMonthlyTokens should be called');
+      const [userId, tokens, startDate, endDate] = tokenServiceCalls.grantMonthlyTokens[0];
+      assert.strictEqual(userId, 20);
+      assert.strictEqual(tokens, 50, 'Starter (diy) grants 50 tokens per cycle');
+      assert.ok(startDate instanceof Date);
+      assert.ok(endDate instanceof Date);
+    });
+
+    it('should grant 150 monthly tokens on new Pro subscription', async () => {
+      dbQueryResults.userByCustomer = [{ id: 21, email: 'new@pro.test', plan: 'free' }];
+
+      const req = makeReq(makeCreatedEvent({ priceId: 'price_test_pro', subId: 'sub_new_pro' }));
+      const res = makeRes();
+      await handleStripeWebhook(req, res);
+
+      assert.ok(tokenServiceCalls.grantMonthlyTokens, 'grantMonthlyTokens should be called');
+      assert.strictEqual(tokenServiceCalls.grantMonthlyTokens[0][1], 150, 'Pro grants 150 tokens per cycle');
+    });
+
+    it('should NOT grant tokens when price ID does not resolve to a plan', async () => {
+      dbQueryResults.userByCustomer = [{ id: 22, email: 'unknown@price.test', plan: 'free' }];
+
+      const req = makeReq(makeCreatedEvent({ priceId: 'price_unknown_xyz', subId: 'sub_unknown' }));
+      const res = makeRes();
+      await handleStripeWebhook(req, res);
+
+      assert.strictEqual(tokenServiceCalls.grantMonthlyTokens, undefined,
+        'grantMonthlyTokens should NOT be called for unresolvable price');
+    });
+
+    it('should NOT grant tokens for incomplete subscriptions (status != active/trialing)', async () => {
+      dbQueryResults.userByCustomer = [{ id: 23, email: 'incomplete@test', plan: 'free' }];
+
+      const req = makeReq(makeCreatedEvent({ status: 'incomplete', subId: 'sub_incomplete' }));
+      const res = makeRes();
+      await handleStripeWebhook(req, res);
+
+      assert.strictEqual(tokenServiceCalls.grantMonthlyTokens, undefined,
+        'grantMonthlyTokens should NOT be called for incomplete subscriptions');
+    });
+  });
+
+  // =========================================================================
   // SUBSCRIPTION CANCELLATION: customer.subscription.deleted
   // =========================================================================
 
   describe('Token Expiry on Cancellation (customer.subscription.deleted)', () => {
 
-    it('should expire all tokens when subscription is deleted', async () => {
+    it('should expire monthly tokens when subscription is deleted (purchased preserved)', async () => {
       dbQueryResults.userByCustomer = [{ id: 5, email: 'cancel@test.com', plan: 'pro' }];
 
       const event = {
@@ -509,18 +592,18 @@ describe('Phase 1.8: Stripe Webhook Token Handlers', () => {
       const res = makeRes();
       await handleStripeWebhook(req, res);
 
-      assert.ok(tokenServiceCalls.expireAllTokens, 'expireAllTokens should be called');
-      assert.strictEqual(tokenServiceCalls.expireAllTokens[0][0], 5);
+      assert.ok(tokenServiceCalls.expireOnCancellation, 'expireOnCancellation should be called');
+      assert.strictEqual(tokenServiceCalls.expireOnCancellation[0][0], 5);
     });
 
     it('should still downgrade plan even if token expiry fails', async () => {
       dbQueryResults.userByCustomer = [{ id: 5, email: 'cancel@test.com', plan: 'pro' }];
 
-      // Make expireAllTokens throw
-      const originalExpire = mockTokenService.expireAllTokens;
-      mockTokenService.expireAllTokens = async () => {
-        tokenServiceCalls.expireAllTokens = (tokenServiceCalls.expireAllTokens || []);
-        tokenServiceCalls.expireAllTokens.push([5]);
+      // Make expireOnCancellation throw
+      const originalExpire = mockTokenService.expireOnCancellation;
+      mockTokenService.expireOnCancellation = async () => {
+        tokenServiceCalls.expireOnCancellation = (tokenServiceCalls.expireOnCancellation || []);
+        tokenServiceCalls.expireOnCancellation.push([5]);
         throw new Error('DB connection failed');
       };
 
@@ -545,7 +628,7 @@ describe('Phase 1.8: Stripe Webhook Token Handlers', () => {
       assert.ok(body.received, 'Should still return received: true');
 
       // Restore
-      mockTokenService.expireAllTokens = originalExpire;
+      mockTokenService.expireOnCancellation = originalExpire;
     });
   });
 });

@@ -1066,6 +1066,14 @@
             color: rgba(255, 255, 255, 0.9);
         }
 
+        .token-detail-line.token-detail-total {
+            border-top: 1px solid rgba(255, 255, 255, 0.12);
+            padding-top: 0.35rem;
+            margin-top: 0.1rem;
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.95);
+        }
+
         .token-action-btn {
             display: block;
             width: 100%;
@@ -1098,6 +1106,20 @@
         .token-action-btn.upgrade-plan:hover {
             transform: translateY(-1px);
             box-shadow: 0 3px 10px rgba(243, 28, 126, 0.35);
+        }
+
+        .token-view-plans-link {
+            display: block;
+            text-align: center;
+            margin-top: 0.4rem;
+            font-size: 0.75rem;
+            color: var(--gray-300);
+            text-decoration: none;
+        }
+
+        .token-view-plans-link:hover {
+            color: var(--cyan);
+            text-decoration: underline;
         }
 
         /* Bundle selector */
@@ -1359,6 +1381,22 @@
         }
         .pack-card.locked {
             background: var(--gray-50); border-style: dashed; border-color: var(--gray-300);
+        }
+        .pack-card.coming-soon {
+            background: var(--gray-50); border-style: dashed; border-color: var(--gray-300);
+            opacity: 0.78;
+        }
+        .pack-card.coming-soon .pack-card-name,
+        .pack-card.coming-soon .pack-card-desc,
+        .pack-card.coming-soon .pack-card-cost {
+            color: var(--gray-500);
+        }
+        .pack-coming-soon-badge {
+            position: absolute; top: 0.6rem; right: 0.6rem;
+            font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--gray-700); background: var(--gray-200);
+            padding: 0.2rem 0.5rem; border-radius: 999px;
         }
         .pack-card-name {
             font-size: 1.05rem; font-weight: 700; color: var(--gray-900); margin: 0;
@@ -3837,11 +3875,16 @@
                         <span>Purchased</span>
                         <span class="detail-value" id="tokenPurchasedDetail">—</span>
                     </div>
+                    <div class="token-detail-line token-detail-total">
+                        <span>Total available</span>
+                        <span class="detail-value" id="tokenTotalDetail">—</span>
+                    </div>
                     <div class="token-detail-line" id="tokenCycleEndLine" style="display:none;">
                         <span>Cycle ends</span>
                         <span class="detail-value" id="tokenCycleEndDetail">—</span>
                     </div>
                     <button class="token-action-btn" id="tokenActionBtn" style="display:none;"></button>
+                    <a href="plans.html" class="token-view-plans-link" id="tokenViewPlansLink" style="display:none;">View Plans</a>
                     <div class="token-bundle-selector" id="tokenBundleSelector">
                         <div class="token-bundle-option" data-bundle="20">
                             <span class="bundle-tokens">20 tokens</span>

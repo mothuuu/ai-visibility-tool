@@ -29,12 +29,19 @@ const mockDb = {
 };
 
 const mockTokenService = {
-  expireAllTokens: async (userId) => {
+  expireMonthlyTokens: async (userId) => {
     if (tokenServiceErrors[userId]) {
-      tokenServiceCalls.push({ userId, error: true });
+      tokenServiceCalls.push({ userId, method: 'expireMonthlyTokens', error: true });
       throw new Error(tokenServiceErrors[userId]);
     }
-    tokenServiceCalls.push({ userId, error: false });
+    tokenServiceCalls.push({ userId, method: 'expireMonthlyTokens', error: false });
+  },
+  expirePurchasedTokens: async (userId) => {
+    if (tokenServiceErrors[userId]) {
+      tokenServiceCalls.push({ userId, method: 'expirePurchasedTokens', error: true });
+      throw new Error(tokenServiceErrors[userId]);
+    }
+    tokenServiceCalls.push({ userId, method: 'expirePurchasedTokens', error: false });
   }
 };
 
@@ -83,12 +90,37 @@ describe('Token Expiry Job', () => {
 
   describe('runTokenExpiryJob', () => {
 
-    it('should expire tokens for users with expired cycles', async () => {
+    it('should expire monthly tokens for users with expired cycles', async () => {
       const yesterday = new Date(Date.now() - 86400000);
       dbQueryResults.push({
         rows: [
-          { user_id: 1, monthly_remaining: 30, purchased_balance: 10, cycle_end_date: yesterday },
-          { user_id: 2, monthly_remaining: 5, purchased_balance: 0, cycle_end_date: yesterday }
+          { user_id: 1, monthly_remaining: 30, cycle_end_date: yesterday },
+          { user_id: 2, monthly_remaining: 5,  cycle_end_date: yesterday }
+        ]
+      });
+      // Sweep 2 (purchased): no rows
+      dbQueryResults.push({ rows: [] });
+
+      const result = await runTokenExpiryJob();
+
+      assert.strictEqual(result.processed, 2);
+      assert.strictEqual(result.errors, 0);
+      assert.strictEqual(tokenServiceCalls.length, 2);
+      assert.strictEqual(tokenServiceCalls[0].userId, 1);
+      assert.strictEqual(tokenServiceCalls[0].method, 'expireMonthlyTokens');
+      assert.strictEqual(tokenServiceCalls[1].userId, 2);
+      assert.strictEqual(tokenServiceCalls[1].method, 'expireMonthlyTokens');
+    });
+
+    it('should expire purchased tokens when 12-month window elapsed', async () => {
+      const yesterday = new Date(Date.now() - 86400000);
+      // Sweep 1 (monthly): no rows
+      dbQueryResults.push({ rows: [] });
+      // Sweep 2 (purchased): two users past expiry
+      dbQueryResults.push({
+        rows: [
+          { user_id: 7, purchased_balance: 25, purchased_expires_at: yesterday },
+          { user_id: 8, purchased_balance: 10, purchased_expires_at: yesterday }
         ]
       });
 
@@ -97,12 +129,15 @@ describe('Token Expiry Job', () => {
       assert.strictEqual(result.processed, 2);
       assert.strictEqual(result.errors, 0);
       assert.strictEqual(tokenServiceCalls.length, 2);
-      assert.strictEqual(tokenServiceCalls[0].userId, 1);
-      assert.strictEqual(tokenServiceCalls[1].userId, 2);
+      assert.strictEqual(tokenServiceCalls[0].method, 'expirePurchasedTokens');
+      assert.strictEqual(tokenServiceCalls[0].userId, 7);
+      assert.strictEqual(tokenServiceCalls[1].method, 'expirePurchasedTokens');
+      assert.strictEqual(tokenServiceCalls[1].userId, 8);
     });
 
-    it('should return 0 processed when no expired cycles found', async () => {
-      dbQueryResults.push({ rows: [] });
+    it('should return 0 processed when neither sweep finds rows', async () => {
+      dbQueryResults.push({ rows: [] }); // sweep 1
+      dbQueryResults.push({ rows: [] }); // sweep 2
 
       const result = await runTokenExpiryJob();
 
@@ -117,11 +152,13 @@ describe('Token Expiry Job', () => {
 
       dbQueryResults.push({
         rows: [
-          { user_id: 1, monthly_remaining: 10, purchased_balance: 0, cycle_end_date: yesterday },
-          { user_id: 2, monthly_remaining: 20, purchased_balance: 5, cycle_end_date: yesterday },
-          { user_id: 3, monthly_remaining: 15, purchased_balance: 0, cycle_end_date: yesterday }
+          { user_id: 1, monthly_remaining: 10, cycle_end_date: yesterday },
+          { user_id: 2, monthly_remaining: 20, cycle_end_date: yesterday },
+          { user_id: 3, monthly_remaining: 15, cycle_end_date: yesterday }
         ]
       });
+      // Sweep 2: empty
+      dbQueryResults.push({ rows: [] });
 
       const result = await runTokenExpiryJob();
 
@@ -130,42 +167,55 @@ describe('Token Expiry Job', () => {
       assert.strictEqual(tokenServiceCalls.length, 3);
     });
 
-    it('should process multiple batches', async () => {
-      // First batch: full (simulating BATCH_SIZE rows — we use 2 to test the loop)
+    it('should process multiple batches in the monthly sweep', async () => {
       const yesterday = new Date(Date.now() - 86400000);
 
-      // Create 500 rows for first batch
+      // First batch: full (500 rows triggers another sweep-1 query)
       const batch1 = [];
       for (let i = 1; i <= 500; i++) {
-        batch1.push({ user_id: i, monthly_remaining: 10, purchased_balance: 0, cycle_end_date: yesterday });
+        batch1.push({ user_id: i, monthly_remaining: 10, cycle_end_date: yesterday });
       }
       dbQueryResults.push({ rows: batch1 });
 
-      // Second batch: partial (fewer than BATCH_SIZE, signals end)
+      // Second batch: partial (fewer than BATCH_SIZE, ends sweep 1)
       dbQueryResults.push({
         rows: [
-          { user_id: 501, monthly_remaining: 5, purchased_balance: 0, cycle_end_date: yesterday }
+          { user_id: 501, monthly_remaining: 5, cycle_end_date: yesterday }
         ]
       });
+
+      // Sweep 2: empty
+      dbQueryResults.push({ rows: [] });
 
       const result = await runTokenExpiryJob();
 
       assert.strictEqual(result.processed, 501);
       assert.strictEqual(result.errors, 0);
-      assert.strictEqual(dbQueryCalls.length, 2); // Two batch queries
+      assert.strictEqual(dbQueryCalls.length, 3); // 2 sweep-1 queries + 1 sweep-2 query
     });
 
-    it('should query with correct WHERE clause', async () => {
-      dbQueryResults.push({ rows: [] });
+    it('should query with correct WHERE clauses for both sweeps', async () => {
+      dbQueryResults.push({ rows: [] }); // sweep 1
+      dbQueryResults.push({ rows: [] }); // sweep 2
 
       await runTokenExpiryJob();
 
-      assert.strictEqual(dbQueryCalls.length, 1);
-      const { sql } = dbQueryCalls[0];
-      assert.ok(sql.includes('cycle_end_date < NOW()'), 'Should filter by expired cycle');
-      assert.ok(sql.includes('monthly_remaining > 0 OR purchased_balance > 0'), 'Should filter non-zero balances');
-      assert.ok(sql.includes('ORDER BY cycle_end_date ASC'), 'Should order by oldest first');
-      assert.ok(sql.includes('LIMIT'), 'Should use batch limit');
+      assert.strictEqual(dbQueryCalls.length, 2);
+
+      // Sweep 1: monthly tokens past cycle end
+      const sweep1 = dbQueryCalls[0].sql;
+      assert.ok(sweep1.includes('cycle_end_date < NOW()'), 'Sweep 1 should filter by expired cycle');
+      assert.ok(sweep1.includes('monthly_remaining > 0'), 'Sweep 1 should filter non-zero monthly');
+      assert.ok(!sweep1.includes('purchased_balance > 0'), 'Sweep 1 must NOT touch purchased balance');
+      assert.ok(sweep1.includes('ORDER BY cycle_end_date ASC'), 'Sweep 1 should order by oldest first');
+      assert.ok(sweep1.includes('LIMIT'), 'Sweep 1 should use batch limit');
+
+      // Sweep 2: purchased tokens past 12-month rolling expiry
+      const sweep2 = dbQueryCalls[1].sql;
+      assert.ok(sweep2.includes('purchased_expires_at IS NOT NULL'), 'Sweep 2 should require non-null expiry');
+      assert.ok(sweep2.includes('purchased_expires_at < NOW()'), 'Sweep 2 should filter elapsed expiry');
+      assert.ok(sweep2.includes('purchased_balance > 0'), 'Sweep 2 should filter non-zero purchased');
+      assert.ok(sweep2.includes('LIMIT'), 'Sweep 2 should use batch limit');
     });
   });
 
@@ -210,14 +260,16 @@ describe('Token Expiry Job', () => {
     it('should be safe to run twice — second run finds no rows if first succeeded', async () => {
       const yesterday = new Date(Date.now() - 86400000);
 
-      // First run: finds users
+      // First run, sweep 1: one user; sweep 2: empty
       dbQueryResults.push({
-        rows: [{ user_id: 1, monthly_remaining: 30, purchased_balance: 10, cycle_end_date: yesterday }]
+        rows: [{ user_id: 1, monthly_remaining: 30, cycle_end_date: yesterday }]
       });
+      dbQueryResults.push({ rows: [] });
       const result1 = await runTokenExpiryJob();
       assert.strictEqual(result1.processed, 1);
 
-      // Second run: no rows (balances are now 0 so WHERE clause doesn't match)
+      // Second run: both sweeps empty (balances are now 0)
+      dbQueryResults.push({ rows: [] });
       dbQueryResults.push({ rows: [] });
       const result2 = await runTokenExpiryJob();
       assert.strictEqual(result2.processed, 0);

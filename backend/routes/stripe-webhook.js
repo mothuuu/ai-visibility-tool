@@ -26,7 +26,8 @@ const {
   handleSubscriptionDeleted: handleSubDeleted,
   upsertOrgStripeFields,
   clearOrgStripeFields,
-  getEntitlements
+  getEntitlements,
+  resolvePlanFromStripeFields
 } = require('../services/planService');
 
 // Phase 1.8: Import TokenService for token top-up and renewal grants
@@ -211,12 +212,13 @@ async function handleSubscriptionDeleted(subscription, client) {
 
   console.log(`✅ User ${user.email} downgraded from ${oldPlan} to free`);
 
-  // Phase 1.8: Expire all tokens on subscription cancellation
+  // Cancellation only expires monthly tokens. Purchased tokens persist
+  // until their 12-month rolling window elapses (handled by the cron).
   try {
-    await TokenService.expireAllTokens(user.id);
-    console.log(`[Token] Expired all tokens for user ${user.id} on subscription cancellation`);
+    await TokenService.expireOnCancellation(user.id);
+    console.log(`[Token] Expired monthly tokens for user ${user.id} on subscription cancellation (purchased preserved)`);
   } catch (tokenErr) {
-    console.error(`[Token] Failed to expire tokens for user ${user.id}:`, tokenErr.message);
+    console.error(`[Token] Failed to expire monthly tokens for user ${user.id}:`, tokenErr.message);
     // Don't break subscription handling — token expiry failure is non-fatal
   }
 
@@ -275,6 +277,21 @@ async function handleSubscriptionUpdated(subscription, client) {
 
   if (status === 'active' || status === 'trialing') {
     console.log(`✅ Subscription active for ${user.email} (price: ${priceId})`);
+
+    // Sync user.plan when the price ID resolves to a known tier — handles
+    // mid-cycle upgrades/downgrades between Starter and Pro. Tokens are not
+    // re-granted here; the next renewal cycle handles that.
+    const resolvedPlan = resolvePlanFromStripeFields({
+      stripe_subscription_status: status,
+      stripe_price_id: priceId
+    });
+    if (resolvedPlan && resolvedPlan !== user.plan) {
+      await queryFn(
+        `UPDATE users SET plan = $1, updated_at = NOW() WHERE id = $2`,
+        [resolvedPlan, user.id]
+      );
+      console.log(`🔁 Plan changed for ${user.email}: ${user.plan} → ${resolvedPlan}`);
+    }
   } else if (status === 'past_due') {
     console.log(`⚠️  Payment past due for ${user.email}`);
   } else if (status === 'canceled' || status === 'unpaid') {
@@ -404,6 +421,41 @@ async function handleSubscriptionCreated(subscription, client) {
         updated_at = NOW()
     WHERE id = $6
   `, [subscription.id, subscription.status, priceId, periodStart, periodEnd, user.id]);
+
+  // Resolve the wire plan from the Stripe price ID (returns null for
+  // incomplete/unmapped subscriptions). PlanService is the SSOT for both the
+  // price→plan mapping and the per-plan token allowance.
+  const resolvedPlan = resolvePlanFromStripeFields({
+    stripe_subscription_status: subscription.status,
+    stripe_price_id: priceId
+  });
+
+  if (resolvedPlan) {
+    // Keep user.plan in sync with the active subscription so subsequent
+    // getEntitlements(user.plan) calls (e.g. renewal grant) see the right tier.
+    await queryFn(
+      `UPDATE users SET plan = $1, updated_at = NOW() WHERE id = $2`,
+      [resolvedPlan, user.id]
+    );
+
+    // Initial monthly-token grant — Stripe sends the first invoice with
+    // billing_reason='subscription_create', which renewal grant intentionally
+    // ignores. Grant here so the user gets tokens immediately on checkout.
+    try {
+      const tokensPerCycle = getEntitlements(resolvedPlan).tokensPerCycle;
+      if (tokensPerCycle > 0 && periodStart && periodEnd) {
+        await TokenService.grantMonthlyTokens(user.id, tokensPerCycle, periodStart, periodEnd);
+        console.log(`[Token] Granted initial ${tokensPerCycle} monthly tokens to user ${user.id} on new ${resolvedPlan} subscription`);
+      } else {
+        console.log(`[Token] Skipping initial grant for user ${user.id} (plan=${resolvedPlan}, tokensPerCycle=${tokensPerCycle})`);
+      }
+    } catch (tokenErr) {
+      console.error(`[Token] Failed to grant initial tokens for user ${user.id}:`, tokenErr.message);
+      // Don't break subscription handling — token grant failure is non-fatal
+    }
+  } else {
+    console.log(`[Webhook] Could not resolve plan for subscription ${subscription.id} (status=${subscription.status}, price=${priceId}) — skipping plan/token update`);
+  }
 
   // Phase 2.1: Dual-write to organizations
   const orgResult = await upsertOrgStripeFields(customerId, subscription, client);

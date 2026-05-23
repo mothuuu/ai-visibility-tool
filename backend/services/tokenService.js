@@ -22,7 +22,7 @@ const InsufficientTokensError = require('../errors/InsufficientTokensError');
  */
 async function getBalance(userId) {
   const result = await db.query(
-    'SELECT monthly_remaining, purchased_balance, cycle_start_date, cycle_end_date FROM token_balances WHERE user_id = $1',
+    'SELECT monthly_remaining, purchased_balance, cycle_start_date, cycle_end_date, purchased_expires_at FROM token_balances WHERE user_id = $1',
     [userId]
   );
 
@@ -32,7 +32,8 @@ async function getBalance(userId) {
       purchased_balance: 0,
       total_available: 0,
       cycle_start_date: null,
-      cycle_end_date: null
+      cycle_end_date: null,
+      purchased_expires_at: null
     };
   }
 
@@ -42,7 +43,8 @@ async function getBalance(userId) {
     purchased_balance: row.purchased_balance,
     total_available: row.monthly_remaining + row.purchased_balance,
     cycle_start_date: row.cycle_start_date,
-    cycle_end_date: row.cycle_end_date
+    cycle_end_date: row.cycle_end_date,
+    purchased_expires_at: row.purchased_expires_at
   };
 }
 
@@ -139,9 +141,12 @@ async function creditPurchasedTokens(userId, amount, referenceType = 'stripe_pay
       [userId]
     );
 
+    // Rolling 12-month expiry: reset the clock on every credit.
     await client.query(`
       UPDATE token_balances
-      SET purchased_balance = purchased_balance + $2, updated_at = NOW()
+      SET purchased_balance    = purchased_balance + $2,
+          purchased_expires_at = NOW() + INTERVAL '12 months',
+          updated_at           = NOW()
       WHERE user_id = $1
     `, [userId, amount]);
 
@@ -304,14 +309,14 @@ async function expireMonthlyTokens(userId) {
 }
 
 /**
- * Expire ALL tokens (monthly + purchased) for subscription cancellation.
- * Creates separate ledger entries for monthly and purchased if each > 0.
- * No-op if row missing or both balances already 0.
+ * Expire purchased tokens (e.g. 12-month rolling window elapsed).
+ * No-op if row missing or purchased_balance already 0.
+ * Clears purchased_expires_at to NULL since balance is now 0.
  *
  * @param {number} userId
  * @returns {Promise<void>}
  */
-async function expireAllTokens(userId) {
+async function expirePurchasedTokens(userId) {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -328,36 +333,81 @@ async function expireAllTokens(userId) {
 
     const { monthly_remaining, purchased_balance } = lockResult.rows[0];
 
-    if (monthly_remaining === 0 && purchased_balance === 0) {
+    if (purchased_balance === 0) {
       await client.query('COMMIT');
       return;
     }
 
-    // Zero out
     await client.query(`
       UPDATE token_balances
-      SET monthly_remaining = 0, purchased_balance = 0, updated_at = NOW()
+      SET purchased_balance    = 0,
+          purchased_expires_at = NULL,
+          updated_at           = NOW()
       WHERE user_id = $1
     `, [userId]);
 
-    // Separate ledger entries so audit trail is granular
-    if (monthly_remaining > 0) {
-      // balance_after for monthly_expire: only purchased remains (but that will also be zeroed)
-      // Since both are being zeroed in the same tx, the final state is 0.
-      // Log monthly_expire first with balance_after reflecting purchased still present
-      // then purchased_expire with balance_after = 0.
-      await client.query(`
-        INSERT INTO token_transactions (user_id, type, amount, balance_after, reference_type)
-        VALUES ($1, 'monthly_expire', $2, $3, 'cancellation')
-      `, [userId, -monthly_remaining, purchased_balance]);
+    const balanceAfter = monthly_remaining; // purchased is now 0
+
+    await client.query(`
+      INSERT INTO token_transactions (user_id, type, amount, balance_after, reference_type)
+      VALUES ($1, 'purchased_expire', $2, $3, 'system')
+    `, [userId, -purchased_balance, balanceAfter]);
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Expire tokens on subscription cancellation.
+ *
+ * Only monthly_remaining is wiped. Purchased tokens (and their
+ * purchased_expires_at clock) persist after cancellation — they
+ * survive until the 12-month rolling window elapses.
+ *
+ * No-op (no ledger entry) if row missing or monthly_remaining already 0.
+ *
+ * @param {number} userId
+ * @returns {Promise<void>}
+ */
+async function expireOnCancellation(userId) {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+
+    const lockResult = await client.query(
+      'SELECT monthly_remaining, purchased_balance FROM token_balances WHERE user_id = $1 FOR UPDATE',
+      [userId]
+    );
+
+    if (lockResult.rows.length === 0) {
+      await client.query('COMMIT');
+      return;
     }
 
-    if (purchased_balance > 0) {
-      await client.query(`
-        INSERT INTO token_transactions (user_id, type, amount, balance_after, reference_type)
-        VALUES ($1, 'purchased_expire', $2, $3, 'cancellation')
-      `, [userId, -purchased_balance, 0]);
+    const { monthly_remaining, purchased_balance } = lockResult.rows[0];
+
+    if (monthly_remaining === 0) {
+      await client.query('COMMIT');
+      return;
     }
+
+    await client.query(`
+      UPDATE token_balances
+      SET monthly_remaining = 0, updated_at = NOW()
+      WHERE user_id = $1
+    `, [userId]);
+
+    const balanceAfter = purchased_balance; // monthly is now 0, purchased untouched
+
+    await client.query(`
+      INSERT INTO token_transactions (user_id, type, amount, balance_after, reference_type)
+      VALUES ($1, 'monthly_expire', $2, $3, 'cancellation')
+    `, [userId, -monthly_remaining, balanceAfter]);
 
     await client.query('COMMIT');
   } catch (err) {
@@ -378,5 +428,6 @@ module.exports = {
   creditPurchasedTokens,
   spendTokens,
   expireMonthlyTokens,
-  expireAllTokens
+  expirePurchasedTokens,
+  expireOnCancellation
 };

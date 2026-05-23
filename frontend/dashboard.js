@@ -1501,18 +1501,19 @@ async function loadTrackedPages() {
 
 // Pack catalog — fallback map used only before the marketplace catalog loads.
 // The canonical source is packCatalogData (fetched from /api/packs/catalog).
+// `live` mirrors the backend live flag — non-live packs are roadmap, not purchasable.
 const PACK_CATALOG = {
-    schema_pack:        { name: 'Schema Pack',        tokens: 60 },
-    faq_pack:           { name: 'FAQ Pack',           tokens: 35 },
-    evidence_trust:     { name: 'Evidence / Trust',   tokens: 40 },
-    entity_clarity:     { name: 'Entity Clarity',     tokens: 45 },
-    quick_wins:         { name: 'Quick Wins',         tokens: 15 },
-    content_brief:      { name: 'Content Brief',      tokens: 30 },
-    comparison:         { name: 'Comparison/Counter', tokens: 70 },
-    ai_ready_draft:     { name: 'AI-Ready Draft',     tokens: 80 },
-    audit_pdf:          { name: 'Audit PDF',          tokens: 10 },
-    refresh:            { name: 'Refresh',            tokens: 20 },
-    citation_lift:      { name: 'Citation Lift',      tokens: 45 }
+    schema_pack:        { name: 'Schema Pack',        tokens: 60, live: true  },
+    faq_pack:           { name: 'FAQ Pack',           tokens: 35, live: true  },
+    evidence_trust:     { name: 'Evidence / Trust',   tokens: 40, live: false },
+    entity_clarity:     { name: 'Entity Clarity',     tokens: 45, live: false },
+    quick_wins:         { name: 'Quick Wins',         tokens: 15, live: true  },
+    content_brief:      { name: 'Content Brief',      tokens: 30, live: false },
+    comparison:         { name: 'Comparison/Counter', tokens: 70, live: false },
+    ai_ready_draft:     { name: 'AI-Ready Draft',     tokens: 80, live: false },
+    audit_pdf:          { name: 'Audit PDF',          tokens: 10, live: true  },
+    refresh:            { name: 'Refresh',            tokens: 20, live: true  },
+    citation_lift:      { name: 'Citation Lift',      tokens: 45, live: false }
 };
 
 // Returns { key, name, cost, available, affordable, minPlan } for a finding's
@@ -1527,7 +1528,7 @@ function lookupPackForFinding(suggestedType) {
             if (hit) return {
                 key: hit.key, name: hit.name, cost: hit.cost,
                 available: hit.available, affordable: hit.affordable,
-                minPlan: hit.minPlan
+                minPlan: hit.minPlan, live: hit.live !== false
             };
         }
     }
@@ -1536,7 +1537,7 @@ function lookupPackForFinding(suggestedType) {
         // Without catalog data we can't compute available/affordable accurately;
         // mark as available+affordable optimistically — the purchase modal will
         // re-validate and show the correct error if not.
-        return { key: suggestedType, name: local.name, cost: local.tokens, available: true, affordable: true, minPlan: null };
+        return { key: suggestedType, name: local.name, cost: local.tokens, available: true, affordable: true, minPlan: null, live: local.live !== false };
     }
     return null;
 }
@@ -1776,6 +1777,7 @@ function renderFindings(findings) {
 // Returns empty string if pack is null (unknown suggested_pack_type → hide button).
 function renderFixThisButton(pack) {
     if (!pack) return '';
+    if (pack.live === false) return ''; // roadmap pack — hide button entirely
     const scanId = currentFindingsScanId;
     if (!scanId) return ''; // no scan context = can't purchase
 
@@ -1784,7 +1786,9 @@ function renderFixThisButton(pack) {
         `data-pack-key="${escapeHtml(pack.key)}" data-scan-id="${scanId}"`;
 
     if (pack.available === false) {
-        const label = pack.minPlan === 'pro' ? 'Pro only' : 'Upgrade';
+        // After P4 the only restricted tier is 'pro'; keep the ternary in case
+        // future packs gate behind other tiers.
+        const label = pack.minPlan === 'pro' ? 'Pro Only' : `${pack.minPlan} Only`;
         return `
             <button class="fix-this-btn locked" ${baseDataAttrs} data-state="locked" disabled aria-disabled="true">
                 <span class="fix-lock-label"><i class="fas fa-lock"></i> ${escapeHtml(label)}</span>
@@ -5486,15 +5490,15 @@ const PLANS_CONFIG = {
         price: '$0',
         priceNote: 'forever',
         monthlyTokens: 0,
-        canPurchaseTokens: false,
+        canPurchaseTokens: true,
         features: {
-            scansPerMonth: '1',
+            scansPerMonth: '2',
             pagesPerScan: '1',
             findings: 'Top 3 teaser',
             citationMonitoring: 'Snapshot only',
             competitorScanning: '\u2014',
             monthlyTokens: '\u2014',
-            tokenTopUps: '\u2014',
+            tokenTopUps: 'Available',
             benchmarking: '\u2014',
             exports: '\u2014',
             citationAlerts: '\u2014'
@@ -5503,18 +5507,18 @@ const PLANS_CONFIG = {
     starter: {
         name: 'Starter',
         planKey: 'diy',           // backend plan name sent to checkout endpoint
-        price: '$29',
+        price: '$19',
         priceNote: '/mo',
-        monthlyTokens: 60,
+        monthlyTokens: 50,
         canPurchaseTokens: true,
         highlight: 'Most Popular',
         features: {
-            scansPerMonth: '4',
+            scansPerMonth: '10',
             pagesPerScan: '3',
             findings: 'Full with evidence',
             citationMonitoring: 'Biweekly, 1\u20132 engines',
             competitorScanning: '\u2014',
-            monthlyTokens: '60',
+            monthlyTokens: '50',
             tokenTopUps: 'Available',
             benchmarking: 'Vertical percentile',
             exports: '\u2014',
@@ -5524,20 +5528,40 @@ const PLANS_CONFIG = {
     pro: {
         name: 'Pro',
         planKey: 'pro',
-        price: '$99',
+        price: '$49',
         priceNote: '/mo',
-        monthlyTokens: 200,
+        monthlyTokens: 150,
         canPurchaseTokens: true,
         highlight: 'Best Value',
         features: {
-            scansPerMonth: 'Unlimited',
+            scansPerMonth: '100',
             pagesPerScan: '10',
-            findings: 'Full with evidence',
+            findings: 'Full + BVI',
             citationMonitoring: 'Weekly, 3+ engines, full context',
-            competitorScanning: 'Up to 5 domains',
-            monthlyTokens: '200',
+            competitorScanning: 'Up to 3 domains',
+            monthlyTokens: '150',
             tokenTopUps: 'Available',
             benchmarking: 'Vertical percentile',
+            exports: 'PDF + CSV',
+            citationAlerts: 'Gained/lost alerts'
+        }
+    },
+    enterprise: {
+        name: 'Enterprise',
+        planKey: null,            // no Stripe checkout; sales contact instead
+        price: 'Contact',
+        priceNote: 'Sales',
+        monthlyTokens: 0,
+        canPurchaseTokens: true,
+        features: {
+            scansPerMonth: '500',
+            pagesPerScan: '25',
+            findings: 'Full + BVI',
+            citationMonitoring: 'Daily',
+            competitorScanning: 'Up to 10 domains',
+            monthlyTokens: 'Custom',
+            tokenTopUps: 'Available',
+            benchmarking: 'Custom',
             exports: 'PDF + CSV',
             citationAlerts: 'Gained/lost alerts'
         }
@@ -5640,11 +5664,13 @@ function renderTokenBalance(balance) {
         widget.classList.remove('low-balance');
     }
 
-    // Breakdown details
+    // Breakdown details. For free users, monthlyAllowance is 0 so the formula
+    // renders "0 of 0" — same shape as paid users, no special-case needed.
     const monthlyAllowance = entitlements.monthlyAllowance;
     document.getElementById('tokenMonthlyDetail').textContent =
-        plan === 'free' ? '0' : `${balance.monthly_remaining || 0} of ${monthlyAllowance}`;
+        `${balance.monthly_remaining || 0} of ${monthlyAllowance}`;
     document.getElementById('tokenPurchasedDetail').textContent = balance.purchased_balance || 0;
+    document.getElementById('tokenTotalDetail').textContent = total;
 
     // Cycle end date
     const cycleEndLine = document.getElementById('tokenCycleEndLine');
@@ -5658,21 +5684,19 @@ function renderTokenBalance(balance) {
         cycleEndLine.style.display = 'none';
     }
 
-    // Action button: "Upgrade" for free users, "Buy Tokens" for paid users
+    // Primary action: "Buy Tokens" — every plan (including Free) now has
+    // canPurchaseTokens=true, so the previous "Upgrade" fallback is gone.
+    // Free users get an additional secondary "View Plans" link so the
+    // upgrade path stays visible without being the only friction-laden CTA.
     const actionBtn = document.getElementById('tokenActionBtn');
-    if (entitlements.canPurchaseTokens) {
-        actionBtn.style.display = '';
-        actionBtn.textContent = '🪙 Buy Tokens';
-        actionBtn.className = 'token-action-btn buy-tokens';
-        actionBtn.onclick = toggleBundleSelector;
-    } else {
-        actionBtn.style.display = '';
-        actionBtn.textContent = '✨ Upgrade';
-        actionBtn.className = 'token-action-btn upgrade-plan';
-        actionBtn.onclick = function () {
-            window.location.href = ROUTES.PLANS;
-        };
-    }
+    const viewPlansLink = document.getElementById('tokenViewPlansLink');
+    const planKey = resolvePlanKey(plan);
+
+    actionBtn.style.display = '';
+    actionBtn.textContent = '🪙 Buy Tokens';
+    actionBtn.className = 'token-action-btn buy-tokens';
+    actionBtn.onclick = toggleBundleSelector;
+    if (viewPlansLink) viewPlansLink.style.display = (planKey === 'free') ? '' : 'none';
 }
 
 function toggleBundleSelector() {
@@ -5914,10 +5938,16 @@ function packCardHtml(pack) {
     const balance = (packCatalogData && packCatalogData.token_balance) || {};
     const total = balance.total_available || 0;
     const shortfall = Math.max(0, pack.cost - total);
+    const comingSoon = pack.live === false;
 
     let footer;
-    if (!pack.available) {
-        const label = pack.minPlan === 'pro' ? 'Pro only' : 'Upgrade';
+    let badge = '';
+    if (comingSoon) {
+        // Coming Soon takes precedence over plan/tokens — pack genuinely doesn't exist yet.
+        footer = `<button class="pack-buy-btn" disabled>Buy</button>`;
+        badge = `<span class="pack-coming-soon-badge">Coming Soon</span>`;
+    } else if (!pack.available) {
+        const label = pack.minPlan === 'pro' ? 'Pro Only' : `${pack.minPlan} Only`;
         footer = `<span class="pack-upgrade-label"><i class="fas fa-lock"></i> ${escapeHtml(label)}</span>`;
     } else if (!pack.affordable) {
         footer = `
@@ -5929,12 +5959,14 @@ function packCardHtml(pack) {
         footer = `<button class="pack-buy-btn" data-pack-key="${escapeAttr(pack.key)}">Buy</button>`;
     }
 
-    const lockIcon = !pack.available
+    const lockIcon = (!comingSoon && !pack.available)
         ? '<i class="fas fa-lock pack-lock-icon"></i>'
         : '';
+    const cardClass = comingSoon ? ' coming-soon' : (pack.available ? '' : ' locked');
 
     return `
-        <div class="pack-card${pack.available ? '' : ' locked'}">
+        <div class="pack-card${cardClass}">
+            ${badge}
             <h3 class="pack-card-name">${lockIcon}${escapeHtml(pack.name)}</h3>
             <div class="pack-card-desc">${escapeHtml(pack.description || '')}</div>
             <div class="pack-card-cost">
@@ -6037,7 +6069,26 @@ async function onConfirmPackPurchase() {
 
     closePackPurchaseModal();
 
-    // Show generating modal
+    // Client-side balance pre-check. The backend re-validates under lock, so
+    // this is purely to keep the "Generating your pack…" spinner from flashing
+    // when we already know the user can't afford this pack. We use the freshest
+    // balance we have — tokenBalanceData is updated by the widget, the catalog
+    // load, and the post-purchase response — falling back to the catalog snapshot.
+    const pack = findPackInCatalog(packKey);
+    const liveBalance =
+        (typeof tokenBalanceData !== 'undefined' && tokenBalanceData && tokenBalanceData.total_available) ??
+        (packCatalogData && packCatalogData.token_balance && packCatalogData.token_balance.total_available) ??
+        0;
+    if (pack && liveBalance < pack.cost) {
+        handlePackPurchaseError(400, {
+            error: 'Insufficient tokens',
+            required: pack.cost,
+            available: liveBalance
+        }, packKey, scanId);
+        return;
+    }
+
+    // Balance looked sufficient — show the spinner while we generate.
     const genModal = document.getElementById('packGeneratingModal');
     if (genModal) genModal.style.display = 'flex';
 
