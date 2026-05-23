@@ -5664,11 +5664,13 @@ function renderTokenBalance(balance) {
         widget.classList.remove('low-balance');
     }
 
-    // Breakdown details
+    // Breakdown details. For free users, monthlyAllowance is 0 so the formula
+    // renders "0 of 0" — same shape as paid users, no special-case needed.
     const monthlyAllowance = entitlements.monthlyAllowance;
     document.getElementById('tokenMonthlyDetail').textContent =
-        plan === 'free' ? '0' : `${balance.monthly_remaining || 0} of ${monthlyAllowance}`;
+        `${balance.monthly_remaining || 0} of ${monthlyAllowance}`;
     document.getElementById('tokenPurchasedDetail').textContent = balance.purchased_balance || 0;
+    document.getElementById('tokenTotalDetail').textContent = total;
 
     // Cycle end date
     const cycleEndLine = document.getElementById('tokenCycleEndLine');
@@ -5682,28 +5684,19 @@ function renderTokenBalance(balance) {
         cycleEndLine.style.display = 'none';
     }
 
-    // Primary action: "Buy Tokens" whenever the plan permits token purchases.
-    // Free users also see a secondary "View Plans" link so the upgrade path
-    // stays visible without being the only friction-laden option.
+    // Primary action: "Buy Tokens" — every plan (including Free) now has
+    // canPurchaseTokens=true, so the previous "Upgrade" fallback is gone.
+    // Free users get an additional secondary "View Plans" link so the
+    // upgrade path stays visible without being the only friction-laden CTA.
     const actionBtn = document.getElementById('tokenActionBtn');
     const viewPlansLink = document.getElementById('tokenViewPlansLink');
     const planKey = resolvePlanKey(plan);
 
-    if (entitlements.canPurchaseTokens) {
-        actionBtn.style.display = '';
-        actionBtn.textContent = '🪙 Buy Tokens';
-        actionBtn.className = 'token-action-btn buy-tokens';
-        actionBtn.onclick = toggleBundleSelector;
-        if (viewPlansLink) viewPlansLink.style.display = (planKey === 'free') ? '' : 'none';
-    } else {
-        actionBtn.style.display = '';
-        actionBtn.textContent = '✨ Upgrade';
-        actionBtn.className = 'token-action-btn upgrade-plan';
-        actionBtn.onclick = function () {
-            window.location.href = ROUTES.PLANS;
-        };
-        if (viewPlansLink) viewPlansLink.style.display = 'none';
-    }
+    actionBtn.style.display = '';
+    actionBtn.textContent = '🪙 Buy Tokens';
+    actionBtn.className = 'token-action-btn buy-tokens';
+    actionBtn.onclick = toggleBundleSelector;
+    if (viewPlansLink) viewPlansLink.style.display = (planKey === 'free') ? '' : 'none';
 }
 
 function toggleBundleSelector() {

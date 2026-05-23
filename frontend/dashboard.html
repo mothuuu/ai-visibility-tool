@@ -1066,6 +1066,14 @@
             color: rgba(255, 255, 255, 0.9);
         }
 
+        .token-detail-line.token-detail-total {
+            border-top: 1px solid rgba(255, 255, 255, 0.12);
+            padding-top: 0.35rem;
+            margin-top: 0.1rem;
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.95);
+        }
+
         .token-action-btn {
             display: block;
             width: 100%;
@@ -3866,6 +3874,10 @@
                     <div class="token-detail-line">
                         <span>Purchased</span>
                         <span class="detail-value" id="tokenPurchasedDetail">—</span>
+                    </div>
+                    <div class="token-detail-line token-detail-total">
+                        <span>Total available</span>
+                        <span class="detail-value" id="tokenTotalDetail">—</span>
                     </div>
                     <div class="token-detail-line" id="tokenCycleEndLine" style="display:none;">
                         <span>Cycle ends</span>
