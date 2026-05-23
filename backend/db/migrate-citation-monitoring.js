@@ -88,7 +88,7 @@ const STATEMENTS = [
     id BIGSERIAL PRIMARY KEY,
     cluster_id BIGINT NOT NULL
       REFERENCES prompt_clusters (id) ON DELETE CASCADE,
-    window TEXT NOT NULL,
+    time_window TEXT NOT NULL,
     sample_size INTEGER NOT NULL DEFAULT 0,
     prompt_volume_index NUMERIC,
     citation_rate NUMERIC,
@@ -97,10 +97,10 @@ const STATEMENTS = [
     recommendation_rate NUMERIC,
     top_cited_domains JSONB NOT NULL DEFAULT '[]'::jsonb,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (cluster_id, window)
+    UNIQUE (cluster_id, time_window)
   )`,
   `CREATE INDEX IF NOT EXISTS idx_benchmark_stats_cluster_window
-     ON benchmark_stats (cluster_id, window, updated_at DESC)`,
+     ON benchmark_stats (cluster_id, time_window, updated_at DESC)`,
 ];
 
 async function migrate() {
