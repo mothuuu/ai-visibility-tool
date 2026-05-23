@@ -80,8 +80,8 @@
         /* Plan Cards Grid */
         .plans-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1.25rem;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
             margin-bottom: 3rem;
         }
 
@@ -398,7 +398,13 @@
         }
 
         /* Responsive */
-        @media (max-width: 900px) {
+        @media (max-width: 1100px) {
+            .plans-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 600px) {
             .plans-grid {
                 grid-template-columns: 1fr;
                 max-width: 400px;
@@ -443,7 +449,7 @@
         <div class="topup-section">
             <div class="topup-header">
                 <h2>Need more tokens?</h2>
-                <p>Available for Starter and Pro subscribers</p>
+                <p>Top-up bundles are available on every plan, including Free.</p>
             </div>
             <div class="topup-grid" id="topupGrid">
                 <!-- Rendered by JS -->
@@ -474,42 +480,86 @@
         ? 'http://localhost:3001/api'
         : 'https://ai-visibility-tool.onrender.com/api';
 
-    // ---- PLANS_CONFIG (duplicated from dashboard.js for standalone use) -----
-    // This is the SINGLE source of truth. If this page is loaded standalone
-    // (not inside dashboard), it needs its own copy.  Keep in sync.
+    // ---- PLANS_CONFIG (mirrored from backend planService PLAN_ENTITLEMENTS) ----
+    // Keep in sync with backend/services/planService.js and dashboard.js.
+    // planKey is the wire-format plan name sent to the checkout endpoint;
+    // backend accepts 'diy' (Starter) and 'pro'. Enterprise is a sales contact.
     const PLANS_CONFIG = {
         free: {
             name: 'Free', planKey: null, price: '$0', priceNote: 'forever',
             monthlyTokens: 0, canPurchaseTokens: true,
             features: {
-                scansPerMonth: '2', pagesPerScan: '1',
-                findings: 'Top 3 teaser', citationMonitoring: 'Snapshot only',
-                competitorScanning: '\u2014', monthlyTokens: '\u2014',
-                tokenTopUps: 'Available', benchmarking: '\u2014',
-                exports: '\u2014', citationAlerts: '\u2014'
+                scansPerMonth: '2',
+                pagesPerScan: '1',
+                domains: '1',
+                findings: 'Top 3 teaser',
+                monthlyTokens: '\u2014',
+                tokenTopUps: '\u2713',
+                citationMonitoring: 'Snapshot',
+                competitors: '\u2014',
+                benchmarking: '\u2014',
+                exports: '\u2014',
+                userSeats: '1',
+                scanHistory: '30 days',
+                support: 'Email'
             }
         },
         starter: {
-            name: 'Starter', planKey: 'diy', price: '$29', priceNote: '/mo',
+            name: 'Starter', planKey: 'diy', price: '$19', priceNote: '/mo',
             monthlyTokens: 50, canPurchaseTokens: true, highlight: 'Most Popular',
             features: {
-                scansPerMonth: '10', pagesPerScan: '3',
-                findings: 'Full with evidence', citationMonitoring: 'Biweekly, 1\u20132 engines',
-                competitorScanning: '\u2014', monthlyTokens: '50',
-                tokenTopUps: 'Available', benchmarking: 'Vertical percentile',
-                exports: '\u2014', citationAlerts: '\u2014'
+                scansPerMonth: '10',
+                pagesPerScan: '3',
+                domains: '1',
+                findings: 'Full',
+                monthlyTokens: '50',
+                tokenTopUps: '\u2713',
+                citationMonitoring: 'Biweekly',
+                competitors: '\u2014',
+                benchmarking: 'Percentile',
+                exports: '\u2014',
+                userSeats: '1',
+                scanHistory: '90 days',
+                support: 'Email'
             }
         },
         pro: {
-            name: 'Pro', planKey: 'pro', price: '$99', priceNote: '/mo',
+            name: 'Pro', planKey: 'pro', price: '$49', priceNote: '/mo',
             monthlyTokens: 150, canPurchaseTokens: true, highlight: 'Best Value',
             features: {
-                scansPerMonth: '100', pagesPerScan: '10',
-                findings: 'Full with evidence',
-                citationMonitoring: 'Weekly, 3+ engines, full context',
-                competitorScanning: 'Up to 5 domains', monthlyTokens: '150',
-                tokenTopUps: 'Available', benchmarking: 'Vertical percentile',
-                exports: 'PDF + CSV', citationAlerts: 'Gained/lost alerts'
+                scansPerMonth: '100',
+                pagesPerScan: '10',
+                domains: '3',
+                findings: 'Full + BVI',
+                monthlyTokens: '150',
+                tokenTopUps: '\u2713',
+                citationMonitoring: 'Weekly',
+                competitors: '3',
+                benchmarking: 'Full',
+                exports: 'CSV + PDF',
+                userSeats: '3',
+                scanHistory: '12 months',
+                support: 'Priority'
+            }
+        },
+        enterprise: {
+            name: 'Enterprise', planKey: null, price: 'Contact', priceNote: 'Sales',
+            monthlyTokens: 0, canPurchaseTokens: true,
+            contactUrl: 'mailto:sales@xeo.marketing?subject=Enterprise%20plan%20enquiry',
+            features: {
+                scansPerMonth: '500',
+                pagesPerScan: '25',
+                domains: '10+',
+                findings: 'Full + BVI',
+                monthlyTokens: 'Custom',
+                tokenTopUps: '\u2713',
+                citationMonitoring: 'Daily',
+                competitors: '10',
+                benchmarking: 'Custom',
+                exports: 'CSV + PDF',
+                userSeats: '10+',
+                scanHistory: '12 months',
+                support: 'Dedicated'
             }
         }
     };
@@ -521,17 +571,21 @@
         { bundle: '250', tokens: 250, price: '$149' }
     ];
 
+    // Order drives how feature rows appear in each plan card.
     const FEATURE_LABELS = {
-        scansPerMonth: 'Scans/mo',
-        pagesPerScan: 'Pages/scan',
-        findings: 'Findings',
+        scansPerMonth:      'Scans/mo',
+        pagesPerScan:       'Pages/scan',
+        domains:            'Domains',
+        findings:           'Findings',
+        monthlyTokens:      'Tokens/mo',
+        tokenTopUps:        'Token top-ups',
         citationMonitoring: 'Citations',
-        competitorScanning: 'Competitors',
-        monthlyTokens: 'Tokens/mo',
-        tokenTopUps: 'Token top-ups',
-        benchmarking: 'Benchmarking',
-        exports: 'Exports',
-        citationAlerts: 'Alerts'
+        competitors:        'Competitors',
+        benchmarking:       'Benchmarking',
+        exports:            'Exports',
+        userSeats:          'User seats',
+        scanHistory:        'Scan history',
+        support:            'Support'
     };
 
     function resolvePlanKey(plan) {
@@ -575,7 +629,7 @@
         const grid = document.getElementById('plansGrid');
         grid.innerHTML = '';
 
-        ['free', 'starter', 'pro'].forEach(function (key) {
+        ['free', 'starter', 'pro', 'enterprise'].forEach(function (key) {
             const plan = PLANS_CONFIG[key];
             const isCurrent = (key === currentPlanKey);
 
@@ -594,29 +648,35 @@
             let featureHtml = '';
             Object.keys(FEATURE_LABELS).forEach(function (fk) {
                 const val = plan.features[fk] || '\u2014';
-                const isDash = val === '\u2014';
+                const isDash  = val === '\u2014';
+                const isCheck = val === '\u2713';
                 featureHtml += '<li>' +
                     '<span class="feature-label">' + FEATURE_LABELS[fk] + '</span>' +
-                    '<span class="feature-value' + (isDash ? ' dash' : '') + '">' + val + '</span>' +
+                    '<span class="feature-value' + (isDash ? ' dash' : '') + (isCheck ? ' check' : '') + '">' + val + '</span>' +
                     '</li>';
             });
 
-            // CTA button
+            // CTA button. "Current Plan" only applies when we actually know
+            // who the user is — anonymous visitors should get a signup path.
             let ctaHtml = '';
-            if (isCurrent) {
+            if (currentUser && isCurrent) {
                 ctaHtml = '<button class="plan-cta secondary" disabled>Current Plan</button>';
+            } else if (key === 'enterprise') {
+                const href = plan.contactUrl || '#';
+                ctaHtml = '<a class="plan-cta primary" href="' + href + '">Contact Sales</a>';
             } else if (key === 'free') {
-                // Free column for paid users — hide CTA
-                ctaHtml = '';
+                // Paid users: no CTA. Anonymous visitors: signup link.
+                if (!currentUser) {
+                    ctaHtml = '<a class="plan-cta secondary" href="auth.html">Get Started Free</a>';
+                }
             } else {
-                // Upgrade or downgrade
-                const planRanks = { free: 0, starter: 1, pro: 2 };
-                const currentRank = planRanks[currentPlanKey] || 0;
-                const targetRank = planRanks[key] || 0;
+                const planRanks = { free: 0, starter: 1, pro: 2, enterprise: 3 };
+                const currentRank = planRanks[currentPlanKey] != null ? planRanks[currentPlanKey] : 0;
+                const targetRank  = planRanks[key]              != null ? planRanks[key]              : 0;
 
                 if (targetRank > currentRank) {
                     // Upgrade
-                    const label = key === 'starter' ? 'Start Starter \u00B7 $29/mo' : 'Go Pro \u00B7 $99/mo';
+                    const label = key === 'starter' ? 'Start Starter \u00B7 $19/mo' : 'Go Pro \u00B7 $49/mo';
                     ctaHtml = '<button class="plan-cta primary" onclick="startCheckout(\'' + key + '\')">' + label + '</button>';
                 } else {
                     // Downgrade

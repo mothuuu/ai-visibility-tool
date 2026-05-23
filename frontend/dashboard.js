@@ -5507,7 +5507,7 @@ const PLANS_CONFIG = {
     starter: {
         name: 'Starter',
         planKey: 'diy',           // backend plan name sent to checkout endpoint
-        price: '$29',
+        price: '$19',
         priceNote: '/mo',
         monthlyTokens: 50,
         canPurchaseTokens: true,
@@ -5528,7 +5528,7 @@ const PLANS_CONFIG = {
     pro: {
         name: 'Pro',
         planKey: 'pro',
-        price: '$99',
+        price: '$49',
         priceNote: '/mo',
         monthlyTokens: 150,
         canPurchaseTokens: true,
@@ -5536,12 +5536,32 @@ const PLANS_CONFIG = {
         features: {
             scansPerMonth: '100',
             pagesPerScan: '10',
-            findings: 'Full with evidence',
+            findings: 'Full + BVI',
             citationMonitoring: 'Weekly, 3+ engines, full context',
-            competitorScanning: 'Up to 5 domains',
+            competitorScanning: 'Up to 3 domains',
             monthlyTokens: '150',
             tokenTopUps: 'Available',
             benchmarking: 'Vertical percentile',
+            exports: 'PDF + CSV',
+            citationAlerts: 'Gained/lost alerts'
+        }
+    },
+    enterprise: {
+        name: 'Enterprise',
+        planKey: null,            // no Stripe checkout; sales contact instead
+        price: 'Contact',
+        priceNote: 'Sales',
+        monthlyTokens: 0,
+        canPurchaseTokens: true,
+        features: {
+            scansPerMonth: '500',
+            pagesPerScan: '25',
+            findings: 'Full + BVI',
+            citationMonitoring: 'Daily',
+            competitorScanning: 'Up to 10 domains',
+            monthlyTokens: 'Custom',
+            tokenTopUps: 'Available',
+            benchmarking: 'Custom',
             exports: 'PDF + CSV',
             citationAlerts: 'Gained/lost alerts'
         }
