@@ -6069,7 +6069,26 @@ async function onConfirmPackPurchase() {
 
     closePackPurchaseModal();
 
-    // Show generating modal
+    // Client-side balance pre-check. The backend re-validates under lock, so
+    // this is purely to keep the "Generating your pack…" spinner from flashing
+    // when we already know the user can't afford this pack. We use the freshest
+    // balance we have — tokenBalanceData is updated by the widget, the catalog
+    // load, and the post-purchase response — falling back to the catalog snapshot.
+    const pack = findPackInCatalog(packKey);
+    const liveBalance =
+        (typeof tokenBalanceData !== 'undefined' && tokenBalanceData && tokenBalanceData.total_available) ??
+        (packCatalogData && packCatalogData.token_balance && packCatalogData.token_balance.total_available) ??
+        0;
+    if (pack && liveBalance < pack.cost) {
+        handlePackPurchaseError(400, {
+            error: 'Insufficient tokens',
+            required: pack.cost,
+            available: liveBalance
+        }, packKey, scanId);
+        return;
+    }
+
+    // Balance looked sufficient — show the spinner while we generate.
     const genModal = document.getElementById('packGeneratingModal');
     if (genModal) genModal.style.display = 'flex';
 
