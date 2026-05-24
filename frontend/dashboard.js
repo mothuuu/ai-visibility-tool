@@ -5699,42 +5699,69 @@ function renderTokenBalance(balance) {
     if (viewPlansLink) viewPlansLink.style.display = (planKey === 'free') ? '' : 'none';
 }
 
+// Token bundle modal — opened by the sidebar widget Buy Tokens button,
+// the Execution Packs "Buy more" button, and unaffordable Fix-This / pack
+// shortfall links. Keeping toggleBundleSelector as an alias means those
+// callers don't need to change.
+function openTokenBundleModal() {
+    const modal = document.getElementById('tokenBundleModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeTokenBundleModal() {
+    const modal = document.getElementById('tokenBundleModal');
+    if (modal) modal.style.display = 'none';
+    // Reset selection so the next open starts clean
+    document.querySelectorAll('.token-bundle-card').forEach(c => c.classList.remove('selected'));
+    const cont = document.getElementById('tokenContinueBtn');
+    if (cont) {
+        cont.disabled = true;
+        cont.textContent = 'Continue to Checkout';
+    }
+    window.__selectedTokenBundle = null;
+}
+
 function toggleBundleSelector() {
-    const selector = document.getElementById('tokenBundleSelector');
-    selector.classList.toggle('visible');
+    // Legacy entrypoint — now always opens the modal.
+    openTokenBundleModal();
 }
 
 function setupTokenWidgetListeners() {
-    // Toggle dropdown
+    // Toggle widget dropdown (independent of the bundle modal)
     const toggle = document.getElementById('tokenBalanceToggle');
     if (toggle) {
         toggle.addEventListener('click', function () {
             const widget = document.getElementById('tokenBalanceWidget');
             widget.classList.toggle('expanded');
-            // Close bundle selector when collapsing
-            if (!widget.classList.contains('expanded')) {
-                document.getElementById('tokenBundleSelector').classList.remove('visible');
-                clearBundleSelection();
-            }
         });
     }
 
-    // Bundle option selection
-    let selectedBundle = null;
-    const bundleOptions = document.querySelectorAll('.token-bundle-option');
-    bundleOptions.forEach(function (opt) {
-        opt.addEventListener('click', function () {
-            bundleOptions.forEach(function (o) { o.classList.remove('selected'); });
-            opt.classList.add('selected');
-            selectedBundle = opt.getAttribute('data-bundle');
+    // Bundle card selection — tracked on window so the closeTokenBundleModal
+    // reset path and the Continue handler share one source of truth.
+    window.__selectedTokenBundle = null;
+    const bundleCards = document.querySelectorAll('.token-bundle-card');
+    bundleCards.forEach(function (card) {
+        card.addEventListener('click', function () {
+            bundleCards.forEach(function (c) { c.classList.remove('selected'); });
+            card.classList.add('selected');
+            window.__selectedTokenBundle = card.getAttribute('data-bundle');
             document.getElementById('tokenContinueBtn').disabled = false;
         });
     });
+
+    // Click backdrop (the overlay itself, not the inner content) to close
+    const modal = document.getElementById('tokenBundleModal');
+    if (modal) {
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) closeTokenBundleModal();
+        });
+    }
 
     // Continue to checkout
     const continueBtn = document.getElementById('tokenContinueBtn');
     if (continueBtn) {
         continueBtn.addEventListener('click', async function () {
+            const selectedBundle = window.__selectedTokenBundle;
             if (!selectedBundle) return;
 
             continueBtn.disabled = true;
@@ -5769,13 +5796,6 @@ function setupTokenWidgetListeners() {
                 alert('Could not start checkout: ' + err.message);
             }
         });
-    }
-
-    function clearBundleSelection() {
-        selectedBundle = null;
-        bundleOptions.forEach(function (o) { o.classList.remove('selected'); });
-        document.getElementById('tokenContinueBtn').disabled = true;
-        document.getElementById('tokenContinueBtn').textContent = 'Continue to Checkout';
     }
 }
 
