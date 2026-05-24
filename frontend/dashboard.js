@@ -6019,18 +6019,21 @@ async function populateScanSelector(preselectScanId) {
     select.innerHTML = '<option value="">Loading scans…</option>';
 
     try {
-        // Reuse existing scan history endpoint
-        const resp = await fetch(`${API_BASE_URL}/scans/history?limit=10`, { headers: authHeaders() });
+        // The actual recent-scans endpoint is /api/scan/list/recent (singular).
+        // The previous URL (/api/scans/history) doesn't exist and 404'd silently,
+        // which is why the dropdown always read "No completed scans found".
+        const resp = await fetch(`${API_BASE_URL}/scan/list/recent?limit=10`, { headers: authHeaders() });
         if (resp.ok) {
             const data = await resp.json();
             packRecentScans = (data.scans || data.results || data || []).filter(s =>
                 (s.status || 'completed') === 'completed'
             );
         } else {
+            console.warn(`[Packs] scan list returned ${resp.status}`);
             packRecentScans = [];
         }
     } catch (err) {
-        console.warn('[Packs] scan history fetch failed:', err.message);
+        console.warn('[Packs] scan list fetch failed:', err.message);
         packRecentScans = [];
     }
 
@@ -6038,7 +6041,7 @@ async function populateScanSelector(preselectScanId) {
     // (e.g. it's beyond the recent-10 window or the endpoint failed), inject a
     // minimal entry so the user can still complete the Fix This flow.
     if (preselectScanId && !packRecentScans.some(s => String(s.id) === String(preselectScanId))) {
-        packRecentScans = [{ id: preselectScanId, primary_domain: 'current scan', created_at: null }, ...packRecentScans];
+        packRecentScans = [{ id: preselectScanId, extracted_domain: 'current scan', created_at: null }, ...packRecentScans];
     }
 
     if (!packRecentScans || packRecentScans.length === 0) {
@@ -6049,9 +6052,13 @@ async function populateScanSelector(preselectScanId) {
 
     select.innerHTML = packRecentScans.map((s) => {
         const isPreselected = preselectScanId && String(s.id) === String(preselectScanId);
-        const label = (s.primary_domain || s.domain || 'scan') +
+        // The endpoint returns extracted_domain + url + total_score; the older
+        // primary_domain / score field names are kept as fallbacks.
+        const displayDomain = s.extracted_domain || s.primary_domain || s.domain || s.url || 'scan';
+        const displayScore = s.total_score != null ? s.total_score : s.score;
+        const label = displayDomain +
             (s.created_at ? ' · ' + new Date(s.created_at).toLocaleDateString() : '') +
-            (s.score != null ? ` · ${s.score}/1000` : '');
+            (displayScore != null ? ` · ${displayScore}/1000` : '');
         return `<option value="${escapeAttr(s.id)}"${isPreselected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
     }).join('');
 
