@@ -6,30 +6,23 @@ const jwt = require('jsonwebtoken');
 const { authenticateToken } = require('../middleware/auth');
 const { handleCitationNetworkWebhook } = require('../services/citationNetworkWebhookHandler');
 
-// Price IDs from the Stripe dashboard. The Stripe-facing plan keys are
-// 'starter' and 'pro' (Enterprise is sales-led). Internally PlanService still
-// aliases 'diy' → 'starter' for backward compatibility with rows written
-// before the rename.
-const MONTHLY_PRICE_IDS = {
-  starter:    process.env.STRIPE_STARTER_PRICE_ID    || 'price_starter_monthly',
-  pro:        process.env.STRIPE_PRO_PRICE_ID        || 'price_pro_monthly',
-  enterprise: process.env.STRIPE_ENTERPRISE_PRICE_ID || 'price_enterprise_monthly',
-  agency:     process.env.STRIPE_AGENCY_PRICE_ID     || 'price_agency_monthly'
-};
-
-// Annual prices (optional — may not be set on Render yet)
-const ANNUAL_PRICE_IDS = {
-  starter:    process.env.STRIPE_STARTER_ANNUAL_PRICE_ID    || 'price_starter_annual',
-  pro:        process.env.STRIPE_PRO_ANNUAL_PRICE_ID        || 'price_pro_annual',
-  enterprise: process.env.STRIPE_ENTERPRISE_ANNUAL_PRICE_ID || 'price_enterprise_annual',
-  agency:     process.env.STRIPE_AGENCY_ANNUAL_PRICE_ID     || 'price_agency_annual'
+// Subscription price IDs. Read from env vars only — no placeholder fallbacks,
+// so a missing env var fails fast with a 500 (same shape as token top-ups)
+// instead of silently sending a fake price to Stripe.
+//
+// Stripe-facing plan keys are 'starter' and 'pro' (Enterprise is sales-led).
+// Annual billing is intentionally NOT supported here — annual Stripe products
+// don't exist yet; the checkout always uses monthly. Any `billing` parameter
+// sent by the client is ignored.
+const PLAN_TO_ENV_KEY = {
+  starter:    'STRIPE_STARTER_PRICE_ID',
+  pro:        'STRIPE_PRO_PRICE_ID',
+  enterprise: 'STRIPE_ENTERPRISE_PRICE_ID',
+  agency:     'STRIPE_AGENCY_PRICE_ID'
 };
 
 // Backward-compat alias map: clients with cached JS may still send plan='diy'.
 const PLAN_ALIASES = { diy: 'starter' };
-
-// Legacy support - maps to monthly prices
-const PRICE_IDS = MONTHLY_PRICE_IDS;
 
 // Test endpoint to verify routes are loaded
 router.get('/test', (req, res) => {
@@ -50,12 +43,13 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
     const { domain, plan: rawPlan = 'starter' } = req.body;
     // Normalize legacy 'diy' to 'starter' so cached client builds still work.
     const plan = PLAN_ALIASES[rawPlan] || rawPlan;
-    // Support billing parameter from query string or body, default to 'annual'
-    const billing = req.query.billing || req.body.billing || 'annual';
+    // Annual billing isn't supported yet (no annual Stripe products). Any
+    // `billing` parameter from the client is intentionally ignored.
+    const billing = 'monthly';
     const userId = req.user.id;
     const email = req.user.email;
 
-    console.log(`🛒 Checkout request: User ${userId} (${email}) for ${plan} plan (${billing} billing)`);
+    console.log(`🛒 Checkout request: User ${userId} (${email}) for ${plan} plan (monthly billing)`);
 
     if (!domain) {
       return res.status(400).json({ error: 'Domain required' });
@@ -65,16 +59,16 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid plan' });
     }
 
-    if (!['monthly', 'annual'].includes(billing)) {
-      return res.status(400).json({ error: 'Invalid billing cycle. Must be "monthly" or "annual"' });
+    // Read the price ID from env. Fail fast (500) when missing so the user
+    // sees a real error instead of Stripe rejecting a placeholder price.
+    const envKey = PLAN_TO_ENV_KEY[plan];
+    const priceId = process.env[envKey];
+    if (!priceId) {
+      console.error(`[Subscription] Missing env var ${envKey} for plan '${plan}'`);
+      return res.status(500).json({ error: `${plan} plan is not configured` });
     }
 
-    // Select the correct price ID based on billing cycle
-    const priceId = billing === 'annual'
-      ? ANNUAL_PRICE_IDS[plan]
-      : MONTHLY_PRICE_IDS[plan];
-
-    console.log(`💰 Using price ID: ${priceId} (${billing})`);
+    console.log(`💰 Using price ID: ${priceId} (monthly)`);
 
     // Get or create Stripe customer
     let customerId = req.user.stripe_customer_id;
@@ -104,14 +98,6 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
       }
     };
 
-    // Apply launch coupon for monthly plans (makes monthly = annual price)
-    if (billing === 'monthly' && process.env.STRIPE_LAUNCH_COUPON_ID) {
-      subscriptionData.discounts = [{
-        coupon: process.env.STRIPE_LAUNCH_COUPON_ID
-      }];
-      console.log(`🎟️ Applying launch coupon: ${process.env.STRIPE_LAUNCH_COUPON_ID}`);
-    }
-
     // Create Checkout Session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -124,7 +110,7 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
       ],
       mode: 'subscription',
       success_url: `${process.env.FRONTEND_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/checkout.html?plan=${plan}&billing=${billing}`,
+      cancel_url: `${process.env.FRONTEND_URL}/checkout.html?plan=${plan}`,
       metadata: {
         userId: userId.toString(),
         domain,
@@ -134,7 +120,7 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
       subscription_data: subscriptionData
     });
 
-    console.log(`✅ Checkout session created: ${session.id} (${billing} billing)`);
+    console.log(`✅ Checkout session created: ${session.id} (monthly billing)`);
     res.json({ url: session.url });
   } catch (error) {
     console.error('❌ Checkout session creation failed:', error);
@@ -290,15 +276,16 @@ async function handleSubscriptionChange(subscription) {
     const priceId = subscription.items.data[0].price.id;
     console.log('📋 Price ID from subscription:', priceId);
 
-    // Match price ID to plan (check both monthly and annual price IDs)
-    if (priceId === MONTHLY_PRICE_IDS.pro || priceId === ANNUAL_PRICE_IDS.pro) {
-      plan = 'pro';
-    } else if (priceId === MONTHLY_PRICE_IDS.starter || priceId === ANNUAL_PRICE_IDS.starter) {
-      plan = 'starter';
-    } else if (priceId === MONTHLY_PRICE_IDS.enterprise || priceId === ANNUAL_PRICE_IDS.enterprise) {
-      plan = 'enterprise';
-    } else if (priceId === MONTHLY_PRICE_IDS.agency || priceId === ANNUAL_PRICE_IDS.agency) {
-      plan = 'agency';
+    // Reverse-lookup: env-var values keyed by plan name. Annual price IDs
+    // aren't supported here (no annual products in Stripe); when they exist,
+    // add the corresponding env vars to PLAN_TO_ENV_KEY or extend this map.
+    const priceToPlan = {};
+    for (const [planName, envKey] of Object.entries(PLAN_TO_ENV_KEY)) {
+      const id = process.env[envKey];
+      if (id) priceToPlan[id] = planName;
+    }
+    if (priceToPlan[priceId]) {
+      plan = priceToPlan[priceId];
     } else {
       // Fallback to metadata if price ID doesn't match
       plan = subscription.metadata.plan || 'free';
