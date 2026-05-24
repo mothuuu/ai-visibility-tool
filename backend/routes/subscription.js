@@ -6,22 +6,27 @@ const jwt = require('jsonwebtoken');
 const { authenticateToken } = require('../middleware/auth');
 const { handleCitationNetworkWebhook } = require('../services/citationNetworkWebhookHandler');
 
-// Price IDs from your Stripe dashboard
-// Monthly prices
+// Price IDs from the Stripe dashboard. The Stripe-facing plan keys are
+// 'starter' and 'pro' (Enterprise is sales-led). Internally PlanService still
+// aliases 'diy' → 'starter' for backward compatibility with rows written
+// before the rename.
 const MONTHLY_PRICE_IDS = {
-  diy: process.env.STRIPE_DIY_MONTHLY_PRICE_ID || process.env.STRIPE_PRICE_DIY || 'price_diy_monthly',
-  pro: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || process.env.STRIPE_PRICE_PRO || 'price_pro_monthly',
-  enterprise: process.env.STRIPE_ENTERPRISE_MONTHLY_PRICE_ID || process.env.STRIPE_PRICE_ENTERPRISE || 'price_enterprise_monthly',
-  agency: process.env.STRIPE_AGENCY_MONTHLY_PRICE_ID || process.env.STRIPE_PRICE_AGENCY || 'price_agency_monthly'
+  starter:    process.env.STRIPE_STARTER_PRICE_ID    || 'price_starter_monthly',
+  pro:        process.env.STRIPE_PRO_PRICE_ID        || 'price_pro_monthly',
+  enterprise: process.env.STRIPE_ENTERPRISE_PRICE_ID || 'price_enterprise_monthly',
+  agency:     process.env.STRIPE_AGENCY_PRICE_ID     || 'price_agency_monthly'
 };
 
-// Annual prices
+// Annual prices (optional — may not be set on Render yet)
 const ANNUAL_PRICE_IDS = {
-  diy: process.env.STRIPE_DIY_ANNUAL_PRICE_ID || 'price_diy_annual',
-  pro: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || 'price_pro_annual',
+  starter:    process.env.STRIPE_STARTER_ANNUAL_PRICE_ID    || 'price_starter_annual',
+  pro:        process.env.STRIPE_PRO_ANNUAL_PRICE_ID        || 'price_pro_annual',
   enterprise: process.env.STRIPE_ENTERPRISE_ANNUAL_PRICE_ID || 'price_enterprise_annual',
-  agency: process.env.STRIPE_AGENCY_ANNUAL_PRICE_ID || 'price_agency_annual'
+  agency:     process.env.STRIPE_AGENCY_ANNUAL_PRICE_ID     || 'price_agency_annual'
 };
+
+// Backward-compat alias map: clients with cached JS may still send plan='diy'.
+const PLAN_ALIASES = { diy: 'starter' };
 
 // Legacy support - maps to monthly prices
 const PRICE_IDS = MONTHLY_PRICE_IDS;
@@ -42,7 +47,9 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
     console.log('Request query:', req.query);
     console.log('User from auth:', req.user);
 
-    const { domain, plan = 'diy' } = req.body;
+    const { domain, plan: rawPlan = 'starter' } = req.body;
+    // Normalize legacy 'diy' to 'starter' so cached client builds still work.
+    const plan = PLAN_ALIASES[rawPlan] || rawPlan;
     // Support billing parameter from query string or body, default to 'annual'
     const billing = req.query.billing || req.body.billing || 'annual';
     const userId = req.user.id;
@@ -54,7 +61,7 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Domain required' });
     }
 
-    if (!['diy', 'pro', 'enterprise', 'agency'].includes(plan)) {
+    if (!['starter', 'pro', 'enterprise', 'agency'].includes(plan)) {
       return res.status(400).json({ error: 'Invalid plan' });
     }
 
@@ -284,13 +291,13 @@ async function handleSubscriptionChange(subscription) {
     console.log('📋 Price ID from subscription:', priceId);
 
     // Match price ID to plan (check both monthly and annual price IDs)
-    if (priceId === MONTHLY_PRICE_IDS.pro || priceId === ANNUAL_PRICE_IDS.pro || priceId === process.env.STRIPE_PRICE_PRO) {
+    if (priceId === MONTHLY_PRICE_IDS.pro || priceId === ANNUAL_PRICE_IDS.pro) {
       plan = 'pro';
-    } else if (priceId === MONTHLY_PRICE_IDS.diy || priceId === ANNUAL_PRICE_IDS.diy || priceId === process.env.STRIPE_PRICE_DIY) {
-      plan = 'diy';
-    } else if (priceId === MONTHLY_PRICE_IDS.enterprise || priceId === ANNUAL_PRICE_IDS.enterprise || priceId === process.env.STRIPE_PRICE_ENTERPRISE) {
+    } else if (priceId === MONTHLY_PRICE_IDS.starter || priceId === ANNUAL_PRICE_IDS.starter) {
+      plan = 'starter';
+    } else if (priceId === MONTHLY_PRICE_IDS.enterprise || priceId === ANNUAL_PRICE_IDS.enterprise) {
       plan = 'enterprise';
-    } else if (priceId === MONTHLY_PRICE_IDS.agency || priceId === ANNUAL_PRICE_IDS.agency || priceId === process.env.STRIPE_PRICE_AGENCY) {
+    } else if (priceId === MONTHLY_PRICE_IDS.agency || priceId === ANNUAL_PRICE_IDS.agency) {
       plan = 'agency';
     } else {
       // Fallback to metadata if price ID doesn't match
