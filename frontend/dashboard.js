@@ -5506,7 +5506,7 @@ const PLANS_CONFIG = {
     },
     starter: {
         name: 'Starter',
-        planKey: 'diy',           // backend plan name sent to checkout endpoint
+        planKey: 'starter',       // backend plan name sent to checkout endpoint (was 'diy')
         price: '$19',
         priceNote: '/mo',
         monthlyTokens: 50,

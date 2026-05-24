@@ -16,7 +16,7 @@ const PLANS = {
     name: 'DIY/Starter',
     price: 2900, // $29.00
     interval: 'month',
-    priceId: process.env.STRIPE_PRICE_DIY,
+    priceId: process.env.STRIPE_STARTER_PRICE_ID,
     features: [
       '10 scans per month',
       'Homepage + 4 pages YOU choose (5 total)',
@@ -31,7 +31,7 @@ const PLANS = {
     name: 'Pro',
     price: 9900, // $99.00
     interval: 'month',
-    priceId: process.env.STRIPE_PRICE_PRO,
+    priceId: process.env.STRIPE_PRO_PRICE_ID,
     features: [
       '50 scans per month',
       'Up to 25 pages per scan',
@@ -49,7 +49,7 @@ const PLANS = {
     name: 'Enterprise',
     price: 24900, // $249.00
     interval: 'month',
-    priceId: process.env.STRIPE_PRICE_ENTERPRISE,
+    priceId: process.env.STRIPE_ENTERPRISE_PRICE_ID,
     features: [
       '200 scans per month',
       'Track 100 pages per domain',
@@ -67,7 +67,7 @@ const PLANS = {
     name: 'Agency',
     price: 49900, // $499.00
     interval: 'month',
-    priceId: process.env.STRIPE_PRICE_AGENCY,
+    priceId: process.env.STRIPE_AGENCY_PRICE_ID,
     features: [
       'Unlimited scans',
       'Unlimited pages tracked',

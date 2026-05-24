@@ -23,29 +23,31 @@ const db = require('../db/database');
 // =============================================================================
 
 /**
- * Map Stripe price IDs to plan names
- * Supports both test and production price IDs via environment variables
+ * Map Stripe price IDs to plan names.
+ *
+ * Env-var naming was unified in P12: subscription price IDs use
+ * STRIPE_<TIER>_PRICE_ID (monthly) and STRIPE_<TIER>_ANNUAL_PRICE_ID. The
+ * mapped value stays 'diy' for the Starter tier so existing downstream code
+ * (citationNetwork SUBSCRIBER_PLANS / PLAN_ALLOCATIONS, normalizePlan callers)
+ * keeps working — getEffectivePlan('diy') → 'starter' handles the alias for
+ * entitlement lookup.
  */
 const PRICE_TO_PLAN = {
-  // DIY/Starter plan
-  [process.env.STRIPE_PRICE_DIY]: 'diy',
-  [process.env.STRIPE_PRICE_DIY_MONTHLY]: 'diy',
-  [process.env.STRIPE_PRICE_DIY_ANNUAL]: 'diy',
+  // Starter (stored internally as 'diy' for backward compatibility)
+  [process.env.STRIPE_STARTER_PRICE_ID]:        'diy',
+  [process.env.STRIPE_STARTER_ANNUAL_PRICE_ID]: 'diy',
 
-  // Pro plan
-  [process.env.STRIPE_PRICE_PRO]: 'pro',
-  [process.env.STRIPE_PRICE_PRO_MONTHLY]: 'pro',
-  [process.env.STRIPE_PRICE_PRO_ANNUAL]: 'pro',
+  // Pro
+  [process.env.STRIPE_PRO_PRICE_ID]:        'pro',
+  [process.env.STRIPE_PRO_ANNUAL_PRICE_ID]: 'pro',
 
-  // Enterprise plan
-  [process.env.STRIPE_PRICE_ENTERPRISE]: 'enterprise',
-  [process.env.STRIPE_PRICE_ENTERPRISE_MONTHLY]: 'enterprise',
-  [process.env.STRIPE_PRICE_ENTERPRISE_ANNUAL]: 'enterprise',
+  // Enterprise
+  [process.env.STRIPE_ENTERPRISE_PRICE_ID]:        'enterprise',
+  [process.env.STRIPE_ENTERPRISE_ANNUAL_PRICE_ID]: 'enterprise',
 
-  // Agency plan
-  [process.env.STRIPE_PRICE_AGENCY]: 'agency',
-  [process.env.STRIPE_PRICE_AGENCY_MONTHLY]: 'agency',
-  [process.env.STRIPE_PRICE_AGENCY_ANNUAL]: 'agency'
+  // Agency
+  [process.env.STRIPE_AGENCY_PRICE_ID]:        'agency',
+  [process.env.STRIPE_AGENCY_ANNUAL_PRICE_ID]: 'agency'
 };
 
 // Filter out undefined keys from env vars that aren't set
