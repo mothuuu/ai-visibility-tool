@@ -2262,7 +2262,7 @@
       "featureList": [
         "AI Visibility Score (0-1000)",
         "8-pillar analysis across 47 factors",
-        "Copy-paste implementation code",
+        "Execution Packs with token-based generation",
         "Competitor analysis",
         "Progress tracking over time",
         "No developer required"
@@ -2273,28 +2273,27 @@
           "name": "Free Plan",
           "price": "0",
           "priceCurrency": "USD",
-          "description": "2 scans per month, homepage analysis only"
+          "description": "2 scans per month, homepage only, teaser findings"
         },
         {
           "@type": "Offer",
-          "name": "DIY Plan",
-          "price": "29",
+          "name": "Starter Plan",
+          "price": "19",
           "priceCurrency": "USD",
-          "description": "25 scans per month, 5 pages, copy-paste code snippets"
+          "description": "10 scans per month, 3 pages, 50 monthly tokens, full findings"
         },
         {
           "@type": "Offer",
           "name": "Pro Plan",
-          "price": "149",
+          "price": "49",
           "priceCurrency": "USD",
-          "description": "50 scans per month, 25 pages, competitor analysis"
+          "description": "100 scans per month, 10 pages, 3 domains, 150 monthly tokens, Brand Visibility Index"
         },
         {
           "@type": "Offer",
           "name": "Enterprise Plan",
-          "price": "499",
           "priceCurrency": "USD",
-          "description": "200 scans per month, 100 pages, full brand monitoring"
+          "description": "500 scans per month, 25 pages, 10+ domains, custom token allocation. Contact sales."
         }
       ],
       "aggregateRating": {
@@ -2417,7 +2416,7 @@
           "name": "How much does AI Visibility Score cost?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Visible2AI offers a free plan with 2 scans per month. Paid plans start at $29/month for DIY (25 scans, 5 pages), $149/month for Pro (50 scans, 25 pages, competitor analysis), and $499/month for Enterprise (200 scans, 100 pages, full brand monitoring)."
+            "text": "Visible2AI offers a free plan with 2 scans per month and homepage-only analysis. Paid plans are Starter at $19/month (10 scans, 3 pages, 50 monthly tokens), Pro at $49/month (100 scans, 10 pages, 3 domains, 150 monthly tokens, Brand Visibility Index), and Enterprise (500 scans, 25 pages, 10+ domains, custom token allocation — contact sales for pricing)."
           }
         },
         {
@@ -2482,7 +2481,7 @@
         "postalCode": "L5N 6J5",
         "addressCountry": "CA"
       },
-      "priceRange": "$0 - $499",
+      "priceRange": "$0 - $49 (Enterprise: contact sales)",
       "openingHoursSpecification": {
         "@type": "OpeningHoursSpecification",
         "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
@@ -2510,14 +2509,14 @@
             </div>
             <div class="modal-body">
                 <p style="margin-bottom: 1.5rem; color: #4a5568; line-height: 1.6;">
-                    We're working hard to bring this plan to you. Please check back soon or start with our <strong>DIY plan</strong> for immediate access.
+                    We're working hard to bring this plan to you. Please check back soon or start with our <strong>Starter plan</strong> for immediate access.
                 </p>
                 <div class="modal-actions">
                     <button class="modal-btn modal-btn-secondary" onclick="closeComingSoonModal()">
                         Close
                     </button>
-                    <button class="modal-btn modal-btn-primary" onclick="goToCheckout('diy')">
-                        Try DIY Plan
+                    <button class="modal-btn modal-btn-primary" onclick="goToCheckout('starter')">
+                        Try Starter Plan
                     </button>
                 </div>
             </div>
@@ -2906,11 +2905,10 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                     </div>
                     <div class="launch-price-box">
                         <span class="launch-price-new">$19</span>
-                        <span class="launch-price-old">$29</span>
                         <span class="launch-price-label">/mo locked for life</span>
                     </div>
                     <div class="launch-fine-print">
-                        <strong>How it works:</strong> Sign up for monthly billing before Jan 31, 2026 and get our annual rate ($19/mo) applied to your monthly subscription — forever. No annual commitment required. Cancel anytime.
+                        <strong>How it works:</strong> Sign up for the Starter plan before Jan 31, 2026 and lock in $19/mo forever. Cancel anytime.
                     </div>
                 </div>
 
@@ -2955,15 +2953,9 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
             </div>
             <!-- END LAUNCH PROMO -->
 
-            <!-- Billing Toggle -->
-            <div class="billing-toggle-container">
-                <div class="billing-toggle">
-                    <button class="billing-option" id="monthlyToggle" onclick="setBillingMode('monthly')">Monthly</button>
-                    <button class="billing-option active" id="annualToggle" onclick="setBillingMode('annual')">
-                        Annually <span class="billing-discount">up to 35% off</span>
-                    </button>
-                </div>
-            </div>
+            <!-- Annual billing intentionally removed until Stripe annual products exist. -->
+            <!-- All pricing on this page is monthly. -->
+
 
             <div class="pricing-grid" style="grid-template-columns: repeat(4, 1fr);">
                 <!-- Card 1: Free -->
@@ -2971,86 +2963,120 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                     <span class="plan-badge badge-free" style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 8px 20px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; background: linear-gradient(135deg, var(--purple) 0%, var(--pink) 100%); color: white;">FREE FOREVER</span>
                     <div class="plan-name" style="margin-top: 10px;">Free</div>
                     <div class="plan-price">$0</div>
-                    <div class="plan-price-small">Get started with basic AI visibility insights</div>
+                    <div class="plan-price-small">Try the score, see your top issues.</div>
 
                     <ul class="plan-features">
                         <li><span class="check-icon">✓</span> 2 scans per month</li>
                         <li><span class="check-icon">✓</span> Homepage analysis only</li>
-                        <li><span class="check-icon">✓</span> Website Visibility Index (basic)</li>
-                        <li><span class="check-icon">✓</span> Top 5 recommendations</li>
+                        <li><span class="check-icon">✓</span> 1 domain</li>
+                        <li><span class="check-icon">✓</span> Top 3 findings (teaser)</li>
+                        <li><span class="check-icon">✓</span> Token top-ups available</li>
+                        <li><span class="check-icon">✓</span> 30-day scan history</li>
                     </ul>
 
                     <button class="plan-cta" onclick="window.location.href='auth.html'">Get Started Free</button>
                 </div>
 
-                <!-- Card 2: DIY (Most Popular) -->
+                <!-- Card 2: Starter (Most Popular) -->
                 <div class="pricing-card featured">
                     <span class="plan-badge badge-popular" style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 8px 20px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%); color: white;">MOST POPULAR</span>
-                    <div class="plan-name" style="margin-top: 10px;">DIY</div>
-                    <div class="plan-price annual-price">$19</div>
-                    <div class="plan-price monthly-price">$29</div>
+                    <div class="plan-name" style="margin-top: 10px;">Starter</div>
+                    <div class="plan-price">$19</div>
                     <div class="plan-price-small">
-                        <span class="annual-note">per month · Billed annually</span>
-                        <span class="monthly-note">per month · Billed monthly</span>
-                        <br><span style="font-size: 14px; color: #4a5568;">Perfect for businesses optimizing their AI presence</span>
+                        per month
+                        <br><span style="font-size: 14px; color: #4a5568;">Full findings + 50 monthly tokens.</span>
                     </div>
 
                     <ul class="plan-features">
-                        <li><span class="check-icon">✓</span> 25 scans per month</li>
-                        <li><span class="check-icon">✓</span> Up to 5 pages of the same domain</li>
-                        <li><span class="check-icon">✓</span> Website Visibility Index (full)</li>
-                        <li><span class="check-icon">✓</span> Copy-paste code snippets</li>
-                        <li><span class="check-icon">✓</span> Competitor scanning</li>
+                        <li><span class="check-icon">✓</span> 10 scans per month</li>
+                        <li><span class="check-icon">✓</span> Up to 3 pages per scan</li>
+                        <li><span class="check-icon">✓</span> 1 domain</li>
+                        <li><span class="check-icon">✓</span> Full findings with evidence</li>
+                        <li><span class="check-icon">✓</span> 50 monthly Execution Pack tokens</li>
+                        <li><span class="check-icon">✓</span> Token top-ups available</li>
+                        <li><span class="check-icon">✓</span> 90-day scan history</li>
                     </ul>
 
-                    <button class="plan-cta" onclick="goToCheckout('diy')">Get Started</button>
+                    <button class="plan-cta" onclick="goToCheckout('starter')">Get Started</button>
                 </div>
 
                 <!-- Card 3: Pro -->
                 <div class="pricing-card">
-                    <span class="plan-badge" style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 8px 20px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; background: linear-gradient(135deg, #4DACA6 0%, #f31c7e 100%); color: white;">GREAT VALUE</span>
+                    <span class="plan-badge" style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 8px 20px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; background: linear-gradient(135deg, #4DACA6 0%, #f31c7e 100%); color: white;">BEST VALUE</span>
                     <div class="plan-name" style="margin-top: 10px;">Pro</div>
-                    <div class="plan-price annual-price">$99</div>
-                    <div class="plan-price monthly-price">$149</div>
+                    <div class="plan-price">$49</div>
                     <div class="plan-price-small">
-                        <span class="annual-note">per month · Billed annually</span>
-                        <span class="monthly-note">per month · Billed monthly</span>
-                        <br><span style="font-size: 14px; color: #4a5568;">Advanced tools for growing teams and agencies</span>
+                        per month
+                        <br><span style="font-size: 14px; color: #4a5568;">Brand Visibility Index + 150 monthly tokens.</span>
                     </div>
 
                     <ul class="plan-features">
-                        <li><span class="check-icon">✓</span> 50 scans per month</li>
-                        <li><span class="check-icon">✓</span> Up to 25 pages of the same domain</li>
-                        <li><span class="check-icon">✓</span> Website Visibility Index (full) & Brand Visibility Index (Lite)</li>
-                        <li><span class="check-icon">✓</span> Copy-paste code snippets</li>
+                        <li><span class="check-icon">✓</span> 100 scans per month</li>
+                        <li><span class="check-icon">✓</span> Up to 10 pages per scan</li>
+                        <li><span class="check-icon">✓</span> 3 domains</li>
+                        <li><span class="check-icon">✓</span> Full findings + Brand Visibility Index</li>
+                        <li><span class="check-icon">✓</span> 150 monthly Execution Pack tokens</li>
                         <li><span class="check-icon">✓</span> 3 competitor analyses</li>
+                        <li><span class="check-icon">✓</span> 12-month scan history</li>
                     </ul>
 
-                    <button class="plan-cta" onclick="openComingSoonModal()">Get Started</button>
+                    <button class="plan-cta" onclick="goToCheckout('pro')">Get Started</button>
                 </div>
 
                 <!-- Card 4: Enterprise -->
                 <div class="pricing-card">
                     <span class="plan-badge" style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 8px 20px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; background: linear-gradient(135deg, #7D41A5 0%, #f31c7e 100%); color: white;">FOR ENTERPRISES</span>
                     <div class="plan-name" style="margin-top: 10px;">Enterprise</div>
-                    <div class="plan-price annual-price">$349</div>
-                    <div class="plan-price monthly-price">$499</div>
+                    <div class="plan-price">Contact</div>
                     <div class="plan-price-small">
-                        <span class="annual-note">per month · Billed annually</span>
-                        <span class="monthly-note">per month · Billed monthly</span>
-                        <br><span style="font-size: 14px; color: #4a5568;">Full-scale AI visibility for large organizations</span>
+                        Sales
+                        <br><span style="font-size: 14px; color: #4a5568;">Custom token allocation + dedicated support.</span>
                     </div>
 
                     <ul class="plan-features">
-                        <li><span class="check-icon">✓</span> 200 scans per month</li>
-                        <li><span class="check-icon">✓</span> Up to 100 pages of the same domain</li>
-                        <li><span class="check-icon">✓</span> Website Visibility Index (full) & Brand Visibility Index (Full)</li>
+                        <li><span class="check-icon">✓</span> 500 scans per month</li>
+                        <li><span class="check-icon">✓</span> Up to 25 pages per scan</li>
+                        <li><span class="check-icon">✓</span> 10+ domains</li>
+                        <li><span class="check-icon">✓</span> Full findings + Brand Visibility Index</li>
+                        <li><span class="check-icon">✓</span> Custom monthly token allocation</li>
                         <li><span class="check-icon">✓</span> 10 competitor analyses</li>
-                        <li><span class="check-icon">✓</span> Advanced AI monitoring (50+ queries)</li>
-                        <li><span class="check-icon">✓</span> Media & social tracking</li>
+                        <li><span class="check-icon">✓</span> 12-month scan history · Dedicated support</li>
                     </ul>
 
-                    <button class="plan-cta" onclick="openComingSoonModal()">Get Started</button>
+                    <button class="plan-cta" onclick="window.location.href='mailto:sales@visible2ai.com?subject=Enterprise%20plan%20enquiry'">Contact Sales</button>
+                </div>
+            </div>
+
+            <!-- Execution Packs explainer -->
+            <div class="execution-packs-section" style="margin-top: 56px; padding: 32px 28px; background: linear-gradient(135deg, rgba(0,185,218,0.06) 0%, rgba(125,65,165,0.06) 100%); border: 1px dashed rgba(125,65,165,0.35); border-radius: 16px;">
+                <div style="text-align: center; max-width: 720px; margin: 0 auto 24px;">
+                    <div class="section-badge" style="background: #ede9fe; color: #6d28d9; display: inline-block; margin-bottom: 12px;">Execution Packs</div>
+                    <h3 style="font-size: 24px; font-weight: 800; color: #1f2937; margin-bottom: 8px;">Tokens turn findings into fixes</h3>
+                    <p style="color: #4a5568; font-size: 15px; line-height: 1.55;">
+                        Every paid plan ships with monthly tokens. Spend them on Execution Packs — generated outputs like Quick Wins, FAQ schema, Schema packs, and Audit PDFs. Need more in a month? Top-up bundles are available on every plan, including Free.
+                    </p>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; max-width: 720px; margin: 0 auto;">
+                    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 12px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: 800; color: #1f2937;">20</div>
+                        <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">tokens</div>
+                        <div style="font-size: 16px; font-weight: 700; color: #7d41a5;">$19</div>
+                    </div>
+                    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 12px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: 800; color: #1f2937;">50</div>
+                        <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">tokens</div>
+                        <div style="font-size: 16px; font-weight: 700; color: #7d41a5;">$39</div>
+                    </div>
+                    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 12px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: 800; color: #1f2937;">120</div>
+                        <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">tokens</div>
+                        <div style="font-size: 16px; font-weight: 700; color: #7d41a5;">$79</div>
+                    </div>
+                    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 12px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: 800; color: #1f2937;">250</div>
+                        <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">tokens</div>
+                        <div style="font-size: 16px; font-weight: 700; color: #7d41a5;">$149</div>
+                    </div>
                 </div>
             </div>
 
@@ -3072,25 +3098,25 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                     <div class="feature-row">
                         <div class="feature-name">Scans per month</div>
                         <div class="feature-value">2</div>
-                        <div class="feature-value">25</div>
-                        <div class="feature-value">50</div>
-                        <div class="feature-value">200</div>
+                        <div class="feature-value">10</div>
+                        <div class="feature-value">100</div>
+                        <div class="feature-value">500</div>
                     </div>
 
                     <div class="feature-row">
-                        <div class="feature-name">Pages of the same domain</div>
+                        <div class="feature-name">Pages per scan</div>
                         <div class="feature-value">1 (Homepage)</div>
-                        <div class="feature-value">5</div>
+                        <div class="feature-value">3</div>
+                        <div class="feature-value">10</div>
                         <div class="feature-value">25</div>
-                        <div class="feature-value">100</div>
                     </div>
 
                     <div class="feature-row">
                         <div class="feature-name">Domains supported</div>
                         <div class="feature-value">1</div>
                         <div class="feature-value">1</div>
-                        <div class="feature-value">1</div>
                         <div class="feature-value">3</div>
+                        <div class="feature-value">10+</div>
                     </div>
                 </div>
 
@@ -3115,9 +3141,9 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                     </div>
                 </div>
 
-                <!-- ANALYSIS & RECOMMENDATIONS Category -->
+                <!-- FINDINGS & EXECUTION PACKS Category -->
                 <div class="feature-category">
-                    <div class="category-title">ANALYSIS & RECOMMENDATIONS</div>
+                    <div class="category-title">FINDINGS & EXECUTION PACKS</div>
 
                     <div class="feature-row">
                         <div class="feature-name">AI Visibility Score</div>
@@ -3128,11 +3154,11 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                     </div>
 
                     <div class="feature-row">
-                        <div class="feature-name">Basic recommendations</div>
-                        <div class="feature-check">✓</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-cross">—</div>
+                        <div class="feature-name">Findings</div>
+                        <div class="feature-value">Top 3 teaser</div>
+                        <div class="feature-value">Full</div>
+                        <div class="feature-value">Full</div>
+                        <div class="feature-value">Full</div>
                     </div>
 
                     <div class="feature-row">
@@ -3144,24 +3170,16 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                     </div>
 
                     <div class="feature-row">
-                        <div class="feature-name">Detailed recommendations</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-value">Up to 10</div>
-                        <div class="feature-value">Up to 25</div>
-                        <div class="feature-value">Unlimited</div>
+                        <div class="feature-name">Monthly Execution Pack tokens</div>
+                        <div class="feature-value">0</div>
+                        <div class="feature-value">50</div>
+                        <div class="feature-value">150</div>
+                        <div class="feature-value">Custom</div>
                     </div>
 
                     <div class="feature-row">
-                        <div class="feature-name">Copy-paste code snippets</div>
-                        <div class="feature-cross">—</div>
+                        <div class="feature-name">Token top-up bundles</div>
                         <div class="feature-check">✓</div>
-                        <div class="feature-check">✓</div>
-                        <div class="feature-check">✓</div>
-                    </div>
-
-                    <div class="feature-row">
-                        <div class="feature-name">Industry-specific insights</div>
-                        <div class="feature-cross">—</div>
                         <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
                         <div class="feature-check">✓</div>
@@ -3184,8 +3202,8 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-name">Scan history</div>
                         <div class="feature-value">30 days</div>
                         <div class="feature-value">90 days</div>
-                        <div class="feature-value">Unlimited</div>
-                        <div class="feature-value">Unlimited</div>
+                        <div class="feature-value">12 months</div>
+                        <div class="feature-value">12 months</div>
                     </div>
 
                     <div class="feature-row">
@@ -3215,22 +3233,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-cross">—</div>
                         <div class="feature-value">Basic (10)</div>
                         <div class="feature-value">Advanced (50+)</div>
-                    </div>
-
-                    <div class="feature-row">
-                        <div class="feature-name">Media tracking</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-check">✓</div>
-                    </div>
-
-                    <div class="feature-row">
-                        <div class="feature-name">Social media monitoring</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-check">✓</div>
                     </div>
                 </div>
 
@@ -3271,24 +3273,8 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                         <div class="feature-name">User seats</div>
                         <div class="feature-value">1</div>
                         <div class="feature-value">1</div>
-                        <div class="feature-value">1</div>
                         <div class="feature-value">3</div>
-                    </div>
-
-                    <div class="feature-row">
-                        <div class="feature-name">Multi-client dashboard</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-cross">—</div>
-                    </div>
-
-                    <div class="feature-row">
-                        <div class="feature-name">Client access links</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-cross">—</div>
+                        <div class="feature-value">10+</div>
                     </div>
                 </div>
 
@@ -3313,14 +3299,6 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                     </div>
 
                     <div class="feature-row">
-                        <div class="feature-name">Custom integrations</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-cross">—</div>
-                        <div class="feature-cross">—</div>
-                    </div>
-
-                    <div class="feature-row">
                         <div class="feature-name">Onboarding call</div>
                         <div class="feature-cross">—</div>
                         <div class="feature-cross">—</div>
@@ -3330,24 +3308,24 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                 </div>
             </div>
 
-            <!-- Agency Plan Box -->
+            <!-- Enterprise Detail Box (was Agency) -->
             <div class="agency-box">
                 <div class="agency-info">
-                    <div class="agency-plan-name">Agency</div>
-                    <div class="agency-plan-tagline">For marketing agencies & consultants</div>
-                    <div class="agency-plan-price">$499<span>/mo</span></div>
-                    <div class="agency-plan-billing">Billed monthly • Cancel anytime</div>
+                    <div class="agency-plan-name">Enterprise</div>
+                    <div class="agency-plan-tagline">For larger teams and multi-brand portfolios</div>
+                    <div class="agency-plan-price">Contact Sales</div>
+                    <div class="agency-plan-billing">Custom pricing • Annual contracts available</div>
                 </div>
                 <ul class="agency-features">
-                    <li><span class="check-icon">✓</span><span>10 client domains</span></li>
-                    <li><span class="check-icon">✓</span><span>Dedicated account manager</span></li>
-                    <li><span class="check-icon">✓</span><span>50 scans per domain/month</span></li>
-                    <li><span class="check-icon">✓</span><span>Priority support</span></li>
+                    <li><span class="check-icon">✓</span><span>10+ domains</span></li>
+                    <li><span class="check-icon">✓</span><span>500+ scans per month</span></li>
+                    <li><span class="check-icon">✓</span><span>Custom monthly token allocation</span></li>
+                    <li><span class="check-icon">✓</span><span>Dedicated support &amp; onboarding</span></li>
                     <li><span class="check-icon">✓</span><span>White-label reports</span></li>
-                    <li><span class="check-icon">✓</span><span>Custom onboarding</span></li>
+                    <li><span class="check-icon">✓</span><span>API access</span></li>
                 </ul>
                 <div class="agency-cta">
-                    <button class="agency-btn" onclick="window.location.href='mailto:sales@visible2ai.com'">
+                    <button class="agency-btn" onclick="window.location.href='mailto:sales@visible2ai.com?subject=Enterprise%20plan%20enquiry'">
                         Contact Sales
                     </button>
                 </div>
@@ -3448,7 +3426,7 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                     <span class="faq-icon">+</span>
                 </button>
                 <div class="faq-answer" hidden>
-                    <p>Visible2AI offers a free plan with 2 scans per month. Paid plans start at $29/month for DIY (25 scans, 5 pages), $149/month for Pro (50 scans, 25 pages, competitor analysis), and $499/month for Enterprise (200 scans, 100 pages, full brand monitoring).</p>
+                    <p>Visible2AI offers a free plan with 2 scans per month and homepage-only analysis. Paid plans are Starter at $19/month (10 scans, 3 pages, 50 monthly tokens), Pro at $49/month (100 scans, 10 pages, 3 domains, 150 monthly tokens, Brand Visibility Index), and Enterprise (500 scans, 25 pages, 10+ domains, custom token allocation — contact sales for pricing).</p>
                 </div>
             </div>
 
@@ -3716,27 +3694,9 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
             }
         }
 
-        // Billing toggle state - default to annual
-        let currentBilling = 'annual';
-
-        // Set billing mode (monthly or annual)
-        function setBillingMode(mode) {
-            currentBilling = mode;
-
-            // Update toggle buttons
-            const monthlyBtn = document.getElementById('monthlyToggle');
-            const annualBtn = document.getElementById('annualToggle');
-
-            if (mode === 'monthly') {
-                monthlyBtn.classList.add('active');
-                annualBtn.classList.remove('active');
-                document.body.classList.add('monthly-mode');
-            } else {
-                monthlyBtn.classList.remove('active');
-                annualBtn.classList.add('active');
-                document.body.classList.remove('monthly-mode');
-            }
-        }
+        // Annual billing is intentionally not offered on the public site until
+        // annual Stripe products exist. All checkout flows use monthly.
+        const currentBilling = 'monthly';
 
         // LAUNCH PROMO: Countdown timer - Remove after Jan 31, 2026
         (function initLaunchCountdown() {

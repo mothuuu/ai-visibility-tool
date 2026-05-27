@@ -1122,71 +1122,85 @@
             text-decoration: underline;
         }
 
-        /* Bundle selector */
-        .token-bundle-selector {
-            display: none;
-            margin-top: 0.5rem;
+        /* Token bundle modal */
+        .modal-subtitle {
+            font-size: 0.9rem;
+            color: var(--gray-500);
+            margin: 0;
         }
 
-        .token-bundle-selector.visible {
-            display: block;
+        .modal-close-btn {
+            position: absolute;
+            top: 0.75rem;
+            right: 1rem;
+            background: transparent;
+            border: 0;
+            font-size: 1.75rem;
+            line-height: 1;
+            color: var(--gray-400);
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
         }
 
-        .token-bundle-option {
+        .modal-close-btn:hover {
+            color: var(--gray-700);
+        }
+
+        .modal-content {
+            position: relative;
+        }
+
+        .token-bundle-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .token-bundle-card {
             display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: space-between;
-            padding: 0.5rem 0.65rem;
-            margin-bottom: 0.3rem;
-            border-radius: 7px;
+            justify-content: center;
+            gap: 0.1rem;
+            padding: 1rem 0.75rem;
+            border: 2px solid var(--gray-200);
+            border-radius: 12px;
+            background: var(--gray-50);
             cursor: pointer;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            background: rgba(255, 255, 255, 0.04);
             transition: all 0.15s;
+            user-select: none;
         }
 
-        .token-bundle-option:hover,
-        .token-bundle-option.selected {
+        .token-bundle-card:hover {
             border-color: var(--cyan);
-            background: rgba(0, 185, 218, 0.1);
+            background: #f0fafb;
         }
 
-        .token-bundle-option .bundle-tokens {
-            font-size: 0.82rem;
-            font-weight: 600;
-            color: var(--white);
+        .token-bundle-card.selected {
+            border-color: var(--cyan);
+            background: #f0fafb;
+            box-shadow: 0 0 0 3px rgba(0, 185, 218, 0.15);
         }
 
-        .token-bundle-option .bundle-price {
-            font-size: 0.78rem;
-            color: rgba(255, 255, 255, 0.65);
+        .token-bundle-card .bundle-tokens {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--gray-900);
         }
 
-        .token-continue-btn {
-            display: block;
-            width: 100%;
-            margin-top: 0.45rem;
-            padding: 0.5rem;
-            border: none;
-            border-radius: 8px;
-            font-size: 0.78rem;
+        .token-bundle-card .bundle-label {
+            font-size: 0.7rem;
+            color: var(--gray-500);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.4rem;
+        }
+
+        .token-bundle-card .bundle-price {
+            font-size: 1rem;
             font-weight: 700;
-            cursor: pointer;
-            background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
-            color: white;
-            transition: all 0.2s;
-        }
-
-        .token-continue-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 3px 10px rgba(0, 185, 218, 0.35);
-        }
-
-        .token-continue-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
+            color: var(--purple);
         }
 
         /* Token widget hidden state */
@@ -3885,25 +3899,6 @@
                     </div>
                     <button class="token-action-btn" id="tokenActionBtn" style="display:none;"></button>
                     <a href="plans.html" class="token-view-plans-link" id="tokenViewPlansLink" style="display:none;">View Plans</a>
-                    <div class="token-bundle-selector" id="tokenBundleSelector">
-                        <div class="token-bundle-option" data-bundle="20">
-                            <span class="bundle-tokens">20 tokens</span>
-                            <span class="bundle-price">$19</span>
-                        </div>
-                        <div class="token-bundle-option" data-bundle="50">
-                            <span class="bundle-tokens">50 tokens</span>
-                            <span class="bundle-price">$39</span>
-                        </div>
-                        <div class="token-bundle-option" data-bundle="120">
-                            <span class="bundle-tokens">120 tokens</span>
-                            <span class="bundle-price">$79</span>
-                        </div>
-                        <div class="token-bundle-option" data-bundle="250">
-                            <span class="bundle-tokens">250 tokens</span>
-                            <span class="bundle-price">$149</span>
-                        </div>
-                        <button class="token-continue-btn" id="tokenContinueBtn" disabled>Continue to Checkout</button>
-                    </div>
                 </div>
             </div>
         </aside>
@@ -5902,6 +5897,47 @@
     </div>
 
     <!-- Pack Purchase Modal -->
+    <!-- Token Bundle Modal (opened by sidebar Buy Tokens, packs "Buy more", and shortfall links) -->
+    <div id="tokenBundleModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 480px;">
+            <button class="modal-close-btn" type="button" aria-label="Close" onclick="closeTokenBundleModal()">&times;</button>
+            <div class="modal-header">
+                <h2 class="modal-title">Buy Tokens</h2>
+                <p class="modal-subtitle">Top-up bundles are available for every plan, including Free.</p>
+            </div>
+            <div class="token-bundle-grid" id="tokenBundleGrid">
+                <div class="token-bundle-card" data-bundle="20">
+                    <span class="bundle-tokens">20</span>
+                    <span class="bundle-label">tokens</span>
+                    <span class="bundle-price">$19</span>
+                </div>
+                <div class="token-bundle-card" data-bundle="50">
+                    <span class="bundle-tokens">50</span>
+                    <span class="bundle-label">tokens</span>
+                    <span class="bundle-price">$39</span>
+                </div>
+                <div class="token-bundle-card" data-bundle="120">
+                    <span class="bundle-tokens">120</span>
+                    <span class="bundle-label">tokens</span>
+                    <span class="bundle-price">$79</span>
+                </div>
+                <div class="token-bundle-card" data-bundle="250">
+                    <span class="bundle-tokens">250</span>
+                    <span class="bundle-label">tokens</span>
+                    <span class="bundle-price">$149</span>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" style="flex: 1;" type="button" onclick="closeTokenBundleModal()">
+                    Cancel
+                </button>
+                <button class="btn btn-primary" style="flex: 1;" type="button" id="tokenContinueBtn" disabled>
+                    Continue to Checkout
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="packPurchaseModal" class="modal-overlay">
         <div class="modal-content" style="max-width: 560px;">
             <div class="modal-header">

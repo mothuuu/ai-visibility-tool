@@ -384,17 +384,16 @@
 
         .loading-overlay .spinner {
             background: white;
-            padding: 2rem 3rem;
-            border-radius: 16px;
+            padding: 1.25rem 2rem;
+            border-radius: 12px;
             text-align: center;
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            font-size: 0.95rem;
+            color: var(--gray-700);
         }
 
-        .loading-overlay .spinner i {
-            font-size: 2rem;
-            color: var(--brand-cyan);
-            margin-bottom: 0.75rem;
-            display: block;
+        .loading-overlay .spinner p {
+            margin: 0;
         }
 
         /* Responsive */
@@ -463,11 +462,13 @@
         </div>
     </div>
 
-    <!-- Loading Overlay -->
+    <!-- Redirect Indicator -->
+    <!-- Static "Redirecting…" panel; no spinner animation. The Stripe hop is
+         usually instant, but a brief click acknowledgement prevents users
+         from double-clicking on slow connections. -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="spinner">
-            <i class="fas fa-spinner fa-spin"></i>
-            <p>Redirecting to checkout...</p>
+            <p>Redirecting to Stripe checkout…</p>
         </div>
     </div>
 
