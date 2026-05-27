@@ -382,7 +382,7 @@
             z-index: 9999;
         }
 
-        .loading-overlay .spinner {
+        .loading-overlay .redirect-card {
             background: white;
             padding: 1.25rem 2rem;
             border-radius: 12px;
@@ -392,7 +392,7 @@
             color: var(--gray-700);
         }
 
-        .loading-overlay .spinner p {
+        .loading-overlay .redirect-card p {
             margin: 0;
         }
 
@@ -465,9 +465,10 @@
     <!-- Redirect Indicator -->
     <!-- Static "Redirecting…" panel; no spinner animation. The Stripe hop is
          usually instant, but a brief click acknowledgement prevents users
-         from double-clicking on slow connections. -->
+         from double-clicking on slow connections. Class is intentionally
+         NOT `.spinner` — that's a 60×60 rotating ring in styles.css. -->
     <div class="loading-overlay" id="loadingOverlay">
-        <div class="spinner">
+        <div class="redirect-card">
             <p>Redirecting to Stripe checkout…</p>
         </div>
     </div>
