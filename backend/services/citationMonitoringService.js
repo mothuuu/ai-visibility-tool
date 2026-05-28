@@ -190,8 +190,6 @@ function createCitationMonitoringService({ db } = {}) {
   async function recordEvidenceBatch(rows = []) {
     if (!Array.isArray(rows) || rows.length === 0) return [];
     const inserted = [];
-    // Per-row insert keeps the SQL small and lets one bad row fail in
-    // isolation. Volume per run is bounded (engines × prompts).
     for (const r of rows) {
       const {
         runId,
@@ -207,6 +205,7 @@ function createCitationMonitoringService({ db } = {}) {
         cited = false,
         error = null,
         detectionStatus = 'skipped',
+        detectorReasoning = null,
       } = r;
 
       if (!runId || !clusterId || !engine || !promptText) {
@@ -217,14 +216,14 @@ function createCitationMonitoringService({ db } = {}) {
 
       const { rows: out } = await conn.query(
         `INSERT INTO citation_evidence
-           (run_id, cluster_id, engine, model, prompt_text, response_text,
-            citations_raw, citations_normalized,
-            mentioned, recommended, cited, error, detection_status)
-         VALUES ($1, $2, $3, $4, $5, $6,
-                 $7::jsonb, $8::jsonb,
-                 $9, $10, $11, $12, $13)
-         RETURNING id, run_id, cluster_id, engine, mentioned, recommended,
-                   cited, created_at`,
+         (run_id, cluster_id, engine, model, prompt_text, response_text,
+          citations_raw, citations_normalized,
+          mentioned, recommended, cited, error, detection_status, detector_reasoning)
+       VALUES ($1, $2, $3, $4, $5, $6,
+               $7::jsonb, $8::jsonb,
+               $9, $10, $11, $12, $13, $14)
+       RETURNING id, run_id, cluster_id, engine, mentioned, recommended,
+                 cited, created_at`,
         [
           runId,
           clusterId,
@@ -239,6 +238,7 @@ function createCitationMonitoringService({ db } = {}) {
           !!cited,
           error,
           detectionStatus,
+          detectorReasoning,
         ]
       );
       inserted.push(out[0]);
@@ -383,14 +383,14 @@ function buildEvidenceRows({ runId, clusterId, queries, results }) {
         engine,
         model: summary.model || null,
         promptText,
-        // Response text intentionally omitted to keep arbitrary upstream
-        // content out of the DB; raw citations are the auditable artifact.
         responseText: null,
         citationsRaw: q.citations || [],
         citationsNormalized: q.citationsNormalized || [],
         mentioned: !!q.mentioned,
         recommended: !!q.recommended,
         cited: !!q.cited,
+        snippet: q.snippet || null,
+        detectorReasoning: q.reasoning || null,
         error: q.error || null,
       });
     }
