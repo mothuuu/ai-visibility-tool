@@ -206,6 +206,7 @@ function createCitationMonitoringService({ db } = {}) {
         recommended = false,
         cited = false,
         error = null,
+        detectionStatus = 'skipped',
       } = r;
 
       if (!runId || !clusterId || !engine || !promptText) {
@@ -218,10 +219,10 @@ function createCitationMonitoringService({ db } = {}) {
         `INSERT INTO citation_evidence
            (run_id, cluster_id, engine, model, prompt_text, response_text,
             citations_raw, citations_normalized,
-            mentioned, recommended, cited, error)
+            mentioned, recommended, cited, error, detection_status)
          VALUES ($1, $2, $3, $4, $5, $6,
                  $7::jsonb, $8::jsonb,
-                 $9, $10, $11, $12)
+                 $9, $10, $11, $12, $13)
          RETURNING id, run_id, cluster_id, engine, mentioned, recommended,
                    cited, created_at`,
         [
@@ -237,6 +238,7 @@ function createCitationMonitoringService({ db } = {}) {
           !!recommended,
           !!cited,
           error,
+          detectionStatus,
         ]
       );
       inserted.push(out[0]);
@@ -252,11 +254,16 @@ function createCitationMonitoringService({ db } = {}) {
     }
     const interval = WINDOW_TO_INTERVAL[window];
 
+    // Only 'detected' rows are included in benchmark metrics.
+    // 'failed' and 'skipped' are operational states (not negative citation
+    // outcomes) and must be excluded from all numerator and denominator
+    // calculations — counting them as negatives would distort the rates.
     const { rows } = await conn.query(
       `SELECT mentioned, recommended, cited, citations_normalized
          FROM citation_evidence
         WHERE cluster_id = $1
-          AND created_at >= NOW() - $2::interval`,
+          AND created_at >= NOW() - $2::interval
+          AND detection_status = 'detected'`,
       [clusterId, interval]
     );
 

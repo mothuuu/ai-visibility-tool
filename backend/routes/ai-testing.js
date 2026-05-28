@@ -8,6 +8,7 @@ const UsageTrackerService = require('../services/usage-tracker-service');
 const {
   persistCitationRun,
 } = require('../services/citationMonitoringService');
+const mentionDetector = require('../services/mentionDetector');
 
 /* eslint-disable no-console */
 const express = require('express');
@@ -1129,8 +1130,8 @@ async function testSingleAssistant(assistantKey, queries, companyName, domain) {
   for (const q of queries) {
     try {
       const txt = await queryAIAssistant(assistantKey, q);
-      const a = analyzeResponse(txt, companyName, domain);
-      out.queries.push({ query:q, mentioned:a.mentioned, recommended:a.recommended, cited:a.cited });
+      const a = await mentionDetector.detectMention(txt, { companyName, domain });
+      out.queries.push({ query:q, mentioned:a.mentioned, recommended:a.recommended, cited:a.cited, snippet:a.snippet });
       if (a.mentioned) m++; if (a.recommended) r++; if (a.cited) c++;
     } catch (e) {
       out.queries.push({ query:q, error:e.message, mentioned:false, recommended:false, cited:false });
@@ -1151,16 +1152,6 @@ async function queryAIAssistant(assistant, query) {
   }
 }
 
-function analyzeResponse(response, companyName, domain) {
-  const lower = (response || '').toLowerCase();
-  const name = (companyName || '').toLowerCase();
-  const host = (domain || '').toLowerCase();
-  return {
-    mentioned: lower.includes(name) || lower.includes(host),
-    recommended: /\b(recommend|suggest|top|best|excellent)\b/.test(lower) && (lower.includes(name) || lower.includes(host)),
-    cited: lower.includes(host) || lower.includes('http')
-  };
-}
 function calculateOverallMetrics(results) {
   const tested = Object.values(results.assistants).filter(a => a.tested);
   if (!tested.length) return;
