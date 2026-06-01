@@ -7,7 +7,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ============================================================================
 -- findings: individual issues discovered during a scan
 -- ============================================================================
-CREATE TABLE findings (
+CREATE TABLE IF NOT EXISTS findings (
   id            UUID          PRIMARY KEY DEFAULT uuid_generate_v4(),
   scan_id       INTEGER       NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
   pillar        VARCHAR(50)   NOT NULL,
@@ -21,14 +21,14 @@ CREATE TABLE findings (
   created_at    TIMESTAMPTZ   DEFAULT NOW()
 );
 
-CREATE INDEX idx_findings_scan_id  ON findings (scan_id);
-CREATE INDEX idx_findings_pillar   ON findings (pillar);
-CREATE INDEX idx_findings_severity ON findings (severity);
+CREATE INDEX IF NOT EXISTS idx_findings_scan_id  ON findings (scan_id);
+CREATE INDEX IF NOT EXISTS idx_findings_pillar   ON findings (pillar);
+CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings (severity);
 
 -- ============================================================================
 -- evidence_snapshots: raw page-level evidence captured during a scan
 -- ============================================================================
-CREATE TABLE evidence_snapshots (
+CREATE TABLE IF NOT EXISTS evidence_snapshots (
   id                UUID          PRIMARY KEY DEFAULT uuid_generate_v4(),
   scan_id           INTEGER       NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
   page_url          VARCHAR(500)  NOT NULL,
@@ -40,4 +40,4 @@ CREATE TABLE evidence_snapshots (
   created_at        TIMESTAMPTZ   DEFAULT NOW()
 );
 
-CREATE INDEX idx_evidence_snapshots_scan_id ON evidence_snapshots (scan_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_snapshots_scan_id ON evidence_snapshots (scan_id);
