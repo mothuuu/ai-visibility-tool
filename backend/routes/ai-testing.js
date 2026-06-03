@@ -12,6 +12,7 @@ const mentionDetector = require('../services/mentionDetector');
 const planService = require('../services/planService');
 const tokenService = require('../services/tokenService');
 const InsufficientTokensError = require('../errors/InsufficientTokensError');
+const { CITATION_TEST_TOKEN_COST } = require('../config/platform-config');
 
 /* eslint-disable no-console */
 const express = require('express');
@@ -1091,10 +1092,10 @@ router.post('/test-ai-visibility', authenticateTokenOptional, async (req, res) =
         return res.status(403).json({ error: 'plan_upgrade_required', message: 'Citation tests require Starter or Pro plan' });
       }
       try {
-        await tokenService.spendTokens(req.user.id, 3, 'citation_test', clusterId.toString());
+        await tokenService.spendTokens(req.user.id, CITATION_TEST_TOKEN_COST, 'citation_test', clusterId.toString());
       } catch (err) {
         if (err instanceof InsufficientTokensError) {
-          return res.status(402).json({ error: 'insufficient_tokens', required: 3, available: err.available });
+          return res.status(402).json({ error: 'insufficient_tokens', required: CITATION_TEST_TOKEN_COST, available: err.available });
         }
         throw err;
       }

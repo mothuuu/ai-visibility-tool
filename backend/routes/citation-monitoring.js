@@ -20,6 +20,7 @@ const {
   createCitationMonitoringService,
   ALLOWED_WINDOWS,
 } = require('../services/citationMonitoringService');
+const planService = require('../services/planService');
 
 function buildRouter({ service } = {}) {
   const router = express.Router();
@@ -60,6 +61,16 @@ function buildRouter({ service } = {}) {
       });
     }
     try {
+      const resolvedPlan = await planService.resolvePlanForRequest({
+        userId: req.user.id,
+        orgId: req.user.organization_id ?? null,
+      });
+      if (!planService.canAccessFeature(resolvedPlan.plan, 'hasCitation')) {
+        return res.status(403).json({
+          error: 'plan_upgrade_required',
+          message: 'Citation tests require Starter or Pro plan',
+        });
+      }
       const row = await svc.upsertCluster({
         id,
         orgId: req.user?.org_id ?? null,

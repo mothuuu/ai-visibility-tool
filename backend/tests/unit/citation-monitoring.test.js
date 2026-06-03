@@ -433,3 +433,72 @@ describe('/api/test-ai-visibility persistence wire-up', () => {
     assert.strictEqual(db.inserted.citation_evidence.length, 0);
   });
 });
+
+// ----------- POST /api/prompt-clusters plan gate ----------
+// The route captures planService and auth by reference at module load time.
+// We patch Module.prototype.require before the first require of the route so
+// that the module captures our mutable stubs instead of the real modules.
+// This mirrors the pattern used in tests/unit/findings-endpoint.test.js.
+
+const Module = require('module');
+
+// Mutable stubs — mutate _canAccess between tests to control behaviour.
+const _planServiceStub = {
+  resolvePlanForRequest: async () => ({ plan: 'starter', source: 'user' }),
+  canAccessFeature: () => _planServiceStub._canAccess,
+  _canAccess: true,
+};
+
+const _authStub = {
+  authenticateToken: (req, _res, next) => {
+    req.user = { id: 42, organization_id: null };
+    next();
+  },
+  authenticateTokenOptional: (_req, _res, next) => next(),
+};
+
+const _origRequire = Module.prototype.require;
+Module.prototype.require = function (id) {
+  if (id === '../services/planService' || id.endsWith('/services/planService')) {
+    return _planServiceStub;
+  }
+  if (id === '../middleware/auth' || id.endsWith('/middleware/auth')) {
+    return _authStub;
+  }
+  return _origRequire.apply(this, arguments);
+};
+const _citationRouter = require('../../routes/citation-monitoring');
+Module.prototype.require = _origRequire; // restore immediately after load
+
+describe('POST /api/prompt-clusters plan gate', () => {
+  const supertest = require('supertest');
+  const express = require('express');
+
+  function buildApp() {
+    const app = express();
+    app.use(express.json());
+    const db = makeFakeDb();
+    const svc = createCitationMonitoringService({ db });
+    const router = _citationRouter.buildRouter({ service: svc });
+    app.use('/api', router);
+    return app;
+  }
+
+  it('returns 403 when plan check fails', async () => {
+    _planServiceStub._canAccess = false;
+    const res = await supertest(buildApp())
+      .post('/api/prompt-clusters')
+      .send({ name: 'Vendor selection', canonicalPrompt: 'Best vendors?' });
+    assert.strictEqual(res.status, 403);
+    assert.strictEqual(res.body.error, 'plan_upgrade_required');
+  });
+
+  it('returns 201 when plan check passes', async () => {
+    _planServiceStub._canAccess = true;
+    const res = await supertest(buildApp())
+      .post('/api/prompt-clusters')
+      .send({ name: 'Vendor selection', canonicalPrompt: 'Best vendors?' });
+    assert.strictEqual(res.status, 201);
+    assert.strictEqual(res.body.success, true);
+  });
+});
