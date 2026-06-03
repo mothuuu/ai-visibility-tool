@@ -261,6 +261,40 @@
   margin-bottom: 8px;
 }
 .vp-prompt-row .vp-input { flex: 1 1 auto; }
+.vp-prompt-row .vp-checkbox { accent-color: var(--teal); }
+
+/* Monitoring-cap display + over-cap hint */
+.vp-monitor-cap {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--teal);
+  margin: 0 0 12px;
+}
+.vp-cap-hint { color: var(--pink); }
+
+/* Prompt action row: add + token CTA */
+.vp-prompt-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+.vp-token-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--purple);
+  background: var(--purple-light);
+  border: 1px solid rgba(125, 65, 165, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.vp-token-cta:hover { background: #ECDDF6; }
 .vp-volume {
   flex: 0 0 auto;
   font-size: 13px;

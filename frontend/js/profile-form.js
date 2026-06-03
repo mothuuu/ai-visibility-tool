@@ -38,6 +38,19 @@
   const itemText = (it) =>
     typeof it === 'string' ? it : str(it && (it.text || it.label || it.name));
 
+  // Normalize list items into the fixed working-profile shapes (Step 9b).
+  // ICP item: { text, selected }.  Prompt item: { text, volume, is_monitored }.
+  function normalizeIcp(it) {
+    if (it && typeof it === 'object') return { text: itemText(it), selected: it.selected !== false };
+    return { text: str(it), selected: true };
+  }
+  function normalizePromptItem(p) {
+    if (p && typeof p === 'object') {
+      return { text: itemText(p), volume: p.volume == null ? null : p.volume, is_monitored: p.is_monitored !== false };
+    }
+    return { text: str(p), volume: null, is_monitored: true };
+  }
+
   // ---- per-field visual state -------------------------------------------
   // hasValue + aiEligible -> 'ai'; else required -> 'required'; else 'optional'.
   function fieldState({ hasValue, aiEligible, required }) {
@@ -159,38 +172,49 @@
       </section>`;
   }
 
+  // Required-list badge: has items -> AI, empty -> Required (mirrors resolveStates).
+  const listBadgeType = (hasItems) => (hasItems ? 'ai' : 'required');
+
   // 4. Who are you reaching in AI answers? (ICPs)
-  function sectionIcps(d, st) {
-    const icps = arr(d.icps);
+  // Inner markup is re-rendered on add/remove from state (single source of truth).
+  function icpsInner(state) {
+    const icps = arr(state.icps);
     const remaining = Math.max(0, ICP_MAX - icps.length);
+    const atMax = icps.length >= ICP_MAX;
     const rows = icps
-      .map((it) => {
-        const selected = typeof it === 'object' && it && it.selected === false ? '' : 'checked';
-        return `
-          <div class="vp-icp-row">
-            <input class="vp-checkbox" type="checkbox" ${selected} />
-            <input class="vp-input" type="text" value="${esc(itemText(it))}" />
-            <button class="vp-icon-btn vp-icon-btn--danger" type="button" title="Remove" aria-label="Remove">
+      .map(
+        (it, i) => `
+          <div class="vp-icp-row" data-idx="${i}">
+            <input class="vp-checkbox" type="checkbox" data-act="icp-toggle" ${it.selected !== false ? 'checked' : ''} />
+            <input class="vp-input" type="text" data-act="icp-text" value="${esc(itemText(it))}" />
+            <button class="vp-icon-btn vp-icon-btn--danger" type="button" data-act="icp-remove" title="Remove" aria-label="Remove">
               <i class="fas fa-times"></i>
             </button>
-          </div>`;
-      })
+          </div>`
+      )
       .join('');
     const emptyHint = icps.length === 0
       ? `<p class="vp-hint">No audiences yet — add the ones whose questions you want to win.</p>`
       : '';
+    const addBtn = atMax
+      ? `<button class="vp-add-btn" type="button" data-act="icp-add" disabled>
+           <i class="fas fa-plus"></i> Add another <span class="vp-add-remaining">(max ${ICP_MAX} reached)</span>
+         </button>`
+      : `<button class="vp-add-btn" type="button" data-act="icp-add">
+           <i class="fas fa-plus"></i> Add another <span class="vp-add-remaining">(${remaining} remaining)</span>
+         </button>`;
     return `
-      <section class="vp-section" data-section="icps">
-        <div class="vp-section-head">
-          <h2 class="vp-section-title">Who are you reaching in AI answers? ${badge(st.icps)}</h2>
-          <p class="vp-section-sub">Pick the audiences whose questions you want to win. Up to ${ICP_MAX}.</p>
-        </div>
-        <div class="vp-list">${rows}</div>
-        ${emptyHint}
-        <button class="vp-add-btn" type="button">
-          <i class="fas fa-plus"></i> Add another <span class="vp-add-remaining">(${remaining} remaining)</span>
-        </button>
-      </section>`;
+      <div class="vp-section-head">
+        <h2 class="vp-section-title">Who are you reaching in AI answers? ${badge(listBadgeType(icps.length > 0), 'icps')}</h2>
+        <p class="vp-section-sub">Pick the audiences whose questions you want to win. Up to ${ICP_MAX}.</p>
+      </div>
+      <div class="vp-list">${rows}</div>
+      ${emptyHint}
+      ${addBtn}`;
+  }
+
+  function sectionIcps(state) {
+    return `<section class="vp-section" data-section="icps">${icpsInner(state)}</section>`;
   }
 
   // 5. Your competitive landscape (two columns)
@@ -233,16 +257,27 @@
       </section>`;
   }
 
+  // Monitoring-cap display text. null cap (Enterprise) -> custom / no numeric limit.
+  function monitoringCapText(state, config) {
+    const monitored = arr(state.tracked_prompts).filter((p) => p && p.is_monitored).length;
+    const cap = config ? config.monitoring_cap : null;
+    if (cap == null) return `Tracking ${monitored} (custom — no limit)`;
+    return `Tracking ${monitored} of up to ${cap}`;
+  }
+
   // 6. Top queries in your vertical (prompts)
-  function sectionPrompts(d, st) {
-    const prompts = arr(d.tracked_prompts);
+  // Inner markup re-renders from state on add/delete/monitor-toggle.
+  function promptsInner(state, config, ui) {
+    const prompts = arr(state.tracked_prompts);
+    const atCap = prompts.length >= PROMPT_SOFT_CAP;
     const rows = prompts
       .map(
-        (p) => `
-          <div class="vp-prompt-row">
-            <input class="vp-input" type="text" value="${esc(itemText(p))}" />
+        (p, i) => `
+          <div class="vp-prompt-row" data-idx="${i}">
+            <input class="vp-checkbox" type="checkbox" data-act="prompt-monitor" title="Monitor this query" aria-label="Monitor this query" ${p.is_monitored ? 'checked' : ''} />
+            <input class="vp-input" type="text" data-act="prompt-text" value="${esc(itemText(p))}" />
             <span class="vp-volume">${esc(formatVolume(p && p.volume))}</span>
-            <button class="vp-icon-btn vp-icon-btn--danger" type="button" title="Delete" aria-label="Delete">
+            <button class="vp-icon-btn vp-icon-btn--danger" type="button" data-act="prompt-delete" title="Delete" aria-label="Delete">
               <i class="fas fa-trash"></i>
             </button>
           </div>`
@@ -251,18 +286,39 @@
     const emptyHint = prompts.length === 0
       ? `<p class="vp-hint">No queries yet — add the prompts you want to track.</p>`
       : '';
+    const capHint = ui && ui.promptCapHint && config && config.monitoring_cap != null
+      ? `<p class="vp-hint vp-cap-hint">You can monitor up to ${config.monitoring_cap} queries on your plan. Turn one off first.</p>`
+      : '';
+    const addBtn = atCap
+      ? `<button class="vp-add-btn" type="button" data-act="prompt-add" disabled>
+           <i class="fas fa-plus"></i> Add <span class="vp-add-remaining">(max ${PROMPT_SOFT_CAP} reached)</span>
+         </button>`
+      : `<button class="vp-add-btn" type="button" data-act="prompt-add">
+           <i class="fas fa-plus"></i> Add <span class="vp-add-remaining">(up to ${PROMPT_SOFT_CAP})</span>
+         </button>`;
+    // Token pop-up CTA — visible only on plans with token_query_unlock_enabled.
+    const tokenCta = config && config.token_query_unlock_enabled
+      ? `<button class="vp-token-cta" type="button" data-act="token-cta">
+           <i class="fas fa-unlock"></i> See all your queries + volumes
+         </button>`
+      : '';
     return `
-      <section class="vp-section" data-section="prompts">
-        <div class="vp-section-head">
-          <h2 class="vp-section-title">Top queries in your vertical ${badge(st.prompts)}</h2>
-          <p class="vp-section-sub">These will be the discovery prompts we track across ChatGPT, Claude, Perplexity, and Gemini.</p>
-        </div>
-        <div class="vp-list">${rows}</div>
-        ${emptyHint}
-        <button class="vp-add-btn" type="button">
-          <i class="fas fa-plus"></i> Add <span class="vp-add-remaining">(up to ${PROMPT_SOFT_CAP})</span>
-        </button>
-      </section>`;
+      <div class="vp-section-head">
+        <h2 class="vp-section-title">Top queries in your vertical ${badge(listBadgeType(prompts.length > 0), 'prompts')}</h2>
+        <p class="vp-section-sub">These will be the discovery prompts we track across ChatGPT, Claude, Perplexity, and Gemini.</p>
+      </div>
+      <div class="vp-monitor-cap" data-monitor-cap>${esc(monitoringCapText(state, config))}</div>
+      <div class="vp-list">${rows}</div>
+      ${emptyHint}
+      ${capHint}
+      <div class="vp-prompt-actions">
+        ${addBtn}
+        ${tokenCta}
+      </div>`;
+  }
+
+  function sectionPrompts(state, config, ui) {
+    return `<section class="vp-section" data-section="prompts">${promptsInner(state, config, ui)}</section>`;
   }
 
   // 7. A few extras (optional)
@@ -312,11 +368,12 @@
       avg_customer_value: str(d.avg_customer_value),
       priority_focus: str(d.priority_focus) || DEFAULT_PRIORITY_FOCUS,
       // List sections — mutated by Step 9b (icps, tracked_prompts) and
-      // Step 9c (competitors_*). Deep-ish copies so edits never touch GET data.
-      icps: arr(d.icps).map((it) => (it && typeof it === 'object' ? { ...it } : it)),
+      // Step 9c (competitors_*). Normalized to fixed item shapes; copies so
+      // edits never touch the GET payload.
+      icps: arr(d.icps).map(normalizeIcp),
       competitors_business: arr(d.competitors_business).map((it) => (it && typeof it === 'object' ? { ...it } : it)),
       competitors_visibility: arr(d.competitors_visibility).map((it) => (it && typeof it === 'object' ? { ...it } : it)),
-      tracked_prompts: arr(d.tracked_prompts).map((p) => (p && typeof p === 'object' ? { ...p } : p)),
+      tracked_prompts: arr(d.tracked_prompts).map(normalizePromptItem),
       // Read-only mirror for render; NOT an editable field (no domain column).
       domain: str(d.domain),
     };
@@ -368,6 +425,112 @@
     return (el && el.__vpProfileState) || null;
   }
 
+  // ---- list section editing (Step 9b: ICPs + prompts) -------------------
+
+  // Placeholder for Walther's separate token-inquiry feature. Step 9b only
+  // wires the CTA to this stub — it does NOT implement the real flow.
+  function onTokenQueryUnlockRequested(ctx) {
+    console.log('[ProfileForm] Token query-unlock requested (placeholder — Walther feature).', ctx || {});
+  }
+
+  function rerenderIcps(el) {
+    const section = el.querySelector('[data-section="icps"]');
+    if (section) section.innerHTML = icpsInner(el.__vpProfileState);
+  }
+  function rerenderPrompts(el) {
+    const section = el.querySelector('[data-section="prompts"]');
+    if (section) section.innerHTML = promptsInner(el.__vpProfileState, el.__vpConfig, el.__vpUi);
+  }
+
+  const rowIdx = (target) => {
+    const row = target.closest && target.closest('[data-idx]');
+    return row ? parseInt(row.getAttribute('data-idx'), 10) : -1;
+  };
+  const actOf = (target) => {
+    const node = target.closest && target.closest('[data-act]');
+    return node ? node.getAttribute('data-act') : null;
+  };
+
+  // Delegated handlers live on the SECTION elements (not the rows), so they
+  // survive re-rendering the section's inner HTML. Text edits update state
+  // without re-rendering (preserve focus); add/remove/toggle re-render.
+  function bindListSections(el) {
+    const icps = el.querySelector('[data-section="icps"]');
+    if (icps) {
+      icps.addEventListener('input', (e) => {
+        if (e.target.getAttribute('data-act') === 'icp-text') {
+          const i = rowIdx(e.target);
+          if (i >= 0) el.__vpProfileState.icps[i].text = e.target.value;
+        }
+      });
+      icps.addEventListener('change', (e) => {
+        if (e.target.getAttribute('data-act') === 'icp-toggle') {
+          const i = rowIdx(e.target);
+          if (i >= 0) el.__vpProfileState.icps[i].selected = e.target.checked;
+        }
+      });
+      icps.addEventListener('click', (e) => {
+        const act = actOf(e.target);
+        const state = el.__vpProfileState;
+        if (act === 'icp-remove') {
+          const i = rowIdx(e.target);
+          if (i >= 0) { state.icps.splice(i, 1); rerenderIcps(el); }
+        } else if (act === 'icp-add') {
+          if (state.icps.length >= ICP_MAX) return; // MAX enforcement (no floor)
+          state.icps.push({ text: '', selected: true });
+          rerenderIcps(el);
+        }
+      });
+    }
+
+    const prompts = el.querySelector('[data-section="prompts"]');
+    if (prompts) {
+      prompts.addEventListener('input', (e) => {
+        if (e.target.getAttribute('data-act') === 'prompt-text') {
+          const i = rowIdx(e.target);
+          if (i >= 0) el.__vpProfileState.tracked_prompts[i].text = e.target.value;
+        }
+      });
+      prompts.addEventListener('change', (e) => {
+        if (e.target.getAttribute('data-act') !== 'prompt-monitor') return;
+        const i = rowIdx(e.target);
+        if (i < 0) return;
+        const state = el.__vpProfileState;
+        const cap = el.__vpConfig ? el.__vpConfig.monitoring_cap : null;
+        if (e.target.checked) {
+          const monitoredNow = state.tracked_prompts.filter((p) => p.is_monitored).length;
+          if (cap != null && monitoredNow >= cap) {
+            // Block turning ON beyond the cap; revert via re-render + hint.
+            el.__vpUi.promptCapHint = true;
+            rerenderPrompts(el);
+            return;
+          }
+          state.tracked_prompts[i].is_monitored = true;
+        } else {
+          state.tracked_prompts[i].is_monitored = false; // turning OFF always allowed
+        }
+        el.__vpUi.promptCapHint = false;
+        rerenderPrompts(el); // refresh "Tracking X of up to N"
+      });
+      prompts.addEventListener('click', (e) => {
+        const act = actOf(e.target);
+        const state = el.__vpProfileState;
+        if (act === 'prompt-delete') {
+          const i = rowIdx(e.target);
+          if (i >= 0) { state.tracked_prompts.splice(i, 1); el.__vpUi.promptCapHint = false; rerenderPrompts(el); }
+        } else if (act === 'prompt-add') {
+          if (state.tracked_prompts.length >= PROMPT_SOFT_CAP) return; // soft-cap MAX
+          // New prompts: no volume; default NOT monitored so adding can't breach cap.
+          state.tracked_prompts.push({ text: '', volume: null, is_monitored: false });
+          el.__vpUi.promptCapHint = false;
+          rerenderPrompts(el);
+        } else if (act === 'token-cta') {
+          onTokenQueryUnlockRequested({ source: 'prompts_section' });
+        }
+      });
+    }
+  }
+
   // ---- public render -----------------------------------------------------
   function render(mountEl, opts) {
     const el = typeof mountEl === 'string' ? document.querySelector(mountEl) : mountEl;
@@ -377,10 +540,12 @@
     }
     const o = opts || {};
     const mode = o.mode === 'edit' ? 'edit' : 'onboarding';
+    const config = o.config || null;
 
     // Build the working-profile state, then render FROM it (controls read their
     // initial values from state; edits write back to the same object).
     const state = createWorkingProfile(o.data || {});
+    const ui = { promptCapHint: false };
     const st = resolveStates(state);
 
     el.classList.add('vp-scope');
@@ -390,15 +555,18 @@
         ${sectionCallYou(state, st)}
         ${sectionBasics(state, st)}
         ${sectionAbout(state, st)}
-        ${sectionIcps(state, st)}
+        ${sectionIcps(state)}
         ${sectionCompetitors(state, st)}
-        ${sectionPrompts(state, st)}
+        ${sectionPrompts(state, config, ui)}
         ${sectionExtras(state)}
         ${sectionCta(mode)}
       </div>`;
 
     el.__vpProfileState = state;     // single source of truth for edits
-    bindSimpleFields(el, state);     // wire simple-field editing
+    el.__vpConfig = config;          // draft_config (monitoring_cap, token unlock)
+    el.__vpUi = ui;                  // transient UI flags (cap hint)
+    bindSimpleFields(el, state);     // wire simple-field editing (9a)
+    bindListSections(el);            // wire ICPs + prompts editing (9b)
     return state;
   }
 
@@ -409,5 +577,6 @@
     createWorkingProfile,
     simpleFieldState,
     getState,
+    onTokenQueryUnlockRequested,
   };
 })();
