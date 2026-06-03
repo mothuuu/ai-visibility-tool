@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Set up your AI visibility profile - Xeo</title>
+    <link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
+
+    <!-- Xeo brand fonts: Syne (headings) / DM Sans (body). The rest of the app
+         currently uses system fonts; these are loaded per the profile-form spec. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome 6 (already used by the dashboard) for control icons. -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Reusable visibility-profile form component (Step 7 static scaffold). -->
+    <link rel="stylesheet" href="css/profile-form.css">
+
+    <style>
+        body {
+            margin: 0;
+            background: #F9FAFB;
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <!-- Mount point for the reusable profile form. Onboarding mode here; the
+         future Profile page (Step 12) mounts the same component in 'edit' mode. -->
+    <main id="profile-form-root"></main>
+
+    <script src="js/profile-form.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            window.ProfileForm.render(
+                document.getElementById('profile-form-root'),
+                { mode: 'onboarding' }
+            );
+        });
+    </script>
+</body>
+</html>
