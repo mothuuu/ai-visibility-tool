@@ -915,7 +915,18 @@ const PLAN_ENTITLEMENTS = Object.freeze({
     hasCompetitor:     false,
     hasExports:        false,
     maxDomains:        1,
-    scanHistoryDays:   30
+    scanHistoryDays:   30,
+    // Intake/profile draft config (see getDraftConfig). Draft never fires for
+    // freemium — all draft features off. Also the safe default for unknown plans.
+    draft: Object.freeze({
+      draft_enabled:              false,
+      populated_prompts_min:      0,
+      populated_prompts_max:      0,
+      baseline_volume:            false,
+      token_query_unlock_enabled: false,
+      monitoring_cap:             0,
+      benchmarking_enabled:       false
+    })
   }),
   starter: Object.freeze({
     scansPerMonth:     10,
@@ -927,7 +938,17 @@ const PLAN_ENTITLEMENTS = Object.freeze({
     hasCompetitor:     false,
     hasExports:        false,
     maxDomains:        1,
-    scanHistoryDays:   90
+    scanHistoryDays:   90,
+    // 'diy' resolves here via getEffectivePlan.
+    draft: Object.freeze({
+      draft_enabled:              true,
+      populated_prompts_min:      3,
+      populated_prompts_max:      5,
+      baseline_volume:            true,
+      token_query_unlock_enabled: true,
+      monitoring_cap:             5,
+      benchmarking_enabled:       false
+    })
   }),
   pro: Object.freeze({
     scansPerMonth:     100,
@@ -939,7 +960,16 @@ const PLAN_ENTITLEMENTS = Object.freeze({
     hasCompetitor:     true,
     hasExports:        true,
     maxDomains:        3,
-    scanHistoryDays:   365
+    scanHistoryDays:   365,
+    draft: Object.freeze({
+      draft_enabled:              true,
+      populated_prompts_min:      3,
+      populated_prompts_max:      5,
+      baseline_volume:            true,
+      token_query_unlock_enabled: true,
+      monitoring_cap:             20,
+      benchmarking_enabled:       true
+    })
   }),
   enterprise: Object.freeze({
     scansPerMonth:     500,
@@ -951,7 +981,17 @@ const PLAN_ENTITLEMENTS = Object.freeze({
     hasCompetitor:     true,
     hasExports:        true,
     maxDomains:        10,
-    scanHistoryDays:   365
+    scanHistoryDays:   365,
+    // monitoring_cap null = custom/unlimited (negotiated per contract).
+    draft: Object.freeze({
+      draft_enabled:              true,
+      populated_prompts_min:      3,
+      populated_prompts_max:      5,
+      baseline_volume:            true,
+      token_query_unlock_enabled: true,
+      monitoring_cap:             null,
+      benchmarking_enabled:       true
+    })
   })
 });
 
@@ -1042,6 +1082,33 @@ function getTokenAllowance(planName) {
   return getEntitlements(planName).tokensPerCycle;
 }
 
+/**
+ * Get the intake/profile draft config for a plan.
+ *
+ * Per-plan settings for the intake-form / profile draft (Step 2 of the
+ * intake-form/profile build). Resolves aliases via getEffectivePlan()
+ * ('diy' → 'starter', 'freemium' → 'free'), so consumers must never hardcode
+ * plan strings — always ask PlanService.
+ *
+ * Returned shape:
+ *   draft_enabled              boolean — whether the draft trigger may fire
+ *   populated_prompts_min      number  — min auto-populated prompts (paid: 3)
+ *   populated_prompts_max      number  — max auto-populated prompts (paid: 5)
+ *   baseline_volume            boolean — show volume on the populated prompts
+ *   token_query_unlock_enabled boolean — "see all queries + volumes" pop-up
+ *   monitoring_cap             number|null — monitored-query cap (null = custom)
+ *   benchmarking_enabled       boolean — competitive benchmarking
+ *
+ * Unknown/legacy plans fall back to the freemium config (all draft features
+ * off) and never throw — mirrors getEntitlements().
+ *
+ * @param {string|null|undefined} planName
+ * @returns {Readonly<{draft_enabled:boolean, populated_prompts_min:number, populated_prompts_max:number, baseline_volume:boolean, token_query_unlock_enabled:boolean, monitoring_cap:(number|null), benchmarking_enabled:boolean}>}
+ */
+function getDraftConfig(planName) {
+  return getEntitlements(planName).draft;
+}
+
 // =============================================================================
 // EXPORTS
 // =============================================================================
@@ -1078,6 +1145,7 @@ module.exports = {
   getEntitlements,
   canAccessFeature,
   getTokenAllowance,
+  getDraftConfig,
 
   // Constants
   ACTIVE_SUBSCRIPTION_STATUSES,

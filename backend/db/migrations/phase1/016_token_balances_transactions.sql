@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS token_balances (
     updated_at      TIMESTAMPTZ   DEFAULT NOW()
 );
 
-CREATE INDEX idx_token_balances_user_id ON token_balances (user_id);
+CREATE INDEX IF NOT EXISTS idx_token_balances_user_id ON token_balances (user_id);
 
 CREATE TABLE IF NOT EXISTS token_transactions (
     id              SERIAL        PRIMARY KEY,
@@ -29,6 +29,6 @@ CREATE TABLE IF NOT EXISTS token_transactions (
     created_at      TIMESTAMPTZ   DEFAULT NOW()
 );
 
-CREATE INDEX idx_token_transactions_user_id    ON token_transactions (user_id);
-CREATE INDEX idx_token_transactions_type       ON token_transactions (type);
-CREATE INDEX idx_token_transactions_created_at ON token_transactions (created_at);
+CREATE INDEX IF NOT EXISTS idx_token_transactions_user_id    ON token_transactions (user_id);
+CREATE INDEX IF NOT EXISTS idx_token_transactions_type       ON token_transactions (type);
+CREATE INDEX IF NOT EXISTS idx_token_transactions_created_at ON token_transactions (created_at);
