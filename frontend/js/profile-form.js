@@ -50,6 +50,16 @@
     }
     return { text: str(p), volume: null, is_monitored: true };
   }
+  // Competitor item: { name }. Priority IS the array index + 1 (no stored field).
+  function normalizeCompetitor(it) {
+    if (it && typeof it === 'object') return { name: itemText(it) };
+    return { name: str(it) };
+  }
+
+  // Competitor column wiring: data-col key -> state array; plus its opposite + label.
+  const COMP_COLS = { business: 'competitors_business', visibility: 'competitors_visibility' };
+  const COMP_OTHER = { business: 'visibility', visibility: 'business' };
+  const COMP_LABEL = { business: 'business competitors', visibility: 'AI visibility competitors' };
 
   // ---- per-field visual state -------------------------------------------
   // hasValue + aiEligible -> 'ai'; else required -> 'required'; else 'optional'.
@@ -217,44 +227,53 @@
     return `<section class="vp-section" data-section="icps">${icpsInner(state)}</section>`;
   }
 
-  // 5. Your competitive landscape (two columns)
-  function competitorColumn(title, sub, items) {
-    const rows = arr(items)
+  // 5. Your competitive landscape (two columns). Priority = array index + 1,
+  // renumbered on every mutation. Re-rendered from state (single source).
+  function competitorColumn(col, title, sub, items) {
+    const list = arr(items);
+    const otherLabel = COMP_LABEL[COMP_OTHER[col]];
+    const rows = list
       .map(
         (it, i) => `
-          <div class="vp-comp-row">
+          <div class="vp-comp-row" data-idx="${i}">
             <span class="vp-priority">${i + 1}</span>
-            <input class="vp-input" type="text" value="${esc(itemText(it))}" />
+            <input class="vp-input" type="text" data-act="comp-name" value="${esc(it.name)}" />
             <span class="vp-chevrons">
-              <button class="vp-chev" type="button" title="Move up" aria-label="Move up"><i class="fas fa-chevron-up"></i></button>
-              <button class="vp-chev" type="button" title="Move down" aria-label="Move down"><i class="fas fa-chevron-down"></i></button>
+              <button class="vp-chev" type="button" data-act="comp-up" title="Move up" aria-label="Move up" ${i === 0 ? 'disabled' : ''}><i class="fas fa-chevron-up"></i></button>
+              <button class="vp-chev" type="button" data-act="comp-down" title="Move down" aria-label="Move down" ${i === list.length - 1 ? 'disabled' : ''}><i class="fas fa-chevron-down"></i></button>
             </span>
-            <button class="vp-icon-btn vp-icon-btn--danger" type="button" title="Delete" aria-label="Delete">
+            <button class="vp-icon-btn" type="button" data-act="comp-move" title="Move to ${esc(otherLabel)}" aria-label="Move to ${esc(otherLabel)}">
+              <i class="fas fa-right-left"></i>
+            </button>
+            <button class="vp-icon-btn vp-icon-btn--danger" type="button" data-act="comp-delete" title="Delete" aria-label="Delete">
               <i class="fas fa-trash"></i>
             </button>
           </div>`
       )
       .join('');
     return `
-      <div class="vp-comp-col">
+      <div class="vp-comp-col" data-col="${col}">
         <p class="vp-comp-col-head">${esc(title)}</p>
         <p class="vp-comp-col-sub">${esc(sub)}</p>
         ${rows}
-        <button class="vp-add-btn" type="button"><i class="fas fa-plus"></i> Add</button>
+        <button class="vp-add-btn" type="button" data-act="comp-add"><i class="fas fa-plus"></i> Add</button>
       </div>`;
   }
 
-  function sectionCompetitors(d, st) {
+  function competitorsInner(state) {
+    const filled = arr(state.competitors_business).length > 0 && arr(state.competitors_visibility).length > 0;
     return `
-      <section class="vp-section" data-section="competitors">
-        <div class="vp-section-head">
-          <h2 class="vp-section-title">Your competitive landscape ${badge(st.competitors_business)}</h2>
-        </div>
-        <div class="vp-comp-cols">
-          ${competitorColumn('Business competitors', 'Real-world rivals you compete with.', d.competitors_business)}
-          ${competitorColumn('AI visibility competitors', 'Sources and lists AI models cite as authorities.', d.competitors_visibility)}
-        </div>
-      </section>`;
+      <div class="vp-section-head">
+        <h2 class="vp-section-title">Your competitive landscape ${badge(listBadgeType(filled), 'competitors')}</h2>
+      </div>
+      <div class="vp-comp-cols">
+        ${competitorColumn('business', 'Business competitors', 'Real-world rivals you compete with.', state.competitors_business)}
+        ${competitorColumn('visibility', 'AI visibility competitors', 'Sources and lists AI models cite as authorities.', state.competitors_visibility)}
+      </div>`;
+  }
+
+  function sectionCompetitors(state) {
+    return `<section class="vp-section" data-section="competitors">${competitorsInner(state)}</section>`;
   }
 
   // Monitoring-cap display text. null cap (Enterprise) -> custom / no numeric limit.
@@ -371,8 +390,8 @@
       // Step 9c (competitors_*). Normalized to fixed item shapes; copies so
       // edits never touch the GET payload.
       icps: arr(d.icps).map(normalizeIcp),
-      competitors_business: arr(d.competitors_business).map((it) => (it && typeof it === 'object' ? { ...it } : it)),
-      competitors_visibility: arr(d.competitors_visibility).map((it) => (it && typeof it === 'object' ? { ...it } : it)),
+      competitors_business: arr(d.competitors_business).map(normalizeCompetitor),
+      competitors_visibility: arr(d.competitors_visibility).map(normalizeCompetitor),
       tracked_prompts: arr(d.tracked_prompts).map(normalizePromptItem),
       // Read-only mirror for render; NOT an editable field (no domain column).
       domain: str(d.domain),
@@ -440,6 +459,10 @@
   function rerenderPrompts(el) {
     const section = el.querySelector('[data-section="prompts"]');
     if (section) section.innerHTML = promptsInner(el.__vpProfileState, el.__vpConfig, el.__vpUi);
+  }
+  function rerenderCompetitors(el) {
+    const section = el.querySelector('[data-section="competitors"]');
+    if (section) section.innerHTML = competitorsInner(el.__vpProfileState);
   }
 
   const rowIdx = (target) => {
@@ -533,6 +556,47 @@
         }
       });
     }
+
+    // 9c: competitor two-column — edit / add / delete / reorder / reclassify.
+    const comp = el.querySelector('[data-section="competitors"]');
+    if (comp) {
+      const colOf = (target) => {
+        const c = target.closest && target.closest('[data-col]');
+        return c ? c.getAttribute('data-col') : null;
+      };
+      comp.addEventListener('input', (e) => {
+        if (e.target.getAttribute('data-act') !== 'comp-name') return;
+        const col = colOf(e.target);
+        const i = rowIdx(e.target);
+        if (col && i >= 0) el.__vpProfileState[COMP_COLS[col]][i].name = e.target.value; // no re-render
+      });
+      comp.addEventListener('click', (e) => {
+        const act = actOf(e.target);
+        if (!act) return;
+        const state = el.__vpProfileState;
+        const col = colOf(e.target);
+        if (!col) return;
+        const list = state[COMP_COLS[col]];
+        if (act === 'comp-add') {
+          list.push({ name: '' }); // no max (none specified)
+          rerenderCompetitors(el);
+          return;
+        }
+        const i = rowIdx(e.target);
+        if (i < 0) return;
+        if (act === 'comp-up') {
+          if (i > 0) { const t = list[i - 1]; list[i - 1] = list[i]; list[i] = t; rerenderCompetitors(el); }
+        } else if (act === 'comp-down') {
+          if (i < list.length - 1) { const t = list[i + 1]; list[i + 1] = list[i]; list[i] = t; rerenderCompetitors(el); }
+        } else if (act === 'comp-delete') {
+          list.splice(i, 1); rerenderCompetitors(el); // no removal floor
+        } else if (act === 'comp-move') {
+          const item = list.splice(i, 1)[0];               // remove from source
+          state[COMP_COLS[COMP_OTHER[col]]].push(item);    // append to target
+          rerenderCompetitors(el);                         // re-render + renumber BOTH
+        }
+      });
+    }
   }
 
   // ---- public render -----------------------------------------------------
@@ -560,7 +624,7 @@
         ${sectionBasics(state, st)}
         ${sectionAbout(state, st)}
         ${sectionIcps(state)}
-        ${sectionCompetitors(state, st)}
+        ${sectionCompetitors(state)}
         ${sectionPrompts(state, config, ui)}
         ${sectionExtras(state)}
         ${sectionCta(mode)}
