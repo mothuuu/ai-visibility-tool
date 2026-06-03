@@ -52,9 +52,10 @@
     optional: ['vp-badge--optional', 'Optional'],
     locked: ['vp-badge--locked', 'Locked'],
   };
-  const badge = (type) => {
+  const badge = (type, field) => {
     const [cls, label] = BADGE_META[type];
-    return `<span class="vp-badge ${cls}">${label}</span>`;
+    const attr = field ? ` data-field-badge="${field}"` : '';
+    return `<span class="vp-badge ${cls}"${attr}>${label}</span>`;
   };
 
   // Expose the pure state resolver for testing.
@@ -109,10 +110,10 @@
     return `
       <section class="vp-section" data-section="call-you">
         <div class="vp-section-head">
-          <h2 class="vp-section-title">What should I call you? ${badge(st.display_name)}</h2>
+          <h2 class="vp-section-title">What should I call you? ${badge(st.display_name, 'display_name')}</h2>
         </div>
         <div class="vp-field">
-          <input class="vp-input" type="text" value="${esc(str(d.display_name))}" placeholder="Your name" />
+          <input class="vp-input" type="text" data-field="display_name" value="${esc(str(d.display_name))}" placeholder="Your name" />
         </div>
       </section>`;
   }
@@ -130,16 +131,16 @@
             <input class="vp-input vp-input--locked" type="text" value="${esc(str(d.domain))}" placeholder="—" readonly />
           </div>
           <div class="vp-field">
-            <label class="vp-label">Company name ${badge(st.company_name)}</label>
-            <input class="vp-input" type="text" value="${esc(str(d.company_name))}" placeholder="Your company" />
+            <label class="vp-label">Company name ${badge(st.company_name, 'company_name')}</label>
+            <input class="vp-input" type="text" data-field="company_name" value="${esc(str(d.company_name))}" placeholder="Your company" />
           </div>
           <div class="vp-field">
-            <label class="vp-label">Industry ${badge(st.industry)}</label>
-            <input class="vp-input" type="text" value="${esc(str(d.industry))}" placeholder="e.g. Marketing technology" />
+            <label class="vp-label">Industry ${badge(st.industry, 'industry')}</label>
+            <input class="vp-input" type="text" data-field="industry" value="${esc(str(d.industry))}" placeholder="e.g. Marketing technology" />
           </div>
           <div class="vp-field">
-            <label class="vp-label">Location ${badge(st.location)}</label>
-            <input class="vp-input" type="text" value="${esc(str(d.location))}" placeholder="e.g. Berlin, Germany" />
+            <label class="vp-label">Location ${badge(st.location, 'location')}</label>
+            <input class="vp-input" type="text" data-field="location" value="${esc(str(d.location))}" placeholder="e.g. Berlin, Germany" />
           </div>
         </div>
       </section>`;
@@ -150,10 +151,10 @@
     return `
       <section class="vp-section" data-section="about">
         <div class="vp-section-head">
-          <h2 class="vp-section-title">Tell us about your business ${badge(st.business_description)}</h2>
+          <h2 class="vp-section-title">Tell us about your business ${badge(st.business_description, 'business_description')}</h2>
         </div>
         <div class="vp-field">
-          <textarea class="vp-textarea" rows="5" placeholder="A sentence or two about what you do and who you serve.">${esc(str(d.business_description))}</textarea>
+          <textarea class="vp-textarea" rows="5" data-field="business_description" placeholder="A sentence or two about what you do and who you serve.">${esc(str(d.business_description))}</textarea>
         </div>
       </section>`;
   }
@@ -274,12 +275,12 @@
         </div>
         <div class="vp-field" style="margin-bottom:18px;">
           <label class="vp-label">What is an average customer worth to you?</label>
-          <input class="vp-input" type="text" value="${esc(str(d.avg_customer_value))}" placeholder="e.g. $5,000 / year" />
+          <input class="vp-input" type="text" data-field="avg_customer_value" value="${esc(str(d.avg_customer_value))}" placeholder="e.g. $5,000 / year" />
           <p class="vp-hint">Helps us prioritize findings tied to higher-value queries.</p>
         </div>
         <div class="vp-field">
           <label class="vp-label">Any specific product or service you want to prioritize?</label>
-          <input class="vp-input" type="text" value="${esc(priorityFocus)}" />
+          <input class="vp-input" type="text" data-field="priority_focus" value="${esc(priorityFocus)}" />
           <p class="vp-hint">Leave as is to optimize across your whole brand.</p>
         </div>
       </section>`;
@@ -295,6 +296,78 @@
       </div>`;
   }
 
+  // ---- working-profile state model (Step 9a) ----------------------------
+  // ONE in-memory object initialized from the loaded GET data. All controls
+  // read their initial values from it and write edits back to it. Lists are
+  // copied (not aliased to the GET payload) so 9b/9c can mutate them freely.
+  // Step 11 serializes this to POST /api/profile.
+  function createWorkingProfile(data) {
+    const d = data || {};
+    return {
+      display_name: str(d.display_name),
+      company_name: str(d.company_name),
+      industry: str(d.industry),
+      location: str(d.location),
+      business_description: str(d.business_description),
+      avg_customer_value: str(d.avg_customer_value),
+      priority_focus: str(d.priority_focus) || DEFAULT_PRIORITY_FOCUS,
+      // List sections — mutated by Step 9b (icps, tracked_prompts) and
+      // Step 9c (competitors_*). Deep-ish copies so edits never touch GET data.
+      icps: arr(d.icps).map((it) => (it && typeof it === 'object' ? { ...it } : it)),
+      competitors_business: arr(d.competitors_business).map((it) => (it && typeof it === 'object' ? { ...it } : it)),
+      competitors_visibility: arr(d.competitors_visibility).map((it) => (it && typeof it === 'object' ? { ...it } : it)),
+      tracked_prompts: arr(d.tracked_prompts).map((p) => (p && typeof p === 'object' ? { ...p } : p)),
+      // Read-only mirror for render; NOT an editable field (no domain column).
+      domain: str(d.domain),
+    };
+  }
+
+  // Simple fields whose badge flips between AI/Required (or Optional) on edit.
+  const FLIP_SPEC = {
+    display_name: { aiEligible: true, required: true },
+    company_name: { aiEligible: true, required: false },
+    industry: { aiEligible: true, required: false },
+    location: { aiEligible: true, required: false },
+    business_description: { aiEligible: true, required: true },
+  };
+
+  // Resolve the badge type for a single simple field given its current value.
+  function simpleFieldState(field, value) {
+    const spec = FLIP_SPEC[field];
+    if (!spec) return 'optional';
+    return fieldState({ hasValue: str(value).length > 0, aiEligible: spec.aiEligible, required: spec.required });
+  }
+
+  // Swap a field's pill badge in place to reflect its current value.
+  function updateFieldBadge(el, field, value) {
+    if (!FLIP_SPEC[field]) return; // optional fields never flip
+    const badgeEl = el.querySelector('[data-field-badge="' + field + '"]');
+    if (!badgeEl) return;
+    const [cls, label] = BADGE_META[simpleFieldState(field, value)];
+    badgeEl.className = 'vp-badge ' + cls;
+    badgeEl.textContent = label;
+  }
+
+  // Bind change handlers for the SIMPLE fields (domain is locked → unbound).
+  function bindSimpleFields(el, state) {
+    const controls = el.querySelectorAll('[data-field]');
+    Array.prototype.forEach.call(controls, (input) => {
+      const field = input.getAttribute('data-field');
+      const onEdit = () => {
+        state[field] = input.value;
+        updateFieldBadge(el, field, input.value);
+      };
+      input.addEventListener('input', onEdit);
+      input.addEventListener('change', onEdit);
+    });
+  }
+
+  // Working-profile accessor (Step 11 reads this to serialize).
+  function getState(mountEl) {
+    const el = typeof mountEl === 'string' ? document.querySelector(mountEl) : mountEl;
+    return (el && el.__vpProfileState) || null;
+  }
+
   // ---- public render -----------------------------------------------------
   function render(mountEl, opts) {
     const el = typeof mountEl === 'string' ? document.querySelector(mountEl) : mountEl;
@@ -304,23 +377,37 @@
     }
     const o = opts || {};
     const mode = o.mode === 'edit' ? 'edit' : 'onboarding';
-    const data = o.data || {};
-    const st = resolveStates(data);
+
+    // Build the working-profile state, then render FROM it (controls read their
+    // initial values from state; edits write back to the same object).
+    const state = createWorkingProfile(o.data || {});
+    const st = resolveStates(state);
 
     el.classList.add('vp-scope');
     el.innerHTML = `
       <div class="vp-form" data-mode="${mode}">
         ${sectionHeader(mode)}
-        ${sectionCallYou(data, st)}
-        ${sectionBasics(data, st)}
-        ${sectionAbout(data, st)}
-        ${sectionIcps(data, st)}
-        ${sectionCompetitors(data, st)}
-        ${sectionPrompts(data, st)}
-        ${sectionExtras(data)}
+        ${sectionCallYou(state, st)}
+        ${sectionBasics(state, st)}
+        ${sectionAbout(state, st)}
+        ${sectionIcps(state, st)}
+        ${sectionCompetitors(state, st)}
+        ${sectionPrompts(state, st)}
+        ${sectionExtras(state)}
         ${sectionCta(mode)}
       </div>`;
+
+    el.__vpProfileState = state;     // single source of truth for edits
+    bindSimpleFields(el, state);     // wire simple-field editing
+    return state;
   }
 
-  window.ProfileForm = { render, resolveStates, formatVolume };
+  window.ProfileForm = {
+    render,
+    resolveStates,
+    formatVolume,
+    createWorkingProfile,
+    simpleFieldState,
+    getState,
+  };
 })();
