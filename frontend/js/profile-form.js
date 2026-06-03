@@ -520,8 +520,12 @@
           if (i >= 0) { state.tracked_prompts.splice(i, 1); el.__vpUi.promptCapHint = false; rerenderPrompts(el); }
         } else if (act === 'prompt-add') {
           if (state.tracked_prompts.length >= PROMPT_SOFT_CAP) return; // soft-cap MAX
-          // New prompts: no volume; default NOT monitored so adding can't breach cap.
-          state.tracked_prompts.push({ text: '', volume: null, is_monitored: false });
+          // New prompts are meant to be tracked: default is_monitored = true when
+          // under the monitoring cap, false when already at it (keeps the invariant).
+          const cap = el.__vpConfig ? el.__vpConfig.monitoring_cap : null;
+          const monitoredNow = state.tracked_prompts.filter((p) => p.is_monitored).length;
+          const monitored = cap == null || monitoredNow < cap;
+          state.tracked_prompts.push({ text: '', volume: null, is_monitored: monitored });
           el.__vpUi.promptCapHint = false;
           rerenderPrompts(el);
         } else if (act === 'token-cta') {
