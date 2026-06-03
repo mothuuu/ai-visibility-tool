@@ -15,7 +15,7 @@
     <!-- Font Awesome 6 (already used by the dashboard) for control icons. -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <!-- Reusable visibility-profile form component (Step 7 static scaffold). -->
+    <!-- Reusable visibility-profile form component (Step 7) + loader (Step 8). -->
     <link rel="stylesheet" href="css/profile-form.css">
 
     <style>
@@ -31,10 +31,19 @@
          future Profile page (Step 12) mounts the same component in 'edit' mode. -->
     <main id="profile-form-root"></main>
 
+    <script>
+        // API base — mirrors the dashboard.js convention.
+        window.API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+            ? 'http://localhost:3001/api'
+            : 'https://ai-visibility-tool.onrender.com/api';
+    </script>
     <script src="js/profile-form.js"></script>
+    <script src="js/profile-loader.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            window.ProfileForm.render(
+            // Loader fetches GET /api/profile, handles the draft-not-ready poll,
+            // and renders the populated form (or manual/empty form on timeout).
+            window.ProfileLoader.start(
                 document.getElementById('profile-form-root'),
                 { mode: 'onboarding' }
             );
