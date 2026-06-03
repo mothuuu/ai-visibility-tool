@@ -9,6 +9,10 @@ const {
   persistCitationRun,
 } = require('../services/citationMonitoringService');
 const mentionDetector = require('../services/mentionDetector');
+const planService = require('../services/planService');
+const tokenService = require('../services/tokenService');
+const InsufficientTokensError = require('../errors/InsufficientTokensError');
+const { CITATION_TEST_TOKEN_COST } = require('../config/platform-config');
 
 /* eslint-disable no-console */
 const express = require('express');
@@ -1077,6 +1081,24 @@ router.post('/test-ai-visibility', authenticateTokenOptional, async (req, res) =
       return res
         .status(400)
         .json({ error: 'URL and queries array are required' });
+    }
+
+    if (clusterId) {
+      if (!req.user) {
+        return res.status(401).json({ error: 'authentication_required' });
+      }
+      const resolvedPlan = await planService.resolvePlanForRequest({ userId: req.user.id, orgId: req.user.org_id });
+      if (!planService.canAccessFeature(resolvedPlan.plan, 'hasCitation')) {
+        return res.status(403).json({ error: 'plan_upgrade_required', message: 'Citation tests require Starter or Pro plan' });
+      }
+      try {
+        await tokenService.spendTokens(req.user.id, CITATION_TEST_TOKEN_COST, 'citation_test', clusterId.toString());
+      } catch (err) {
+        if (err instanceof InsufficientTokensError) {
+          return res.status(402).json({ error: 'insufficient_tokens', required: CITATION_TEST_TOKEN_COST, available: err.available });
+        }
+        throw err;
+      }
     }
 
     const results = await testAIVisibility(url, industry, queries);
