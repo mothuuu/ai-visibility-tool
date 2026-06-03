@@ -127,6 +127,7 @@ app.use('/api/tokens', tokenRoutes); // Token balance and purchase
 app.use('/api/packs', packRoutes); // Phase 2: Pack purchase / catalog / history
 app.use('/api/citations', citationRoutes); // Phase 3: Citation latest/history/detail
 app.use('/api/benchmarks', benchmarkRoutes); // Phase 3: Vertical benchmarks
+app.use('/api/profile', require('./routes/profile')); // Step 5: Visibility profile intake/edit
 app.use('/api/test', require('./routes/test-routes'));
 
 // Health check
