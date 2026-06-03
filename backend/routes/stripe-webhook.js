@@ -108,7 +108,8 @@ async function handleStripeWebhook(req, res) {
     // If nothing returned, this event was already processed (duplicate)
     if (eventLogResult.rows.length === 0) {
       await client.query('ROLLBACK');
-      client.release();
+      // NOTE: do not release here — the `return` routes through the single
+      // `finally` block below, which releases the client exactly once.
       console.log(`⏭️  [Webhook] Duplicate event ${event.id}, skipping`);
       return res.json({ received: true, duplicate: true });
     }
