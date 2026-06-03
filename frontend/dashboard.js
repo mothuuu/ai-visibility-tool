@@ -2,6 +2,31 @@ const API_BASE_URL = window.location.hostname === 'localhost' || window.location
     ? 'http://localhost:3001/api'
     : 'https://ai-visibility-tool.onrender.com/api';
 
+// Step 6: visibility-profile completion gate (frontend redirect hook).
+// Route the intake form lives at (Phase 2 builds the page).
+const PROFILE_SETUP_ROUTE = '/profile-setup.html';
+
+// Global handler: any API response of 403 { error:'profile_incomplete' } sends a
+// paid+incomplete user to the intake form (covers direct navigation / any call).
+// Installed once; matches the existing window.location redirect pattern.
+(function installProfileGateInterceptor() {
+    if (window.__profileGateInstalled) return;
+    window.__profileGateInstalled = true;
+    const origFetch = window.fetch.bind(window);
+    window.fetch = async function (...args) {
+        const resp = await origFetch(...args);
+        if (resp.status === 403) {
+            try {
+                const data = await resp.clone().json();
+                if (data && data.error === 'profile_incomplete') {
+                    window.location.href = data.redirect || PROFILE_SETUP_ROUTE;
+                }
+            } catch (_) { /* non-JSON 403 — ignore */ }
+        }
+        return resp;
+    };
+})();
+
 // ============================================================================
 // SUBMISSION STATUS CONSTANTS & VERIFICATION POLICY
 // ============================================================================
@@ -306,6 +331,25 @@ async function initDashboard() {
         }
         if (quotaLegacy) {
             localStorage.setItem('quotaLegacy', JSON.stringify(quotaLegacy));
+        }
+
+        // Step 6: gate dashboard on a completed visibility profile (paid only).
+        // Fresh server read via GET /api/profile (returns plan draft_config +
+        // profile_completed). Freemium (draft_enabled=false) is never redirected.
+        try {
+            const profResp = await fetch(`${API_BASE_URL}/profile`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            if (profResp.ok) {
+                const profData = await profResp.json();
+                if (profData.draft_config && profData.draft_config.draft_enabled && !profData.profile_completed) {
+                    console.log('Dashboard: paid profile incomplete, redirecting to profile setup');
+                    window.location.href = PROFILE_SETUP_ROUTE;
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn('Dashboard: profile gate check failed (non-fatal):', e);
         }
 
         // Update UI
