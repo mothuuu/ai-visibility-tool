@@ -444,6 +444,67 @@
     return (el && el.__vpProfileState) || null;
   }
 
+  // ---- progress + CTA readiness (Step 10) -------------------------------
+  // MIRRORS Step 5's server validateProfilePayload EXACTLY so an enabled CTA
+  // always corresponds to a payload the server would accept. Step 5 is lenient:
+  // icps / competitors_* require only array length >= 1 (no selected/name check);
+  // prompts require length >= 3 AND every prompt has non-empty text; the cap rule
+  // is monitored(is_monitored===true) count <= monitoring_cap (skipped when null).
+  const hasText = (v) => str(typeof v === 'string' ? v : (v && v.text)).length > 0;
+
+  function evaluateReadiness(state, config) {
+    const s = state || {};
+    const icps = arr(s.icps);
+    const cb = arr(s.competitors_business);
+    const cv = arr(s.competitors_visibility);
+    const prompts = arr(s.tracked_prompts);
+
+    // Required FIELD rules (denominator of "N of N required fields ready").
+    const rules = [
+      { key: 'display_name', ok: str(s.display_name).length > 0 },
+      { key: 'business_description', ok: str(s.business_description).length > 0 },
+      { key: 'icps', ok: icps.length >= 1 },
+      { key: 'competitors_business', ok: cb.length >= 1 },
+      { key: 'competitors_visibility', ok: cv.length >= 1 },
+      { key: 'tracked_prompts', ok: prompts.length >= 3 && prompts.every(hasText) },
+    ];
+    const readyCount = rules.filter((r) => r.ok).length;
+    const total = rules.length; // derived from the rule set, not hardcoded
+
+    // Monitoring cap — a constraint (mirrors Step 5), folded into allReady but
+    // NOT counted as a "field" (it's a cap, not something to fill). Already
+    // enforced live in 9b, so it can only fail on pre-over-cap loaded data.
+    const cap = config ? config.monitoring_cap : null;
+    const monitoredCount = prompts.filter((p) => p && typeof p === 'object' && p.is_monitored === true).length;
+    const capOk = cap == null || monitoredCount <= cap;
+
+    const allReady = readyCount === total && capOk;
+
+    // Optional answered (cosmetic): avg non-empty; priority_focus changed from
+    // the untouched default.
+    const optionalAnswered =
+      (str(s.avg_customer_value).length > 0 ? 1 : 0) +
+      (str(s.priority_focus).length > 0 && str(s.priority_focus) !== DEFAULT_PRIORITY_FOCUS ? 1 : 0);
+
+    return { rules, readyCount, total, capOk, allReady, optionalAnswered, optionalTotal: 2 };
+  }
+
+  // Recompute the progress line + CTA disabled state from current state. Single
+  // entry point called after EVERY mutation (and on initial render).
+  function recomputeProgress(mountEl) {
+    const el = typeof mountEl === 'string' ? document.querySelector(mountEl) : mountEl;
+    if (!el || !el.__vpProfileState) return null;
+    const r = evaluateReadiness(el.__vpProfileState, el.__vpConfig);
+    const progressEl = el.querySelector('.vp-progress');
+    if (progressEl) {
+      progressEl.textContent =
+        `${r.readyCount} of ${r.total} required fields ready · ${r.optionalAnswered} of ${r.optionalTotal} optional answered`;
+    }
+    const cta = el.querySelector('.vp-cta');
+    if (cta) cta.disabled = !r.allReady; // Step 10 controls enabled state only (no click handler)
+    return r;
+  }
+
   // ---- list section editing (Step 9b: ICPs + prompts) -------------------
 
   // Placeholder for Walther's separate token-inquiry feature. Step 9b only
@@ -455,14 +516,17 @@
   function rerenderIcps(el) {
     const section = el.querySelector('[data-section="icps"]');
     if (section) section.innerHTML = icpsInner(el.__vpProfileState);
+    recomputeProgress(el);
   }
   function rerenderPrompts(el) {
     const section = el.querySelector('[data-section="prompts"]');
     if (section) section.innerHTML = promptsInner(el.__vpProfileState, el.__vpConfig, el.__vpUi);
+    recomputeProgress(el);
   }
   function rerenderCompetitors(el) {
     const section = el.querySelector('[data-section="competitors"]');
     if (section) section.innerHTML = competitorsInner(el.__vpProfileState);
+    recomputeProgress(el);
   }
 
   const rowIdx = (target) => {
@@ -634,7 +698,18 @@
     el.__vpConfig = config;          // draft_config (monitoring_cap, token unlock)
     el.__vpUi = ui;                  // transient UI flags (cap hint)
     bindSimpleFields(el, state);     // wire simple-field editing (9a)
-    bindListSections(el);            // wire ICPs + prompts editing (9b)
+    bindListSections(el);            // wire ICPs + prompts + competitors editing (9b/9c)
+
+    // Step 10: single recompute trigger. Root-level input/change listeners fire
+    // (via bubbling) AFTER the inner mutation handlers run, covering text edits
+    // and checkbox toggles that don't re-render; structural changes recompute
+    // inside the rerender* helpers. Both cover every mutation in both modes.
+    if (!el.__vpProgressBound) {
+      el.addEventListener('input', () => recomputeProgress(el));
+      el.addEventListener('change', () => recomputeProgress(el));
+      el.__vpProgressBound = true;
+    }
+    recomputeProgress(el);           // initial progress + CTA state
     return state;
   }
 
@@ -646,5 +721,7 @@
     simpleFieldState,
     getState,
     onTokenQueryUnlockRequested,
+    evaluateReadiness,
+    recomputeProgress,
   };
 })();
