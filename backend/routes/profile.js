@@ -91,8 +91,12 @@ const asArray = (v) => (Array.isArray(v) ? v : []);
 /**
  * Server-side validation of a POST payload. Returns an array of field-level
  * errors ([] when valid). Never trusts the client.
+ *
+ * @param {object} body
+ * @param {{ plan: string, monitoringCap: (number|null) }} planCtx - monitoringCap
+ *        from getDraftConfig(plan); null means no limit (Enterprise).
  */
-function validateProfilePayload(body) {
+function validateProfilePayload(body, planCtx) {
   const errors = [];
   const push = (field, rule, message) => errors.push({ field, rule, message });
 
@@ -125,6 +129,20 @@ function validateProfilePayload(body) {
     const bad = prompts.findIndex((p) => !isNonEmptyString(typeof p === 'string' ? p : p?.text));
     if (bad !== -1) {
       push('tracked_prompts', 'item_invalid', `Tracked prompt at index ${bad} is missing text`);
+    }
+  }
+
+  // Server-enforce the plan's monitoring cap (never silently clamp/drop).
+  // null cap = no limit (Enterprise) => skip.
+  const cap = planCtx?.monitoringCap;
+  if (cap !== null && cap !== undefined) {
+    const monitoredCount = prompts.filter((p) => typeof p === 'object' && p?.is_monitored === true).length;
+    if (monitoredCount > cap) {
+      push(
+        'tracked_prompts',
+        'monitoring_cap',
+        `You can monitor up to ${cap} prompts on the ${planCtx.plan} plan`
+      );
     }
   }
 
@@ -216,7 +234,7 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 
   // Server-side validation — write nothing on failure.
-  const errors = validateProfilePayload(req.body || {});
+  const errors = validateProfilePayload(req.body || {}, { plan, monitoringCap: draftConfig.monitoring_cap });
   if (errors.length > 0) {
     return res.status(400).json({ error: 'Validation failed', fields: errors });
   }
