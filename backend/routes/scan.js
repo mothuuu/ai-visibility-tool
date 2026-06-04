@@ -594,7 +594,7 @@ router.post('/analyze', authenticateToken, loadOrgContext, async (req, res) => {
 
     // Citation snapshot — fire-and-forget. Plan-gated query count + engines.
     // MUST NOT delay scan completion, MUST NOT fail the scan on error.
-    // citation_test_runs.status starts as 'running' and flips to 'complete'/'failed'
+    // citation_test_runs.status starts as 'pending' and flips to 'completed'/'failed'
     // when the background suite finishes; the frontend can poll for results.
     Promise.resolve()
       .then(() => citationSnapshotService.runScanTimeCitation(scan.id, userId, scanDomain))
