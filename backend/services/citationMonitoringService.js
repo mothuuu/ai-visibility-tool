@@ -294,10 +294,10 @@ function createCitationMonitoringService({ db } = {}) {
         `INSERT INTO citation_evidence
            (run_id, cluster_id, engine, model, prompt_text, response_text,
             citations_raw, citations_normalized,
-            mentioned, recommended, cited, error, detection_status, idempotency_key)
+            mentioned, recommended, cited, error, detection_status, snippet, detector_reasoning, idempotency_key)
          VALUES ($1, $2, $3, $4, $5, $6,
                  $7::jsonb, $8::jsonb,
-                 $9, $10, $11, $12, $13, $14)
+                 $9, $10, $11, $12, $13, $14, $15, $16)
          ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
         [
           runId,
@@ -312,7 +312,9 @@ function createCitationMonitoringService({ db } = {}) {
           !!r.recommended,
           !!r.cited,
           r.error,
-          'skipped',
+          r.detectionStatus || 'skipped',
+          r.snippet || null,
+          r.detectorReasoning || null,
           idempotencyKey,
         ]
       );
@@ -474,6 +476,7 @@ function buildEvidenceRows({ runId, clusterId, queries, results }) {
         cited: !!q.cited,
         snippet: q.snippet || null,
         detectorReasoning: q.reasoning || null,
+        detectionStatus: q.detectionStatus || 'skipped',
         error: q.error || null,
       });
     }

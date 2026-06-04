@@ -114,6 +114,9 @@ function makeFakeDb() {
         recommended: params[9],
         cited: params[10],
         error: params[11],
+        detection_status: params[12] || 'skipped',
+        snippet: params[13] !== undefined ? params[13] : null,
+        detector_reasoning: params[14] !== undefined ? params[14] : null,
         idempotency_key: idempotencyKey || null,
         created_at: new Date(),
       };
@@ -623,8 +626,8 @@ describe('CP7 orchestration flow', () => {
 
     const results = {
       assistants: {
-        openai:     { tested: true,  queries: [{ query: 'q1', mentioned: true,  recommended: false, cited: false, snippet: null }] },
-        anthropic:  { tested: true,  queries: [{ query: 'q1', mentioned: false, recommended: false, cited: false, snippet: null }] },
+        openai:     { tested: true,  queries: [{ query: 'q1', mentioned: true,  recommended: false, cited: false, snippet: 'some excerpt', detectionStatus: 'detected', reasoning: 'brand found' }] },
+        anthropic:  { tested: true,  queries: [{ query: 'q1', mentioned: false, recommended: false, cited: false, snippet: null,          detectionStatus: 'detected', reasoning: 'not found' }] },
         perplexity: { tested: false, queries: [] },
       },
     };
@@ -641,6 +644,16 @@ describe('CP7 orchestration flow', () => {
       assert.ok(ev.idempotency_key != null, 'expected non-null idempotency_key');
     }
     assert.deepStrictEqual(outcome, { persisted: 2, skipped: 0 });
+
+    // First row — has snippet and reasoning
+    assert.strictEqual(db.inserted.citation_evidence[0].detection_status, 'detected');
+    assert.strictEqual(db.inserted.citation_evidence[0].snippet, 'some excerpt');
+    assert.strictEqual(db.inserted.citation_evidence[0].detector_reasoning, 'brand found');
+
+    // Second row — snippet is null
+    assert.strictEqual(db.inserted.citation_evidence[1].detection_status, 'detected');
+    assert.strictEqual(db.inserted.citation_evidence[1].snippet, null);
+    assert.strictEqual(db.inserted.citation_evidence[1].detector_reasoning, 'not found');
   });
 
   it('persistEvidenceRows is idempotent on second call', async () => {
@@ -660,8 +673,8 @@ describe('CP7 orchestration flow', () => {
 
     const results = {
       assistants: {
-        openai:     { tested: true,  queries: [{ query: 'q1', mentioned: true,  recommended: false, cited: false, snippet: null }] },
-        anthropic:  { tested: true,  queries: [{ query: 'q1', mentioned: false, recommended: false, cited: false, snippet: null }] },
+        openai:     { tested: true,  queries: [{ query: 'q1', mentioned: true,  recommended: false, cited: false, snippet: 'some excerpt', detectionStatus: 'detected', reasoning: 'brand found' }] },
+        anthropic:  { tested: true,  queries: [{ query: 'q1', mentioned: false, recommended: false, cited: false, snippet: null,          detectionStatus: 'detected', reasoning: 'not found' }] },
         perplexity: { tested: false, queries: [] },
       },
     };
@@ -673,5 +686,33 @@ describe('CP7 orchestration flow', () => {
 
     assert.strictEqual(db.inserted.citation_evidence.length, 2);
     assert.deepStrictEqual(second, { persisted: 0, skipped: 2 });
+  });
+
+  it('persistEvidenceRows falls back to skipped when detectionStatus absent', async () => {
+    const db = makeFakeDb();
+    const svc = createCitationMonitoringService({ db });
+
+    const cluster = await svc.upsertCluster({
+      name: 'test cluster',
+      canonicalPrompt: 'test prompt',
+    });
+    const run = await svc.createRun({
+      clusterId: cluster.id,
+      initiatedByUserId: 1,
+      initiatedByOrgId: 1,
+      client: db,
+    });
+
+    // No detectionStatus field on the query result.
+    const results = {
+      assistants: {
+        openai: { tested: true, queries: [{ query: 'q1', mentioned: false, recommended: false, cited: false }] },
+      },
+    };
+
+    await svc.persistEvidenceRows({ runId: run.id, clusterId: cluster.id, queries: ['q1'], results });
+
+    assert.strictEqual(db.inserted.citation_evidence.length, 1);
+    assert.strictEqual(db.inserted.citation_evidence[0].detection_status, 'skipped');
   });
 });

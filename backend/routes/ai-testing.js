@@ -1170,7 +1170,7 @@ async function testSingleAssistant(assistantKey, queries, companyName, domain) {
     try {
       const txt = await queryAIAssistant(assistantKey, q);
       const a = await mentionDetector.detectMention(txt, { companyName, domain });
-      out.queries.push({ query:q, mentioned:a.mentioned, recommended:a.recommended, cited:a.cited, snippet:a.snippet });
+      out.queries.push({ query:q, mentioned:a.mentioned, recommended:a.recommended, cited:a.cited, snippet:a.snippet, detectionStatus:a.detectionStatus, reasoning:a.reasoning });
       if (a.mentioned) m++; if (a.recommended) r++; if (a.cited) c++;
     } catch (e) {
       out.queries.push({ query:q, error:e.message, mentioned:false, recommended:false, cited:false });
