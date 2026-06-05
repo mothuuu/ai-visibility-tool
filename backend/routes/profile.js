@@ -107,18 +107,25 @@ function validateProfilePayload(body, planCtx) {
     push('business_description', 'required', 'Business description is required');
   }
 
+  // ICP counts only when it is selected AND has non-empty (trimmed) text.
   const icps = asArray(body.icps);
-  if (icps.length < 1) {
+  const icpText = (it) => (typeof it === 'string' ? it : it && it.text);
+  const icpSelected = (it) => (typeof it === 'string' ? true : !!(it && it.selected));
+  const selectedIcps = icps.filter((it) => icpSelected(it) && isNonEmptyString(icpText(it)));
+  if (selectedIcps.length < 1) {
     push('icps', 'min', 'At least one ICP must be selected');
   }
 
+  // Competitor counts only when it has a non-empty (trimmed) name.
+  const compName = (it) => (typeof it === 'string' ? it : it && it.name);
+
   const cb = asArray(body.competitors_business);
-  if (cb.length < 1) {
+  if (cb.filter((it) => isNonEmptyString(compName(it))).length < 1) {
     push('competitors_business', 'min', 'At least one business competitor is required');
   }
 
   const cv = asArray(body.competitors_visibility);
-  if (cv.length < 1) {
+  if (cv.filter((it) => isNonEmptyString(compName(it))).length < 1) {
     push('competitors_visibility', 'min', 'At least one visibility competitor is required');
   }
 

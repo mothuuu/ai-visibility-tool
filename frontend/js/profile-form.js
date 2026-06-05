@@ -459,13 +459,22 @@
     const cv = arr(s.competitors_visibility);
     const prompts = arr(s.tracked_prompts);
 
+    // ICP counts only when selected AND non-empty text; competitor only when it
+    // has a non-empty name. Mirrors Step 5's server validation verbatim.
+    const icpOk = (it) => {
+      const text = typeof it === 'string' ? it : (it && it.text);
+      const selected = typeof it === 'string' ? true : !!(it && it.selected);
+      return selected && str(text).length > 0;
+    };
+    const namedOk = (it) => str(typeof it === 'string' ? it : (it && it.name)).length > 0;
+
     // Required FIELD rules (denominator of "N of N required fields ready").
     const rules = [
       { key: 'display_name', ok: str(s.display_name).length > 0 },
       { key: 'business_description', ok: str(s.business_description).length > 0 },
-      { key: 'icps', ok: icps.length >= 1 },
-      { key: 'competitors_business', ok: cb.length >= 1 },
-      { key: 'competitors_visibility', ok: cv.length >= 1 },
+      { key: 'icps', ok: icps.some(icpOk) },
+      { key: 'competitors_business', ok: cb.some(namedOk) },
+      { key: 'competitors_visibility', ok: cv.some(namedOk) },
       { key: 'tracked_prompts', ok: prompts.length >= 3 && prompts.every(hasText) },
     ];
     const readyCount = rules.filter((r) => r.ok).length;
