@@ -27,11 +27,23 @@ const {
   upsertOrgStripeFields,
   clearOrgStripeFields,
   getEntitlements,
-  resolvePlanFromStripeFields
+  resolvePlanFromStripeFields,
+  resolvePlanForRequest,
+  getDraftConfig
 } = require('../services/planService');
 
 // Phase 1.8: Import TokenService for token top-up and renewal grants
 const TokenService = require('../services/tokenService');
+
+// Step 4: Draft-generation trigger (intake/profile build). Fired AFTER the
+// webhook transaction commits, in the background, never blocking the response.
+const { generateDraft } = require('../services/draftGenerationService');
+
+// Subscription events that may move a user onto a paid (draft-enabled) tier.
+const DRAFT_TRIGGER_EVENT_TYPES = new Set([
+  'customer.subscription.created',
+  'customer.subscription.updated'
+]);
 
 // Valid token top-up amounts
 const VALID_TOKEN_AMOUNTS = [20, 50, 120, 250];
@@ -96,7 +108,8 @@ async function handleStripeWebhook(req, res) {
     // If nothing returned, this event was already processed (duplicate)
     if (eventLogResult.rows.length === 0) {
       await client.query('ROLLBACK');
-      client.release();
+      // NOTE: do not release here — the `return` routes through the single
+      // `finally` block below, which releases the client exactly once.
       console.log(`⏭️  [Webhook] Duplicate event ${event.id}, skipping`);
       return res.json({ received: true, duplicate: true });
     }
@@ -156,6 +169,12 @@ async function handleStripeWebhook(req, res) {
     await client.query('COMMIT');
     console.log(`✅ [Webhook] Event ${event.id} processed successfully`);
     res.json({ received: true });
+
+    // Step 4: AFTER commit + response, kick off the one-time draft generation
+    // for users who just became paid. Fully detached: it must never block the
+    // response nor affect the 200 already sent. Duplicates can't reach here —
+    // the processed_stripe_events dedupe returns early above on replay.
+    maybeTriggerDraftGeneration(event);
 
   } catch (error) {
     // ROLLBACK on any error - this removes the idempotency record automatically
@@ -572,5 +591,71 @@ async function handleRenewalTokenGrant(invoice, user, queryFn) {
   console.log(`[Token] Granted ${tokensPerCycle} monthly tokens to user ${user.id} for cycle ${cycleStartDate.toISOString()} to ${cycleEndDate.toISOString()}`);
 }
 
-// Export as function (not object with named export)
+/**
+ * Step 4: Post-commit draft-generation trigger.
+ *
+ * Runs AFTER the webhook transaction has committed and the 200 has been sent.
+ * For a subscription event that may have moved the user onto a paid tier, it
+ * re-resolves the user's effective plan (now committed) and, if the plan is
+ * draft-enabled, kicks off generateDraft(userId) in the BACKGROUND.
+ *
+ * Guarantees:
+ *  - Non-blocking: never awaited by the request path; the response is already sent.
+ *  - Never fails the webhook: the whole body is wrapped, and the detached job has
+ *    its own .catch — any error (lookup, resolve, throw) is logged, not propagated.
+ *  - No double-generation: replayed events are stopped by the processed_stripe_events
+ *    dedupe before reaching here, and generateDraft itself no-ops once
+ *    draft_generated_at is set. Both layers are relied on; neither is bypassed.
+ *
+ * @param {object} event - The full Stripe event (already committed/handled).
+ */
+function maybeTriggerDraftGeneration(event) {
+  try {
+    if (!DRAFT_TRIGGER_EVENT_TYPES.has(event.type)) {
+      return;
+    }
+
+    const customerId = event.data?.object?.customer;
+    if (!customerId) {
+      return;
+    }
+
+    // Detached async work — deliberately NOT awaited by the caller.
+    (async () => {
+      // Map Stripe customer -> internal user (reads post-commit state).
+      const userResult = await db.query(
+        'SELECT id FROM users WHERE stripe_customer_id = $1',
+        [customerId]
+      );
+      const userId = userResult.rows[0]?.id;
+      if (!userId) {
+        console.log(`[DraftTrigger] No user for customer ${customerId} — no draft trigger`);
+        return;
+      }
+
+      // Effective plan is the SSOT; gate strictly on draft eligibility.
+      const { plan } = await resolvePlanForRequest({ userId });
+      if (!getDraftConfig(plan).draft_enabled) {
+        console.log(`[DraftTrigger] user ${userId} plan '${plan}' not draft-enabled — no trigger`);
+        return;
+      }
+
+      // generateDraft is idempotent (draft_generated_at guard) and re-checks
+      // plan eligibility itself, so firing here is always safe.
+      console.log(`[DraftTrigger] user ${userId} plan '${plan}': kicking off background draft generation`);
+      const result = await generateDraft(userId);
+      console.log(`[DraftTrigger] user ${userId} draft generation result: ${result.status}`);
+    })().catch((err) => {
+      // Background failure must never surface to Stripe — log and move on.
+      console.error(`[DraftTrigger] background draft generation failed for customer ${customerId}:`, err.message);
+    });
+  } catch (err) {
+    // Defensive: even synchronous setup errors must not affect the webhook.
+    console.error('[DraftTrigger] trigger setup failed (non-fatal):', err.message);
+  }
+}
+
+// Export as function (not object with named export).
+// `maybeTriggerDraftGeneration` is attached for unit/integration testing.
 module.exports = handleStripeWebhook;
+module.exports.maybeTriggerDraftGeneration = maybeTriggerDraftGeneration;

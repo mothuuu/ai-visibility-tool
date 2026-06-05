@@ -8,6 +8,11 @@
     <link rel="shortcut icon" href="/favicon.ico?v=2">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Xeo brand fonts + visibility-profile form component (reused in edit mode). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/profile-form.css">
     <style>
         * {
             margin: 0;
@@ -582,6 +587,46 @@
             font-weight: 600;
             color: var(--gray-900);
         }
+
+        /* Step 13: profile summary card */
+        .profile-summary-card .psc-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.25rem 2.5rem;
+        }
+        .psc-item { min-width: 120px; }
+        .psc-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--gray-500);
+            margin-bottom: 4px;
+        }
+        .psc-value { font-size: 0.95rem; font-weight: 600; color: var(--gray-900); }
+        .psc-competitors { display: flex; flex-wrap: wrap; gap: 6px; }
+        .psc-chip {
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: var(--gray-100);
+            color: var(--gray-700);
+            border-radius: 9999px;
+            padding: 3px 10px;
+        }
+        .psc-muted { color: var(--gray-400); font-weight: 500; }
+        .psc-edit {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--purple);
+            background: transparent;
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            padding: 6px 12px;
+            cursor: pointer;
+        }
+        .psc-edit:hover { background: var(--gray-50); border-color: var(--purple); }
 
         /* Stats Grid */
         .stats-grid {
@@ -3769,6 +3814,10 @@
                         <i class="fas fa-home"></i>
                         <span>Dashboard Home</span>
                     </div>
+                    <div class="nav-item" data-section="visibility-profile" id="navVisibilityProfile" style="display:none;">
+                        <i class="fas fa-id-card"></i>
+                        <span>Profile</span>
+                    </div>
                     <div class="nav-item" data-section="start-new-scan">
                         <i class="fas fa-search"></i>
                         <span>Start New Scan</span>
@@ -3941,6 +3990,9 @@
                     </div>
                 </div>
 
+                <!-- Step 13: compact visibility-profile summary (paid only; populated in JS) -->
+                <div class="card profile-summary-card" id="profileSummaryCard" style="display:none;"></div>
+
                 <!-- Prominent Purple Scan Section -->
                 <div class="purple-scan-section">
                     <h2>Start a new scan or view your recent results below</h2>
@@ -3986,6 +4038,11 @@
                         </table>
                     </div>
                 </div>
+            </section>
+
+            <!-- Visibility Profile Section (Step 12: reuses the form component in EDIT mode) -->
+            <section class="section" id="visibility-profile">
+                <div id="visibility-profile-root"></div>
             </section>
 
             <!-- Start New Scan Section -->
@@ -6264,6 +6321,14 @@
     </div>
 
     <script src="utils/quota.js"></script>
+    <!-- Step 12: expose API base for the profile loader, then load the form component. -->
+    <script>
+        window.API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+            ? 'http://localhost:3001/api'
+            : 'https://ai-visibility-tool.onrender.com/api';
+    </script>
+    <script src="js/profile-form.js" defer></script>
+    <script src="js/profile-loader.js" defer></script>
     <script src="dashboard.js" defer></script>
     <script src="support-chat.js"></script>
 </body>

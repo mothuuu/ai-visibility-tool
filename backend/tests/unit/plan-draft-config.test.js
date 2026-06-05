@@ -21,7 +21,7 @@ Module.prototype.require = function (id) {
   return originalRequire.apply(this, arguments);
 };
 
-const { getDraftConfig } = require('../../services/planService');
+const { getDraftConfig, isDraftEnabled } = require('../../services/planService');
 
 // Expected configs (the contract this step delivers)
 const EXPECTED = {
@@ -101,6 +101,22 @@ describe('PlanService.getDraftConfig — per-plan draft settings', () => {
         EXPECTED.freemium,
         `getDraftConfig(${JSON.stringify(bad)}) should fall back to freemium`
       );
+    }
+  });
+
+  it('isDraftEnabled mirrors draft_enabled for each tier', () => {
+    assert.strictEqual(isDraftEnabled('freemium'), false);
+    assert.strictEqual(isDraftEnabled('free'), false);
+    assert.strictEqual(isDraftEnabled('starter'), true);
+    assert.strictEqual(isDraftEnabled('diy'), true);
+    assert.strictEqual(isDraftEnabled('pro'), true);
+    assert.strictEqual(isDraftEnabled('enterprise'), true);
+  });
+
+  it('isDraftEnabled is false for unknown/legacy plans and never throws', () => {
+    for (const bad of ['xyz123', 'agency', '', null, undefined, 42, {}]) {
+      assert.doesNotThrow(() => isDraftEnabled(bad), `isDraftEnabled(${JSON.stringify(bad)}) threw`);
+      assert.strictEqual(isDraftEnabled(bad), false, `isDraftEnabled(${JSON.stringify(bad)}) should be false`);
     }
   });
 

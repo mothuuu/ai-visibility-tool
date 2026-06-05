@@ -1109,6 +1109,20 @@ function getDraftConfig(planName) {
   return getEntitlements(planName).draft;
 }
 
+/**
+ * Convenience accessor: whether the intake/profile draft may fire for a plan.
+ *
+ * Shorthand for getDraftConfig(plan).draft_enabled. Routes through the same
+ * PlanService mapping ('diy' → 'starter', unknown → freemium), so it's false
+ * for freemium and unknown/legacy plans and never throws.
+ *
+ * @param {string|null|undefined} planName
+ * @returns {boolean}
+ */
+function isDraftEnabled(planName) {
+  return getDraftConfig(planName).draft_enabled;
+}
+
 // =============================================================================
 // EXPORTS
 // =============================================================================
@@ -1146,6 +1160,7 @@ module.exports = {
   canAccessFeature,
   getTokenAllowance,
   getDraftConfig,
+  isDraftEnabled,
 
   // Constants
   ACTIVE_SUBSCRIPTION_STATUSES,

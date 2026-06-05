@@ -10,7 +10,8 @@
     "db:migrate": "node db/migrate.js up",
     "db:rollback": "node db/migrate.js down",
     "db:rollback:force": "node db/migrate.js down --force",
-    "db:status": "node db/migrate.js status"
+    "db:status": "node db/migrate.js status",
+    "draft:generate": "node scripts/draft-generate.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.0",

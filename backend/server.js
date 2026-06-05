@@ -27,6 +27,11 @@ const benchmarkRoutes = require('./routes/benchmarks');
 // P0: Export as function, not object
 const handleStripeWebhook = require('./routes/stripe-webhook');
 
+// Step 6: dashboard completion gate (paid users must finish their profile).
+// Composed with authenticateToken at the gated mounts so req.user is set first.
+const { authenticateToken } = require('./middleware/auth');
+const { requireCompletedProfile } = require('./middleware/requireCompletedProfile');
+
 // Background jobs
 const { getWorker } = require('./jobs/submissionWorker');
 const { sendActionReminders } = require('./jobs/citationNetworkReminders');
@@ -114,7 +119,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api', aiTestingRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/scan', scanRoutes);
-app.use('/api/scans', findingsRoutes);
+// Step 6: gated dashboard data routes (paid users need a completed profile).
+// authenticateToken sets req.user; requireCompletedProfile then does fresh reads.
+app.use('/api/scans', authenticateToken, requireCompletedProfile, findingsRoutes);
 app.use('/api/competitors', competitorRoutes); // Competitive tracking (Elite mode)
 app.use('/api/support-chat', supportChatRoutes);
 app.use('/api/waitlist', waitlistRoutes);
@@ -123,10 +130,11 @@ app.use('/api/admin', adminControlCenterRoutes); // Admin control center routes 
 app.use('/api/citation-network', citationNetworkRoutes); // AI Citation Network (directory submissions)
 app.use('/api', require('./routes/citation-monitoring')); // Phase 3: Citation Monitoring (separate from citation-network)
 app.use('/api/org', organizationRoutes); // Phase 3B: Organization/Team management
-app.use('/api/tokens', tokenRoutes); // Token balance and purchase
-app.use('/api/packs', packRoutes); // Phase 2: Pack purchase / catalog / history
-app.use('/api/citations', citationRoutes); // Phase 3: Citation latest/history/detail
-app.use('/api/benchmarks', benchmarkRoutes); // Phase 3: Vertical benchmarks
+app.use('/api/tokens', authenticateToken, requireCompletedProfile, tokenRoutes); // Token balance and purchase
+app.use('/api/packs', authenticateToken, requireCompletedProfile, packRoutes); // Phase 2: Pack purchase / catalog / history
+app.use('/api/citations', authenticateToken, requireCompletedProfile, citationRoutes); // Phase 3: Citation latest/history/detail
+app.use('/api/benchmarks', authenticateToken, requireCompletedProfile, benchmarkRoutes); // Phase 3: Vertical benchmarks
+app.use('/api/profile', require('./routes/profile')); // Step 5: Visibility profile intake/edit
 app.use('/api/test', require('./routes/test-routes'));
 
 // Health check
