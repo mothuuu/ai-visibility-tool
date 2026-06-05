@@ -588,6 +588,46 @@
             color: var(--gray-900);
         }
 
+        /* Step 13: profile summary card */
+        .profile-summary-card .psc-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.25rem 2.5rem;
+        }
+        .psc-item { min-width: 120px; }
+        .psc-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--gray-500);
+            margin-bottom: 4px;
+        }
+        .psc-value { font-size: 0.95rem; font-weight: 600; color: var(--gray-900); }
+        .psc-competitors { display: flex; flex-wrap: wrap; gap: 6px; }
+        .psc-chip {
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: var(--gray-100);
+            color: var(--gray-700);
+            border-radius: 9999px;
+            padding: 3px 10px;
+        }
+        .psc-muted { color: var(--gray-400); font-weight: 500; }
+        .psc-edit {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--purple);
+            background: transparent;
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            padding: 6px 12px;
+            cursor: pointer;
+        }
+        .psc-edit:hover { background: var(--gray-50); border-color: var(--purple); }
+
         /* Stats Grid */
         .stats-grid {
             display: grid;
@@ -3949,6 +3989,9 @@
                         <div class="stat-meta" id="dashboardScansPercent">0% used</div>
                     </div>
                 </div>
+
+                <!-- Step 13: compact visibility-profile summary (paid only; populated in JS) -->
+                <div class="card profile-summary-card" id="profileSummaryCard" style="display:none;"></div>
 
                 <!-- Prominent Purple Scan Section -->
                 <div class="purple-scan-section">

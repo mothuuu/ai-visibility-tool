@@ -342,6 +342,7 @@ async function initDashboard() {
             });
             if (profResp.ok) {
                 const profData = await profResp.json();
+                lastProfileData = profData; // Step 13: reuse this fetch for the summary card (no second GET)
                 if (profData.draft_config && profData.draft_config.draft_enabled) {
                     // Step 12: reveal the Profile (edit) nav item for paid users.
                     // Uses the same draft_enabled signal as the backend gate, so the
@@ -356,6 +357,9 @@ async function initDashboard() {
                     }
                 }
             }
+            // Step 13: render the profile summary card from the data just fetched
+            // (paid only; degrades/hides gracefully for sparse or freemium).
+            renderProfileSummaryCard();
         } catch (e) {
             console.warn('Dashboard: profile gate check failed (non-fatal):', e);
         }
@@ -1264,6 +1268,64 @@ function navigateToSection(sectionId) {
 // Set true at the Step 6 gate when draft_config.draft_enabled (paid).
 let visibilityProfileEnabled = false;
 let visibilityProfileMounted = false;
+// Step 13: the GET /api/profile payload fetched once in initDashboard, reused
+// for the summary card (no second fetch).
+let lastProfileData = null;
+
+// Step 13: render the compact profile summary card on dashboard home from the
+// already-fetched profile. Paid only (draft_enabled); degrades gracefully when
+// fields are sparse; hidden for freemium / missing data. Read-only — "Edit
+// profile" navigates to the Step 12 Profile section.
+function renderProfileSummaryCard() {
+    const cardEl = document.getElementById('profileSummaryCard');
+    if (!cardEl) return;
+    const data = lastProfileData;
+    if (!data || !data.draft_config || !data.draft_config.draft_enabled) {
+        cardEl.style.display = 'none'; // freemium / no data
+        return;
+    }
+    const p = data.profile || {};
+    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const muted = (t) => `<span class="psc-muted">${esc(t)}</span>`;
+    const clean = (s) => String(s == null ? '' : s).trim();
+
+    const company = clean(p.company_name);
+    const industry = clean(p.industry);
+    const comps = (Array.isArray(p.competitors_business) ? p.competitors_business : [])
+        .map((c) => clean(typeof c === 'string' ? c : (c && c.name)))
+        .filter(Boolean)
+        .slice(0, 3);
+    const promptCount = Array.isArray(p.tracked_prompts) ? p.tracked_prompts.length : 0;
+
+    cardEl.innerHTML = `
+        <div class="card-header">
+            <h2 class="card-title">Your visibility profile</h2>
+            <button class="psc-edit" type="button" onclick="navigateToSection('visibility-profile')">
+                <i class="fas fa-pen"></i> Edit profile
+            </button>
+        </div>
+        <div class="psc-grid">
+            <div class="psc-item">
+                <div class="psc-label">Company</div>
+                <div class="psc-value">${company ? esc(company) : muted('Not set')}</div>
+            </div>
+            <div class="psc-item">
+                <div class="psc-label">Industry</div>
+                <div class="psc-value">${industry ? esc(industry) : muted('Not set')}</div>
+            </div>
+            <div class="psc-item">
+                <div class="psc-label">Top competitors</div>
+                <div class="psc-value">${comps.length
+                    ? `<span class="psc-competitors">${comps.map((n) => `<span class="psc-chip">${esc(n)}</span>`).join('')}</span>`
+                    : muted('None yet')}</div>
+            </div>
+            <div class="psc-item">
+                <div class="psc-label">Tracked prompts</div>
+                <div class="psc-value">${promptCount > 0 ? promptCount : muted('0')}</div>
+            </div>
+        </div>`;
+    cardEl.style.display = '';
+}
 function mountVisibilityProfile() {
     const container = document.getElementById('visibility-profile-root');
     if (!container) return;
