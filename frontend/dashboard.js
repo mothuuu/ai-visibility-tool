@@ -342,10 +342,17 @@ async function initDashboard() {
             });
             if (profResp.ok) {
                 const profData = await profResp.json();
-                if (profData.draft_config && profData.draft_config.draft_enabled && !profData.profile_completed) {
-                    console.log('Dashboard: paid profile incomplete, redirecting to profile setup');
-                    window.location.href = PROFILE_SETUP_ROUTE;
-                    return;
+                if (profData.draft_config && profData.draft_config.draft_enabled) {
+                    // Step 12: reveal the Profile (edit) nav item for paid users.
+                    // Uses the same draft_enabled signal as the backend gate, so the
+                    // item only shows for plans that actually have a profile.
+                    const profNav = document.getElementById('navVisibilityProfile');
+                    if (profNav) profNav.style.display = '';
+                    if (!profData.profile_completed) {
+                        console.log('Dashboard: paid profile incomplete, redirecting to profile setup');
+                        window.location.href = PROFILE_SETUP_ROUTE;
+                        return;
+                    }
                 }
             }
         } catch (e) {
@@ -1237,6 +1244,8 @@ function navigateToSection(sectionId) {
         if (typeof loadPackCatalog === 'function') loadPackCatalog();
     } else if (sectionId === 'my-packs') {
         if (typeof loadPackHistory === 'function') loadPackHistory();
+    } else if (sectionId === 'visibility-profile') {
+        mountVisibilityProfile();
     }
 
     // Update URL without reload
@@ -1246,6 +1255,21 @@ function navigateToSection(sectionId) {
 
     // Scroll to top
     document.getElementById('mainContent').scrollTop = 0;
+}
+
+// Step 12: lazily mount the visibility-profile form in EDIT mode on first visit.
+// Reuses the same loader/component as profile-setup.html (Steps 7–11); the edit
+// path loads the current profile, allows editing, and Saves in place (no redirect).
+let visibilityProfileMounted = false;
+function mountVisibilityProfile() {
+    if (visibilityProfileMounted) return;
+    const container = document.getElementById('visibility-profile-root');
+    if (container && window.ProfileLoader && typeof window.ProfileLoader.start === 'function') {
+        window.ProfileLoader.start(container, { mode: 'edit' });
+        visibilityProfileMounted = true;
+    } else {
+        console.warn('Dashboard: ProfileLoader not available to mount visibility profile');
+    }
 }
 
 // Setup mobile menu

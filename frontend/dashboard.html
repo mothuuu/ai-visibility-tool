@@ -8,6 +8,11 @@
     <link rel="shortcut icon" href="/favicon.ico?v=2">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Xeo brand fonts + visibility-profile form component (reused in edit mode). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/profile-form.css">
     <style>
         * {
             margin: 0;
@@ -3769,6 +3774,10 @@
                         <i class="fas fa-home"></i>
                         <span>Dashboard Home</span>
                     </div>
+                    <div class="nav-item" data-section="visibility-profile" id="navVisibilityProfile" style="display:none;">
+                        <i class="fas fa-id-card"></i>
+                        <span>Profile</span>
+                    </div>
                     <div class="nav-item" data-section="start-new-scan">
                         <i class="fas fa-search"></i>
                         <span>Start New Scan</span>
@@ -3986,6 +3995,11 @@
                         </table>
                     </div>
                 </div>
+            </section>
+
+            <!-- Visibility Profile Section (Step 12: reuses the form component in EDIT mode) -->
+            <section class="section" id="visibility-profile">
+                <div id="visibility-profile-root"></div>
             </section>
 
             <!-- Start New Scan Section -->
@@ -6264,6 +6278,14 @@
     </div>
 
     <script src="utils/quota.js"></script>
+    <!-- Step 12: expose API base for the profile loader, then load the form component. -->
+    <script>
+        window.API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+            ? 'http://localhost:3001/api'
+            : 'https://ai-visibility-tool.onrender.com/api';
+    </script>
+    <script src="js/profile-form.js" defer></script>
+    <script src="js/profile-loader.js" defer></script>
     <script src="dashboard.js" defer></script>
     <script src="support-chat.js"></script>
 </body>
