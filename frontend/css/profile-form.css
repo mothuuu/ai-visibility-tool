@@ -385,6 +385,25 @@
   cursor: not-allowed;
 }
 
+/* Over-cap CTA reason (shown only when the cap is the specific blocker) */
+.vp-cta-reason {
+  margin: 10px 0 0;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pink);
+}
+
+/* Submit/save feedback message */
+.vp-submit-msg {
+  margin: 10px 0 0;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+}
+.vp-submit-msg--success { color: var(--teal); }
+.vp-submit-msg--error { color: var(--pink); }
+
 /* ---- Loader states: "setting up…" + error (rendered by profile-loader) - */
 .vp-status {
   text-align: center;

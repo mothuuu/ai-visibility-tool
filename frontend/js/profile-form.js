@@ -365,9 +365,13 @@
   function sectionCta(mode) {
     const label = mode === 'edit' ? 'Save' : 'Build my dashboard →';
     return `
-      <div class="vp-cta-row" data-section="cta">
-        <span class="vp-progress">0 of 5 required fields ready · 0 of 2 optional answered</span>
-        <button class="vp-cta" type="button" disabled>${esc(label)}</button>
+      <div data-section="cta">
+        <div class="vp-cta-row">
+          <span class="vp-progress">0 of 6 required fields ready · 0 of 2 optional answered</span>
+          <button class="vp-cta" type="button" data-cta-label="${esc(label)}" disabled>${esc(label)}</button>
+        </div>
+        <p class="vp-cta-reason" style="display:none"></p>
+        <p class="vp-submit-msg" role="status" style="display:none"></p>
       </div>`;
   }
 
@@ -495,7 +499,7 @@
       (str(s.avg_customer_value).length > 0 ? 1 : 0) +
       (str(s.priority_focus).length > 0 && str(s.priority_focus) !== DEFAULT_PRIORITY_FOCUS ? 1 : 0);
 
-    return { rules, readyCount, total, capOk, allReady, optionalAnswered, optionalTotal: 2 };
+    return { rules, readyCount, total, capOk, allReady, optionalAnswered, optionalTotal: 2, cap, monitoredCount };
   }
 
   // Recompute the progress line + CTA disabled state from current state. Single
@@ -510,8 +514,164 @@
         `${r.readyCount} of ${r.total} required fields ready · ${r.optionalAnswered} of ${r.optionalTotal} optional answered`;
     }
     const cta = el.querySelector('.vp-cta');
-    if (cta) cta.disabled = !r.allReady; // Step 10 controls enabled state only (no click handler)
+    // Stay disabled while a submit is in flight; otherwise gate on readiness.
+    if (cta) cta.disabled = el.__vpSubmitting ? true : !r.allReady;
+
+    // Over-cap CTA reason — shown ONLY when the cap is the specific blocker
+    // (all field rules pass but monitored count exceeds the cap, e.g. a plan
+    // downgrade). Not shown for ordinary field shortfalls.
+    const reasonEl = el.querySelector('.vp-cta-reason');
+    if (reasonEl) {
+      if (r.readyCount === r.total && !r.capOk && r.cap != null) {
+        const over = r.monitoredCount - r.cap;
+        reasonEl.textContent = `Monitoring ${r.monitoredCount} of ${r.cap} allowed — unmonitor ${over} to continue.`;
+        reasonEl.style.display = '';
+      } else {
+        reasonEl.textContent = '';
+        reasonEl.style.display = 'none';
+      }
+    }
     return r;
+  }
+
+  // ---- submit / save flow (Step 11) -------------------------------------
+
+  // Serialize the working profile into POST /api/profile's body (Step 5).
+  // domain is EXCLUDED (no column). Sends full icps/competitors/prompts arrays.
+  function serializeProfile(s) {
+    const st0 = s || {};
+    return {
+      display_name: str(st0.display_name),
+      company_name: str(st0.company_name),
+      industry: str(st0.industry),
+      location: str(st0.location),
+      business_description: str(st0.business_description),
+      icps: arr(st0.icps).map((it) => ({ text: str(it && it.text), selected: !!(it && it.selected) })),
+      competitors_business: arr(st0.competitors_business).map((it) => ({ name: str(it && it.name) })),
+      competitors_visibility: arr(st0.competitors_visibility).map((it) => ({ name: str(it && it.name) })),
+      tracked_prompts: arr(st0.tracked_prompts).map((p) => ({
+        text: str(p && p.text),
+        volume: p && p.volume != null ? p.volume : null,
+        is_monitored: !!(p && p.is_monitored),
+      })),
+      avg_customer_value: str(st0.avg_customer_value),
+      priority_focus: str(st0.priority_focus),
+    };
+  }
+
+  function resolveSubmitOpts(sub) {
+    const o = sub || {};
+    return {
+      apiBaseUrl: o.apiBaseUrl || (typeof window !== 'undefined' && window.API_BASE_URL) || '/api',
+      fetchImpl: o.fetchImpl || (typeof window !== 'undefined' && window.fetch ? window.fetch.bind(window) : null),
+      getToken: o.authToken != null
+        ? () => o.authToken
+        : () => (typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null),
+      redirect: o.redirect || ((url) => { if (typeof window !== 'undefined') window.location.href = url; }),
+      onAuthFail: o.onAuthFail || (() => { if (typeof window !== 'undefined') window.location.href = 'auth.html'; }),
+    };
+  }
+
+  const CTA_LABEL = { onboarding: 'Build my dashboard →', edit: 'Save' };
+  const CTA_BUSY = { onboarding: 'Building your dashboard…', edit: 'Saving…' };
+
+  function setCtaBusy(el, busy) {
+    const cta = el.querySelector('.vp-cta');
+    if (!cta) return;
+    const mode = el.__vpMode === 'edit' ? 'edit' : 'onboarding';
+    if (busy) {
+      cta.disabled = true;
+      cta.textContent = CTA_BUSY[mode];
+    } else {
+      cta.textContent = CTA_LABEL[mode];
+      recomputeProgress(el); // restores disabled = !allReady
+    }
+  }
+
+  function setSubmitMsg(el, type, text) {
+    const m = el.querySelector('.vp-submit-msg');
+    if (!m) return;
+    if (!text) { m.textContent = ''; m.style.display = 'none'; m.className = 'vp-submit-msg'; return; }
+    m.textContent = text;
+    m.className = 'vp-submit-msg vp-submit-msg--' + type;
+    m.style.display = '';
+  }
+
+  // CTA submit handler — active only when the CTA is enabled. Edits are NEVER
+  // wiped: state is untouched on every error path.
+  async function submitProfile(mountEl) {
+    const el = typeof mountEl === 'string' ? document.querySelector(mountEl) : mountEl;
+    if (!el || !el.__vpProfileState) return;
+    const cta = el.querySelector('.vp-cta');
+    if (!cta || cta.disabled) return;       // enabled-only
+    if (el.__vpSubmitting) return;          // in-flight guard (no double-submit)
+    // Safety: never submit an incomplete/over-cap profile.
+    if (!evaluateReadiness(el.__vpProfileState, el.__vpConfig).allReady) return;
+
+    const mode = el.__vpMode === 'edit' ? 'edit' : 'onboarding';
+    const sub = el.__vpSubmit || resolveSubmitOpts(null);
+    if (!sub.fetchImpl) { console.error('[ProfileForm] no fetch available'); return; }
+
+    el.__vpSubmitting = true;
+    setSubmitMsg(el, null);
+    setCtaBusy(el, true);
+
+    let resp;
+    try {
+      const token = sub.getToken();
+      resp = await sub.fetchImpl(`${sub.apiBaseUrl}/profile`, {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { Authorization: 'Bearer ' + token } : {}),
+        body: JSON.stringify(serializeProfile(el.__vpProfileState)),
+      });
+    } catch (err) {
+      // Network failure — edits preserved, recoverable, re-enable for retry.
+      el.__vpSubmitting = false;
+      setCtaBusy(el, false);
+      setSubmitMsg(el, 'error', 'Network error. Your changes are safe — please try again.');
+      return { state: 'error', error: String(err && err.message || err) };
+    }
+
+    if (resp.status === 401) {
+      sub.onAuthFail(); // edits preserved (state untouched); leave CTA busy during redirect
+      return { state: 'auth_redirect' };
+    }
+
+    if (resp.ok) {
+      if (mode === 'onboarding') {
+        sub.redirect('dashboard.html'); // Step 6 gate now passes; keep CTA busy during redirect
+        return { state: 'redirect' };
+      }
+      // edit: stay on page, confirm, restore CTA
+      el.__vpSubmitting = false;
+      setCtaBusy(el, false);
+      setSubmitMsg(el, 'success', 'Saved — changes apply to your next scan and monitoring run.');
+      return { state: 'saved' };
+    }
+
+    // Non-OK: edits preserved, re-enable for retry.
+    let body = null;
+    try { body = await resp.json(); } catch (_) { /* non-JSON */ }
+    el.__vpSubmitting = false;
+    setCtaBusy(el, false);
+    if (resp.status === 400 && body && Array.isArray(body.fields)) {
+      // Defensive — lockstep validation should prevent reaching here.
+      const msg = body.fields.map((f) => f.message).join(' · ');
+      setSubmitMsg(el, 'error', 'Please fix: ' + msg);
+      return { state: 'validation_error', fields: body.fields };
+    }
+    setSubmitMsg(el, 'error', 'Something went wrong saving your profile. Please try again.');
+    return { state: 'error', status: resp.status };
+  }
+
+  // Bind the CTA click once via delegation on the mount (survives re-renders).
+  function bindCta(el) {
+    if (el.__vpCtaBound) return;
+    el.addEventListener('click', (e) => {
+      const cta = e.target.closest && e.target.closest('.vp-cta');
+      if (cta) submitProfile(el);
+    });
+    el.__vpCtaBound = true;
   }
 
   // ---- list section editing (Step 9b: ICPs + prompts) -------------------
@@ -706,8 +866,12 @@
     el.__vpProfileState = state;     // single source of truth for edits
     el.__vpConfig = config;          // draft_config (monitoring_cap, token unlock)
     el.__vpUi = ui;                  // transient UI flags (cap hint)
+    el.__vpMode = mode;              // onboarding | edit (CTA label + submit behavior)
+    el.__vpSubmit = resolveSubmitOpts(o.submit); // POST target / auth / redirect (injectable)
+    el.__vpSubmitting = false;       // in-flight guard
     bindSimpleFields(el, state);     // wire simple-field editing (9a)
     bindListSections(el);            // wire ICPs + prompts + competitors editing (9b/9c)
+    bindCta(el);                     // wire CTA submit/save (Step 11)
 
     // Step 10: single recompute trigger. Root-level input/change listeners fire
     // (via bubbling) AFTER the inner mutation handlers run, covering text edits
@@ -732,5 +896,7 @@
     onTokenQueryUnlockRequested,
     evaluateReadiness,
     recomputeProgress,
+    serializeProfile,
+    submitProfile,
   };
 })();
