@@ -346,6 +346,7 @@ async function initDashboard() {
                     // Step 12: reveal the Profile (edit) nav item for paid users.
                     // Uses the same draft_enabled signal as the backend gate, so the
                     // item only shows for plans that actually have a profile.
+                    visibilityProfileEnabled = true;
                     const profNav = document.getElementById('navVisibilityProfile');
                     if (profNav) profNav.style.display = '';
                     if (!profData.profile_completed) {
@@ -1260,16 +1261,44 @@ function navigateToSection(sectionId) {
 // Step 12: lazily mount the visibility-profile form in EDIT mode on first visit.
 // Reuses the same loader/component as profile-setup.html (Steps 7–11); the edit
 // path loads the current profile, allows editing, and Saves in place (no redirect).
+// Set true at the Step 6 gate when draft_config.draft_enabled (paid).
+let visibilityProfileEnabled = false;
 let visibilityProfileMounted = false;
 function mountVisibilityProfile() {
-    if (visibilityProfileMounted) return;
     const container = document.getElementById('visibility-profile-root');
-    if (container && window.ProfileLoader && typeof window.ProfileLoader.start === 'function') {
+    if (!container) return;
+
+    // Hard-block the freemium deep-link (?section=visibility-profile): mirror the
+    // server's 403 so a non-paid user can't reach an empty form that dead-ends on
+    // Save. draft_enabled is the same signal the backend gate uses.
+    if (!visibilityProfileEnabled) {
+        renderVisibilityProfileLocked(container);
+        return;
+    }
+
+    if (visibilityProfileMounted) return;
+    if (window.ProfileLoader && typeof window.ProfileLoader.start === 'function') {
         window.ProfileLoader.start(container, { mode: 'edit' });
         visibilityProfileMounted = true;
     } else {
         console.warn('Dashboard: ProfileLoader not available to mount visibility profile');
     }
+}
+
+// Locked/upgrade state shown when a non-paid user reaches the profile section
+// directly (the nav item is hidden for them, so this only triggers on deep-link).
+function renderVisibilityProfileLocked(container) {
+    container.innerHTML = `
+        <div class="vp-scope">
+          <div class="vp-form">
+            <div class="vp-status" data-status="locked">
+              <div style="font-size:2rem;color:var(--gray-400);margin-bottom:6px;"><i class="fas fa-lock"></i></div>
+              <h2 class="vp-status-title">Your visibility profile is a paid feature</h2>
+              <p class="vp-status-sub">Upgrade your plan to set up and edit the profile that powers your scans and monitoring.</p>
+              <button class="vp-cta" type="button" style="margin-top:18px;" onclick="navigateToSection('billing-subscription')">View plans</button>
+            </div>
+          </div>
+        </div>`;
 }
 
 // Setup mobile menu
