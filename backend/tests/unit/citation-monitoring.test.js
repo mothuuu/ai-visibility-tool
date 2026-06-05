@@ -33,9 +33,11 @@ function makeFakeDb() {
     citation_test_runs: [],
     citation_evidence: [],
     benchmark_stats: [],
+    personal_orgs: [],
   };
   let id = 1;
   const calls = [];
+  const evidenceIdempotencyKeys = new Set();
 
   const query = async (sql, params) => {
     calls.push({ sql: sql.trim().split('\n')[0], params });
@@ -73,7 +75,7 @@ function makeFakeDb() {
         initiated_by_user_id: params[1],
         initiated_by_org_id: params[2],
         engines_tested: JSON.parse(params[3]),
-        status: 'running',
+        status: 'pending',
         started_at: new Date(),
         completed_at: null,
         cost_estimate_cents: params[4],
@@ -93,6 +95,11 @@ function makeFakeDb() {
     }
 
     if (/^INSERT INTO citation_evidence/i.test(trimmed)) {
+      const idempotencyKey = params[params.length - 1];
+      if (idempotencyKey && evidenceIdempotencyKeys.has(idempotencyKey)) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (idempotencyKey) evidenceIdempotencyKeys.add(idempotencyKey);
       const row = {
         id: id++,
         run_id: params[0],
@@ -107,10 +114,14 @@ function makeFakeDb() {
         recommended: params[9],
         cited: params[10],
         error: params[11],
+        detection_status: params[12] || 'skipped',
+        snippet: params[13] !== undefined ? params[13] : null,
+        detector_reasoning: params[14] !== undefined ? params[14] : null,
+        idempotency_key: idempotencyKey || null,
         created_at: new Date(),
       };
       inserted.citation_evidence.push(row);
-      return { rows: [row] };
+      return { rows: [row], rowCount: 1 };
     }
 
     if (/^SELECT mentioned, recommended, cited/i.test(trimmed)) {
@@ -165,6 +176,25 @@ function makeFakeDb() {
       return {
         rows: inserted.prompt_clusters.filter((c) => !c.is_archived),
       };
+    }
+
+    // BEGIN / COMMIT / ROLLBACK — no-ops in fake, must not throw
+    if (/^BEGIN$/i.test(trimmed) || /^COMMIT$/i.test(trimmed) || /^ROLLBACK$/i.test(trimmed)) {
+      return { rows: [] };
+    }
+
+    // personal_orgs SELECT
+    // Note: service sends 'SELECT id FROM ...' not 'SELECT * FROM ...'
+    if (/^SELECT id FROM personal_orgs WHERE user_id/i.test(trimmed)) {
+      const row = inserted.personal_orgs.find(r => r.user_id === params[0]);
+      return { rows: row ? [row] : [] };
+    }
+
+    // personal_orgs INSERT
+    if (/^INSERT INTO personal_orgs/i.test(trimmed)) {
+      const row = { id: id++, user_id: params[0], created_at: new Date() };
+      inserted.personal_orgs.push(row);
+      return { rows: [row] };
     }
 
     throw new Error(`Unhandled SQL in fake db: ${trimmed.slice(0, 80)}`);
@@ -248,7 +278,7 @@ describe('citationMonitoringService end-to-end', () => {
       enginesTested: ['openai', 'perplexity'],
       notes: 'target=example.com',
     });
-    assert.strictEqual(run.status, 'running');
+    assert.strictEqual(run.status, 'pending');
     assert.strictEqual(run.cluster_id, cluster.id);
 
     const evidence = await svc.recordEvidenceBatch([
@@ -500,5 +530,189 @@ describe('POST /api/prompt-clusters plan gate', () => {
       .send({ name: 'Vendor selection', canonicalPrompt: 'Best vendors?' });
     assert.strictEqual(res.status, 201);
     assert.strictEqual(res.body.success, true);
+  });
+});
+
+// ----------- CP7 orchestration flow ----------
+describe('CP7 orchestration flow', () => {
+  it('ensurePersonalOrg creates org on first call', async () => {
+    const db = makeFakeDb();
+    const svc = createCitationMonitoringService({ db });
+
+    const orgId = await svc.ensurePersonalOrg(42, db);
+
+    assert.strictEqual(db.inserted.personal_orgs.length, 1);
+    assert.strictEqual(typeof orgId, 'number');
+  });
+
+  it('ensurePersonalOrg is idempotent', async () => {
+    const db = makeFakeDb();
+    const svc = createCitationMonitoringService({ db });
+
+    // Pre-insert a row so the SELECT finds it.
+    const preId = 99;
+    db.inserted.personal_orgs.push({ id: preId, user_id: 42, created_at: new Date() });
+
+    const orgId = await svc.ensurePersonalOrg(42, db);
+
+    assert.strictEqual(db.inserted.personal_orgs.length, 1);
+    assert.strictEqual(orgId, preId);
+  });
+
+  it('ensurePersonalOrg throws if userId is null', async () => {
+    const db = makeFakeDb();
+    const svc = createCitationMonitoringService({ db });
+
+    await assert.rejects(
+      () => svc.ensurePersonalOrg(null, db),
+      /userId is required/
+    );
+  });
+
+  it('createRun inserts with status pending', async () => {
+    const db = makeFakeDb();
+    const svc = createCitationMonitoringService({ db });
+
+    const cluster = await svc.upsertCluster({
+      name: 'test cluster',
+      canonicalPrompt: 'test prompt',
+    });
+
+    const run = await svc.createRun({
+      clusterId: cluster.id,
+      initiatedByUserId: 1,
+      initiatedByOrgId: 1,
+      client: db,
+    });
+
+    assert.strictEqual(run.status, 'pending');
+    assert.strictEqual(typeof run.id, 'number');
+  });
+
+  it('updateRunStatus sets terminal status', async () => {
+    const db = makeFakeDb();
+    const svc = createCitationMonitoringService({ db });
+
+    const cluster = await svc.upsertCluster({
+      name: 'test cluster',
+      canonicalPrompt: 'test prompt',
+    });
+    const run = await svc.createRun({
+      clusterId: cluster.id,
+      initiatedByUserId: 1,
+      initiatedByOrgId: 1,
+      client: db,
+    });
+
+    await svc.updateRunStatus(run.id, 'completed');
+
+    assert.strictEqual(db.inserted.citation_test_runs[0].status, 'completed');
+  });
+
+  it('persistEvidenceRows inserts evidence with idempotency keys', async () => {
+    const db = makeFakeDb();
+    const svc = createCitationMonitoringService({ db });
+
+    const cluster = await svc.upsertCluster({
+      name: 'test cluster',
+      canonicalPrompt: 'test prompt',
+    });
+    const run = await svc.createRun({
+      clusterId: cluster.id,
+      initiatedByUserId: 1,
+      initiatedByOrgId: 1,
+      client: db,
+    });
+
+    const results = {
+      assistants: {
+        openai:     { tested: true,  queries: [{ query: 'q1', mentioned: true,  recommended: false, cited: false, snippet: 'some excerpt', detectionStatus: 'detected', reasoning: 'brand found' }] },
+        anthropic:  { tested: true,  queries: [{ query: 'q1', mentioned: false, recommended: false, cited: false, snippet: null,          detectionStatus: 'detected', reasoning: 'not found' }] },
+        perplexity: { tested: false, queries: [] },
+      },
+    };
+
+    const outcome = await svc.persistEvidenceRows({
+      runId: run.id,
+      clusterId: cluster.id,
+      queries: ['q1'],
+      results,
+    });
+
+    assert.strictEqual(db.inserted.citation_evidence.length, 2);
+    for (const ev of db.inserted.citation_evidence) {
+      assert.ok(ev.idempotency_key != null, 'expected non-null idempotency_key');
+    }
+    assert.deepStrictEqual(outcome, { persisted: 2, skipped: 0 });
+
+    // First row — has snippet and reasoning
+    assert.strictEqual(db.inserted.citation_evidence[0].detection_status, 'detected');
+    assert.strictEqual(db.inserted.citation_evidence[0].snippet, 'some excerpt');
+    assert.strictEqual(db.inserted.citation_evidence[0].detector_reasoning, 'brand found');
+
+    // Second row — snippet is null
+    assert.strictEqual(db.inserted.citation_evidence[1].detection_status, 'detected');
+    assert.strictEqual(db.inserted.citation_evidence[1].snippet, null);
+    assert.strictEqual(db.inserted.citation_evidence[1].detector_reasoning, 'not found');
+  });
+
+  it('persistEvidenceRows is idempotent on second call', async () => {
+    const db = makeFakeDb();
+    const svc = createCitationMonitoringService({ db });
+
+    const cluster = await svc.upsertCluster({
+      name: 'test cluster',
+      canonicalPrompt: 'test prompt',
+    });
+    const run = await svc.createRun({
+      clusterId: cluster.id,
+      initiatedByUserId: 1,
+      initiatedByOrgId: 1,
+      client: db,
+    });
+
+    const results = {
+      assistants: {
+        openai:     { tested: true,  queries: [{ query: 'q1', mentioned: true,  recommended: false, cited: false, snippet: 'some excerpt', detectionStatus: 'detected', reasoning: 'brand found' }] },
+        anthropic:  { tested: true,  queries: [{ query: 'q1', mentioned: false, recommended: false, cited: false, snippet: null,          detectionStatus: 'detected', reasoning: 'not found' }] },
+        perplexity: { tested: false, queries: [] },
+      },
+    };
+
+    const input = { runId: run.id, clusterId: cluster.id, queries: ['q1'], results };
+
+    await svc.persistEvidenceRows(input);
+    const second = await svc.persistEvidenceRows(input);
+
+    assert.strictEqual(db.inserted.citation_evidence.length, 2);
+    assert.deepStrictEqual(second, { persisted: 0, skipped: 2 });
+  });
+
+  it('persistEvidenceRows falls back to skipped when detectionStatus absent', async () => {
+    const db = makeFakeDb();
+    const svc = createCitationMonitoringService({ db });
+
+    const cluster = await svc.upsertCluster({
+      name: 'test cluster',
+      canonicalPrompt: 'test prompt',
+    });
+    const run = await svc.createRun({
+      clusterId: cluster.id,
+      initiatedByUserId: 1,
+      initiatedByOrgId: 1,
+      client: db,
+    });
+
+    // No detectionStatus field on the query result.
+    const results = {
+      assistants: {
+        openai: { tested: true, queries: [{ query: 'q1', mentioned: false, recommended: false, cited: false }] },
+      },
+    };
+
+    await svc.persistEvidenceRows({ runId: run.id, clusterId: cluster.id, queries: ['q1'], results });
+
+    assert.strictEqual(db.inserted.citation_evidence.length, 1);
+    assert.strictEqual(db.inserted.citation_evidence[0].detection_status, 'skipped');
   });
 });

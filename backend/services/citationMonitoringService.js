@@ -134,6 +134,21 @@ function createCitationMonitoringService({ db } = {}) {
     return rows[0] || null;
   }
 
+  // -------- personal_orgs --------
+  async function ensurePersonalOrg(userId, client) {
+    if (userId == null) throw new Error('userId is required');
+    const { rows } = await client.query(
+      'SELECT id FROM personal_orgs WHERE user_id = $1',
+      [userId]
+    );
+    if (rows[0]) return rows[0].id;
+    const { rows: ins } = await client.query(
+      'INSERT INTO personal_orgs (user_id) VALUES ($1) RETURNING id',
+      [userId]
+    );
+    return ins[0].id;
+  }
+
   // -------- citation_test_runs --------
   async function createRun({
     clusterId,
@@ -142,13 +157,15 @@ function createCitationMonitoringService({ db } = {}) {
     enginesTested = [],
     costEstimateCents = null,
     notes = null,
-  }) {
+    client,
+  } = {}) {
     if (!clusterId) throw new Error('clusterId is required');
-    const { rows } = await conn.query(
+    const execConn = client || conn;
+    const { rows } = await execConn.query(
       `INSERT INTO citation_test_runs
          (cluster_id, initiated_by_user_id, initiated_by_org_id,
           engines_tested, status, cost_estimate_cents, notes)
-       VALUES ($1, $2, $3, $4::jsonb, 'running', $5, $6)
+       VALUES ($1, $2, $3, $4::jsonb, 'pending', $5, $6)
        RETURNING *`,
       [
         clusterId,
@@ -160,6 +177,25 @@ function createCitationMonitoringService({ db } = {}) {
       ]
     );
     return rows[0];
+  }
+
+  const TERMINAL_STATUSES = new Set(['completed', 'failed', 'partial']);
+  const VALID_STATUSES = new Set(['pending', 'running', 'completed', 'failed', 'partial']);
+
+  async function updateRunStatus(runId, status) {
+    if (runId == null) throw new Error('runId is required');
+    if (!VALID_STATUSES.has(status)) {
+      throw new Error(`invalid status: ${status}`);
+    }
+    const setCompleted = TERMINAL_STATUSES.has(status);
+    const { rows } = await conn.query(
+      `UPDATE citation_test_runs
+          SET status = $2${setCompleted ? ', completed_at = NOW()' : ''}
+        WHERE id = $1
+        RETURNING *`,
+      [runId, status]
+    );
+    return rows[0] || null;
   }
 
   async function markRunCompleted(runId, { status = 'completed' } = {}) {
@@ -244,6 +280,51 @@ function createCitationMonitoringService({ db } = {}) {
       inserted.push(out[0]);
     }
     return inserted;
+  }
+
+  async function persistEvidenceRows({ runId, clusterId, queries, results }) {
+    const crypto = require('crypto');
+    const rows = buildEvidenceRows({ runId, clusterId, queries, results });
+    let persisted = 0;
+    let skipped = 0;
+    for (const r of rows) {
+      const hash = crypto.createHash('sha256').update(r.promptText).digest('hex');
+      const idempotencyKey = `${runId}:${r.engine}:${hash}`;
+      const result = await conn.query(
+        `INSERT INTO citation_evidence
+           (run_id, cluster_id, engine, model, prompt_text, response_text,
+            citations_raw, citations_normalized,
+            mentioned, recommended, cited, error, detection_status, snippet, detector_reasoning, idempotency_key)
+         VALUES ($1, $2, $3, $4, $5, $6,
+                 $7::jsonb, $8::jsonb,
+                 $9, $10, $11, $12, $13, $14, $15, $16)
+         ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
+        [
+          runId,
+          r.clusterId,
+          r.engine,
+          r.model,
+          r.promptText,
+          r.responseText,
+          asJsonb(r.citationsRaw),
+          asJsonb(r.citationsNormalized),
+          !!r.mentioned,
+          !!r.recommended,
+          !!r.cited,
+          r.error,
+          r.detectionStatus || 'skipped',
+          r.snippet || null,
+          r.detectorReasoning || null,
+          idempotencyKey,
+        ]
+      );
+      if (result.rowCount > 0) {
+        persisted++;
+      } else {
+        skipped++;
+      }
+    }
+    return { persisted, skipped };
   }
 
   // -------- benchmark_stats --------
@@ -347,16 +428,20 @@ function createCitationMonitoringService({ db } = {}) {
   }
 
   return {
+    // personal orgs
+    ensurePersonalOrg,
     // clusters
     upsertCluster,
     listClusters,
     getCluster,
     // runs
     createRun,
+    updateRunStatus,
     markRunCompleted,
     listRuns,
     // evidence
     recordEvidenceBatch,
+    persistEvidenceRows,
     // stats
     computeAndStoreBenchmark,
     getBenchmark,
@@ -391,6 +476,7 @@ function buildEvidenceRows({ runId, clusterId, queries, results }) {
         cited: !!q.cited,
         snippet: q.snippet || null,
         detectorReasoning: q.reasoning || null,
+        detectionStatus: q.detectionStatus || 'skipped',
         error: q.error || null,
       });
     }

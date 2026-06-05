@@ -7,7 +7,9 @@ const { PLAN_LIMITS } = require('../middleware/usageLimits');
 const UsageTrackerService = require('../services/usage-tracker-service');
 const {
   persistCitationRun,
+  createCitationMonitoringService,
 } = require('../services/citationMonitoringService');
+const citationService = createCitationMonitoringService();
 const mentionDetector = require('../services/mentionDetector');
 const planService = require('../services/planService');
 const tokenService = require('../services/tokenService');
@@ -1083,21 +1085,40 @@ router.post('/test-ai-visibility', authenticateTokenOptional, async (req, res) =
         .json({ error: 'URL and queries array are required' });
     }
 
+    let run;
     if (clusterId) {
       if (!req.user) {
         return res.status(401).json({ error: 'authentication_required' });
       }
-      const resolvedPlan = await planService.resolvePlanForRequest({ userId: req.user.id, orgId: req.user.org_id });
-      if (!planService.canAccessFeature(resolvedPlan.plan, 'hasCitation')) {
-        return res.status(403).json({ error: 'plan_upgrade_required', message: 'Citation tests require Starter or Pro plan' });
-      }
+
+      const client = await db.getClient();
       try {
-        await tokenService.spendTokens(req.user.id, CITATION_TEST_TOKEN_COST, 'citation_test', clusterId.toString());
+        await client.query('BEGIN');
+        const resolvedPlan = await planService.resolvePlanForRequest({
+          userId: req.user.id,
+          orgId: req.user.organization_id ?? null
+        });
+        if (!planService.canAccessFeature(resolvedPlan.plan, 'hasCitation')) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({ error: 'plan_upgrade_required', message: 'Citation tests require Starter or Pro plan' });
+        }
+        const orgId = await citationService.ensurePersonalOrg(req.user.id, client);
+        run = await citationService.createRun({
+          clusterId,
+          initiatedByUserId: req.user.id,
+          initiatedByOrgId: orgId,
+          client
+        });
+        await tokenService.spendTokens(req.user.id, CITATION_TEST_TOKEN_COST, 'citation_test', run.id.toString());
+        await client.query('COMMIT');
       } catch (err) {
+        await client.query('ROLLBACK');
         if (err instanceof InsufficientTokensError) {
           return res.status(402).json({ error: 'insufficient_tokens', required: CITATION_TEST_TOKEN_COST, available: err.available });
         }
         throw err;
+      } finally {
+        client.release();
       }
     }
 
@@ -1107,18 +1128,10 @@ router.post('/test-ai-visibility', authenticateTokenOptional, async (req, res) =
       return res.json({ success: true, data: results });
     }
 
-    // Persistence path. Failures here MUST NOT mask the engine results
-    // for the caller — surface them in `persistence.error` instead.
-    const persistence = await persistCitationRun({
-      clusterId,
-      url,
-      queries,
-      results,
-      initiatedByUserId: req.user?.id || null,
-      initiatedByOrgId: req.user?.org_id || null,
-    });
+    const evidenceResult = await citationService.persistEvidenceRows({ runId: run.id, clusterId, queries, results });
+    await citationService.updateRunStatus(run.id, deriveStatus(results));
 
-    return res.json({ success: true, data: results, persistence });
+    return res.json({ success: true, data: results, persistence: { runId: run.id, evidenceCount: evidenceResult.persisted } });
   } catch (error) {
     console.error('AI visibility testing failed:', error.message);
     return res
@@ -1127,9 +1140,13 @@ router.post('/test-ai-visibility', authenticateTokenOptional, async (req, res) =
   }
 });
 
-// persistCitationRun + buildEvidenceRows live in
-// services/citationMonitoringService.js so they can be unit-tested without
-// loading Express / DB middleware.
+function deriveStatus(results) {
+  const assistants = Object.values(results.assistants);
+  if (assistants.length === 0) return 'failed';
+  if (assistants.every(a => a.tested)) return 'completed';
+  if (assistants.every(a => !a.tested)) return 'failed';
+  return 'partial';
+}
 
 async function testAIVisibility(url, industry, queries) {
   const domain = new URL(url).hostname;
@@ -1153,7 +1170,7 @@ async function testSingleAssistant(assistantKey, queries, companyName, domain) {
     try {
       const txt = await queryAIAssistant(assistantKey, q);
       const a = await mentionDetector.detectMention(txt, { companyName, domain });
-      out.queries.push({ query:q, mentioned:a.mentioned, recommended:a.recommended, cited:a.cited, snippet:a.snippet });
+      out.queries.push({ query:q, mentioned:a.mentioned, recommended:a.recommended, cited:a.cited, snippet:a.snippet, detectionStatus:a.detectionStatus, reasoning:a.reasoning });
       if (a.mentioned) m++; if (a.recommended) r++; if (a.cited) c++;
     } catch (e) {
       out.queries.push({ query:q, error:e.message, mentioned:false, recommended:false, cited:false });
