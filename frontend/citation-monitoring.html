@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Citation Monitoring - AI Visibility</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+    <link rel="shortcut icon" href="/favicon.ico?v=2">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Top Nav */
+        .top-nav {
+            background: white;
+            padding: 20px 40px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo { display: flex; align-items: center; text-decoration: none; }
+        .logo img { height: 50px; width: auto; }
+
+        @media (max-width: 768px) { .logo img { height: 38px; } }
+
+        .nav-actions { display: flex; gap: 15px; align-items: center; }
+
+        .plan-badge {
+            background: #00B9DA;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+
+        .back-btn {
+            color: #4a5568;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+        .back-btn:hover { background: #f7fafc; }
+
+        /* Page Layout */
+        .page-wrapper { max-width: 960px; margin: 0 auto; }
+
+        .page-header {
+            margin-bottom: 28px;
+        }
+        .page-header h1 {
+            font-size: 28px;
+            color: #2d3748;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 6px;
+        }
+        .page-header h1 i { color: #00B9DA; }
+        .page-header p { color: #718096; font-size: 15px; }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 20px 28px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .card-header h2 {
+            font-size: 18px;
+            color: #2d3748;
+            font-weight: 600;
+        }
+        .card-body { padding: 24px 28px; }
+
+        /* Form Elements */
+        .form-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+        .form-row label {
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        select {
+            padding: 9px 14px;
+            border: 1px solid #cbd5e0;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #2d3748;
+            background: white;
+            cursor: pointer;
+            min-width: 220px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        select:focus { border-color: #00B9DA; }
+        select:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .token-hint {
+            font-size: 13px;
+            color: #718096;
+            margin-bottom: 16px;
+        }
+        .token-hint i { color: #00B9DA; margin-right: 4px; }
+
+        .error-msg {
+            background: #fff5f5;
+            color: #c53030;
+            border: 1px solid #fed7d7;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 14px;
+            margin-bottom: 14px;
+        }
+
+        /* Buttons */
+        .btn-primary {
+            background: #00B9DA;
+            color: white;
+            border: none;
+            padding: 10px 22px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s, opacity 0.2s;
+        }
+        .btn-primary:hover { background: #0099b8; }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* Loading / Empty / Error states */
+        .loading-spinner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #718096;
+            font-size: 14px;
+            padding: 20px 0;
+        }
+        .loading-spinner i { color: #00B9DA; }
+
+        .empty-msg {
+            color: #718096;
+            font-size: 14px;
+            padding: 20px 0;
+        }
+
+        /* Overall Metrics Row */
+        .overall-metrics {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .metric-chip {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 14px 20px;
+            text-align: center;
+            flex: 1;
+            min-width: 120px;
+        }
+        .metric-chip .metric-label {
+            display: block;
+            font-size: 12px;
+            color: #718096;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 6px;
+        }
+        .metric-chip .metric-value {
+            display: block;
+            font-size: 22px;
+            font-weight: 700;
+            color: #2d3748;
+        }
+
+        /* Engines Grid */
+        .engines-grid { display: flex; flex-direction: column; gap: 16px; }
+
+        .engine-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .engine-card.engine-untested { opacity: 0.7; }
+
+        .engine-header {
+            background: #f7fafc;
+            padding: 12px 18px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+        .engine-name {
+            font-weight: 700;
+            font-size: 15px;
+            color: #2d3748;
+        }
+        .engine-metrics-summary {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-left: auto;
+        }
+
+        .metric-pill {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            background: #e2e8f0;
+            color: #718096;
+        }
+        .metric-pill.active.mention { background: #bee3f8; color: #2b6cb0; }
+        .metric-pill.active.recommend { background: #c6f6d5; color: #276749; }
+        .metric-pill.active.cite { background: #fefcbf; color: #975a16; }
+
+        .untested-reason {
+            padding: 12px 18px;
+            color: #718096;
+            font-size: 13px;
+        }
+
+        /* Query Results */
+        .query-results { padding: 0; }
+
+        .query-row {
+            padding: 12px 18px;
+            border-top: 1px solid #e2e8f0;
+        }
+        .query-row:first-child { border-top: none; }
+
+        .query-text {
+            font-size: 13px;
+            color: #2d3748;
+            margin-bottom: 8px;
+            font-style: italic;
+        }
+
+        .query-signals {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+        .signal {
+            font-size: 12px;
+            color: #4a5568;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .icon-yes { color: #10B981; }
+        .icon-no { color: #EF4444; }
+
+        .query-snippet {
+            font-size: 12px;
+            color: #4a5568;
+            background: #f7fafc;
+            border-left: 3px solid #00B9DA;
+            padding: 6px 10px;
+            border-radius: 0 6px 6px 0;
+            margin-top: 6px;
+        }
+
+        .query-reasoning {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 6px;
+        }
+        .query-reasoning strong { color: #4a5568; }
+
+        /* Status Badges */
+        .status-badge {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 3px 8px;
+            border-radius: 10px;
+        }
+        .status-completed { background: #c6f6d5; color: #276749; }
+        .status-failed { background: #fed7d7; color: #c53030; }
+        .status-partial { background: #fefcbf; color: #975a16; }
+        .status-running { background: #bee3f8; color: #2b6cb0; }
+        .status-pending { background: #e2e8f0; color: #4a5568; }
+        .status-good { background: #c6f6d5; color: #276749; }
+        .status-neutral { background: #e2e8f0; color: #718096; }
+        .status-error { background: #fed7d7; color: #c53030; }
+
+        /* Run Cards (history) */
+        .history-list { display: flex; flex-direction: column; gap: 10px; }
+
+        .run-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 14px 18px;
+        }
+        .run-card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+        .run-time { font-size: 13px; color: #4a5568; }
+        .token-cost { font-size: 13px; color: #718096; margin-left: auto; }
+        .token-cost i { color: #F59E0B; margin-right: 3px; }
+        .run-card-meta {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            font-size: 12px;
+            color: #718096;
+        }
+        .run-card.run-card-compact { padding: 12px 16px; }
+
+        /* Benchmark */
+        .benchmark-metrics {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+        }
+        .top-domains { margin-bottom: 16px; }
+        .top-domains h4 {
+            font-size: 14px;
+            color: #4a5568;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .domains-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .domains-table th, .domains-table td {
+            text-align: left;
+            padding: 8px 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .domains-table th {
+            font-weight: 600;
+            color: #4a5568;
+            background: #f7fafc;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .domains-table td { color: #2d3748; }
+        .updated-at { font-size: 12px; color: #a0aec0; }
+
+        /* Window Selector in card-header */
+        .card-header select { min-width: 140px; }
+    </style>
+</head>
+<body>
+    <div class="top-nav">
+        <a href="dashboard.html" class="logo">
+            <img src="/logo.png" alt="Visible2AI - AI Visibility Score" />
+        </a>
+        <div class="nav-actions">
+            <span class="plan-badge" id="planBadge"></span>
+            <a href="dashboard.html" class="back-btn">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    <div class="page-wrapper">
+        <div class="page-header">
+            <h1><i class="fas fa-chart-bar"></i> Citation Monitoring</h1>
+            <p>Track how AI assistants cite and mention your brand across prompt clusters.</p>
+        </div>
+
+        <!-- Run Test Section -->
+        <div class="card" id="runTestSection">
+            <div class="card-header">
+                <h2>Run Citation Test</h2>
+            </div>
+            <div class="card-body">
+                <div class="form-row">
+                    <label for="clusterSelector">Prompt Cluster</label>
+                    <select id="clusterSelector" onchange="onClusterChange()">
+                        <option value="">Loading clusters...</option>
+                    </select>
+                </div>
+                <p class="token-hint" id="tokenCostHint"></p>
+                <div class="error-msg" id="runTestError" style="display:none;"></div>
+                <button class="btn-primary" id="runTestBtn" onclick="runCitationTest()">
+                    <i class="fas fa-play"></i> Run Test
+                </button>
+            </div>
+        </div>
+
+        <!-- Latest Results Section -->
+        <div class="card" id="latestResultsSection">
+            <div class="card-header">
+                <h2>Latest Results</h2>
+            </div>
+            <div class="card-body">
+                <div id="latestResultsContent">
+                    <p class="empty-msg">Select a cluster to view results.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Run History Section -->
+        <div class="card" id="runHistorySection">
+            <div class="card-header">
+                <h2>Run History</h2>
+            </div>
+            <div class="card-body">
+                <div id="runHistoryContent">
+                    <p class="empty-msg">Select a cluster to view history.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Benchmark Stats Section -->
+        <div class="card" id="benchmarkSection">
+            <div class="card-header">
+                <h2>Benchmark Stats</h2>
+                <select id="benchmarkWindowSelector" onchange="loadBenchmarkStats(currentClusterId)">
+                    <option value="7d">Last 7 days</option>
+                    <option value="14d">Last 14 days</option>
+                    <option value="30d" selected>Last 30 days</option>
+                    <option value="90d">Last 90 days</option>
+                </select>
+            </div>
+            <div class="card-body">
+                <div id="benchmarkContent">
+                    <p class="empty-msg">Select a cluster to view benchmark stats.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="citation-monitoring.js"></script>
+    <script src="support-chat.js"></script>
+</body>
+</html>
