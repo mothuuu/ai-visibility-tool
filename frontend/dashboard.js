@@ -2,6 +2,31 @@ const API_BASE_URL = window.location.hostname === 'localhost' || window.location
     ? 'http://localhost:3001/api'
     : 'https://ai-visibility-tool.onrender.com/api';
 
+// Step 6: visibility-profile completion gate (frontend redirect hook).
+// Route the intake form lives at (Phase 2 builds the page).
+const PROFILE_SETUP_ROUTE = '/profile-setup.html';
+
+// Global handler: any API response of 403 { error:'profile_incomplete' } sends a
+// paid+incomplete user to the intake form (covers direct navigation / any call).
+// Installed once; matches the existing window.location redirect pattern.
+(function installProfileGateInterceptor() {
+    if (window.__profileGateInstalled) return;
+    window.__profileGateInstalled = true;
+    const origFetch = window.fetch.bind(window);
+    window.fetch = async function (...args) {
+        const resp = await origFetch(...args);
+        if (resp.status === 403) {
+            try {
+                const data = await resp.clone().json();
+                if (data && data.error === 'profile_incomplete') {
+                    window.location.href = data.redirect || PROFILE_SETUP_ROUTE;
+                }
+            } catch (_) { /* non-JSON 403 — ignore */ }
+        }
+        return resp;
+    };
+})();
+
 // ============================================================================
 // SUBMISSION STATUS CONSTANTS & VERIFICATION POLICY
 // ============================================================================
@@ -306,6 +331,37 @@ async function initDashboard() {
         }
         if (quotaLegacy) {
             localStorage.setItem('quotaLegacy', JSON.stringify(quotaLegacy));
+        }
+
+        // Step 6: gate dashboard on a completed visibility profile (paid only).
+        // Fresh server read via GET /api/profile (returns plan draft_config +
+        // profile_completed). Freemium (draft_enabled=false) is never redirected.
+        try {
+            const profResp = await fetch(`${API_BASE_URL}/profile`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            if (profResp.ok) {
+                const profData = await profResp.json();
+                lastProfileData = profData; // Step 13: reuse this fetch for the summary card (no second GET)
+                if (profData.draft_config && profData.draft_config.draft_enabled) {
+                    // Step 12: reveal the Profile (edit) nav item for paid users.
+                    // Uses the same draft_enabled signal as the backend gate, so the
+                    // item only shows for plans that actually have a profile.
+                    visibilityProfileEnabled = true;
+                    const profNav = document.getElementById('navVisibilityProfile');
+                    if (profNav) profNav.style.display = '';
+                    if (!profData.profile_completed) {
+                        console.log('Dashboard: paid profile incomplete, redirecting to profile setup');
+                        window.location.href = PROFILE_SETUP_ROUTE;
+                        return;
+                    }
+                }
+            }
+            // Step 13: render the profile summary card from the data just fetched
+            // (paid only; degrades/hides gracefully for sparse or freemium).
+            renderProfileSummaryCard();
+        } catch (e) {
+            console.warn('Dashboard: profile gate check failed (non-fatal):', e);
         }
 
         // Update UI
@@ -1193,6 +1249,8 @@ function navigateToSection(sectionId) {
         if (typeof loadPackCatalog === 'function') loadPackCatalog();
     } else if (sectionId === 'my-packs') {
         if (typeof loadPackHistory === 'function') loadPackHistory();
+    } else if (sectionId === 'visibility-profile') {
+        mountVisibilityProfile();
     }
 
     // Update URL without reload
@@ -1202,6 +1260,107 @@ function navigateToSection(sectionId) {
 
     // Scroll to top
     document.getElementById('mainContent').scrollTop = 0;
+}
+
+// Step 12: lazily mount the visibility-profile form in EDIT mode on first visit.
+// Reuses the same loader/component as profile-setup.html (Steps 7–11); the edit
+// path loads the current profile, allows editing, and Saves in place (no redirect).
+// Set true at the Step 6 gate when draft_config.draft_enabled (paid).
+let visibilityProfileEnabled = false;
+let visibilityProfileMounted = false;
+// Step 13: the GET /api/profile payload fetched once in initDashboard, reused
+// for the summary card (no second fetch).
+let lastProfileData = null;
+
+// Step 13: render the compact profile summary card on dashboard home from the
+// already-fetched profile. Paid only (draft_enabled); degrades gracefully when
+// fields are sparse; hidden for freemium / missing data. Read-only — "Edit
+// profile" navigates to the Step 12 Profile section.
+function renderProfileSummaryCard() {
+    const cardEl = document.getElementById('profileSummaryCard');
+    if (!cardEl) return;
+    const data = lastProfileData;
+    if (!data || !data.draft_config || !data.draft_config.draft_enabled) {
+        cardEl.style.display = 'none'; // freemium / no data
+        return;
+    }
+    const p = data.profile || {};
+    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const muted = (t) => `<span class="psc-muted">${esc(t)}</span>`;
+    const clean = (s) => String(s == null ? '' : s).trim();
+
+    const company = clean(p.company_name);
+    const industry = clean(p.industry);
+    const comps = (Array.isArray(p.competitors_business) ? p.competitors_business : [])
+        .map((c) => clean(typeof c === 'string' ? c : (c && c.name)))
+        .filter(Boolean)
+        .slice(0, 3);
+    const promptCount = Array.isArray(p.tracked_prompts) ? p.tracked_prompts.length : 0;
+
+    cardEl.innerHTML = `
+        <div class="card-header">
+            <h2 class="card-title">Your visibility profile</h2>
+            <button class="psc-edit" type="button" onclick="navigateToSection('visibility-profile')">
+                <i class="fas fa-pen"></i> Edit profile
+            </button>
+        </div>
+        <div class="psc-grid">
+            <div class="psc-item">
+                <div class="psc-label">Company</div>
+                <div class="psc-value">${company ? esc(company) : muted('Not set')}</div>
+            </div>
+            <div class="psc-item">
+                <div class="psc-label">Industry</div>
+                <div class="psc-value">${industry ? esc(industry) : muted('Not set')}</div>
+            </div>
+            <div class="psc-item">
+                <div class="psc-label">Top competitors</div>
+                <div class="psc-value">${comps.length
+                    ? `<span class="psc-competitors">${comps.map((n) => `<span class="psc-chip">${esc(n)}</span>`).join('')}</span>`
+                    : muted('None yet')}</div>
+            </div>
+            <div class="psc-item">
+                <div class="psc-label">Tracked prompts</div>
+                <div class="psc-value">${promptCount > 0 ? promptCount : muted('0')}</div>
+            </div>
+        </div>`;
+    cardEl.style.display = '';
+}
+function mountVisibilityProfile() {
+    const container = document.getElementById('visibility-profile-root');
+    if (!container) return;
+
+    // Hard-block the freemium deep-link (?section=visibility-profile): mirror the
+    // server's 403 so a non-paid user can't reach an empty form that dead-ends on
+    // Save. draft_enabled is the same signal the backend gate uses.
+    if (!visibilityProfileEnabled) {
+        renderVisibilityProfileLocked(container);
+        return;
+    }
+
+    if (visibilityProfileMounted) return;
+    if (window.ProfileLoader && typeof window.ProfileLoader.start === 'function') {
+        window.ProfileLoader.start(container, { mode: 'edit' });
+        visibilityProfileMounted = true;
+    } else {
+        console.warn('Dashboard: ProfileLoader not available to mount visibility profile');
+    }
+}
+
+// Locked/upgrade state shown when a non-paid user reaches the profile section
+// directly (the nav item is hidden for them, so this only triggers on deep-link).
+function renderVisibilityProfileLocked(container) {
+    container.innerHTML = `
+        <div class="vp-scope">
+          <div class="vp-form">
+            <div class="vp-status" data-status="locked">
+              <div style="font-size:2rem;color:var(--gray-400);margin-bottom:6px;"><i class="fas fa-lock"></i></div>
+              <h2 class="vp-status-title">Your visibility profile is a paid feature</h2>
+              <p class="vp-status-sub">Upgrade your plan to set up and edit the profile that powers your scans and monitoring.</p>
+              <button class="vp-cta" type="button" style="margin-top:18px;" onclick="navigateToSection('billing-subscription')">View plans</button>
+            </div>
+          </div>
+        </div>`;
 }
 
 // Setup mobile menu
