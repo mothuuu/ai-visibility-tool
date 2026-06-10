@@ -327,6 +327,19 @@ function createCitationMonitoringService({ db } = {}) {
     return { persisted, skipped };
   }
 
+  async function getEvidence({ runId } = {}) {
+    if (!runId) throw new Error('runId is required');
+    const { rows } = await conn.query(
+      `SELECT engine, model, prompt_text, detection_status,
+              mentioned, recommended, cited, snippet
+         FROM citation_evidence
+        WHERE run_id = $1
+        ORDER BY engine, created_at ASC`,
+      [runId]
+    );
+    return rows;
+  }
+
   // -------- benchmark_stats --------
   async function computeAndStoreBenchmark({ clusterId, window = '30d' } = {}) {
     if (!clusterId) throw new Error('clusterId is required');
@@ -442,6 +455,7 @@ function createCitationMonitoringService({ db } = {}) {
     // evidence
     recordEvidenceBatch,
     persistEvidenceRows,
+    getEvidence,
     // stats
     computeAndStoreBenchmark,
     getBenchmark,
