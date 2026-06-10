@@ -52,7 +52,7 @@ async function loadClusters() {
         clusters = json.data;
 
         if (clusters.length === 0) {
-            selector.innerHTML = '<option value="">No clusters found — create one in the dashboard</option>';
+            selector.innerHTML = '<option value="">No prompt clusters found. Contact support if you believe this is an error.</option>';
             return;
         }
 
