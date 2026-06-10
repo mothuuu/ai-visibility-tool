@@ -46,14 +46,28 @@
   }
   function normalizePromptItem(p) {
     if (p && typeof p === 'object') {
-      return { text: itemText(p), volume: p.volume == null ? null : p.volume, is_monitored: p.is_monitored !== false };
+      return { text: itemText(p), volume: p.volume == null ? null : p.volume, is_monitored: p.is_monitored !== false, funnel_stage: normalizeFunnelStage(p.funnel_stage) };
     }
-    return { text: str(p), volume: null, is_monitored: true };
+    return { text: str(p), volume: null, is_monitored: true, funnel_stage: null };
   }
-  // Competitor item: { name }. Priority IS the array index + 1 (no stored field).
+  // Competitor item: { name, url }. Priority IS the array index + 1 (no stored field).
   function normalizeCompetitor(it) {
-    if (it && typeof it === 'object') return { name: itemText(it) };
-    return { name: str(it) };
+    if (it && typeof it === 'object') return { name: itemText(it), url: cleanUrl(it.url) };
+    return { name: str(it), url: null };
+  }
+
+  // url: trimmed non-empty string (lenient — no format enforcement), else null.
+  function cleanUrl(v) {
+    const s = str(v);
+    return s || null;
+  }
+
+  // funnel stage: TOFU/MOFU/BOFU (case-insensitive), else null (untagged).
+  const PROMPT_STAGE_KEYS = ['TOFU', 'MOFU', 'BOFU'];
+  const COMP_MAX = 5; // hard cap per competitor column
+  function normalizeFunnelStage(v) {
+    const s = str(v).toUpperCase();
+    return PROMPT_STAGE_KEYS.indexOf(s) !== -1 ? s : null;
   }
 
   // Competitor column wiring: data-col key -> state array; plus its opposite + label.
@@ -232,12 +246,16 @@
   function competitorColumn(col, title, sub, items) {
     const list = arr(items);
     const otherLabel = COMP_LABEL[COMP_OTHER[col]];
+    const atMax = list.length >= COMP_MAX;
     const rows = list
       .map(
         (it, i) => `
           <div class="vp-comp-row" data-idx="${i}">
-            <span class="vp-priority">${i + 1}</span>
-            <input class="vp-input" type="text" data-act="comp-name" value="${esc(it.name)}" />
+            <span class="vp-priority" title="Priority ${i + 1}">${i + 1}</span>
+            <div class="vp-comp-fields">
+              <input class="vp-input" type="text" data-act="comp-name" value="${esc(it.name)}" placeholder="Competitor name" />
+              <input class="vp-input vp-comp-url" type="text" data-act="comp-url" value="${esc(it.url || '')}" placeholder="Website (optional)" />
+            </div>
             <span class="vp-chevrons">
               <button class="vp-chev" type="button" data-act="comp-up" title="Move up" aria-label="Move up" ${i === 0 ? 'disabled' : ''}><i class="fas fa-chevron-up"></i></button>
               <button class="vp-chev" type="button" data-act="comp-down" title="Move down" aria-label="Move down" ${i === list.length - 1 ? 'disabled' : ''}><i class="fas fa-chevron-down"></i></button>
@@ -251,12 +269,15 @@
           </div>`
       )
       .join('');
+    const addBtn = atMax
+      ? `<button class="vp-add-btn" type="button" data-act="comp-add" disabled><i class="fas fa-plus"></i> Add <span class="vp-add-remaining">(max ${COMP_MAX} reached)</span></button>`
+      : `<button class="vp-add-btn" type="button" data-act="comp-add"><i class="fas fa-plus"></i> Add</button>`;
     return `
       <div class="vp-comp-col" data-col="${col}">
         <p class="vp-comp-col-head">${esc(title)}</p>
         <p class="vp-comp-col-sub">${esc(sub)}</p>
         ${rows}
-        <button class="vp-add-btn" type="button" data-act="comp-add"><i class="fas fa-plus"></i> Add</button>
+        ${addBtn}
       </div>`;
   }
 
@@ -265,6 +286,7 @@
     return `
       <div class="vp-section-head">
         <h2 class="vp-section-title">Your competitive landscape ${badge(listBadgeType(filled), 'competitors')}</h2>
+        <p class="vp-section-sub">Order sets priority — 1 is highest. Use the arrows to reorder. Up to ${COMP_MAX} per column; website is optional.</p>
       </div>
       <div class="vp-comp-cols">
         ${competitorColumn('business', 'Business competitors', 'Real-world rivals you compete with.', state.competitors_business)}
@@ -284,37 +306,65 @@
     return `Tracking ${monitored} of up to ${cap}`;
   }
 
-  // 6. Top queries in your vertical (prompts)
-  // Inner markup re-renders from state on add/delete/monitor-toggle.
+  // Funnel-stage groups for the prompts section (labels shown in the UI).
+  const PROMPT_GROUPS = [
+    { key: 'TOFU', label: 'TOFU · Awareness' },
+    { key: 'MOFU', label: 'MOFU · Comparison' },
+    { key: 'BOFU', label: 'BOFU · Decision' },
+  ];
+
+  // One prompt row. `i` is the index in the flat state.tracked_prompts array
+  // (grouping is purely presentational; state stays a single ordered list).
+  function promptRow(p, i) {
+    const stage = p.funnel_stage || '';
+    const opt = (v, l) => `<option value="${v}" ${stage === v ? 'selected' : ''}>${l}</option>`;
+    return `
+      <div class="vp-prompt-row" data-idx="${i}">
+        <input class="vp-checkbox" type="checkbox" data-act="prompt-monitor" title="Monitor this query" aria-label="Monitor this query" ${p.is_monitored ? 'checked' : ''} />
+        <input class="vp-input" type="text" data-act="prompt-text" value="${esc(itemText(p))}" />
+        <select class="vp-stage-select" data-act="prompt-stage" title="Funnel stage" aria-label="Funnel stage">
+          ${stage === '' ? '<option value="" selected>Untagged</option>' : ''}
+          ${opt('TOFU', 'TOFU')}${opt('MOFU', 'MOFU')}${opt('BOFU', 'BOFU')}
+        </select>
+        <span class="vp-volume">${esc(formatVolume(p && p.volume))}</span>
+        <button class="vp-icon-btn vp-icon-btn--danger" type="button" data-act="prompt-delete" title="Delete" aria-label="Delete">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>`;
+  }
+
+  // 6. Top queries in your vertical (prompts) — grouped by funnel stage.
+  // Inner markup re-renders from state on add/delete/monitor-toggle/re-tag.
   function promptsInner(state, config, ui) {
     const prompts = arr(state.tracked_prompts);
     const atCap = prompts.length >= PROMPT_SOFT_CAP;
-    const rows = prompts
-      .map(
-        (p, i) => `
-          <div class="vp-prompt-row" data-idx="${i}">
-            <input class="vp-checkbox" type="checkbox" data-act="prompt-monitor" title="Monitor this query" aria-label="Monitor this query" ${p.is_monitored ? 'checked' : ''} />
-            <input class="vp-input" type="text" data-act="prompt-text" value="${esc(itemText(p))}" />
-            <span class="vp-volume">${esc(formatVolume(p && p.volume))}</span>
-            <button class="vp-icon-btn vp-icon-btn--danger" type="button" data-act="prompt-delete" title="Delete" aria-label="Delete">
-              <i class="fas fa-trash"></i>
-            </button>
-          </div>`
-      )
-      .join('');
-    const emptyHint = prompts.length === 0
-      ? `<p class="vp-hint">No queries yet — add the prompts you want to track.</p>`
+    const indexed = prompts.map((p, i) => ({ p, i }));
+
+    const groupsHtml = PROMPT_GROUPS.map((g) => {
+      const items = indexed.filter(({ p }) => (p.funnel_stage || null) === g.key);
+      const rows = items.map(({ p, i }) => promptRow(p, i)).join('') || '<p class="vp-hint vp-group-empty">None yet.</p>';
+      const addBtn = atCap
+        ? `<button class="vp-add-btn" type="button" data-act="prompt-add" data-stage="${g.key}" disabled><i class="fas fa-plus"></i> Add to ${g.key} <span class="vp-add-remaining">(max ${PROMPT_SOFT_CAP})</span></button>`
+        : `<button class="vp-add-btn" type="button" data-act="prompt-add" data-stage="${g.key}"><i class="fas fa-plus"></i> Add to ${g.key}</button>`;
+      return `
+        <div class="vp-prompt-group" data-stage="${g.key}">
+          <div class="vp-prompt-group-head">${g.label} <span class="vp-group-count">(${items.length})</span></div>
+          <div class="vp-list">${rows}</div>
+          ${addBtn}
+        </div>`;
+    }).join('');
+
+    const untagged = indexed.filter(({ p }) => !p.funnel_stage);
+    const untaggedHtml = untagged.length
+      ? `<div class="vp-prompt-group" data-stage="untagged">
+           <div class="vp-prompt-group-head">Untagged <span class="vp-group-count">(${untagged.length})</span></div>
+           <div class="vp-list">${untagged.map(({ p, i }) => promptRow(p, i)).join('')}</div>
+         </div>`
       : '';
+
     const capHint = ui && ui.promptCapHint && config && config.monitoring_cap != null
       ? `<p class="vp-hint vp-cap-hint">You can monitor up to ${config.monitoring_cap} queries on your plan. Turn one off first.</p>`
       : '';
-    const addBtn = atCap
-      ? `<button class="vp-add-btn" type="button" data-act="prompt-add" disabled>
-           <i class="fas fa-plus"></i> Add <span class="vp-add-remaining">(max ${PROMPT_SOFT_CAP} reached)</span>
-         </button>`
-      : `<button class="vp-add-btn" type="button" data-act="prompt-add">
-           <i class="fas fa-plus"></i> Add <span class="vp-add-remaining">(up to ${PROMPT_SOFT_CAP})</span>
-         </button>`;
     // Token pop-up CTA — visible only on plans with token_query_unlock_enabled.
     const tokenCta = config && config.token_query_unlock_enabled
       ? `<button class="vp-token-cta" type="button" data-act="token-cta">
@@ -324,14 +374,13 @@
     return `
       <div class="vp-section-head">
         <h2 class="vp-section-title">Top queries in your vertical ${badge(listBadgeType(prompts.length > 0), 'prompts')}</h2>
-        <p class="vp-section-sub">These will be the discovery prompts we track across ChatGPT, Claude, Perplexity, and Gemini.</p>
+        <p class="vp-section-sub">These will be the discovery prompts we track across ChatGPT, Claude, Perplexity, and Gemini. Grouped by funnel stage — re-tag with the dropdown.</p>
       </div>
       <div class="vp-monitor-cap" data-monitor-cap>${esc(monitoringCapText(state, config))}</div>
-      <div class="vp-list">${rows}</div>
-      ${emptyHint}
       ${capHint}
+      ${groupsHtml}
+      ${untaggedHtml}
       <div class="vp-prompt-actions">
-        ${addBtn}
         ${tokenCta}
       </div>`;
   }
@@ -547,10 +596,11 @@
       location: str(st0.location),
       business_description: str(st0.business_description),
       icps: arr(st0.icps).map((it) => ({ text: str(it && it.text), selected: !!(it && it.selected) })),
-      competitors_business: arr(st0.competitors_business).map((it) => ({ name: str(it && it.name) })),
-      competitors_visibility: arr(st0.competitors_visibility).map((it) => ({ name: str(it && it.name) })),
+      competitors_business: arr(st0.competitors_business).map((it) => ({ name: str(it && it.name), url: cleanUrl(it && it.url) })),
+      competitors_visibility: arr(st0.competitors_visibility).map((it) => ({ name: str(it && it.name), url: cleanUrl(it && it.url) })),
       tracked_prompts: arr(st0.tracked_prompts).map((p) => ({
         text: str(p && p.text),
+        funnel_stage: normalizeFunnelStage(p && p.funnel_stage),
         volume: p && p.volume != null ? p.volume : null,
         is_monitored: !!(p && p.is_monitored),
       })),
@@ -748,7 +798,16 @@
         }
       });
       prompts.addEventListener('change', (e) => {
-        if (e.target.getAttribute('data-act') !== 'prompt-monitor') return;
+        const act = e.target.getAttribute('data-act');
+        if (act === 'prompt-stage') {
+          const i = rowIdx(e.target);
+          if (i >= 0) {
+            el.__vpProfileState.tracked_prompts[i].funnel_stage = e.target.value || null;
+            rerenderPrompts(el); // re-group under the new stage
+          }
+          return;
+        }
+        if (act !== 'prompt-monitor') return;
         const i = rowIdx(e.target);
         if (i < 0) return;
         const state = el.__vpProfileState;
@@ -781,7 +840,10 @@
           const cap = el.__vpConfig ? el.__vpConfig.monitoring_cap : null;
           const monitoredNow = state.tracked_prompts.filter((p) => p.is_monitored).length;
           const monitored = cap == null || monitoredNow < cap;
-          state.tracked_prompts.push({ text: '', volume: null, is_monitored: monitored });
+          // Pre-set the new item's stage from the group's add button.
+          const btn = e.target.closest('[data-act]');
+          const stage = normalizeFunnelStage(btn && btn.getAttribute('data-stage'));
+          state.tracked_prompts.push({ text: '', volume: null, is_monitored: monitored, funnel_stage: stage });
           el.__vpUi.promptCapHint = false;
           rerenderPrompts(el);
         } else if (act === 'token-cta') {
@@ -798,10 +860,14 @@
         return c ? c.getAttribute('data-col') : null;
       };
       comp.addEventListener('input', (e) => {
-        if (e.target.getAttribute('data-act') !== 'comp-name') return;
+        const act = e.target.getAttribute('data-act');
+        if (act !== 'comp-name' && act !== 'comp-url') return;
         const col = colOf(e.target);
         const i = rowIdx(e.target);
-        if (col && i >= 0) el.__vpProfileState[COMP_COLS[col]][i].name = e.target.value; // no re-render
+        if (!col || i < 0) return;
+        const item = el.__vpProfileState[COMP_COLS[col]][i];
+        if (act === 'comp-name') item.name = e.target.value;  // no re-render (preserve focus)
+        else item.url = e.target.value;
       });
       comp.addEventListener('click', (e) => {
         const act = actOf(e.target);
@@ -811,7 +877,8 @@
         if (!col) return;
         const list = state[COMP_COLS[col]];
         if (act === 'comp-add') {
-          list.push({ name: '' }); // no max (none specified)
+          if (list.length >= COMP_MAX) return; // 5-cap per column
+          list.push({ name: '', url: null });
           rerenderCompetitors(el);
           return;
         }
@@ -824,8 +891,10 @@
         } else if (act === 'comp-delete') {
           list.splice(i, 1); rerenderCompetitors(el); // no removal floor
         } else if (act === 'comp-move') {
+          const target = state[COMP_COLS[COMP_OTHER[col]]];
+          if (target.length >= COMP_MAX) return;           // target column full — don't move
           const item = list.splice(i, 1)[0];               // remove from source
-          state[COMP_COLS[COMP_OTHER[col]]].push(item);    // append to target
+          target.push(item);                               // append to target
           rerenderCompetitors(el);                         // re-render + renumber BOTH
         }
       });
