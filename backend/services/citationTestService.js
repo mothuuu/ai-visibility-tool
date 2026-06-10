@@ -25,7 +25,6 @@ const COST_PER_1K = {
   claude:     0.003,   // sonnet-class
   chatgpt:    0.001,   // 4o-mini-class
   perplexity: 0.0006,  // sonar-small
-  gemini:     0.001,
 };
 
 // Lazy-load adapters so tests can stub them without triggering API-key checks.
@@ -38,7 +37,7 @@ function loadAdapter(engine) {
   }
 }
 
-const VALID_ENGINES = new Set(['claude', 'chatgpt', 'perplexity', 'gemini']);
+const VALID_ENGINES = new Set(['claude', 'chatgpt', 'perplexity']);
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -171,10 +170,10 @@ async function runEngineQueue({ testRunId, engine, queries, domain, competitorDo
       const resp = await adapter.runQuery(query);
       tokens += resp.tokens_used || 0;
 
-      const analysis = analyzeCitation(resp.response_text, domain, competitorDomains);
+      const analysis = analyzeCitation(resp.response, domain, competitorDomains);
       await persistEvidence({
         testRunId, query, engine, analysis,
-        responseText: resp.response_text, storePro
+        responseText: resp.response, storePro
       });
       results.push({
         query, engine, cited: analysis.cited, citation_type: analysis.citation_type,
@@ -217,7 +216,7 @@ async function runSingleTest(query, engine, domain, competitorDomains = []) {
   if (!VALID_ENGINES.has(engine)) throw new Error(`Unsupported engine: ${engine}`);
   const adapter = loadAdapter(engine);
   const resp = await adapter.runQuery(query);
-  const analysis = analyzeCitation(resp.response_text, domain, competitorDomains);
+  const analysis = analyzeCitation(resp.response, domain, competitorDomains);
   return { ...resp, analysis };
 }
 

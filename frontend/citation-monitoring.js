@@ -333,7 +333,7 @@ function renderEngineResult(engine, result, isPro) {
 }
 
 function renderQueryRow(q, isPro) {
-    const statusClass = { found: 'status-good', not_found: 'status-neutral', skipped: 'status-neutral', error: 'status-error' }[q.detectionStatus] || 'status-neutral';
+    const statusClass = { detected: 'status-good', failed: 'status-error', skipped: 'status-neutral' }[q.detectionStatus] || 'status-neutral';
     const icon = v => v
         ? '<i class="fas fa-check icon-yes"></i>'
         : '<i class="fas fa-times icon-no"></i>';
@@ -440,10 +440,6 @@ function showLoading(containerId) {
     if (el) el.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
 }
 
-function hideLoading(containerId) {
-    // No-op — callers replace content directly
-}
-
 function showError(containerId, message) {
     const el = document.getElementById(containerId);
     if (el) el.innerHTML = `<div class="error-msg">${escapeHtml(message)}</div>`;
@@ -470,7 +466,9 @@ function escapeHtml(str) {
 
 function escapeAttr(str) {
     if (!str) return '';
-    return String(str).replace(/"/g, '&quot;');
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;');
 }
 
 document.addEventListener('DOMContentLoaded', initCitationMonitoring);
