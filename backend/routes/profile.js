@@ -88,6 +88,27 @@ function publicDraftConfig(cfg) {
 const isNonEmptyString = (v) => typeof v === 'string' && v.trim().length > 0;
 const asArray = (v) => (Array.isArray(v) ? v : []);
 
+const COMPETITOR_MAX = 5; // per column
+const PROMPT_STAGES = new Set(['TOFU', 'MOFU', 'BOFU']);
+
+// funnel_stage: TOFU/MOFU/BOFU (case-insensitive), else null (untagged).
+function normalizeFunnelStage(v) {
+  if (v == null) return null;
+  const s = String(v).trim().toUpperCase();
+  return PROMPT_STAGES.has(s) ? s : null;
+}
+
+// Persisted competitor shape: { name, url }. url optional/lenient (trim, no
+// format enforcement). Returns null for an empty-name item (dropped on save).
+function normalizeCompetitorSave(it) {
+  const rawName = typeof it === 'string' ? it : (it && it.name);
+  const name = String(rawName == null ? '' : rawName).trim();
+  if (!name) return null;
+  const rawUrl = it && typeof it === 'object' ? it.url : null;
+  const url = rawUrl == null ? null : (String(rawUrl).trim() || null);
+  return { name, url };
+}
+
 /**
  * Server-side validation of a POST payload. Returns an array of field-level
  * errors ([] when valid). Never trusts the client.
@@ -119,14 +140,18 @@ function validateProfilePayload(body, planCtx) {
   // Competitor counts only when it has a non-empty (trimmed) name.
   const compName = (it) => (typeof it === 'string' ? it : it && it.name);
 
-  const cb = asArray(body.competitors_business);
-  if (cb.filter((it) => isNonEmptyString(compName(it))).length < 1) {
+  const cbNamed = asArray(body.competitors_business).filter((it) => isNonEmptyString(compName(it)));
+  if (cbNamed.length < 1) {
     push('competitors_business', 'min', 'At least one business competitor is required');
+  } else if (cbNamed.length > COMPETITOR_MAX) {
+    push('competitors_business', 'max', `Up to ${COMPETITOR_MAX} business competitors`);
   }
 
-  const cv = asArray(body.competitors_visibility);
-  if (cv.filter((it) => isNonEmptyString(compName(it))).length < 1) {
+  const cvNamed = asArray(body.competitors_visibility).filter((it) => isNonEmptyString(compName(it)));
+  if (cvNamed.length < 1) {
     push('competitors_visibility', 'min', 'At least one visibility competitor is required');
+  } else if (cvNamed.length > COMPETITOR_MAX) {
+    push('competitors_visibility', 'max', `Up to ${COMPETITOR_MAX} visibility competitors`);
   }
 
   const prompts = asArray(body.tracked_prompts);
@@ -159,12 +184,13 @@ function validateProfilePayload(body, planCtx) {
 /** Coerce a tracked_prompts entry into the stored {text, volume, is_monitored} shape. */
 function normalizePrompt(p) {
   if (typeof p === 'string') {
-    return { text: p.trim(), volume: null, is_monitored: false };
+    return { text: p.trim(), volume: null, is_monitored: false, funnel_stage: null };
   }
   return {
-    text: String(p.text).trim(),
+    text: String(p.text == null ? '' : p.text).trim(),
     volume: p.volume ?? null,
     is_monitored: Boolean(p.is_monitored),
+    funnel_stage: normalizeFunnelStage(p.funnel_stage),
   };
 }
 
@@ -175,6 +201,9 @@ function buildSaveValues(body) {
     if (!(field in body)) continue;
     if (field === 'tracked_prompts') {
       values[field] = asArray(body.tracked_prompts).map(normalizePrompt);
+    } else if (field === 'competitors_business' || field === 'competitors_visibility') {
+      // Persist clean { name, url }; drop empty-name items; cap at 5 per column.
+      values[field] = asArray(body[field]).map(normalizeCompetitorSave).filter(Boolean).slice(0, COMPETITOR_MAX);
     } else if (JSONB_FIELDS.has(field)) {
       values[field] = asArray(body[field]);
     } else {

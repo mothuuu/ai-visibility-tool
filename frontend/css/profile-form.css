@@ -234,13 +234,14 @@
 }
 .vp-comp-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   margin-bottom: 8px;
 }
 .vp-priority {
   flex: 0 0 auto;
   width: 24px; height: 24px;
+  margin-top: 5px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -250,8 +251,18 @@
   background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
   border-radius: 6px;
 }
+/* name + optional url stacked in one cell */
+.vp-comp-fields {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.vp-comp-fields .vp-input { flex: 1 1 auto; }
+.vp-comp-url { font-size: 12px; color: var(--gray-600); }
 .vp-comp-row .vp-input { flex: 1 1 auto; }
-.vp-chevrons { display: inline-flex; flex-direction: column; gap: 1px; }
+.vp-chevrons { display: inline-flex; flex-direction: column; gap: 1px; margin-top: 4px; }
 
 /* ---- Prompts ---------------------------------------------------------- */
 .vp-prompt-row {
@@ -262,6 +273,39 @@
 }
 .vp-prompt-row .vp-input { flex: 1 1 auto; }
 .vp-prompt-row .vp-checkbox { accent-color: var(--teal); }
+
+/* Funnel-stage dropdown on each prompt row */
+.vp-stage-select {
+  flex: 0 0 auto;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray-700);
+  background: var(--white);
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-sm);
+  padding: 7px 8px;
+}
+.vp-stage-select:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0,185,218,0.15); }
+
+/* Funnel-stage groups */
+.vp-prompt-group {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.vp-prompt-group-head {
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--violet-deep);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 10px;
+}
+.vp-group-count { color: var(--gray-400); font-weight: 500; }
+.vp-group-empty { margin: 0 0 4px; }
 
 /* Monitoring-cap display + over-cap hint */
 .vp-monitor-cap {
