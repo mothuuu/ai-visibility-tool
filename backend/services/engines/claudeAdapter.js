@@ -2,7 +2,7 @@
  * Claude (Anthropic) engine adapter for CitationTestService.
  *
  *   runQuery(query, options?) →
- *     { response_text: string, model_used: string, tokens_used: number|null }
+ *     { response: string, model_used: string, tokens_used: number|null }
  *
  * Retries on 429 (rate limit) and 5xx with exponential backoff, up to 3 attempts.
  * 30 s per-call timeout.
@@ -51,7 +51,7 @@ async function callOnce(query, model) {
     const text = block && typeof block.text === 'string' ? block.text : '';
     const usage = resp.usage || {};
     const totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0) || null;
-    return { response_text: text, model_used: model, tokens_used: totalTokens };
+    return { response: text, model_used: model, tokens_used: totalTokens };
   } finally {
     clearTimeout(t);
   }

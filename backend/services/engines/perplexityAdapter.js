@@ -5,7 +5,7 @@
  * Calls are made via raw fetch to avoid binding the openai SDK to a third-party host.
  *
  *   runQuery(query, options?) →
- *     { response_text: string, model_used: string, tokens_used: number|null }
+ *     { response: string, model_used: string, tokens_used: number|null }
  */
 
 const SYSTEM_PROMPT =
@@ -56,7 +56,7 @@ async function callOnce(query, model) {
     const data = await resp.json();
     const text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
     const tokens = (data.usage && data.usage.total_tokens) || null;
-    return { response_text: text, model_used: model, tokens_used: tokens };
+    return { response: text, model_used: model, tokens_used: tokens };
   } finally {
     clearTimeout(timer);
   }

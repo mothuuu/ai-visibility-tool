@@ -2,7 +2,7 @@
  * ChatGPT (OpenAI) engine adapter for CitationTestService.
  *
  *   runQuery(query, options?) →
- *     { response_text: string, model_used: string, tokens_used: number|null }
+ *     { response: string, model_used: string, tokens_used: number|null }
  *
  * Retries on 429 / 5xx with exponential backoff, up to 3 attempts.
  * 30 s per-call timeout.
@@ -47,7 +47,7 @@ async function callOnce(query, model) {
   });
   const text = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '';
   const tokens = (resp.usage && resp.usage.total_tokens) || null;
-  return { response_text: text, model_used: model, tokens_used: tokens };
+  return { response: text, model_used: model, tokens_used: tokens };
 }
 
 async function runQuery(query, options = {}) {

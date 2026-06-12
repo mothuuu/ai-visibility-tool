@@ -21,6 +21,7 @@ const {
   ALLOWED_WINDOWS,
 } = require('../services/citationMonitoringService');
 const planService = require('../services/planService');
+const db = require('../db/database');
 
 function buildRouter({ service } = {}) {
   const router = express.Router();
@@ -109,6 +110,58 @@ function buildRouter({ service } = {}) {
       return res
         .status(500)
         .json({ success: false, error: 'failed_to_list_runs' });
+    }
+  });
+
+  // ---------- citation evidence ----------
+  router.get('/citation-evidence', authenticateToken, async (req, res) => {
+    const runId = Number(req.query.runId);
+    if (!Number.isInteger(runId) || runId <= 0) {
+      return res
+        .status(400)
+        .json({ success: false, error: 'runId is required' });
+    }
+    try {
+      const resolvedPlan = await planService.resolvePlanForRequest({
+        userId: req.user.id,
+        orgId: req.user.organization_id ?? null,
+      });
+      if (!planService.canAccessFeature(resolvedPlan.plan, 'hasCitation')) {
+        return res.status(403).json({ error: 'plan_upgrade_required' });
+      }
+
+      const isPro =
+        planService.getEntitlements(resolvedPlan.plan).hasCitation === 'pro';
+
+      let owned = false;
+      const client = await db.getClient();
+      try {
+        const { rows: ownerRows } = await client.query(
+          `SELECT ctr.id
+             FROM citation_test_runs ctr
+             JOIN personal_orgs po ON po.id = ctr.initiated_by_org_id
+            WHERE ctr.id = $1
+              AND po.user_id = $2`,
+          [runId, req.user.id]
+        );
+        owned = ownerRows.length > 0;
+      } finally {
+        client.release();
+      }
+
+      if (!owned) {
+        return res
+          .status(404)
+          .json({ success: false, error: 'run_not_found' });
+      }
+
+      const rows = await svc.getEvidence({ runId });
+      return res.json({ success: true, data: rows, meta: { isPro } });
+    } catch (err) {
+      console.error('listEvidence failed:', err.message);
+      return res
+        .status(500)
+        .json({ success: false, error: 'failed_to_list_evidence' });
     }
   });
 
