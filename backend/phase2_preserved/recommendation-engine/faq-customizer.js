@@ -13,6 +13,7 @@ require('dotenv').config({ path: './backend/.env' });
 
 const Anthropic = require('@anthropic-ai/sdk');
 const { hasLibrary, loadLibrary } = require('./faq-library-loader');
+const { DEFAULT_CLAUDE_MODEL } = require('../../config/models');
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY
@@ -165,7 +166,7 @@ async function customizeFAQWithClaude(libraryFAQ, extracted, siteData) {
   const prompt = buildLibraryCustomizationPrompt(libraryFAQ, extracted, siteData);
   
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: DEFAULT_CLAUDE_MODEL,
     max_tokens: 1500,
     messages: [{
       role: 'user',
@@ -281,7 +282,7 @@ async function generateWithClaudeFallback(industry, siteData, count) {
   
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: DEFAULT_CLAUDE_MODEL,
       max_tokens: 2500,
       messages: [{
         role: 'user',

@@ -4,7 +4,7 @@
 const axios = require('axios');
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-sonnet-4-6';
+const MODEL = require('../../config/models').DEFAULT_CLAUDE_MODEL;
 
 async function runQuery(prompt, options = {}) {
   const { timeout = 30000, signal } = options;
