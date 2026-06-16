@@ -31,6 +31,7 @@ const STATUS = Object.freeze({
   ALREADY_GENERATED: 'already_generated',
   NO_SCAN: 'no_scan',
   GENERATED: 'generated',
+  FAILED: 'generation_failed',
 });
 
 // ---------------------------------------------------------------------------
@@ -209,8 +210,31 @@ async function generateDraft(userId, { pipeline = PIPELINE } = {}) {
     Object.assign(ctx.profile, contribution);
   }
 
-  // 5) Persist once and mark the draft generated. Even if every generator
-  //    stubbed/failed, the job completes and draft_generated_at is set.
+  // 5) Wholesale-failure guard. A dead model / API outage makes EVERY LLM-backed
+  //    generator catch its own error and return empty — so the per-field status
+  //    reads "ran" but the draft has no real content. The only reliable signal is
+  //    the content itself: the four LLM list-generators (icps, both competitor
+  //    columns, prompts) all empty means generation produced nothing. (Basics
+  //    aren't a signal — scan_extraction has a deterministic hostname fallback.)
+  //    In that case ABORT: never overwrite the existing profile (which may hold a
+  //    user's manually-entered data, since persistDraft writes where
+  //    draft_generated_at IS NULL), and never report success. Partial failures
+  //    (some content) still persist — per-field graceful degradation is kept.
+  const LIST_FIELDS = ['icps', 'competitors_business', 'competitors_visibility', 'tracked_prompts'];
+  const hasContent = LIST_FIELDS.some(
+    (k) => Array.isArray(ctx.profile[k]) && ctx.profile[k].length > 0
+  );
+  if (!hasContent) {
+    console.error(
+      `[DraftGeneration] user ${userId} (plan=${plan}, scan=${scan.id}): ALL LLM generators produced no content ` +
+        `(likely model retirement / API outage) — ABORTING without writing; existing profile preserved. ` +
+        `fields=${JSON.stringify(fields)}`
+    );
+    return { userId, plan, scanId: scan.id, status: STATUS.FAILED, fields };
+  }
+
+  // 6) Persist once and mark the draft generated. Even if individual fields
+  //    stubbed/failed, as long as SOME content was produced the job completes.
   const written = await persistDraft(userId, ctx.profile);
 
   console.log(

@@ -21,7 +21,7 @@ const InsufficientTokensError = require('../errors/InsufficientTokensError');
 const { getPackConfig, getArtifactType, planMeetsRequirement } = require('../config/packCatalog');
 const { getTemplate } = require('../templates/packTemplates');
 
-const DEFAULT_MODEL = process.env.ANTHROPIC_PACK_MODEL || 'claude-sonnet-4-20250514';
+const DEFAULT_MODEL = process.env.ANTHROPIC_PACK_MODEL || require('../config/models').DEFAULT_CLAUDE_MODEL;
 const MAX_TOKENS = 4096;
 const PREVIEW_LEN = 500;
 

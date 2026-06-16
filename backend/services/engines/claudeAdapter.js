@@ -12,7 +12,7 @@ const SYSTEM_PROMPT =
   'You are a helpful AI assistant. Answer the user\'s question naturally and thoroughly.';
 
 const DEFAULT_MODEL =
-  process.env.CITATION_CLAUDE_MODEL || 'claude-sonnet-4-20250514';
+  process.env.CITATION_CLAUDE_MODEL || require('../../config/models').DEFAULT_CLAUDE_MODEL;
 
 const TIMEOUT_MS = 30000;
 const MAX_RETRIES = 3;
