@@ -34,9 +34,18 @@
   const str = (v) => (v == null ? '' : String(v)).trim();
   const arr = (v) => (Array.isArray(v) ? v : []);
 
-  // ICP / competitor entries may be plain strings or objects — extract text.
+  // ICP / competitor / prompt entries may be plain strings or objects, and the
+  // generators accept several key aliases for the text/name (text|query|prompt,
+  // name|title|company|brand|source|publication). Mirror those here so stored
+  // items always render regardless of which key holds the value.
   const itemText = (it) =>
-    typeof it === 'string' ? it : str(it && (it.text || it.label || it.name));
+    typeof it === 'string'
+      ? it
+      : str(it && (it.text || it.query || it.prompt || it.name || it.label || it.title || it.company || it.brand || it.source || it.publication));
+
+  // Pull a competitor's url, mirroring the generators' url aliases.
+  const itemUrl = (it) =>
+    it && typeof it === 'object' ? cleanUrl(it.url || it.website || it.link || it.homepage) : null;
 
   // Normalize list items into the fixed working-profile shapes (Step 9b).
   // ICP item: { text, selected }.  Prompt item: { text, volume, is_monitored }.
@@ -52,7 +61,7 @@
   }
   // Competitor item: { name, url }. Priority IS the array index + 1 (no stored field).
   function normalizeCompetitor(it) {
-    if (it && typeof it === 'object') return { name: itemText(it), url: cleanUrl(it.url) };
+    if (it && typeof it === 'object') return { name: itemText(it), url: itemUrl(it) };
     return { name: str(it), url: null };
   }
 
