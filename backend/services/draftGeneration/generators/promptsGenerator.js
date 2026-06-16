@@ -25,6 +25,7 @@
  */
 
 const claudeAdapter = require('../../engines/claudeAdapter');
+const { parseJsonArray } = require('../llmJson');
 
 const DEFAULT_MIN = 3;
 const DEFAULT_MAX = 5;
@@ -141,23 +142,6 @@ function buildQuery(context, min, max) {
   ].join('\n');
 }
 
-/** Strip fences / prose and parse the first JSON array. null on failure. */
-function parseJsonArrayLoose(text) {
-  if (!text || typeof text !== 'string') return null;
-  let t = text.trim();
-  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence) t = fence[1].trim();
-  const first = t.indexOf('[');
-  const last = t.lastIndexOf(']');
-  if (first === -1 || last === -1 || last < first) return null;
-  try {
-    const v = JSON.parse(t.slice(first, last + 1));
-    return Array.isArray(v) ? v : null;
-  } catch {
-    return null;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Generator
 // ---------------------------------------------------------------------------
@@ -186,7 +170,7 @@ module.exports = {
       if (!context) return { tracked_prompts: [] };
 
       const out = await claudeAdapter.runQuery(buildQuery(context, min, max));
-      const parsed = parseJsonArrayLoose(out && out.response_text);
+      const parsed = parseJsonArray(out, 'prompts');
       if (!parsed) return { tracked_prompts: [] };
 
       const items = [];
