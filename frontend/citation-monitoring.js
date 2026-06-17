@@ -600,7 +600,7 @@ function renderRunHistory(runs) {
                 recent.map(function (run, i) {
                     var h     = barH[run.status] != null ? barH[run.status] : 10;
                     var color = i === 0 ? 'var(--brand-cyan)' : 'var(--gray-300)';
-                    var title = escapeAttr(run.status + ' · ' + relativeTime(run.started_at));
+                    var title = escapeAttr(run.status + ' · ' + relativeTime(run.started_at) + ' · bar height reflects run status, not success rate');
                     return '<div title="' + title + '" style="flex:1;display:flex;align-items:flex-end;height:100%;">' +
                         '<div style="width:100%;height:' + h + '%;background:' + color + ';border-radius:3px 3px 0 0;transition:height .2s;"></div>' +
                     '</div>';
