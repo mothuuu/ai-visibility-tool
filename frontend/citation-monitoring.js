@@ -493,7 +493,7 @@ function renderLatestResults(run, evidenceRows) {
     if (nudgeEl) {
         if (notFoundRows.length > 0) {
             nudgeEl.innerHTML =
-                'Improve your AI visibility — <a href="dashboard.html" style="color:var(--brand-cyan);">view recommendations</a>.';
+                'Improve your AI visibility — <a href="dashboard.html" class="nudge-link">view recommendations</a>.';
             nudgeEl.classList.remove('hidden');
         } else {
             nudgeEl.classList.add('hidden');
@@ -505,7 +505,7 @@ function renderLatestResults(run, evidenceRows) {
     if (!matrixEl) return;
 
     var partialBanner = run.status === 'partial'
-        ? '<div class="status-partial" style="padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:14px;">' +
+        ? '<div class="status-partial partial-banner">' +
               '<i class="fas fa-exclamation-triangle"></i> ' +
               'This test was partial — some engines did not respond. Results below are based on available engines.' +
           '</div>'
@@ -523,37 +523,32 @@ function renderLatestResults(run, evidenceRows) {
 
     var matrixHtml = '';
     if (uniquePrompts.length > 0 && uniqueEngines.length > 0) {
-        var thC  = 'text-align:center;font-size:12px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;border-bottom:1px solid var(--gray-200);';
-        var thL  = 'text-align:left;font-size:12px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;border-bottom:1px solid var(--gray-200);';
-        var tdC  = 'text-align:center;padding:8px 12px;border-bottom:1px solid var(--gray-200);';
-        var tdTx = 'padding:8px 12px;border-bottom:1px solid var(--gray-200);font-size:13px;color:var(--gray-700);font-style:italic;max-width:300px;word-break:break-word;';
-
         var colHeaders = uniqueEngines.map(function (e) {
-            return '<th scope="col" style="' + thC + '">' + escapeHtml(ENGINE_DISPLAY[e] || e) + '</th>';
+            return '<th scope="col" class="matrix-th-center">' + escapeHtml(ENGINE_DISPLAY[e] || e) + '</th>';
         }).join('');
 
         var tableRows = uniquePrompts.map(function (prompt) {
             var cells = uniqueEngines.map(function (engine) {
                 var row = evidenceRows.find(function (r) { return r.prompt_text === prompt && r.engine === engine; });
-                if (!row) return '<td style="' + tdC + '">—</td>';
-                return '<td style="' + tdC + '" title="' + escapeAttr(row.detection_status || '') + '">' + statusIcon(row) + '</td>';
+                if (!row) return '<td class="matrix-td-center">—</td>';
+                return '<td class="matrix-td-center" title="' + escapeAttr(row.detection_status || '') + '">' + statusIcon(row) + '</td>';
             }).join('');
-            return '<tr><th scope="row" style="' + tdTx + '">' + escapeHtml(prompt) + '</th>' + cells + '</tr>';
+            return '<tr><th scope="row" class="matrix-th-row">' + escapeHtml(prompt) + '</th>' + cells + '</tr>';
         }).join('');
 
         var legendHtml =
-            '<div style="display:flex;align-items:center;gap:16px;font-size:12px;color:var(--gray-600);margin-top:10px;">' +
+            '<div class="matrix-legend">' +
                 iconCited() + ' Cited &nbsp;&nbsp;' +
                 iconMentioned() + ' Mentioned &nbsp;&nbsp;' +
                 iconNotFound() + ' Not found' +
             '</div>';
 
         matrixHtml =
-            '<div style="overflow-x:auto;margin-bottom:18px;">' +
-                '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
-                    '<caption style="text-align:left;font-size:12px;font-weight:600;color:var(--gray-600);padding:0 0 8px;">AI citation results by prompt and engine</caption>' +
-                    '<thead><tr style="background:var(--gray-50);">' +
-                        '<th scope="col" style="' + thL + '">Prompt</th>' + colHeaders +
+            '<div class="matrix-wrapper">' +
+                '<table class="matrix-table">' +
+                    '<caption class="matrix-caption">AI citation results by prompt and engine</caption>' +
+                    '<thead><tr class="matrix-thead-row">' +
+                        '<th scope="col" class="matrix-th-left">Prompt</th>' + colHeaders +
                     '</tr></thead>' +
                     '<tbody>' + tableRows + '</tbody>' +
                 '</table>' +
@@ -569,19 +564,19 @@ function renderLatestResults(run, evidenceRows) {
             var sc = r.detection_status === 'detected' ? 'status-good'
                    : r.detection_status === 'failed'   ? 'status-error'
                    : 'status-neutral';
-            return '<details style="border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;margin-bottom:8px;">' +
-                '<summary style="padding:10px 14px;cursor:pointer;background:var(--gray-50);font-size:13px;font-weight:600;color:var(--gray-700);display:flex;align-items:center;gap:8px;list-style:none;">' +
+            return '<details class="snippet-details">' +
+                '<summary class="snippet-summary">' +
                     statusIcon(r) +
                     escapeHtml(ENGINE_DISPLAY[r.engine] || r.engine) +
-                    '<span style="font-weight:400;font-style:italic;margin-left:4px;">' + escapeHtml(r.prompt_text) + '</span>' +
+                    '<span class="snippet-prompt">' + escapeHtml(r.prompt_text) + '</span>' +
                 '</summary>' +
-                '<div style="padding:10px 14px;border-top:1px solid var(--gray-200);">' +
-                    '<span class="status-badge ' + sc + '" style="display:inline-block;margin-bottom:8px;">' + escapeHtml(r.detection_status) + '</span>' +
-                    '<div class="query-snippet">“' + escapeHtml(r.snippet) + '”</div>' +
+                '<div class="snippet-body">' +
+                    '<span class="status-badge ' + sc + '">' + escapeHtml(r.detection_status) + '</span>' +
+                    '<div class="query-snippet">"' + escapeHtml(r.snippet) + '"</div>' +
                 '</div>' +
             '</details>';
         }).join('');
-        snippetsHtml = '<div style="margin-top:4px;">' + items + '</div>';
+        snippetsHtml = '<div class="snippets-container">' + items + '</div>';
     }
 
     matrixEl.innerHTML = partialBanner + matrixHtml + snippetsHtml;

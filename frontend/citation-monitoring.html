@@ -1247,6 +1247,173 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        /* ── Matrix table ── */
+        .matrix-wrapper {
+            overflow-x: auto;
+            margin-bottom: 18px;
+        }
+
+        .matrix-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .matrix-caption {
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--gray-600);
+            padding: 0 0 8px;
+        }
+
+        .matrix-thead-row {
+            background: var(--gray-50);
+        }
+
+        .matrix-th-left {
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--gray-500);
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .matrix-th-center {
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--gray-500);
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .matrix-td-center {
+            text-align: center;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .matrix-th-row {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--gray-200);
+            font-size: 13px;
+            color: var(--gray-700);
+            font-style: italic;
+            max-width: 300px;
+            word-break: break-word;
+        }
+
+        .matrix-legend {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 12px;
+            color: var(--gray-600);
+            margin-top: 10px;
+        }
+
+        /* ── Partial banner ── */
+        .partial-banner {
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        /* ── Snippet expandables ── */
+        .snippet-details {
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .snippet-summary {
+            padding: 10px 14px;
+            cursor: pointer;
+            background: var(--gray-50);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--gray-700);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            list-style: none;
+        }
+
+        .snippet-prompt {
+            font-weight: 400;
+            font-style: italic;
+            margin-left: 4px;
+        }
+
+        .snippet-body {
+            padding: 10px 14px;
+            border-top: 1px solid var(--gray-200);
+        }
+
+        .snippet-body .status-badge {
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+
+        .snippets-container {
+            margin-top: 4px;
+        }
+
+        /* ── Nudge link ── */
+        .nudge-link {
+            color: var(--brand-cyan);
+        }
+
+        /* ── History bars ── */
+        .history-bars-container {
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            height: 48px;
+            padding: 4px 28px 0;
+        }
+
+        .history-bar-col {
+            flex: 1;
+            display: flex;
+            align-items: flex-end;
+            height: 100%;
+        }
+
+        .history-bar-fill {
+            width: 100%;
+            border-radius: 3px 3px 0 0;
+            transition: height .2s;
+        }
+
+        .history-list-body {
+            padding: 0 28px 22px;
+        }
+
+        /* ── Benchmark ── */
+        .top-domains-section {
+            margin-top: 20px;
+        }
+
+        .top-domains-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--gray-700);
+            margin: 0 0 10px;
+        }
+
+        .updated-at-section {
+            margin-top: 14px;
+        }
     </style>
 </head>
 
