@@ -88,15 +88,15 @@ function showEmpty(containerId, message) {
 // ── SVG status icons ───────────────────────────────────────────────────────
 
 function iconCited() {
-    return '<svg class="ic ic-cited" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+    return '<svg class="ic ic-cited" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-label="Cited"><path d="M20 6 9 17l-5-5"/></svg>';
 }
 
 function iconMentioned() {
-    return '<svg class="ic ic-ment" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#00B9DA" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path fill="#00B9DA" d="M12 3a9 9 0 0 1 0 18z"/></svg>';
+    return '<svg class="ic ic-ment" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#00B9DA" stroke-width="2" stroke-linecap="round" aria-label="Mentioned"><circle cx="12" cy="12" r="9"/><path fill="#00B9DA" d="M12 3a9 9 0 0 1 0 18z"/></svg>';
 }
 
 function iconNotFound() {
-    return '<svg class="ic ic-none" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="6" y1="12" x2="18" y2="12"/></svg>';
+    return '<svg class="ic ic-none" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" aria-label="Not found"><line x1="6" y1="12" x2="18" y2="12"/></svg>';
 }
 
 function statusIcon(row) {
@@ -529,7 +529,7 @@ function renderLatestResults(run, evidenceRows) {
         var tdTx = 'padding:8px 12px;border-bottom:1px solid var(--gray-200);font-size:13px;color:var(--gray-700);font-style:italic;max-width:300px;word-break:break-word;';
 
         var colHeaders = uniqueEngines.map(function (e) {
-            return '<th style="' + thC + '">' + escapeHtml(ENGINE_DISPLAY[e] || e) + '</th>';
+            return '<th scope="col" style="' + thC + '">' + escapeHtml(ENGINE_DISPLAY[e] || e) + '</th>';
         }).join('');
 
         var tableRows = uniquePrompts.map(function (prompt) {
@@ -538,7 +538,7 @@ function renderLatestResults(run, evidenceRows) {
                 if (!row) return '<td style="' + tdC + '">—</td>';
                 return '<td style="' + tdC + '" title="' + escapeAttr(row.detection_status || '') + '">' + statusIcon(row) + '</td>';
             }).join('');
-            return '<tr><td style="' + tdTx + '">' + escapeHtml(prompt) + '</td>' + cells + '</tr>';
+            return '<tr><th scope="row" style="' + tdTx + '">' + escapeHtml(prompt) + '</th>' + cells + '</tr>';
         }).join('');
 
         var legendHtml =
@@ -551,8 +551,9 @@ function renderLatestResults(run, evidenceRows) {
         matrixHtml =
             '<div style="overflow-x:auto;margin-bottom:18px;">' +
                 '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+                    '<caption style="text-align:left;font-size:12px;font-weight:600;color:var(--gray-600);padding:0 0 8px;">AI citation results by prompt and engine</caption>' +
                     '<thead><tr style="background:var(--gray-50);">' +
-                        '<th style="' + thL + '">Prompt</th>' + colHeaders +
+                        '<th scope="col" style="' + thL + '">Prompt</th>' + colHeaders +
                     '</tr></thead>' +
                     '<tbody>' + tableRows + '</tbody>' +
                 '</table>' +
