@@ -17,6 +17,7 @@
  */
 
 const claudeAdapter = require('../../engines/claudeAdapter');
+const { parseJsonArray } = require('../llmJson');
 
 const MAX_ICPS = 5;          // hard cap on what we ever return
 const LLM_MAX_CHARS = 4000;  // budget for the context fed to the model
@@ -103,23 +104,6 @@ function buildQuery(context) {
   ].join('\n');
 }
 
-/** Strip fences / prose and parse the first JSON array. null on failure. */
-function parseJsonArrayLoose(text) {
-  if (!text || typeof text !== 'string') return null;
-  let t = text.trim();
-  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence) t = fence[1].trim();
-  const first = t.indexOf('[');
-  const last = t.lastIndexOf(']');
-  if (first === -1 || last === -1 || last < first) return null;
-  try {
-    const v = JSON.parse(t.slice(first, last + 1));
-    return Array.isArray(v) ? v : null;
-  } catch {
-    return null;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Generator
 // ---------------------------------------------------------------------------
@@ -142,7 +126,7 @@ module.exports = {
       if (!context) return { icps: [] }; // nothing to reason from — manual entry
 
       const out = await claudeAdapter.runQuery(buildQuery(context));
-      const parsed = parseJsonArrayLoose(out && out.response_text);
+      const parsed = parseJsonArray(out, 'icps');
       if (!parsed) return { icps: [] }; // unparseable — degrade to empty
 
       const icps = [];

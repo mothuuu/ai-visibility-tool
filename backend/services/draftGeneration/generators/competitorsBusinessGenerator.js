@@ -18,6 +18,7 @@
  */
 
 const claudeAdapter = require('../../engines/claudeAdapter');
+const { parseJsonArray } = require('../llmJson');
 
 const MAX_ITEMS = 5;
 const LLM_MAX_CHARS = 4000;
@@ -110,23 +111,6 @@ function buildQuery(context) {
   ].join('\n');
 }
 
-/** Strip fences / prose and parse the first JSON array. null on failure. */
-function parseJsonArrayLoose(text) {
-  if (!text || typeof text !== 'string') return null;
-  let t = text.trim();
-  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence) t = fence[1].trim();
-  const first = t.indexOf('[');
-  const last = t.lastIndexOf(']');
-  if (first === -1 || last === -1 || last < first) return null;
-  try {
-    const v = JSON.parse(t.slice(first, last + 1));
-    return Array.isArray(v) ? v : null;
-  } catch {
-    return null;
-  }
-}
-
 /** Map parsed items -> [{ name, url }]; drop empty-name items; cap at MAX_ITEMS. */
 function mapItems(parsed) {
   const out = [];
@@ -168,7 +152,7 @@ module.exports = {
       if (!context) return { competitors_business: [] };
 
       const out = await claudeAdapter.runQuery(buildQuery(context));
-      const parsed = parseJsonArrayLoose(out && out.response_text);
+      const parsed = parseJsonArray(out, 'competitors_business');
       if (!parsed) return { competitors_business: [] };
 
       return { competitors_business: mapItems(parsed) };

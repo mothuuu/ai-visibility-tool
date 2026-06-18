@@ -138,7 +138,7 @@ async function loadClusters() {
         const json = await res.json();
 
         if (!json.success || !Array.isArray(json.data)) {
-            selector.innerHTML = '<option value="">No clusters available</option>';
+            selector.innerHTML = '<option value="">No prompts available</option>';
             showState('empty');
             return;
         }
@@ -146,7 +146,7 @@ async function loadClusters() {
         clusters = json.data;
 
         if (clusters.length === 0) {
-            selector.innerHTML = '<option value="">No prompt clusters found</option>';
+            selector.innerHTML = '<option value="">No prompts configured</option>';
             showState('empty');
             return;
         }
@@ -167,7 +167,7 @@ async function loadClusters() {
 
         await checkAndShowState(currentClusterId);
     } catch {
-        selector.innerHTML = '<option value="">Failed to load clusters</option>';
+        selector.innerHTML = '<option value="">Failed to load</option>';
         showState('empty');
     }
 }
@@ -226,7 +226,7 @@ async function runCitationTest() {
 
     if (!currentClusterId) {
         if (errorEl) {
-            errorEl.textContent = 'Please select a prompt cluster.';
+            errorEl.textContent = 'No prompt cluster configured. Please contact support.';
             errorEl.style.display = 'block';
         }
         return;
@@ -235,7 +235,7 @@ async function runCitationTest() {
     const cluster = clusters.find(function (c) { return String(c.id) === currentClusterId; });
     if (!cluster) {
         if (errorEl) {
-            errorEl.textContent = 'Selected cluster not found. Please reload the page.';
+            errorEl.textContent = 'Configuration error. Please reload the page.';
             errorEl.style.display = 'block';
         }
         return;
@@ -246,7 +246,7 @@ async function runCitationTest() {
 
     if (queries.length === 0) {
         if (errorEl) {
-            errorEl.textContent = 'This cluster has no prompts configured.';
+            errorEl.textContent = 'No prompts configured for this test.';
             errorEl.style.display = 'block';
         }
         return;
@@ -326,7 +326,7 @@ async function loadLatestResults(clusterId) {
         const json = await res.json();
 
         if (!json.success || !Array.isArray(json.data) || json.data.length === 0) {
-            showEmpty('latestResultsContent', 'No tests run yet for this cluster.');
+            showEmpty('latestResultsContent', 'No tests run yet.');
             return;
         }
 
@@ -382,7 +382,7 @@ async function loadRunHistory(clusterId) {
         const json = await res.json();
 
         if (!json.success || !Array.isArray(json.data) || json.data.length === 0) {
-            if (listEl) listEl.innerHTML = '<p class="empty-msg">No test runs found for this cluster.</p>';
+            if (listEl) listEl.innerHTML = '<p class="empty-msg">No test runs found.</p>';
             return;
         }
 

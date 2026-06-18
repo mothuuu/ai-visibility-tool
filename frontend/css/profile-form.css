@@ -271,7 +271,11 @@
   gap: 10px;
   margin-bottom: 8px;
 }
-.vp-prompt-row .vp-input { flex: 1 1 auto; }
+/* Override the global dashboard rule `input[type=text], select { width:100% }`
+   which otherwise makes the <select> consume the flex row and collapses the
+   text input. Scoped to the row so flex controls sizing. */
+.vp-prompt-row .vp-input { flex: 1 1 auto; width: auto; min-width: 0; }
+.vp-prompt-row .vp-stage-select { flex: 0 0 auto; width: auto; min-width: 120px; }
 .vp-prompt-row .vp-checkbox { accent-color: var(--teal); }
 
 /* Funnel-stage dropdown on each prompt row */

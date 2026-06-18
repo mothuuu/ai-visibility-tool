@@ -25,6 +25,7 @@
 
 const { URL } = require('url');
 const claudeAdapter = require('../../engines/claudeAdapter');
+const { parseJsonObject } = require('../llmJson');
 
 // Keep the prompt within a sane budget for the adapter's fixed token cap.
 const LLM_MAX_CHARS = 6000;
@@ -156,22 +157,6 @@ function buildQuery(siteText) {
   ].join('\n');
 }
 
-/** Strip code fences / prose and parse the first JSON object. null on failure. */
-function parseJsonLoose(text) {
-  if (!text || typeof text !== 'string') return null;
-  let t = text.trim();
-  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence) t = fence[1].trim();
-  const first = t.indexOf('{');
-  const last = t.lastIndexOf('}');
-  if (first === -1 || last === -1 || last < first) return null;
-  try {
-    return JSON.parse(t.slice(first, last + 1));
-  } catch {
-    return null;
-  }
-}
-
 /** Trimmed non-empty string, or null (also rejects literal null/none/unknown). */
 function cleanStr(v) {
   if (v == null) return null;
@@ -210,7 +195,7 @@ module.exports = {
       if (!siteText) return fallback; // nothing to feed the LLM — best-effort deterministic
 
       const out = await claudeAdapter.runQuery(buildQuery(siteText));
-      const parsed = parseJsonLoose(out && out.response_text);
+      const parsed = parseJsonObject(out, 'scan_extraction');
       if (!parsed) return fallback; // unparseable — never worse than today
 
       // Per-field: prefer the LLM value, fall back to deterministic when empty.
