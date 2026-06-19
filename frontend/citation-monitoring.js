@@ -88,15 +88,15 @@ function showEmpty(containerId, message) {
 // ── SVG status icons ───────────────────────────────────────────────────────
 
 function iconCited() {
-    return '<svg class="ic ic-cited" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+    return '<svg class="ic ic-cited" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-label="Cited"><path d="M20 6 9 17l-5-5"/></svg>';
 }
 
 function iconMentioned() {
-    return '<svg class="ic ic-ment" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#00B9DA" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path fill="#00B9DA" d="M12 3a9 9 0 0 1 0 18z"/></svg>';
+    return '<svg class="ic ic-ment" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#00B9DA" stroke-width="2" stroke-linecap="round" aria-label="Mentioned"><circle cx="12" cy="12" r="9"/><path fill="#00B9DA" d="M12 3a9 9 0 0 1 0 18z"/></svg>';
 }
 
 function iconNotFound() {
-    return '<svg class="ic ic-none" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="6" y1="12" x2="18" y2="12"/></svg>';
+    return '<svg class="ic ic-none" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" aria-label="Not found"><line x1="6" y1="12" x2="18" y2="12"/></svg>';
 }
 
 function statusIcon(row) {
@@ -138,7 +138,7 @@ async function loadClusters() {
         const json = await res.json();
 
         if (!json.success || !Array.isArray(json.data)) {
-            selector.innerHTML = '<option value="">No clusters available</option>';
+            selector.innerHTML = '<option value="">No prompts available</option>';
             showState('empty');
             return;
         }
@@ -146,7 +146,7 @@ async function loadClusters() {
         clusters = json.data;
 
         if (clusters.length === 0) {
-            selector.innerHTML = '<option value="">No prompt clusters found</option>';
+            selector.innerHTML = '<option value="">No prompts configured</option>';
             showState('empty');
             return;
         }
@@ -167,7 +167,7 @@ async function loadClusters() {
 
         await checkAndShowState(currentClusterId);
     } catch {
-        selector.innerHTML = '<option value="">Failed to load clusters</option>';
+        selector.innerHTML = '<option value="">Failed to load</option>';
         showState('empty');
     }
 }
@@ -226,7 +226,7 @@ async function runCitationTest() {
 
     if (!currentClusterId) {
         if (errorEl) {
-            errorEl.textContent = 'Please select a prompt cluster.';
+            errorEl.textContent = 'No prompt cluster configured. Please contact support.';
             errorEl.style.display = 'block';
         }
         return;
@@ -235,7 +235,7 @@ async function runCitationTest() {
     const cluster = clusters.find(function (c) { return String(c.id) === currentClusterId; });
     if (!cluster) {
         if (errorEl) {
-            errorEl.textContent = 'Selected cluster not found. Please reload the page.';
+            errorEl.textContent = 'Configuration error. Please reload the page.';
             errorEl.style.display = 'block';
         }
         return;
@@ -246,7 +246,7 @@ async function runCitationTest() {
 
     if (queries.length === 0) {
         if (errorEl) {
-            errorEl.textContent = 'This cluster has no prompts configured.';
+            errorEl.textContent = 'No prompts configured for this test.';
             errorEl.style.display = 'block';
         }
         return;
@@ -326,7 +326,7 @@ async function loadLatestResults(clusterId) {
         const json = await res.json();
 
         if (!json.success || !Array.isArray(json.data) || json.data.length === 0) {
-            showEmpty('latestResultsContent', 'No tests run yet for this cluster.');
+            showEmpty('latestResultsContent', 'No tests run yet.');
             return;
         }
 
@@ -382,7 +382,7 @@ async function loadRunHistory(clusterId) {
         const json = await res.json();
 
         if (!json.success || !Array.isArray(json.data) || json.data.length === 0) {
-            if (listEl) listEl.innerHTML = '<p class="empty-msg">No test runs found for this cluster.</p>';
+            if (listEl) listEl.innerHTML = '<p class="empty-msg">No test runs found.</p>';
             return;
         }
 
@@ -493,7 +493,7 @@ function renderLatestResults(run, evidenceRows) {
     if (nudgeEl) {
         if (notFoundRows.length > 0) {
             nudgeEl.innerHTML =
-                'Improve your AI visibility — <a href="dashboard.html" style="color:var(--brand-cyan);">view recommendations</a>.';
+                'Improve your AI visibility — <a href="dashboard.html" class="nudge-link">view recommendations</a>.';
             nudgeEl.classList.remove('hidden');
         } else {
             nudgeEl.classList.add('hidden');
@@ -505,7 +505,7 @@ function renderLatestResults(run, evidenceRows) {
     if (!matrixEl) return;
 
     var partialBanner = run.status === 'partial'
-        ? '<div class="status-partial" style="padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:14px;">' +
+        ? '<div class="status-partial partial-banner">' +
               '<i class="fas fa-exclamation-triangle"></i> ' +
               'This test was partial — some engines did not respond. Results below are based on available engines.' +
           '</div>'
@@ -523,36 +523,32 @@ function renderLatestResults(run, evidenceRows) {
 
     var matrixHtml = '';
     if (uniquePrompts.length > 0 && uniqueEngines.length > 0) {
-        var thC  = 'text-align:center;font-size:12px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;border-bottom:1px solid var(--gray-200);';
-        var thL  = 'text-align:left;font-size:12px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;border-bottom:1px solid var(--gray-200);';
-        var tdC  = 'text-align:center;padding:8px 12px;border-bottom:1px solid var(--gray-200);';
-        var tdTx = 'padding:8px 12px;border-bottom:1px solid var(--gray-200);font-size:13px;color:var(--gray-700);font-style:italic;max-width:300px;word-break:break-word;';
-
         var colHeaders = uniqueEngines.map(function (e) {
-            return '<th style="' + thC + '">' + escapeHtml(ENGINE_DISPLAY[e] || e) + '</th>';
+            return '<th scope="col" class="matrix-th-center">' + escapeHtml(ENGINE_DISPLAY[e] || e) + '</th>';
         }).join('');
 
         var tableRows = uniquePrompts.map(function (prompt) {
             var cells = uniqueEngines.map(function (engine) {
                 var row = evidenceRows.find(function (r) { return r.prompt_text === prompt && r.engine === engine; });
-                if (!row) return '<td style="' + tdC + '">—</td>';
-                return '<td style="' + tdC + '" title="' + escapeAttr(row.detection_status || '') + '">' + statusIcon(row) + '</td>';
+                if (!row) return '<td class="matrix-td-center">—</td>';
+                return '<td class="matrix-td-center" title="' + escapeAttr(row.detection_status || '') + '">' + statusIcon(row) + '</td>';
             }).join('');
-            return '<tr><td style="' + tdTx + '">' + escapeHtml(prompt) + '</td>' + cells + '</tr>';
+            return '<tr><th scope="row" class="matrix-th-row">' + escapeHtml(prompt) + '</th>' + cells + '</tr>';
         }).join('');
 
         var legendHtml =
-            '<div style="display:flex;align-items:center;gap:16px;font-size:12px;color:var(--gray-600);margin-top:10px;">' +
+            '<div class="matrix-legend">' +
                 iconCited() + ' Cited &nbsp;&nbsp;' +
                 iconMentioned() + ' Mentioned &nbsp;&nbsp;' +
                 iconNotFound() + ' Not found' +
             '</div>';
 
         matrixHtml =
-            '<div style="overflow-x:auto;margin-bottom:18px;">' +
-                '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
-                    '<thead><tr style="background:var(--gray-50);">' +
-                        '<th style="' + thL + '">Prompt</th>' + colHeaders +
+            '<div class="matrix-wrapper">' +
+                '<table class="matrix-table">' +
+                    '<caption class="matrix-caption">AI citation results by prompt and engine</caption>' +
+                    '<thead><tr class="matrix-thead-row">' +
+                        '<th scope="col" class="matrix-th-left">Prompt</th>' + colHeaders +
                     '</tr></thead>' +
                     '<tbody>' + tableRows + '</tbody>' +
                 '</table>' +
@@ -568,19 +564,19 @@ function renderLatestResults(run, evidenceRows) {
             var sc = r.detection_status === 'detected' ? 'status-good'
                    : r.detection_status === 'failed'   ? 'status-error'
                    : 'status-neutral';
-            return '<details style="border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;margin-bottom:8px;">' +
-                '<summary style="padding:10px 14px;cursor:pointer;background:var(--gray-50);font-size:13px;font-weight:600;color:var(--gray-700);display:flex;align-items:center;gap:8px;list-style:none;">' +
+            return '<details class="snippet-details">' +
+                '<summary class="snippet-summary">' +
                     statusIcon(r) +
                     escapeHtml(ENGINE_DISPLAY[r.engine] || r.engine) +
-                    '<span style="font-weight:400;font-style:italic;margin-left:4px;">' + escapeHtml(r.prompt_text) + '</span>' +
+                    '<span class="snippet-prompt">' + escapeHtml(r.prompt_text) + '</span>' +
                 '</summary>' +
-                '<div style="padding:10px 14px;border-top:1px solid var(--gray-200);">' +
-                    '<span class="status-badge ' + sc + '" style="display:inline-block;margin-bottom:8px;">' + escapeHtml(r.detection_status) + '</span>' +
-                    '<div class="query-snippet">“' + escapeHtml(r.snippet) + '”</div>' +
+                '<div class="snippet-body">' +
+                    '<span class="status-badge ' + sc + '">' + escapeHtml(r.detection_status) + '</span>' +
+                    '<div class="query-snippet">"' + escapeHtml(r.snippet) + '"</div>' +
                 '</div>' +
             '</details>';
         }).join('');
-        snippetsHtml = '<div style="margin-top:4px;">' + items + '</div>';
+        snippetsHtml = '<div class="snippets-container">' + items + '</div>';
     }
 
     matrixEl.innerHTML = partialBanner + matrixHtml + snippetsHtml;
@@ -599,7 +595,7 @@ function renderRunHistory(runs) {
                 recent.map(function (run, i) {
                     var h     = barH[run.status] != null ? barH[run.status] : 10;
                     var color = i === 0 ? 'var(--brand-cyan)' : 'var(--gray-300)';
-                    var title = escapeAttr(run.status + ' · ' + relativeTime(run.started_at));
+                    var title = escapeAttr(run.status + ' · ' + relativeTime(run.started_at) + ' · bar height reflects run status, not success rate');
                     return '<div title="' + title + '" style="flex:1;display:flex;align-items:flex-end;height:100%;">' +
                         '<div style="width:100%;height:' + h + '%;background:' + color + ';border-radius:3px 3px 0 0;transition:height .2s;"></div>' +
                     '</div>';
