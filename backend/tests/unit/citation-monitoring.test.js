@@ -44,6 +44,20 @@ function makeFakeDb() {
     const trimmed = sql.trim();
 
     if (/^INSERT INTO prompt_clusters/i.test(trimmed)) {
+      // Simulate ON CONFLICT (org_id, name) DO UPDATE: update in-place if found.
+      const existing = inserted.prompt_clusters.find(
+        (r) => r.org_id === params[0] && r.name === params[2]
+      );
+      if (existing) {
+        existing.canonical_prompt = params[3];
+        existing.prompt_variants = JSON.parse(params[4]);
+        existing.industry = params[5];
+        existing.persona = params[6];
+        existing.funnel_stage = params[7];
+        existing.competitor_domains = JSON.parse(params[8]);
+        existing.updated_at = new Date();
+        return { rows: [existing] };
+      }
       const row = {
         id: id++,
         org_id: params[0],
@@ -714,5 +728,124 @@ describe('CP7 orchestration flow', () => {
 
     assert.strictEqual(db.inserted.citation_evidence.length, 1);
     assert.strictEqual(db.inserted.citation_evidence[0].detection_status, 'skipped');
+  });
+});
+
+// ----------- CP9a: triggerDeeperScan → prompt_clusters bridge ----------
+describe('CP9a: triggerDeeperScan → prompt_clusters bridge', () => {
+  const { triggerDeeperScan } = require('../../services/deeperScanService');
+
+  it('3 monitored + 2 unmonitored prompts → 1 cluster using only monitored prompts in order', async () => {
+    const client = makeFakeDb();
+    const profile = {
+      tracked_prompts: [
+        { text: 'What is AI?',        is_monitored: true,  volume: null, funnel_stage: 'TOFU' },
+        { text: 'Best AI tools?',     is_monitored: false, volume: null, funnel_stage: null   },
+        { text: 'AI for business?',   is_monitored: true,  volume: null, funnel_stage: 'MOFU' },
+        { text: 'Compare AI vendors', is_monitored: true,  volume: null, funnel_stage: 'BOFU' },
+        { text: 'AI pricing?',        is_monitored: false, volume: null, funnel_stage: null   },
+      ],
+      icps: [],
+    };
+
+    await triggerDeeperScan({ userId: 42, profile, plan: 'pro', client });
+
+    assert.strictEqual(client.inserted.prompt_clusters.length, 1);
+    const cluster = client.inserted.prompt_clusters[0];
+    assert.strictEqual(cluster.name, 'Default');
+    assert.strictEqual(cluster.canonical_prompt, 'What is AI?');
+    assert.deepStrictEqual(cluster.prompt_variants, ['AI for business?', 'Compare AI vendors']);
+  });
+
+  it('re-confirming same user profile updates the existing cluster rather than creating a second row', async () => {
+    const client = makeFakeDb();
+
+    await triggerDeeperScan({
+      userId: 42,
+      profile: {
+        tracked_prompts: [
+          { text: 'Original prompt', is_monitored: true,  volume: null, funnel_stage: null },
+          { text: 'Second prompt',   is_monitored: true,  volume: null, funnel_stage: null },
+        ],
+        icps: [],
+      },
+      plan: 'pro',
+      client,
+    });
+
+    await triggerDeeperScan({
+      userId: 42,
+      profile: {
+        tracked_prompts: [
+          { text: 'Updated prompt 1', is_monitored: true,  volume: null, funnel_stage: null },
+          { text: 'Updated prompt 2', is_monitored: true,  volume: null, funnel_stage: null },
+          { text: 'Not monitored',    is_monitored: false, volume: null, funnel_stage: null },
+        ],
+        icps: [],
+      },
+      plan: 'pro',
+      client,
+    });
+
+    assert.strictEqual(client.inserted.prompt_clusters.length, 1, 'must not create a second row');
+    const cluster = client.inserted.prompt_clusters[0];
+    assert.strictEqual(cluster.canonical_prompt, 'Updated prompt 1');
+    assert.deepStrictEqual(cluster.prompt_variants, ['Updated prompt 2']);
+  });
+
+  it('zero is_monitored prompts → no cluster created', async () => {
+    const client = makeFakeDb();
+    const profile = {
+      tracked_prompts: [
+        { text: 'A prompt', is_monitored: false, volume: null, funnel_stage: null },
+        { text: 'B prompt', is_monitored: false, volume: null, funnel_stage: null },
+      ],
+      icps: [],
+    };
+
+    await triggerDeeperScan({ userId: 42, profile, plan: 'pro', client });
+
+    assert.strictEqual(client.inserted.prompt_clusters.length, 0);
+  });
+
+  it('funnel_stage on the created cluster is null regardless of prompt funnel stages', async () => {
+    const client = makeFakeDb();
+    const profile = {
+      tracked_prompts: [
+        { text: 'TOFU prompt', is_monitored: true, volume: null, funnel_stage: 'TOFU' },
+        { text: 'BOFU prompt', is_monitored: true, volume: null, funnel_stage: 'BOFU' },
+      ],
+      icps: [],
+    };
+
+    await triggerDeeperScan({ userId: 42, profile, plan: 'pro', client });
+
+    assert.strictEqual(client.inserted.prompt_clusters.length, 1);
+    assert.strictEqual(client.inserted.prompt_clusters[0].funnel_stage, null);
+  });
+
+  it('triggerDeeperScan uses the provided transaction client throughout — no separate connection opened', async () => {
+    const client = makeFakeDb();
+    const profile = {
+      tracked_prompts: [
+        { text: 'A monitored prompt', is_monitored: true, volume: null, funnel_stage: null },
+      ],
+      icps: [],
+    };
+
+    await triggerDeeperScan({ userId: 42, profile, plan: 'pro', client });
+
+    const sqls = client.calls.map((c) => c.sql);
+    assert.ok(
+      sqls.some((s) => /personal_orgs/i.test(s)),
+      'personal_orgs query must go through the provided client'
+    );
+    assert.ok(
+      sqls.some((s) => /prompt_clusters/i.test(s)),
+      'prompt_clusters query must go through the provided client'
+    );
+    // Bridge creates clusters only — must not create test runs or evidence rows.
+    assert.strictEqual(client.inserted.citation_test_runs.length, 0);
+    assert.strictEqual(client.inserted.citation_evidence.length, 0);
   });
 });

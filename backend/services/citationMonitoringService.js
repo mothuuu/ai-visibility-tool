@@ -96,6 +96,14 @@ function createCitationMonitoringService({ db } = {}) {
          (org_id, user_id, name, canonical_prompt, prompt_variants,
           industry, persona, funnel_stage, competitor_domains)
        VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9::jsonb)
+       ON CONFLICT (org_id, name) DO UPDATE SET
+         canonical_prompt = EXCLUDED.canonical_prompt,
+         prompt_variants = EXCLUDED.prompt_variants,
+         industry = EXCLUDED.industry,
+         persona = EXCLUDED.persona,
+         funnel_stage = EXCLUDED.funnel_stage,
+         competitor_domains = EXCLUDED.competitor_domains,
+         updated_at = NOW()
        RETURNING *`,
       [
         orgId,
