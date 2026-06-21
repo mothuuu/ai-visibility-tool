@@ -260,9 +260,9 @@ describe('phase 3 migration DDL', () => {
     }
   });
 
-  it('enforces uniqueness of (cluster_id, window) on benchmark_stats', () => {
+  it('enforces uniqueness of (cluster_id, time_window) on benchmark_stats', () => {
     const joined = STATEMENTS.join('\n').toLowerCase();
-    assert.match(joined, /unique \(cluster_id, window\)/);
+    assert.match(joined, /unique \(cluster_id, time_window\)/);
   });
 });
 
