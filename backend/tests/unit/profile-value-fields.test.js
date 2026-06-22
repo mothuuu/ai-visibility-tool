@@ -79,4 +79,30 @@ describe('profile save path — value fields round-trip', () => {
     assert.strictEqual(v.tracked_prompts[0].volume, 100);
     assert.ok(!('value' in v.tracked_prompts[1]));
   });
+
+  it('save path preserves opportunity_evidence verbatim (un-flattened)', () => {
+    const opportunity_evidence = {
+      cited_domains: [{ domain: 'g2.com', count: 2 }, { domain: 'acme.com', count: 1 }],
+      diversity_count: 2,
+      brand_present: true,
+      competitors_present: [{ name: 'Globex', domain: 'globex.com' }],
+      engine: 'perplexity',
+      gathered_at: '2026-06-22T00:00:00.000Z',
+    };
+    const out = normalizePrompt({ text: 'acme vs globex', funnel_stage: 'BOFU', is_monitored: true, volume: 5, opportunity_evidence });
+    assert.deepStrictEqual(out.opportunity_evidence, opportunity_evidence, 'nested evidence preserved exactly');
+  });
+
+  it('preservation is generalized: value + opportunity_evidence + any future key survive together', () => {
+    const prompt = {
+      text: 'p', funnel_stage: 'BOFU', is_monitored: true, volume: 9,
+      value: { band: 5 },
+      opportunity_evidence: { diversity_count: 3, engine: 'perplexity' },
+      demand: { index: 42 }, // hypothetical future enrichment key
+    };
+    const out = normalizePrompt(prompt);
+    assert.deepStrictEqual(out.value, prompt.value);
+    assert.deepStrictEqual(out.opportunity_evidence, prompt.opportunity_evidence);
+    assert.deepStrictEqual(out.demand, prompt.demand, 'future enrichment keys are not dropped');
+  });
 });

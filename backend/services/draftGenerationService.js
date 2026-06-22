@@ -24,17 +24,26 @@ const { resolvePlanForRequest, getDraftConfig } = require('./planService');
 const { PIPELINE } = require('./draftGeneration/generators');
 
 /**
- * Fire-and-forget business-value scoring (Layer 2). Strictly additive and fully
- * isolated: it no-ops (marks prompts "pending") until the customer supplies
- * deal_size_band/sales_model, and any failure here must NEVER affect generation.
- * Lazy require avoids load-order coupling.
+ * Fire-and-forget post-generation enrichment. Strictly additive and fully
+ * isolated: Value scoring no-ops ("pending") until the customer supplies
+ * deal_size_band/sales_model; Opportunity evidence runs only once Value has
+ * populated bands. Any failure here must NEVER affect generation. Lazy requires
+ * avoid load-order coupling.
  */
 function triggerValueScoring(userId) {
   Promise.resolve()
     .then(() => require('./draftGeneration/valueScoring').scorePromptValues(userId))
+    .then((res) => {
+      // Opportunity evidence depends on value.band, so only chain it once scoring
+      // actually populated bands. Its own gates/no-ops handle everything else.
+      if (res && res.status === 'scored') {
+        return require('./draftGeneration/opportunityEvidence').gatherOpportunityEvidence(userId);
+      }
+      return undefined;
+    })
     .catch((err) =>
       console.warn(
-        `[DraftGeneration] value-scoring trigger failed for user ${userId}: ${err && err.message ? err.message : err}`
+        `[DraftGeneration] enrichment trigger failed for user ${userId}: ${err && err.message ? err.message : err}`
       )
     );
 }

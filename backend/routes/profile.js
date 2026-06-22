@@ -198,6 +198,11 @@ function validateProfilePayload(body, planCtx) {
   return errors;
 }
 
+// Core, form-authored prompt keys that this endpoint owns and normalizes.
+// Anything else on a prompt is server-computed enrichment (value,
+// opportunity_evidence, …) that the form only round-trips.
+const CORE_PROMPT_KEYS = new Set(['text', 'volume', 'is_monitored', 'funnel_stage']);
+
 /** Coerce a tracked_prompts entry into the stored {text, volume, is_monitored} shape. */
 function normalizePrompt(p) {
   if (typeof p === 'string') {
@@ -209,10 +214,13 @@ function normalizePrompt(p) {
     is_monitored: Boolean(p.is_monitored),
     funnel_stage: normalizeFunnelStage(p.funnel_stage),
   };
-  // Preserve server-computed enrichment (Layer 2 Value) verbatim so an intake
-  // edit never flattens it. The form does not author `value`; it only round-trips
-  // whatever GET returned. Demand/`volume` is already preserved above.
-  if (p.value !== undefined) out.value = p.value;
+  // Preserve every server-computed enrichment key verbatim (value,
+  // opportunity_evidence, and any future per-prompt enrichment) so an intake
+  // edit never flattens it. Generalized so new enrichment keys are kept without
+  // touching this code again.
+  for (const k of Object.keys(p)) {
+    if (!CORE_PROMPT_KEYS.has(k) && p[k] !== undefined) out[k] = p[k];
+  }
   return out;
 }
 
@@ -365,8 +373,16 @@ router.post('/', authenticateToken, async (req, res) => {
     if (newDeal && newModel && inputsChanged) {
       Promise.resolve()
         .then(() => require('../services/draftGeneration/valueScoring').scorePromptValues(userId))
+        .then((res) => {
+          // Opportunity evidence (Perplexity) depends on value bands; chain it
+          // only once scoring populated them. Isolated; never affects the save.
+          if (res && res.status === 'scored') {
+            return require('../services/draftGeneration/opportunityEvidence').gatherOpportunityEvidence(userId);
+          }
+          return undefined;
+        })
         .catch((err) =>
-          console.warn(`[Profile] value-scoring trigger failed for user ${userId}: ${err && err.message ? err.message : err}`)
+          console.warn(`[Profile] enrichment trigger failed for user ${userId}: ${err && err.message ? err.message : err}`)
         );
     }
 

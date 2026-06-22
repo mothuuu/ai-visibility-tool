@@ -12,7 +12,8 @@
     "db:rollback:force": "node db/migrate.js down --force",
     "db:status": "node db/migrate.js status",
     "draft:generate": "node scripts/draft-generate.js",
-    "value:score": "node scripts/value-score.js"
+    "value:score": "node scripts/value-score.js",
+    "opportunity:evidence": "node scripts/opportunity-evidence.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.0",
