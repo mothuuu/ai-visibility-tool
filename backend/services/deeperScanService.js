@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * Deeper-scan trigger (intake/profile build, Step 5).
  *
@@ -25,6 +27,8 @@
  * @param {object}  [args.client]         - in-transaction DB client (enqueue here later)
  * @returns {Promise<{ triggered: boolean }>}
  */
+const { createCitationMonitoringService } = require('./citationMonitoringService');
+
 async function triggerDeeperScan({ userId, profile, plan, client }) {
   // The caller sets deeper_scan_triggered_at inside the same transaction and
   // only invokes this on FIRST completion, so reaching here means "fire once".
@@ -32,6 +36,43 @@ async function triggerDeeperScan({ userId, profile, plan, client }) {
     `[DeeperScan] Triggering deeper scan for user ${userId} (plan=${plan}) ` +
       `from confirmed profile (${(profile.tracked_prompts || []).length} tracked prompts, ` +
       `${(profile.icps || []).length} ICPs) — TODO: wire targeted-scan engine`
+  );
+
+  // Bridge: upsert a personal-org prompt cluster from the confirmed monitored
+  // prompts so Citation Monitoring has real data on first visit.
+  const svc = createCitationMonitoringService({ db: client });
+  const orgId = await svc.ensurePersonalOrg(userId, client);
+
+  const allPrompts = profile.tracked_prompts || [];
+  const monitored = allPrompts.filter((p) => p.is_monitored === true);
+
+  if (monitored.length === 0) {
+    console.log(
+      `[DeeperScan] No monitored prompts for user ${userId} — skipping cluster upsert.`
+    );
+    return { triggered: true };
+  }
+
+  const canonicalPrompt = monitored[0].text;
+  const promptVariants = monitored.slice(1).map((p) => p.text);
+
+  // funnel_stage is null on the cluster — each prompt's own funnel_stage is the
+  // source of truth for funnel position. The cluster does not partition by funnel.
+  const cluster = await svc.upsertCluster({
+    orgId,
+    userId,
+    name: 'Default',
+    canonicalPrompt,
+    promptVariants,
+    industry: null,
+    persona: null,
+    funnelStage: null,
+    competitorDomains: [],
+  });
+
+  console.log(
+    `[DeeperScan] Upserted prompt cluster id=${cluster.id} for user ${userId} ` +
+      `("Default", ${monitored.length} monitored prompts).`
   );
 
   // No targeted-scan pipeline yet — intentionally does not enqueue a standard
