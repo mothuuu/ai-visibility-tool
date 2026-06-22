@@ -23,6 +23,22 @@ const db = require('../db/database');
 const { resolvePlanForRequest, getDraftConfig } = require('./planService');
 const { PIPELINE } = require('./draftGeneration/generators');
 
+/**
+ * Fire-and-forget business-value scoring (Layer 2). Strictly additive and fully
+ * isolated: it no-ops (marks prompts "pending") until the customer supplies
+ * deal_size_band/sales_model, and any failure here must NEVER affect generation.
+ * Lazy require avoids load-order coupling.
+ */
+function triggerValueScoring(userId) {
+  Promise.resolve()
+    .then(() => require('./draftGeneration/valueScoring').scorePromptValues(userId))
+    .catch((err) =>
+      console.warn(
+        `[DraftGeneration] value-scoring trigger failed for user ${userId}: ${err && err.message ? err.message : err}`
+      )
+    );
+}
+
 const GENERATOR_RETRIES = 1; // one short internal retry per generator
 
 // Status constants returned by generateDraft().
@@ -241,6 +257,10 @@ async function generateDraft(userId, { pipeline = PIPELINE } = {}) {
     `[DraftGeneration] user ${userId} (plan=${plan}, scan=${scan.id}): draft generated — ` +
       Object.entries(fields).map(([k, v]) => `${k}:${v}`).join(' ')
   );
+
+  // Separate, non-blocking Layer-2 step: score per-prompt business value now that
+  // prompts exist. Self-gates on plan + business inputs; never blocks generation.
+  triggerValueScoring(userId);
 
   return {
     userId,
