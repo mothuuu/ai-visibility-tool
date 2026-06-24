@@ -12,10 +12,18 @@
  *
  *   npm run opportunity:evidence -- --user 174
  *   node scripts/opportunity-evidence.js --user 174
+ *
+ * --rederive: recompute the evidence signals (brand/social exclusion,
+ * competitor_candidates, …) from the ALREADY-STORED cited domains — NO Perplexity
+ * calls, no key required:
+ *   npm run opportunity:evidence -- --user 174 --rederive
  */
 
 const db = require('../db/database');
-const { gatherOpportunityEvidence } = require('../services/draftGeneration/opportunityEvidence');
+const {
+  gatherOpportunityEvidence,
+  rederiveOpportunityEvidence,
+} = require('../services/draftGeneration/opportunityEvidence');
 
 function parseArgs(argv) {
   const args = {};
@@ -23,17 +31,26 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === '--user' || a === '-u') args.user = argv[++i];
     else if (a.startsWith('--user=')) args.user = a.slice('--user='.length);
+    else if (a === '--rederive') args.rederive = true;
   }
   return args;
 }
 
 async function main() {
-  const { user } = parseArgs(process.argv.slice(2));
+  const { user, rederive } = parseArgs(process.argv.slice(2));
   const userId = Number.parseInt(user, 10);
 
   if (!user || Number.isNaN(userId)) {
-    console.error('Usage: npm run opportunity:evidence -- --user <id>');
+    console.error('Usage: npm run opportunity:evidence -- --user <id> [--rederive]');
     process.exit(2);
+  }
+
+  if (rederive) {
+    console.log(`[opportunity:evidence] Re-deriving stored evidence for user ${userId} (no Perplexity calls)...`);
+    const result = await rederiveOpportunityEvidence(userId);
+    console.log('[opportunity:evidence] Result:');
+    console.log(JSON.stringify(result, null, 2));
+    process.exit(0);
   }
 
   console.log(`[opportunity:evidence] Gathering Perplexity evidence for user ${userId}...`);
