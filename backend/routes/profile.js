@@ -388,6 +388,13 @@ router.post('/', authenticateToken, async (req, res) => {
           }
           return undefined;
         })
+        .then((opp) => {
+          // Impact rollup (Layer 4): pure Value × Opportunity over the bands set.
+          if (opp && opp.status === 'scored') {
+            return require('../services/draftGeneration/impactScoring').scoreImpact(userId);
+          }
+          return undefined;
+        })
         .catch((err) =>
           console.warn(`[Profile] enrichment trigger failed for user ${userId}: ${err && err.message ? err.message : err}`)
         );

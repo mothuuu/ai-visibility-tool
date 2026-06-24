@@ -48,6 +48,13 @@ function triggerValueScoring(userId) {
       }
       return undefined;
     })
+    .then((opp) => {
+      // Impact rollup (Layer 4): pure Value × Opportunity over the bands just set.
+      if (opp && opp.status === 'scored') {
+        return require('./draftGeneration/impactScoring').scoreImpact(userId);
+      }
+      return undefined;
+    })
     .catch((err) =>
       console.warn(
         `[DraftGeneration] enrichment trigger failed for user ${userId}: ${err && err.message ? err.message : err}`
