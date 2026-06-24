@@ -14,7 +14,8 @@
     "draft:generate": "node scripts/draft-generate.js",
     "value:score": "node scripts/value-score.js",
     "opportunity:evidence": "node scripts/opportunity-evidence.js",
-    "opportunity:score": "node scripts/opportunity-score.js"
+    "opportunity:score": "node scripts/opportunity-score.js",
+    "impact:score": "node scripts/impact-score.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.0",
