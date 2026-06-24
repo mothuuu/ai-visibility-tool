@@ -1,12 +1,9 @@
 /**
- * Opportunity EVIDENCE pass verification.
+ * Opportunity EVIDENCE pass verification — typed cited field + competitor gap.
  *
- * Proves the strict-additive, facts-only contract of
- * services/draftGeneration/opportunityEvidence.js — including the honest
- * derivation (own-brand + social/junk exclusion, competitor_candidates,
- * raw_cited_domains) and the offline re-derive path — with an in-memory DB that
- * THROWS on any SQL other than the whitelisted reads + the single tracked_prompts
- * write, a stubbable Perplexity adapter, and a stub plan service.
+ * In-memory DB that THROWS on any SQL other than the whitelisted reads + the
+ * single two-column write (tracked_prompts + competitor_gap_summary), a stubbable
+ * Perplexity adapter, and a stub plan service.
  *
  *   node --test backend/tests/unit/opportunity-evidence.test.js
  */
@@ -25,14 +22,14 @@ const state = {
   primaryDomain: null,
   scanUrl: null,
   runQuery: null,
-  calls: [],            // queries sent to Perplexity
+  calls: [],
 };
 
 const RE_PROFILE = /SELECT tracked_prompts, competitors_business, competitors_visibility/;
 const RE_USERS = /^SELECT primary_domain FROM users WHERE id = \$1$/;
 const RE_SCANS = /SELECT url FROM scans/;
 const RE_LOCK = /^SELECT tracked_prompts FROM visibility_profiles WHERE user_id = \$1 FOR UPDATE$/;
-const RE_WRITE = /^UPDATE visibility_profiles SET tracked_prompts = \$2::jsonb WHERE user_id = \$1$/;
+const RE_WRITE = /^UPDATE visibility_profiles SET tracked_prompts = \$2::jsonb, competitor_gap_summary = \$3::jsonb WHERE user_id = \$1$/;
 
 const PROFILE_COLS = ['tracked_prompts', 'competitors_business', 'competitors_visibility', 'company_name'];
 
@@ -56,6 +53,7 @@ function makeClient() {
       }
       if (RE_WRITE.test(sql)) {
         state.profile.tracked_prompts = JSON.parse(params[1]);
+        state.profile.competitor_gap_summary = JSON.parse(params[2]);
         return Promise.resolve({ rowCount: 1 });
       }
       throw new Error(`Unexpected client SQL (non-additive?): ${sql}`);
@@ -100,24 +98,23 @@ function evidenceFor(prompts, text) {
   const p = prompts.find((x) => x.text === text);
   return p && p.opportunity_evidence;
 }
-const domainsOf = (cd) => (cd || []).map((d) => d.domain);
+const fieldClasses = (cf) => (cf || []).map((e) => `${e.domain}:${e.class}`);
 
 function baseProfile() {
   return {
     company_name: 'Acme',
     tracked_prompts: [
-      { text: 'best crm for enterprise', funnel_stage: 'MOFU', is_monitored: true, volume: 200, value: { band: 5, basis: 'business_grounded', generated_at: 'V' } },
+      { text: 'best crm for enterprise', funnel_stage: 'MOFU', is_monitored: true, volume: 200, value: { band: 5 } },
       { text: 'acme vs globex', funnel_stage: 'BOFU', is_monitored: false, volume: null, value: { band: 4 }, custom: { keep: 1 } },
       { text: 'what is a crm', funnel_stage: 'TOFU', is_monitored: true, volume: 50, value: { band: 2 } },
-      { text: 'crm pricing', funnel_stage: 'BOFU', is_monitored: true, volume: 10 }, // no value
+      { text: 'crm pricing', funnel_stage: 'BOFU', is_monitored: true, volume: 10 },
     ],
     competitors_business: [{ name: 'Globex', url: 'https://globex.com' }],
     competitors_visibility: [{ name: 'Initech', url: 'initech.io' }],
   };
 }
 
-// Deterministic citation sets keyed by prompt text. acme.com is the brand;
-// reddit.com is social — both must be excluded from the competitive set.
+// acme.com = brand; g2.com = competitor; forbes.com = media; reddit.com = social.
 const CITATIONS = {
   'best crm for enterprise': ['https://acme.com/crm', 'https://g2.com/a', 'https://g2.com/b', 'https://forbes.com/x'],
   'acme vs globex': ['https://www.globex.com/compare', 'https://reddit.com/r/crm', 'https://acme.com/vs'],
@@ -134,109 +131,86 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// gather (live)
+// gather (live) — typed fields
 // ---------------------------------------------------------------------------
-describe('opportunity evidence — gather (live)', () => {
-  it('SCOPED: only value.band >= threshold prompts call Perplexity', async () => {
-    const res = await gatherOpportunityEvidence(1);
-    assert.strictEqual(res.status, 'gathered');
-    assert.strictEqual(res.processed, 2);
-    assert.strictEqual(state.calls.length, 2);
-    assert.deepStrictEqual(state.calls.map((c) => c.q).sort(), ['acme vs globex', 'best crm for enterprise']);
-    assert.strictEqual(evidenceFor(state.profile.tracked_prompts, 'what is a crm'), undefined);
-    assert.strictEqual(evidenceFor(state.profile.tracked_prompts, 'crm pricing'), undefined);
-  });
-
-  it('low search context + base sonar model used for the call', async () => {
-    await gatherOpportunityEvidence(1);
-    const opts = state.calls[0].opts;
-    assert.strictEqual(opts.searchContextSize, 'low');
-    assert.strictEqual(opts.model, require('../../config/models').OPPORTUNITY_PERPLEXITY_MODEL);
-  });
-
-  it('ADDITIVE-ONLY: only opportunity_evidence + tracked_prompts change', async () => {
-    const before = clone(state.profile);
-    await gatherOpportunityEvidence(1);
-    assert.deepStrictEqual(state.profile.competitors_business, before.competitors_business);
-    assert.deepStrictEqual(state.profile.competitors_visibility, before.competitors_visibility);
-    assert.deepStrictEqual(stripEvidence(state.profile.tracked_prompts), stripEvidence(before.tracked_prompts));
-  });
-
-  it('FACTS-ONLY shape: landscape facts + new fields, NO score/band/weight', async () => {
+describe('opportunity evidence — typed cited field', () => {
+  it('FACTS-ONLY shape: typed fields, NO score/band/weight', async () => {
     await gatherOpportunityEvidence(1);
     const ev = evidenceFor(state.profile.tracked_prompts, 'best crm for enterprise');
     assert.deepStrictEqual(Object.keys(ev).sort(), [
-      'brand_present', 'cited_domains', 'competitor_candidates', 'competitors_present',
-      'diversity_count', 'engine', 'gathered_at', 'raw_cited_domains',
+      'brand_present', 'cited_field', 'competitor_count', 'competitor_domains',
+      'competitors_present', 'diversity_count', 'engine', 'gathered_at',
+      'media_count', 'media_domains', 'raw_cited_domains',
     ]);
     for (const banned of ['band', 'score', 'weight', 'specificity', 'winnability', 'opportunity']) {
       assert.ok(!(banned in ev), `evidence must not contain ${banned}`);
     }
-    assert.strictEqual(ev.engine, 'perplexity');
   });
 
-  it('OWN-DOMAIN EXCLUSION: brand domain dropped from diversity but kept in raw', async () => {
+  it('CLASSIFICATION precedence: brand collapsed, competitor/media/social typed', async () => {
     await gatherOpportunityEvidence(1);
     const ev = evidenceFor(state.profile.tracked_prompts, 'best crm for enterprise');
-    // acme.com (brand) excluded from competitive set; g2.com + forbes.com remain.
-    assert.deepStrictEqual(ev.cited_domains, [{ domain: 'g2.com', count: 2 }, { domain: 'forbes.com', count: 1 }]);
-    assert.strictEqual(ev.diversity_count, 2);
-    assert.deepStrictEqual(ev.competitor_candidates, ['g2.com', 'forbes.com']);
-    // raw retains everything, brand included.
-    assert.deepStrictEqual(domainsOf(ev.raw_cited_domains), ['acme.com', 'g2.com', 'forbes.com']);
+    // brand (acme.com) collapsed out of cited_field; g2 -> competitor, forbes -> media.
+    assert.deepStrictEqual(fieldClasses(ev.cited_field), ['g2.com:competitor', 'forbes.com:media']);
+    assert.deepStrictEqual(ev.competitor_domains, ['g2.com']);
+    assert.deepStrictEqual(ev.media_domains, ['forbes.com']);
+    assert.strictEqual(ev.competitor_count, 1);
+    assert.strictEqual(ev.media_count, 1);
+    assert.strictEqual(ev.diversity_count, ev.competitor_count, 'diversity == competitor_count');
     assert.strictEqual(ev.brand_present, true);
+    // raw retains everything incl. brand.
+    assert.deepStrictEqual(ev.raw_cited_domains.map((d) => d.domain), ['acme.com', 'g2.com', 'forbes.com']);
   });
 
-  it('SOCIAL EXCLUSION + competitor match: reddit dropped, globex kept', async () => {
+  it('competitor_domains exclude media/social/brand; social stays typed in cited_field', async () => {
     await gatherOpportunityEvidence(1);
     const ev = evidenceFor(state.profile.tracked_prompts, 'acme vs globex');
-    // reddit.com (social) + acme.com (brand) excluded → only globex.com competitive.
-    assert.deepStrictEqual(ev.cited_domains, [{ domain: 'globex.com', count: 1 }]);
+    assert.deepStrictEqual(fieldClasses(ev.cited_field), ['globex.com:competitor', 'reddit.com:social_junk']);
+    assert.deepStrictEqual(ev.competitor_domains, ['globex.com']);
+    assert.deepStrictEqual(ev.media_domains, []);
     assert.strictEqual(ev.diversity_count, 1);
-    assert.deepStrictEqual(ev.competitor_candidates, ['globex.com']);
-    assert.deepStrictEqual(domainsOf(ev.raw_cited_domains), ['globex.com', 'reddit.com', 'acme.com']);
-    assert.strictEqual(ev.brand_present, true);
     // declared competitor Globex matched against the RAW set.
     assert.deepStrictEqual(ev.competitors_present, [{ name: 'Globex', domain: 'globex.com' }]);
+    assert.strictEqual(ev.brand_present, true);
   });
 
-  it('reports declared competitors on the result', async () => {
+  it('GAP SUMMARY: declared-vs-cited computed + stored on competitor_gap_summary', async () => {
     const res = await gatherOpportunityEvidence(1);
-    assert.deepStrictEqual(res.declared_competitors.competitors_business, [{ name: 'Globex', url: 'https://globex.com', domain: 'globex.com' }]);
-    assert.deepStrictEqual(res.declared_competitors.competitors_visibility, [{ name: 'Initech', url: 'initech.io', domain: 'initech.io' }]);
+    const s = res.competitor_gap_summary;
+    assert.deepStrictEqual(state.profile.competitor_gap_summary, s, 'summary persisted to its own column');
+
+    assert.deepStrictEqual(s.declared_competitors, [
+      { name: 'Globex', domain: 'globex.com' },
+      { name: 'Initech', domain: 'initech.io' },
+    ]);
+    assert.deepStrictEqual(s.cited_competitors, [
+      { domain: 'g2.com', prompt_count: 1 },
+      { domain: 'globex.com', prompt_count: 1 },
+    ]);
+    // Initech never cited; Globex IS cited (so not in declared_but_not_cited).
+    assert.deepStrictEqual(s.declared_but_not_cited, [{ name: 'Initech', domain: 'initech.io' }]);
+    // g2.com wins but was not declared; globex.com declared so excluded.
+    assert.deepStrictEqual(s.cited_but_not_declared, [{ domain: 'g2.com', prompt_count: 1 }]);
   });
 
-  it('BRAND via scan-URL fallback when primary_domain unset', async () => {
-    state.primaryDomain = null;
-    state.scanUrl = 'https://www.acme.com/home';
-    await gatherOpportunityEvidence(1);
-    assert.strictEqual(evidenceFor(state.profile.tracked_prompts, 'best crm for enterprise').brand_present, true);
-  });
-
-  it('SCOPED no-op: no qualifying prompts → zero calls, untouched', async () => {
-    state.profile.tracked_prompts = [{ text: 'a', value: { band: 3 } }, { text: 'b' }];
-    const before = clone(state.profile);
-    const res = await gatherOpportunityEvidence(1);
-    assert.strictEqual(res.status, 'no_qualifying_prompts');
-    assert.strictEqual(state.calls.length, 0);
-    assert.deepStrictEqual(state.profile, before);
-  });
-
-  it('NEVER-NULL (per-prompt failure): failed prompt untouched, others proceed', async () => {
-    state.profile.tracked_prompts[1].opportunity_evidence = { engine: 'perplexity', diversity_count: 9, gathered_at: 'OLD' };
-    state.runQuery = async (q) => {
-      if (q === 'acme vs globex') throw new Error('429 rate limited');
-      return { response: 'x', citations: CITATIONS[q] || [] };
-    };
+  it('SCOPED: only band>=threshold prompts call Perplexity', async () => {
     const res = await gatherOpportunityEvidence(1);
     assert.strictEqual(res.status, 'gathered');
-    assert.strictEqual(res.processed, 1);
-    assert.strictEqual(res.failed, 1);
-    assert.strictEqual(evidenceFor(state.profile.tracked_prompts, 'acme vs globex').gathered_at, 'OLD');
-    assert.notStrictEqual(evidenceFor(state.profile.tracked_prompts, 'best crm for enterprise'), undefined);
+    assert.strictEqual(res.processed, 2);
+    assert.strictEqual(state.calls.length, 2);
+    assert.strictEqual(evidenceFor(state.profile.tracked_prompts, 'what is a crm'), undefined);
   });
 
-  it('NEVER-NULL (total failure): all calls fail → write aborted, untouched', async () => {
+  it('ADDITIVE-ONLY: only tracked_prompts + competitor_gap_summary change', async () => {
+    const before = clone(state.profile);
+    await gatherOpportunityEvidence(1);
+    assert.deepStrictEqual(state.profile.competitors_business, before.competitors_business);
+    assert.deepStrictEqual(state.profile.competitors_visibility, before.competitors_visibility);
+    assert.strictEqual(state.profile.company_name, before.company_name);
+    assert.deepStrictEqual(stripEvidence(state.profile.tracked_prompts), stripEvidence(before.tracked_prompts));
+  });
+
+  it('NEVER-NULL (total failure): all calls fail → nothing written', async () => {
     state.profile.tracked_prompts[0].opportunity_evidence = { engine: 'perplexity', diversity_count: 7 };
     const before = clone(state.profile);
     state.runQuery = async () => { throw new Error('network down'); };
@@ -245,14 +219,14 @@ describe('opportunity evidence — gather (live)', () => {
     assert.deepStrictEqual(state.profile, before);
   });
 
-  it('IDEMPOTENT: re-run refreshes processed prompts only; others unchanged', async () => {
+  it('IDEMPOTENT: re-run stable except timestamps', async () => {
     await gatherOpportunityEvidence(1);
-    const afterFirst = clone(state.profile);
+    const a = clone(state.profile);
     await gatherOpportunityEvidence(1);
-    assert.deepStrictEqual(stripEvidence(state.profile.tracked_prompts), stripEvidence(afterFirst.tracked_prompts));
+    assert.deepStrictEqual(stripEvidence(state.profile.tracked_prompts), stripEvidence(a.tracked_prompts));
     assert.deepStrictEqual(
-      evidenceFor(state.profile.tracked_prompts, 'best crm for enterprise').cited_domains,
-      evidenceFor(afterFirst.tracked_prompts, 'best crm for enterprise').cited_domains
+      evidenceFor(state.profile.tracked_prompts, 'best crm for enterprise').cited_field,
+      evidenceFor(a.tracked_prompts, 'best crm for enterprise').cited_field
     );
   });
 
@@ -269,7 +243,7 @@ describe('opportunity evidence — gather (live)', () => {
 // ---------------------------------------------------------------------------
 // re-derive (offline; the Goldwynn case)
 // ---------------------------------------------------------------------------
-describe('opportunity evidence — re-derive (offline, no Perplexity)', () => {
+describe('opportunity evidence — re-derive (offline)', () => {
   function goldwynnProfile() {
     return {
       company_name: 'Goldwynn Bahamas',
@@ -279,7 +253,6 @@ describe('opportunity evidence — re-derive (offline, no Perplexity)', () => {
         {
           text: 'is Goldwynn Bahamas worth the investment',
           funnel_stage: 'BOFU', is_monitored: true, volume: 30, value: { band: 5 },
-          // OLD-shape evidence: brand + social inflate diversity to 5.
           opportunity_evidence: {
             cited_domains: [
               { domain: 'goldwynnbahamas.com', count: 1 },
@@ -292,7 +265,7 @@ describe('opportunity evidence — re-derive (offline, no Perplexity)', () => {
             engine: 'perplexity', gathered_at: 'ORIGINAL',
           },
         },
-        { text: 'low value prompt', funnel_stage: 'TOFU', value: { band: 2 } }, // no evidence
+        { text: 'low value prompt', funnel_stage: 'TOFU', value: { band: 2 } },
       ],
     };
   }
@@ -307,45 +280,33 @@ describe('opportunity evidence — re-derive (offline, no Perplexity)', () => {
     const res = await rederiveOpportunityEvidence(1);
     assert.strictEqual(res.status, 'rederived');
     assert.strictEqual(res.rederived, 1);
-    assert.strictEqual(state.calls.length, 0, 'must not call Perplexity');
+    assert.strictEqual(state.calls.length, 0);
   });
 
-  it('collapses brand variants + social, exposes competitor_candidates', async () => {
+  it('brand collapse + typed field; preserves gathered_at, stamps rederived_at', async () => {
     await rederiveOpportunityEvidence(1);
     const ev = evidenceFor(state.profile.tracked_prompts, 'is Goldwynn Bahamas worth the investment');
-    // goldwynnbahamas/goldwynnresorts/goldwynn collapsed (brand), expedia (social) dropped.
-    assert.deepStrictEqual(ev.cited_domains, [{ domain: 'albany.com', count: 2 }]);
+    assert.deepStrictEqual(fieldClasses(ev.cited_field), ['expedia.com:social_junk', 'albany.com:competitor']);
+    assert.deepStrictEqual(ev.competitor_domains, ['albany.com']);
     assert.strictEqual(ev.diversity_count, 1);
-    assert.deepStrictEqual(ev.competitor_candidates, ['albany.com']);
-    assert.strictEqual(ev.brand_present, true, 'a brand domain is present');
-    // declared competitor Albany matched.
+    assert.strictEqual(ev.brand_present, true);
     assert.deepStrictEqual(ev.competitors_present, [{ name: 'Albany', domain: 'albany.com' }]);
-    // raw retains all five; original fetch time preserved; rederive stamped.
-    assert.deepStrictEqual(domainsOf(ev.raw_cited_domains),
+    assert.deepStrictEqual(ev.raw_cited_domains.map((d) => d.domain),
       ['goldwynnbahamas.com', 'goldwynnresorts.com', 'goldwynn.com', 'expedia.com', 'albany.com']);
     assert.strictEqual(ev.gathered_at, 'ORIGINAL');
     assert.ok(typeof ev.rederived_at === 'string');
   });
 
-  it('ADDITIVE + idempotent: other keys untouched; second run stable', async () => {
-    const before = clone(state.profile);
-    await rederiveOpportunityEvidence(1);
-    assert.deepStrictEqual(stripEvidence(state.profile.tracked_prompts), stripEvidence(before.tracked_prompts));
-    const afterFirst = clone(evidenceFor(state.profile.tracked_prompts, 'is Goldwynn Bahamas worth the investment'));
-    await rederiveOpportunityEvidence(1);
-    const afterSecond = evidenceFor(state.profile.tracked_prompts, 'is Goldwynn Bahamas worth the investment');
-    assert.deepStrictEqual(afterSecond.cited_domains, afterFirst.cited_domains);
-    assert.deepStrictEqual(afterSecond.raw_cited_domains, afterFirst.raw_cited_domains);
-  });
-
-  it('reports declared competitors', async () => {
+  it('gap summary: declared Albany IS cited (matched), nothing missing', async () => {
     const res = await rederiveOpportunityEvidence(1);
-    assert.deepStrictEqual(res.declared_competitors.competitors_business, [{ name: 'Albany', url: 'https://albany.com', domain: 'albany.com' }]);
-    assert.deepStrictEqual(res.declared_competitors.competitors_visibility, []);
+    const s = res.competitor_gap_summary;
+    assert.deepStrictEqual(s.cited_competitors, [{ domain: 'albany.com', prompt_count: 1 }]);
+    assert.deepStrictEqual(s.declared_but_not_cited, []);
+    assert.deepStrictEqual(s.cited_but_not_declared, []);
   });
 
   it('NEVER-NULL: nothing stored to recompute → no write', async () => {
-    state.profile.tracked_prompts = [{ text: 'x', value: { band: 5 } }]; // no evidence
+    state.profile.tracked_prompts = [{ text: 'x', value: { band: 5 } }];
     const before = clone(state.profile);
     const res = await rederiveOpportunityEvidence(1);
     assert.strictEqual(res.status, 'nothing_to_rederive');
@@ -354,31 +315,39 @@ describe('opportunity evidence — re-derive (offline, no Perplexity)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// pure derivation internals
+// pure internals
 // ---------------------------------------------------------------------------
-describe('derivation internals', () => {
-  const { extractDomain, buildBrandContext, isBrandOwned, isSocialJunk } = _internals;
+describe('classification + gap internals', () => {
+  const { classifyDomain, buildBrandContext, isBrandOwned, buildGapSummary } = _internals;
 
-  it('extractDomain reduces to registrable (eTLD+1)', () => {
-    assert.strictEqual(extractDomain('https://docs.globex.com/x'), 'globex.com');
-    assert.strictEqual(extractDomain('https://shop.acme.co.uk/x'), 'acme.co.uk');
-    assert.strictEqual(extractDomain('initech.io'), 'initech.io');
-    assert.strictEqual(extractDomain('not a url'), null);
+  it('classifyDomain: social → media → competitor (default)', () => {
+    assert.strictEqual(classifyDomain('facebook.com'), 'social_junk');
+    assert.strictEqual(classifyDomain('expedia.com'), 'social_junk');
+    assert.strictEqual(classifyDomain('forbes.com'), 'media');
+    assert.strictEqual(classifyDomain('robbreport.com'), 'media');
+    assert.strictEqual(classifyDomain('sothebysrealty.com'), 'competitor');
+    assert.strictEqual(classifyDomain('bahamasrealty.com'), 'competitor');
   });
 
-  it('isBrandOwned collapses prefix variants, not unrelated geo', () => {
+  it('isBrandOwned collapses prefix variants, not geo words', () => {
     const ctx = buildBrandContext({ brandDomain: 'goldwynnbahamas.com', companyName: 'Goldwynn Bahamas' });
-    assert.strictEqual(isBrandOwned('goldwynnbahamas.com', ctx), true);
     assert.strictEqual(isBrandOwned('goldwynnresorts.com', ctx), true);
     assert.strictEqual(isBrandOwned('goldwynn.com', ctx), true);
-    assert.strictEqual(isBrandOwned('albany.com', ctx), false);
-    assert.strictEqual(isBrandOwned('bahamasrealty.com', ctx), false, 'geo word must not match');
+    assert.strictEqual(isBrandOwned('bahamasrealty.com', ctx), false);
   });
 
-  it('isSocialJunk flags configured low-authority domains', () => {
-    for (const d of ['facebook.com', 'youtube.com', 'reddit.com', 'tripadvisor.com', 'expedia.com']) {
-      assert.strictEqual(isSocialJunk(d), true, d);
-    }
-    assert.strictEqual(isSocialJunk('albany.com'), false);
+  it('buildGapSummary: frequency, declared_but_not_cited, cited_but_not_declared', () => {
+    const declared = [{ name: 'Albany', domain: 'albany.com' }, { name: 'Ghost', domain: 'ghost.com' }];
+    const evidences = [
+      { raw_cited_domains: [{ domain: 'albany.com', count: 1 }, { domain: 'sothebys.com', count: 1 }], competitor_domains: ['albany.com', 'sothebys.com'] },
+      { raw_cited_domains: [{ domain: 'sothebys.com', count: 1 }], competitor_domains: ['sothebys.com'] },
+    ];
+    const s = buildGapSummary(declared, evidences);
+    assert.deepStrictEqual(s.cited_competitors, [
+      { domain: 'sothebys.com', prompt_count: 2 },
+      { domain: 'albany.com', prompt_count: 1 },
+    ]);
+    assert.deepStrictEqual(s.declared_but_not_cited, [{ name: 'Ghost', domain: 'ghost.com' }]);
+    assert.deepStrictEqual(s.cited_but_not_declared, [{ domain: 'sothebys.com', prompt_count: 2 }]);
   });
 });

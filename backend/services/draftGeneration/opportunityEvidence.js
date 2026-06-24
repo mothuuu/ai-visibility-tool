@@ -1,40 +1,43 @@
 'use strict';
 
 /**
- * Opportunity EVIDENCE pass (Perplexity citation bootstrap) + honest derivation.
+ * Opportunity EVIDENCE pass — typed cited field + competitor-gap insight.
  *
- * Surfaces the REAL cited-source landscape for HIGH-VALUE prompts and stores it
- * as grounded, facts-only evidence on each prompt. NO score, band, weight, or
- * winnability — that is a separate later pass.
+ * Surfaces the REAL cited-source landscape for HIGH-VALUE prompts as grounded,
+ * facts-only evidence. NO score, band, weight, or winnability — that is a
+ * separate later pass. This pass TYPES the cited field and exposes the
+ * "declared vs. actually-cited competitors" gap; it does not interpret it.
  *
- * Derivation discipline (so a later score isn't fed inflated signals):
- *   - OWN-DOMAIN EXCLUSION: the customer's own registrable domain and brand
- *     variants (e.g. goldwynnbahamas.com / goldwynnresorts.com / goldwynn.com)
- *     are collapsed out of diversity_count and the competitive cited set.
- *     brand_present stays true if any brand domain appears.
- *   - SOCIAL / LOW-AUTHORITY EXCLUSION: a config list (facebook, youtube,
- *     reddit, tripadvisor, expedia, …) is excluded from diversity_count and the
- *     competitive set, but kept in raw_cited_domains so nothing is lost.
- *   - competitor_candidates: the cited domains left AFTER removing brand +
- *     social/junk — the real third-party field winning these answers. Distinct
- *     from competitors_present (declared-competitor matches). Facts only.
+ * Per-prompt opportunity_evidence (on visibility_profiles.tracked_prompts):
+ *   raw_cited_domains  : [{domain,count}]        every cited domain, nothing lost
+ *   cited_field        : [{domain,count,class}]  every NON-brand cited domain, typed
+ *   competitor_domains : [domain]                class === 'competitor' only
+ *   media_domains      : [domain]                class === 'media'
+ *   competitor_count   : competitor_domains.length   (the honest concentration)
+ *   media_count        : media_domains.length
+ *   diversity_count    : === competitor_count        (competitive field size only)
+ *   brand_present      : any brand domain cited
+ *   competitors_present: [{name,domain}]         DECLARED-competitor matches
+ *   engine, gathered_at[, rederived_at]
  *
- * Self-contained on visibility_profiles.tracked_prompts. Strictly additive:
- * writes ONLY `opportunity_evidence`, preserves every other key/column,
- * idempotent, never overwrites real data with blanks.
+ * Profile-level competitor_gap_summary (visibility_profiles.competitor_gap_summary):
+ *   declared_competitors, cited_competitors, declared_but_not_cited,
+ *   cited_but_not_declared, generated_at   — facts only.
  *
- * Two entry points:
- *   - gatherOpportunityEvidence(userId): live — one base-Sonar (low context)
- *     Perplexity call per qualifying prompt, then derive.
- *   - rederiveOpportunityEvidence(userId): offline — recompute the signals from
- *     the ALREADY-STORED cited domains (raw_cited_domains / cited_domains). No
- *     Perplexity calls. Use after a derivation rule changes.
+ * Classification precedence: brand-owned (collapsed here) → social_junk → media →
+ * competitor (default). One domain → exactly one class. Lists live in
+ * config/citationDomainClasses.js.
+ *
+ * Strictly additive: writes ONLY tracked_prompts + competitor_gap_summary,
+ * preserves every other key/column, idempotent, never overwrites real data with
+ * blanks. Offline re-derivation recomputes from stored citations (no Perplexity).
  */
 
 const db = require('../../db/database');
 const perplexityAdapter = require('../engines/perplexityAdapter');
 const { resolvePlanForRequest, getDraftConfig } = require('../planService');
 const { OPPORTUNITY_PERPLEXITY_MODEL } = require('../../config/models');
+const { classifyDomain } = require('../../config/citationDomainClasses');
 
 // Plan-config flag that gates Opportunity (same umbrella gate as Value).
 const ELIGIBILITY_FLAG = 'draft_enabled';
@@ -55,23 +58,6 @@ const SECOND_LEVEL_TLDS = new Set([
   'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'me.uk',
   'com.au', 'net.au', 'org.au',
   'co.nz', 'co.za', 'com.br', 'co.jp', 'co.in', 'com.sg', 'com.mx',
-]);
-
-// Social / aggregator / OTA / low-authority domains. Real demand signal, but NOT
-// competitive diversity — a brand can't "win" them the way it wins a niche
-// review or a competitor comparison. Excluded from diversity + competitive set;
-// retained in raw_cited_domains. Config list — extend as needed.
-const SOCIAL_LOW_AUTHORITY = new Set([
-  // social
-  'facebook.com', 'instagram.com', 'twitter.com', 'x.com', 'tiktok.com',
-  'youtube.com', 'linkedin.com', 'pinterest.com', 'reddit.com', 'quora.com',
-  'threads.net', 'medium.com',
-  // travel OTAs / aggregators (hospitality-heavy, but harmless elsewhere)
-  'tripadvisor.com', 'expedia.com', 'booking.com', 'hotels.com', 'trivago.com',
-  'kayak.com', 'agoda.com', 'priceline.com', 'airbnb.com', 'vrbo.com',
-  'yelp.com', 'trustpilot.com',
-  // generic reference
-  'wikipedia.org', 'wikimedia.org',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -116,11 +102,7 @@ function sld(domain) {
   return domain ? domain.split('.')[0] : '';
 }
 
-/**
- * Brand context for own-domain collapsing. `registrables` are exact brand
- * registrable domains; `stems` are brand name/domain stems used for prefix
- * collapsing of variants.
- */
+/** Brand context for own-domain collapsing. */
 function buildBrandContext({ brandDomain, companyName, extraBrandDomains = [] } = {}) {
   const registrables = new Set();
   if (brandDomain) registrables.add(brandDomain);
@@ -148,10 +130,6 @@ function isBrandOwned(domain, ctx) {
   return false;
 }
 
-function isSocialJunk(domain) {
-  return Boolean(domain) && SOCIAL_LOW_AUTHORITY.has(domain);
-}
-
 /** Full cited URLs -> deduped [{domain,count}] in first-seen order. */
 function domainCountsFromUrls(urls) {
   const order = [];
@@ -159,16 +137,13 @@ function domainCountsFromUrls(urls) {
   for (const url of asArray(urls)) {
     const domain = extractDomain(url);
     if (!domain) continue;
-    if (!counts.has(domain)) {
-      counts.set(domain, 0);
-      order.push(domain);
-    }
+    if (!counts.has(domain)) { counts.set(domain, 0); order.push(domain); }
     counts.set(domain, counts.get(domain) + 1);
   }
   return order.map((domain) => ({ domain, count: counts.get(domain) }));
 }
 
-/** Stored raw_cited_domains / cited_domains -> normalized [{domain,count}]. */
+/** Stored raw_cited_domains / cited_domains / cited_field -> [{domain,count}]. */
 function normalizeDomainCounts(stored) {
   const order = [];
   const counts = new Map();
@@ -176,38 +151,48 @@ function normalizeDomainCounts(stored) {
     const domain = typeof entry === 'string' ? extractDomain(entry) : extractDomain(entry && entry.domain);
     if (!domain) continue;
     const c = entry && typeof entry === 'object' && Number.isFinite(entry.count) ? entry.count : 1;
-    if (!counts.has(domain)) {
-      counts.set(domain, 0);
-      order.push(domain);
-    }
+    if (!counts.has(domain)) { counts.set(domain, 0); order.push(domain); }
     counts.set(domain, counts.get(domain) + c);
   }
   return order.map((domain) => ({ domain, count: counts.get(domain) }));
 }
 
 /**
- * Derive the facts-only evidence object from a raw [{domain,count}] set.
- * Applies brand + social/junk exclusion. NO scoring.
+ * Derive the typed, facts-only evidence object from a raw [{domain,count}] set.
+ * Brand-owned domains are collapsed out of cited_field; remaining domains are
+ * typed social_junk / media / competitor. NO scoring.
  */
 function deriveEvidence(rawCounts, brandCtx, competitors, meta = {}) {
   const raw = asArray(rawCounts);
   const rawSet = new Set(raw.map((d) => d.domain));
 
-  const competitive = raw.filter((d) => !isBrandOwned(d.domain, brandCtx) && !isSocialJunk(d.domain));
-  const cited_domains = competitive.map((d) => ({ domain: d.domain, count: d.count }));
+  const cited_field = [];
+  const competitor_domains = [];
+  const media_domains = [];
+  let brand_present = false;
 
-  const brand_present = raw.some((d) => isBrandOwned(d.domain, brandCtx));
+  for (const { domain, count } of raw) {
+    if (isBrandOwned(domain, brandCtx)) { brand_present = true; continue; } // collapse brand
+    const cls = classifyDomain(domain);
+    cited_field.push({ domain, count, class: cls });
+    if (cls === 'competitor') competitor_domains.push(domain);
+    else if (cls === 'media') media_domains.push(domain);
+  }
+
   const competitors_present = asArray(competitors)
     .filter((c) => c.domain && rawSet.has(c.domain))
     .map((c) => ({ name: c.name, domain: c.domain }));
 
   const out = {
-    cited_domains,                              // competitive (brand + social removed)
-    raw_cited_domains: raw,                     // everything cited, nothing lost
-    diversity_count: cited_domains.length,      // competitive count only
-    brand_present,                              // any brand domain present
-    competitors_present,                        // declared-competitor matches
-    competitor_candidates: cited_domains.map((d) => d.domain), // real third-party field
+    cited_field,
+    raw_cited_domains: raw,
+    competitor_domains,
+    media_domains,
+    competitor_count: competitor_domains.length,
+    media_count: media_domains.length,
+    diversity_count: competitor_domains.length, // competitive field only
+    brand_present,
+    competitors_present,
     engine: meta.engine || ENGINE,
     gathered_at: meta.gathered_at || new Date().toISOString(),
   };
@@ -234,14 +219,42 @@ function collectCompetitors(profile) {
   return out;
 }
 
-/** Compact declared-competitor summary for reporting (requirement 4). */
-function summarizeDeclaredCompetitors(profile) {
-  const f = (col) => asArray(profile[col]).map((c) => ({
-    name: c && c.name != null ? String(c.name).trim() || null : null,
-    url: c && c.url != null ? String(c.url).trim() || null : null,
-    domain: c ? extractDomain(c.url) : null,
-  }));
-  return { competitors_business: f('competitors_business'), competitors_visibility: f('competitors_visibility') };
+/**
+ * Profile-level competitor-gap summary (facts only). Built from the typed
+ * evidence of HIGH-VALUE prompts + the declared competitor list.
+ *
+ * @param {Array<{name,domain}>} declared
+ * @param {Array<object>} evidences  per-prompt evidence objects (high-value)
+ */
+function buildGapSummary(declared, evidences, meta = {}) {
+  const citedAll = new Set();              // every cited registrable domain (any class)
+  const compPromptCount = new Map();       // competitor-class domain -> # prompts cited in
+  for (const ev of asArray(evidences)) {
+    for (const d of asArray(ev.raw_cited_domains)) citedAll.add(d.domain);
+    for (const dom of new Set(asArray(ev.competitor_domains))) {
+      compPromptCount.set(dom, (compPromptCount.get(dom) || 0) + 1);
+    }
+  }
+
+  const declared_competitors = asArray(declared).map((c) => ({ name: c.name || null, domain: c.domain || null }));
+  const declaredDomains = new Set(declared_competitors.map((c) => c.domain).filter(Boolean));
+
+  const cited_competitors = [...compPromptCount.entries()]
+    .map(([domain, prompt_count]) => ({ domain, prompt_count }))
+    .sort((a, b) => b.prompt_count - a.prompt_count || a.domain.localeCompare(b.domain));
+
+  // Declared competitor never appears in ANY cited set (null domain => can't be cited).
+  const declared_but_not_cited = declared_competitors.filter((c) => !c.domain || !citedAll.has(c.domain));
+  // Real competitor-class winners the customer did NOT declare.
+  const cited_but_not_declared = cited_competitors.filter((c) => !declaredDomains.has(c.domain));
+
+  return {
+    declared_competitors,
+    cited_competitors,
+    declared_but_not_cited,
+    cited_but_not_declared,
+    generated_at: meta.generated_at || new Date().toISOString(),
+  };
 }
 
 /** A prompt qualifies when the Value pass rated it at/above the threshold. */
@@ -289,11 +302,11 @@ async function readBrandDomain(userId) {
 }
 
 /**
- * Read-modify-write tracked_prompts under a row lock, applying `mutate` to a
- * FRESH copy. Writes ONLY the tracked_prompts column. `mutate` returns the new
- * array, or null to abort (commit nothing).
+ * Read-modify-write under a row lock. Applies `mutate` to a FRESH copy of
+ * tracked_prompts; writes ONLY tracked_prompts + competitor_gap_summary. `mutate`
+ * returns the new array, or null to abort (commit nothing). Strict additive guard.
  */
-async function applyToTrackedPrompts(userId, mutate) {
+async function writeEvidence(userId, mutate, summary) {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -301,19 +314,13 @@ async function applyToTrackedPrompts(userId, mutate) {
       `SELECT tracked_prompts FROM visibility_profiles WHERE user_id = $1 FOR UPDATE`,
       [userId]
     );
-    if (rows.length === 0) {
-      await client.query('ROLLBACK');
-      return { written: false, reason: 'no_profile' };
-    }
+    if (rows.length === 0) { await client.query('ROLLBACK'); return { written: false, reason: 'no_profile' }; }
     const current = asArray(rows[0].tracked_prompts);
     const next = mutate(current);
-    if (next == null) {
-      await client.query('ROLLBACK');
-      return { written: false, reason: 'aborted' };
-    }
+    if (next == null) { await client.query('ROLLBACK'); return { written: false, reason: 'aborted' }; }
     await client.query(
-      `UPDATE visibility_profiles SET tracked_prompts = $2::jsonb WHERE user_id = $1`,
-      [userId, JSON.stringify(next)]
+      `UPDATE visibility_profiles SET tracked_prompts = $2::jsonb, competitor_gap_summary = $3::jsonb WHERE user_id = $1`,
+      [userId, JSON.stringify(next), JSON.stringify(summary)]
     );
     await client.query('COMMIT');
     return { written: true };
@@ -331,7 +338,7 @@ async function applyToTrackedPrompts(userId, mutate) {
 
 /**
  * Live gather: one base-Sonar (low context) Perplexity call per HIGH-VALUE
- * prompt, then derive honest evidence. Strictly additive, idempotent, facts only.
+ * prompt, then derive typed evidence + the gap summary. Additive, idempotent.
  */
 async function gatherOpportunityEvidence(userId) {
   if (!userId) throw new Error('gatherOpportunityEvidence requires a userId');
@@ -382,8 +389,10 @@ async function gatherOpportunityEvidence(userId) {
     return { userId, plan, status: 'all_failed', failed };
   }
 
+  const summary = buildGapSummary(competitors, [...evidenceByText.values()]);
+
   let processed = 0;
-  const result = await applyToTrackedPrompts(userId, (current) => {
+  const result = await writeEvidence(userId, (current) => {
     let changed = false;
     const next = current.map((p) => {
       if (!p || typeof p !== 'object') return p;
@@ -394,20 +403,15 @@ async function gatherOpportunityEvidence(userId) {
       return { ...p, opportunity_evidence: ev };
     });
     return changed ? next : null;
-  });
+  }, summary);
 
   if (!result.written) return { userId, plan, status: 'all_failed', processed: 0, failed };
-  return {
-    userId, plan, status: 'gathered', processed, failed,
-    declared_competitors: summarizeDeclaredCompetitors(profile),
-  };
+  return { userId, plan, status: 'gathered', processed, failed, competitor_gap_summary: summary };
 }
 
 /**
- * Offline re-derive: recompute evidence signals from the ALREADY-STORED cited
- * domains, applying the current brand + social exclusion rules. NO Perplexity
- * calls. Strictly additive, idempotent, never-null (aborts if nothing has
- * retained citations to recompute from).
+ * Offline re-derive: recompute typed evidence + gap summary from ALREADY-STORED
+ * citations. NO Perplexity calls. Additive, idempotent, never-null.
  */
 async function rederiveOpportunityEvidence(userId) {
   if (!userId) throw new Error('rederiveOpportunityEvidence requires a userId');
@@ -425,47 +429,48 @@ async function rederiveOpportunityEvidence(userId) {
   const brandDomain = await readBrandDomain(userId);
   const brandCtx = buildBrandContext({ brandDomain, companyName: profile.company_name });
   const competitors = collectCompetitors(profile);
-  const declared = summarizeDeclaredCompetitors(profile);
 
-  // Recompute from stored domains for each prompt that already has retained
-  // citations (raw_cited_domains preferred, else the older cited_domains).
   const newByText = new Map();
+  const summaryEvidences = [];
   let needFetch = 0;
   for (const p of prompts) {
     if (!p || typeof p !== 'object' || !p.opportunity_evidence) continue;
     const ev = p.opportunity_evidence;
-    const stored = ev.raw_cited_domains || ev.cited_domains;
+    const stored = ev.raw_cited_domains || ev.cited_domains || ev.cited_field;
     if (!Array.isArray(stored)) { needFetch += 1; continue; } // citations not retained
-    const rawCounts = normalizeDomainCounts(stored);
     const text = typeof p.text === 'string' ? p.text : null;
     if (text == null) continue;
-    newByText.set(text, deriveEvidence(rawCounts, brandCtx, competitors, {
+    const fresh = deriveEvidence(normalizeDomainCounts(stored), brandCtx, competitors, {
       engine: ev.engine || ENGINE,
-      gathered_at: ev.gathered_at, // preserve original fetch time
+      gathered_at: ev.gathered_at,             // preserve original fetch time
       rederived_at: new Date().toISOString(),
-    }));
+    });
+    newByText.set(text, fresh);
+    if (qualifies(p)) summaryEvidences.push(fresh); // gap summary = high-value prompts only
   }
 
   if (newByText.size === 0) {
-    return { userId, plan, status: 'nothing_to_rederive', need_fetch: needFetch, declared_competitors: declared };
+    return { userId, plan, status: 'nothing_to_rederive', need_fetch: needFetch };
   }
 
+  const summary = buildGapSummary(competitors, summaryEvidences);
+
   let rederived = 0;
-  const result = await applyToTrackedPrompts(userId, (current) => {
+  const result = await writeEvidence(userId, (current) => {
     let changed = false;
     const next = current.map((p) => {
       if (!p || typeof p !== 'object') return p;
       const ev = newByText.get(typeof p.text === 'string' ? p.text : null);
-      if (!ev) return p;                       // unmatched / not retained => unchanged
+      if (!ev) return p;
       rederived += 1;
       changed = true;
       return { ...p, opportunity_evidence: ev };
     });
     return changed ? next : null;
-  });
+  }, summary);
 
-  if (!result.written) return { userId, plan, status: 'nothing_to_rederive', need_fetch: needFetch, declared_competitors: declared };
-  return { userId, plan, status: 'rederived', rederived, need_fetch: needFetch, declared_competitors: declared };
+  if (!result.written) return { userId, plan, status: 'nothing_to_rederive', need_fetch: needFetch };
+  return { userId, plan, status: 'rederived', rederived, need_fetch: needFetch, competitor_gap_summary: summary };
 }
 
 module.exports = {
@@ -474,8 +479,7 @@ module.exports = {
   // exposed for tests
   _internals: {
     extractDomain, deriveEvidence, buildEvidence, collectCompetitors,
-    buildBrandContext, isBrandOwned, isSocialJunk, normalizeDomainCounts,
-    summarizeDeclaredCompetitors, qualifies, VALUE_THRESHOLD,
-    SOCIAL_LOW_AUTHORITY,
+    buildBrandContext, isBrandOwned, normalizeDomainCounts, buildGapSummary,
+    classifyDomain, qualifies, VALUE_THRESHOLD,
   },
 };
