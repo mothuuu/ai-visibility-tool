@@ -41,6 +41,13 @@ function triggerValueScoring(userId) {
       }
       return undefined;
     })
+    .then((ev) => {
+      // Winnability score is pure computation over the evidence just gathered.
+      if (ev && ev.status === 'gathered') {
+        return require('./draftGeneration/opportunityScoring').scoreOpportunity(userId);
+      }
+      return undefined;
+    })
     .catch((err) =>
       console.warn(
         `[DraftGeneration] enrichment trigger failed for user ${userId}: ${err && err.message ? err.message : err}`
