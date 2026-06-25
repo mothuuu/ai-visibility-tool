@@ -1,9 +1,11 @@
 // backend/db/migrate-citation-monitoring-backfill.js
-// CP9b — One-time backfill: create prompt_clusters rows for users who confirmed
-// their visibility profile before the CP9a bridge existed.
+// One-time backfill: create prompt_clusters rows for users who confirmed their
+// visibility profile before the deeperScan bridge existed.
 //
-// Safe to re-run: upsertCluster uses ON CONFLICT (org_id, name) DO UPDATE,
-// so repeated executions update the existing row rather than creating duplicates.
+// Uses the 018 schema via triggerDeeperScan, which calls upsertCluster with
+// SELECT-then-INSERT/UPDATE (no UNIQUE constraint dependency).
+// Safe to re-run: upsertCluster matches on (user_id, cluster_name) and updates
+// in-place if found.
 //
 // Usage:
 //   node backend/db/migrate-citation-monitoring-backfill.js            # live

@@ -189,11 +189,55 @@ async function creditPurchasedTokens(userId, amount, referenceType = 'stripe_pay
  * @param {number} amount - Must be > 0
  * @param {string} referenceType
  * @param {string|null} [referenceId=null]
+ * @param {object|null} [externalClient=null] - If provided, use this client and skip BEGIN/COMMIT (caller manages the transaction).
  * @returns {Promise<{monthly_remaining:number, purchased_balance:number, total_available:number}>}
  */
-async function spendTokens(userId, amount, referenceType, referenceId = null) {
+async function spendTokens(userId, amount, referenceType, referenceId = null, externalClient = null) {
   if (!amount || amount <= 0) {
     throw new Error('amount must be > 0');
+  }
+
+  if (externalClient) {
+    // Caller manages the transaction — just run queries on the provided client.
+    const lockResult = await externalClient.query(
+      'SELECT monthly_remaining, purchased_balance FROM token_balances WHERE user_id = $1 FOR UPDATE',
+      [userId]
+    );
+
+    if (lockResult.rows.length === 0) {
+      throw new InsufficientTokensError(amount, 0);
+    }
+
+    let { monthly_remaining, purchased_balance } = lockResult.rows[0];
+    const totalAvailable = monthly_remaining + purchased_balance;
+
+    if (totalAvailable < amount) {
+      throw new InsufficientTokensError(amount, totalAvailable);
+    }
+
+    let remaining = amount;
+    const monthlyDeduct = Math.min(remaining, monthly_remaining);
+    monthly_remaining -= monthlyDeduct;
+    remaining -= monthlyDeduct;
+
+    if (remaining > 0) {
+      purchased_balance -= remaining;
+    }
+
+    await externalClient.query(`
+      UPDATE token_balances
+      SET monthly_remaining = $2, purchased_balance = $3, updated_at = NOW()
+      WHERE user_id = $1
+    `, [userId, monthly_remaining, purchased_balance]);
+
+    const balanceAfter = monthly_remaining + purchased_balance;
+
+    await externalClient.query(`
+      INSERT INTO token_transactions (user_id, type, amount, balance_after, reference_type, reference_id)
+      VALUES ($1, 'spend', $2, $3, $4, $5)
+    `, [userId, -amount, balanceAfter, referenceType, referenceId]);
+
+    return { monthly_remaining, purchased_balance, total_available: balanceAfter };
   }
 
   const client = await db.getClient();
