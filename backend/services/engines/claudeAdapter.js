@@ -35,18 +35,23 @@ function isRetryable(err) {
   return status === 429 || (status >= 500 && status < 600);
 }
 
-async function callOnce(query, model) {
+async function callOnce(query, model, temperature) {
   const client = getClient();
   // Race against a timeout
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), TIMEOUT_MS);
   try {
-    const resp = await client.messages.create({
+    const params = {
       model,
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: query }],
-    }, { signal: ctl.signal });
+    };
+    // Optional, opt-in only: callers needing determinism (e.g. value scoring)
+    // pass options.temperature; absent => SDK default, so existing callers are
+    // completely unchanged.
+    if (typeof temperature === 'number') params.temperature = temperature;
+    const resp = await client.messages.create(params, { signal: ctl.signal });
     const block = (resp.content || []).find(b => b.type === 'text');
     const text = block && typeof block.text === 'string' ? block.text : '';
     const usage = resp.usage || {};
@@ -59,11 +64,12 @@ async function callOnce(query, model) {
 
 async function runQuery(query, options = {}) {
   const model = options.model || DEFAULT_MODEL;
+  const temperature = options.temperature; // optional; undefined => SDK default
   const started = Date.now();
   let lastErr;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const out = await callOnce(query, model);
+      const out = await callOnce(query, model, temperature);
       console.log(`CitationTest [claude] query completed in ${Date.now() - started}ms`);
       return out;
     } catch (err) {

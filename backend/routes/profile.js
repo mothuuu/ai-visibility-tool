@@ -38,7 +38,22 @@ const EDITABLE_FIELDS = [
   'tracked_prompts',
   'avg_customer_value',
   'priority_focus',
+  'deal_size_band',
+  'sales_model',
 ];
+
+// Customer-supplied business economics that ground per-prompt Value scoring.
+// Invalid/unknown values normalize to null (never persisted as garbage), same
+// lenient discipline as funnel_stage. NULL = not-yet-provided.
+const DEAL_SIZE_BANDS = new Set(['under_1k', '1k_10k', '10k_50k', '50k_250k', 'over_250k']);
+const SALES_MODELS = new Set(['self_serve', 'smb', 'mid_market', 'enterprise']);
+const ENUM_FIELD_VALUES = { deal_size_band: DEAL_SIZE_BANDS, sales_model: SALES_MODELS };
+
+function normalizeEnumField(field, v) {
+  if (v == null) return null;
+  const s = String(v).trim().toLowerCase();
+  return ENUM_FIELD_VALUES[field].has(s) ? s : null;
+}
 
 const JSONB_FIELDS = new Set([
   'icps',
@@ -65,6 +80,8 @@ function normalizeProfile(row) {
     tracked_prompts: row?.tracked_prompts ?? [],
     avg_customer_value: row?.avg_customer_value ?? null,
     priority_focus: row?.priority_focus ?? null,
+    deal_size_band: row?.deal_size_band ?? null,
+    sales_model: row?.sales_model ?? null,
     draft_generated_at: row?.draft_generated_at ?? null,
     draft_source: row?.draft_source ?? null,
     profile_completed_at: row?.profile_completed_at ?? null,
@@ -181,17 +198,30 @@ function validateProfilePayload(body, planCtx) {
   return errors;
 }
 
+// Core, form-authored prompt keys that this endpoint owns and normalizes.
+// Anything else on a prompt is server-computed enrichment (value,
+// opportunity_evidence, …) that the form only round-trips.
+const CORE_PROMPT_KEYS = new Set(['text', 'volume', 'is_monitored', 'funnel_stage']);
+
 /** Coerce a tracked_prompts entry into the stored {text, volume, is_monitored} shape. */
 function normalizePrompt(p) {
   if (typeof p === 'string') {
     return { text: p.trim(), volume: null, is_monitored: false, funnel_stage: null };
   }
-  return {
+  const out = {
     text: String(p.text == null ? '' : p.text).trim(),
     volume: p.volume ?? null,
     is_monitored: Boolean(p.is_monitored),
     funnel_stage: normalizeFunnelStage(p.funnel_stage),
   };
+  // Preserve every server-computed enrichment key verbatim (value,
+  // opportunity_evidence, and any future per-prompt enrichment) so an intake
+  // edit never flattens it. Generalized so new enrichment keys are kept without
+  // touching this code again.
+  for (const k of Object.keys(p)) {
+    if (!CORE_PROMPT_KEYS.has(k) && p[k] !== undefined) out[k] = p[k];
+  }
+  return out;
 }
 
 /** Build the sanitized, save-ready value map from a validated payload. */
@@ -206,6 +236,8 @@ function buildSaveValues(body) {
       values[field] = asArray(body[field]).map(normalizeCompetitorSave).filter(Boolean).slice(0, COMPETITOR_MAX);
     } else if (JSONB_FIELDS.has(field)) {
       values[field] = asArray(body[field]);
+    } else if (field in ENUM_FIELD_VALUES) {
+      values[field] = normalizeEnumField(field, body[field]);
     } else {
       values[field] = body[field] === undefined ? null : body[field];
     }
@@ -227,7 +259,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const { rows } = await db.query(
       `SELECT display_name, company_name, industry, location, business_description,
               icps, competitors_business, competitors_visibility, tracked_prompts,
-              avg_customer_value, priority_focus,
+              avg_customer_value, priority_focus, deal_size_band, sales_model,
               draft_generated_at, draft_source, profile_completed_at, deeper_scan_triggered_at
          FROM visibility_profiles
         WHERE user_id = $1`,
@@ -281,12 +313,15 @@ router.post('/', authenticateToken, async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Lock the row (if any) so first-completion detection is race-safe.
+    // Lock the row (if any) so first-completion detection is race-safe. Also read
+    // prior value-scoring inputs so we only (re)trigger scoring when they change.
     const existing = await client.query(
-      `SELECT profile_completed_at FROM visibility_profiles WHERE user_id = $1 FOR UPDATE`,
+      `SELECT profile_completed_at, deal_size_band, sales_model
+         FROM visibility_profiles WHERE user_id = $1 FOR UPDATE`,
       [userId]
     );
     const isFirstCompletion = existing.rows.length === 0 || existing.rows[0].profile_completed_at === null;
+    const priorInputs = existing.rows[0] || {};
 
     // Upsert ONLY the editable fields (draft lifecycle columns untouched).
     const cols = Object.keys(values);
@@ -327,11 +362,49 @@ router.post('/', authenticateToken, async (req, res) => {
 
     await client.query('COMMIT');
 
+    // Layer-2 (Value): separate, non-blocking, isolated. Trigger only once BOTH
+    // business inputs exist AND this save provided/changed them — so unrelated
+    // edits don't re-spend an LLM call. The scorer itself is strictly additive
+    // and idempotent; a failure here never affects the save response.
+    const newDeal = 'deal_size_band' in values ? values.deal_size_band : priorInputs.deal_size_band;
+    const newModel = 'sales_model' in values ? values.sales_model : priorInputs.sales_model;
+    const inputsChanged =
+      newDeal !== priorInputs.deal_size_band || newModel !== priorInputs.sales_model;
+    if (newDeal && newModel && inputsChanged) {
+      Promise.resolve()
+        .then(() => require('../services/draftGeneration/valueScoring').scorePromptValues(userId))
+        .then((res) => {
+          // Opportunity evidence (Perplexity) depends on value bands; chain it
+          // only once scoring populated them. Isolated; never affects the save.
+          if (res && res.status === 'scored') {
+            return require('../services/draftGeneration/opportunityEvidence').gatherOpportunityEvidence(userId);
+          }
+          return undefined;
+        })
+        .then((ev) => {
+          // Winnability score: pure computation over the evidence just gathered.
+          if (ev && ev.status === 'gathered') {
+            return require('../services/draftGeneration/opportunityScoring').scoreOpportunity(userId);
+          }
+          return undefined;
+        })
+        .then((opp) => {
+          // Impact rollup (Layer 4): pure Value × Opportunity over the bands set.
+          if (opp && opp.status === 'scored') {
+            return require('../services/draftGeneration/impactScoring').scoreImpact(userId);
+          }
+          return undefined;
+        })
+        .catch((err) =>
+          console.warn(`[Profile] enrichment trigger failed for user ${userId}: ${err && err.message ? err.message : err}`)
+        );
+    }
+
     // Return the fresh, normalized state.
     const { rows } = await db.query(
       `SELECT display_name, company_name, industry, location, business_description,
               icps, competitors_business, competitors_visibility, tracked_prompts,
-              avg_customer_value, priority_focus,
+              avg_customer_value, priority_focus, deal_size_band, sales_model,
               draft_generated_at, draft_source, profile_completed_at, deeper_scan_triggered_at
          FROM visibility_profiles WHERE user_id = $1`,
       [userId]
@@ -354,3 +427,6 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
+
+// Test-only surface for the pure save/read helpers (no routing impact).
+module.exports.__test = { normalizeProfile, buildSaveValues, normalizePrompt, normalizeEnumField };

@@ -23,6 +23,45 @@ const db = require('../db/database');
 const { resolvePlanForRequest, getDraftConfig } = require('./planService');
 const { PIPELINE } = require('./draftGeneration/generators');
 
+/**
+ * Fire-and-forget post-generation enrichment. Strictly additive and fully
+ * isolated: Value scoring no-ops ("pending") until the customer supplies
+ * deal_size_band/sales_model; Opportunity evidence runs only once Value has
+ * populated bands. Any failure here must NEVER affect generation. Lazy requires
+ * avoid load-order coupling.
+ */
+function triggerValueScoring(userId) {
+  Promise.resolve()
+    .then(() => require('./draftGeneration/valueScoring').scorePromptValues(userId))
+    .then((res) => {
+      // Opportunity evidence depends on value.band, so only chain it once scoring
+      // actually populated bands. Its own gates/no-ops handle everything else.
+      if (res && res.status === 'scored') {
+        return require('./draftGeneration/opportunityEvidence').gatherOpportunityEvidence(userId);
+      }
+      return undefined;
+    })
+    .then((ev) => {
+      // Winnability score is pure computation over the evidence just gathered.
+      if (ev && ev.status === 'gathered') {
+        return require('./draftGeneration/opportunityScoring').scoreOpportunity(userId);
+      }
+      return undefined;
+    })
+    .then((opp) => {
+      // Impact rollup (Layer 4): pure Value × Opportunity over the bands just set.
+      if (opp && opp.status === 'scored') {
+        return require('./draftGeneration/impactScoring').scoreImpact(userId);
+      }
+      return undefined;
+    })
+    .catch((err) =>
+      console.warn(
+        `[DraftGeneration] enrichment trigger failed for user ${userId}: ${err && err.message ? err.message : err}`
+      )
+    );
+}
+
 const GENERATOR_RETRIES = 1; // one short internal retry per generator
 
 // Status constants returned by generateDraft().
@@ -241,6 +280,10 @@ async function generateDraft(userId, { pipeline = PIPELINE } = {}) {
     `[DraftGeneration] user ${userId} (plan=${plan}, scan=${scan.id}): draft generated — ` +
       Object.entries(fields).map(([k, v]) => `${k}:${v}`).join(' ')
   );
+
+  // Separate, non-blocking Layer-2 step: score per-prompt business value now that
+  // prompts exist. Self-gates on plan + business inputs; never blocks generation.
+  triggerValueScoring(userId);
 
   return {
     userId,
