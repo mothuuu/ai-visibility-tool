@@ -6,7 +6,6 @@ const db = require('../db/database');
 const { PLAN_LIMITS } = require('../middleware/usageLimits');
 const UsageTrackerService = require('../services/usage-tracker-service');
 const {
-  persistCitationRun,
   createCitationMonitoringService,
 } = require('../services/citationMonitoringService');
 const citationService = createCitationMonitoringService();
@@ -1102,14 +1101,12 @@ router.post('/test-ai-visibility', authenticateTokenOptional, async (req, res) =
           await client.query('ROLLBACK');
           return res.status(403).json({ error: 'plan_upgrade_required', message: 'Citation tests require Starter or Pro plan' });
         }
-        const orgId = await citationService.ensurePersonalOrg(req.user.id, client);
         run = await citationService.createRun({
-          clusterId,
-          initiatedByUserId: req.user.id,
-          initiatedByOrgId: orgId,
-          client
+          userId: req.user.id,
+          runType: 'manual',
+          client,
         });
-        await tokenService.spendTokens(req.user.id, CITATION_TEST_TOKEN_COST, 'citation_test', run.id.toString());
+        await tokenService.spendTokens(req.user.id, CITATION_TEST_TOKEN_COST, 'citation_test', run.id.toString(), client);
         await client.query('COMMIT');
       } catch (err) {
         await client.query('ROLLBACK');
@@ -1128,7 +1125,7 @@ router.post('/test-ai-visibility', authenticateTokenOptional, async (req, res) =
       return res.json({ success: true, data: results });
     }
 
-    const evidenceResult = await citationService.persistEvidenceRows({ runId: run.id, clusterId, queries, results });
+    const evidenceResult = await citationService.persistEvidenceRows({ runId: run.id, queries, results });
     await citationService.updateRunStatus(run.id, deriveStatus(results));
 
     return res.json({ success: true, data: results, persistence: { runId: run.id, evidenceCount: evidenceResult.persisted } });

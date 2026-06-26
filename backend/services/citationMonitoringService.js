@@ -1,137 +1,88 @@
 // backend/services/citationMonitoringService.js
-// Phase 3 — Citation Monitoring persistence service.
+// Citation Monitoring persistence service — aligned to 018 prod schema.
 //
-// Reads/writes:
-//   prompt_clusters, citation_test_runs, citation_evidence, benchmark_stats
+// Reads/writes: prompt_clusters, citation_test_runs, citation_evidence
+// benchmark_stats is not written here (stubs only — no cluster_id FK in 018).
 //
 // DI-friendly: pass any object that exposes `query(text, params)` (the
 // existing `db/database.js` export, a transaction client, or a test fake).
 //
-// NOTE: this service is intentionally separate from the directory
-// submissions / "AI Citation Network" feature. Do not reuse those tables.
+// All DB column names are translated to API field names before returning so
+// the frontend receives a stable shape regardless of schema evolution.
 'use strict';
 
-const ALLOWED_WINDOWS = new Set(['7d', '14d', '30d', '90d']);
-const WINDOW_TO_INTERVAL = {
-  '7d': '7 days',
-  '14d': '14 days',
-  '30d': '30 days',
-  '90d': '90 days',
+// Maps engine keys used by ai-testing.js results to 018 CHECK-constraint values.
+const ENGINE_MAP = {
+  openai: 'chatgpt',
+  anthropic: 'claude',
+  perplexity: 'perplexity',
+  gemini: 'gemini',
 };
 
 function defaultDb() {
-  // Lazy require so unit tests can avoid requiring pg.
   return require('../db/database');
 }
 
-function asJsonb(value, fallback = '[]') {
-  if (value === undefined || value === null) return fallback;
+function asJsonb(value) {
+  if (value === undefined || value === null) return '[]';
   return JSON.stringify(value);
-}
-
-function extractDomain(rawUrl) {
-  if (!rawUrl || typeof rawUrl !== 'string') return null;
-  try {
-    const u = new URL(rawUrl);
-    return u.hostname.replace(/^www\./, '').toLowerCase();
-  } catch {
-    // Allow bare domain strings from upstream parsers.
-    const trimmed = rawUrl.trim().toLowerCase();
-    return trimmed && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(trimmed)
-      ? trimmed.replace(/^www\./, '')
-      : null;
-  }
 }
 
 function createCitationMonitoringService({ db } = {}) {
   const conn = db || defaultDb();
 
   // -------- prompt_clusters --------
-  async function upsertCluster({
-    id,
-    orgId = null,
-    userId = null,
-    name,
-    canonicalPrompt,
-    promptVariants = [],
-    industry = null,
-    persona = null,
-    funnelStage = null,
-    competitorDomains = [],
-  }) {
-    if (!name || !canonicalPrompt) {
-      throw new Error('name and canonicalPrompt are required');
-    }
 
-    if (id) {
-      const { rows } = await conn.query(
-        `UPDATE prompt_clusters
-           SET name = $2,
-               canonical_prompt = $3,
-               prompt_variants = $4::jsonb,
-               industry = $5,
-               persona = $6,
-               funnel_stage = $7,
-               competitor_domains = $8::jsonb,
-               updated_at = NOW()
-         WHERE id = $1
-         RETURNING *`,
-        [
-          id,
-          name,
-          canonicalPrompt,
-          asJsonb(promptVariants),
-          industry,
-          persona,
-          funnelStage,
-          asJsonb(competitorDomains),
-        ]
-      );
-      if (!rows[0]) throw new Error(`prompt_cluster ${id} not found`);
-      return rows[0];
-    }
-
-    const { rows } = await conn.query(
-      `INSERT INTO prompt_clusters
-         (org_id, user_id, name, canonical_prompt, prompt_variants,
-          industry, persona, funnel_stage, competitor_domains)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9::jsonb)
-       ON CONFLICT (org_id, name) DO UPDATE SET
-         canonical_prompt = EXCLUDED.canonical_prompt,
-         prompt_variants = EXCLUDED.prompt_variants,
-         industry = EXCLUDED.industry,
-         persona = EXCLUDED.persona,
-         funnel_stage = EXCLUDED.funnel_stage,
-         competitor_domains = EXCLUDED.competitor_domains,
-         updated_at = NOW()
-       RETURNING *`,
-      [
-        orgId,
-        userId,
-        name,
-        canonicalPrompt,
-        asJsonb(promptVariants),
-        industry,
-        persona,
-        funnelStage,
-        asJsonb(competitorDomains),
-      ]
-    );
-    return rows[0];
+  function translateCluster(row) {
+    if (!row) return null;
+    const queries = Array.isArray(row.queries) ? row.queries : [];
+    return {
+      ...row,
+      name: row.cluster_name,
+      canonical_prompt: queries[0] || null,
+      prompt_variants: queries.slice(1),
+    };
   }
 
-  async function listClusters({ orgId = null, userId = null, limit = 100 } = {}) {
-    const { rows } = await conn.query(
-      `SELECT *
-         FROM prompt_clusters
-        WHERE is_archived = FALSE
-          AND ($1::int IS NULL OR org_id = $1)
-          AND ($2::int IS NULL OR user_id = $2)
-        ORDER BY updated_at DESC
-        LIMIT $3`,
-      [orgId, userId, Math.min(Math.max(limit, 1), 500)]
+  // SELECT-then-INSERT/UPDATE because 018 has no UNIQUE constraint on prompt_clusters.
+  async function upsertCluster({ userId, clusterName, queries = [], vertical, intentTier, source }) {
+    if (!clusterName) throw new Error('clusterName is required');
+
+    const { rows: existing } = await conn.query(
+      'SELECT id FROM prompt_clusters WHERE user_id = $1 AND cluster_name = $2',
+      [userId, clusterName]
     );
-    return rows;
+
+    if (existing[0]) {
+      const { rows } = await conn.query(
+        `UPDATE prompt_clusters
+           SET queries = $1::jsonb, updated_at = NOW()
+         WHERE id = $2
+         RETURNING *`,
+        [asJsonb(queries), existing[0].id]
+      );
+      return translateCluster(rows[0]);
+    }
+
+    const { rows } = await conn.query(
+      `INSERT INTO prompt_clusters (user_id, cluster_name, vertical, intent_tier, queries, source)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+       RETURNING *`,
+      [userId, clusterName, vertical, intentTier, asJsonb(queries), source]
+    );
+    return translateCluster(rows[0]);
+  }
+
+  async function listClusters({ userId = null, limit = 100 } = {}) {
+    const { rows } = await conn.query(
+      `SELECT * FROM prompt_clusters
+        WHERE active = TRUE
+          AND ($1::int IS NULL OR user_id = $1)
+        ORDER BY updated_at DESC
+        LIMIT $2`,
+      [userId, Math.min(Math.max(limit, 1), 500)]
+    );
+    return rows.map(translateCluster);
   }
 
   async function getCluster(id) {
@@ -139,63 +90,28 @@ function createCitationMonitoringService({ db } = {}) {
       'SELECT * FROM prompt_clusters WHERE id = $1',
       [id]
     );
-    return rows[0] || null;
-  }
-
-  // -------- personal_orgs --------
-  async function ensurePersonalOrg(userId, client) {
-    if (userId == null) throw new Error('userId is required');
-    const { rows } = await client.query(
-      'SELECT id FROM personal_orgs WHERE user_id = $1',
-      [userId]
-    );
-    if (rows[0]) return rows[0].id;
-    const { rows: ins } = await client.query(
-      'INSERT INTO personal_orgs (user_id) VALUES ($1) RETURNING id',
-      [userId]
-    );
-    return ins[0].id;
+    return rows[0] ? translateCluster(rows[0]) : null;
   }
 
   // -------- citation_test_runs --------
-  async function createRun({
-    clusterId,
-    initiatedByUserId = null,
-    initiatedByOrgId = null,
-    enginesTested = [],
-    costEstimateCents = null,
-    notes = null,
-    client,
-  } = {}) {
-    if (!clusterId) throw new Error('clusterId is required');
+
+  async function createRun({ userId, runType, scanId = null, enginesTested = [], client } = {}) {
     const execConn = client || conn;
     const { rows } = await execConn.query(
-      `INSERT INTO citation_test_runs
-         (cluster_id, initiated_by_user_id, initiated_by_org_id,
-          engines_tested, status, cost_estimate_cents, notes)
-       VALUES ($1, $2, $3, $4::jsonb, 'pending', $5, $6)
+      `INSERT INTO citation_test_runs (user_id, run_type, scan_id, engines_tested, status)
+       VALUES ($1, $2, $3, $4::text[], 'pending')
        RETURNING *`,
-      [
-        clusterId,
-        initiatedByUserId,
-        initiatedByOrgId,
-        asJsonb(enginesTested),
-        costEstimateCents,
-        notes,
-      ]
+      [userId, runType, scanId, enginesTested]
     );
     return rows[0];
   }
 
-  const TERMINAL_STATUSES = new Set(['completed', 'failed', 'partial']);
   const VALID_STATUSES = new Set(['pending', 'running', 'completed', 'failed', 'partial']);
 
   async function updateRunStatus(runId, status) {
     if (runId == null) throw new Error('runId is required');
-    if (!VALID_STATUSES.has(status)) {
-      throw new Error(`invalid status: ${status}`);
-    }
-    const setCompleted = TERMINAL_STATUSES.has(status);
+    if (!VALID_STATUSES.has(status)) throw new Error(`invalid status: ${status}`);
+    const setCompleted = status === 'completed' || status === 'failed' || status === 'partial';
     const { rows } = await conn.query(
       `UPDATE citation_test_runs
           SET status = $2${setCompleted ? ', completed_at = NOW()' : ''}
@@ -206,7 +122,7 @@ function createCitationMonitoringService({ db } = {}) {
     return rows[0] || null;
   }
 
-  async function markRunCompleted(runId, { status = 'completed' } = {}) {
+  async function markRunCompleted(runId, { status = 'complete' } = {}) {
     const { rows } = await conn.query(
       `UPDATE citation_test_runs
           SET status = $2, completed_at = NOW()
@@ -217,367 +133,106 @@ function createCitationMonitoringService({ db } = {}) {
     return rows[0] || null;
   }
 
-  async function listRuns({ clusterId, limit = 50 } = {}) {
-    if (!clusterId) throw new Error('clusterId is required');
+  async function listRuns({ userId = null, limit = 50 } = {}) {
     const { rows } = await conn.query(
-      `SELECT *
-         FROM citation_test_runs
-        WHERE cluster_id = $1
-        ORDER BY started_at DESC
+      `SELECT * FROM citation_test_runs
+        WHERE ($1::int IS NULL OR user_id = $1)
+        ORDER BY created_at DESC
         LIMIT $2`,
-      [clusterId, Math.min(Math.max(limit, 1), 200)]
+      [userId, Math.min(Math.max(limit, 1), 200)]
     );
     return rows;
   }
 
   // -------- citation_evidence --------
-  async function recordEvidenceBatch(rows = []) {
-    if (!Array.isArray(rows) || rows.length === 0) return [];
-    const inserted = [];
-    for (const r of rows) {
-      const {
-        runId,
-        clusterId,
-        engine,
-        model = null,
-        promptText,
-        responseText = null,
-        citationsRaw = [],
-        citationsNormalized = [],
-        mentioned = false,
-        recommended = false,
-        cited = false,
-        error = null,
-        detectionStatus = 'skipped',
-        detectorReasoning = null,
-      } = r;
 
-      if (!runId || !clusterId || !engine || !promptText) {
-        throw new Error(
-          'runId, clusterId, engine, promptText are required for evidence'
-        );
-      }
-
-      const { rows: out } = await conn.query(
-        `INSERT INTO citation_evidence
-         (run_id, cluster_id, engine, model, prompt_text, response_text,
-          citations_raw, citations_normalized,
-          mentioned, recommended, cited, error, detection_status, detector_reasoning)
-       VALUES ($1, $2, $3, $4, $5, $6,
-               $7::jsonb, $8::jsonb,
-               $9, $10, $11, $12, $13, $14)
-       RETURNING id, run_id, cluster_id, engine, mentioned, recommended,
-                 cited, created_at`,
-        [
-          runId,
-          clusterId,
-          engine,
-          model,
-          promptText,
-          responseText,
-          asJsonb(citationsRaw),
-          asJsonb(citationsNormalized),
-          !!mentioned,
-          !!recommended,
-          !!cited,
-          error,
-          detectionStatus,
-          detectorReasoning,
-        ]
-      );
-      inserted.push(out[0]);
-    }
-    return inserted;
+  // Derives citation_type from result flags.
+  // 018 citation_type CHECK ('cited', 'recommended', 'compared', 'absent').
+  function deriveCitationType(q) {
+    if (q.cited) return 'cited';
+    if (q.recommended) return 'recommended';
+    if (q.mentioned) return 'compared';
+    return 'absent';
   }
 
-  async function persistEvidenceRows({ runId, clusterId, queries, results }) {
-    const crypto = require('crypto');
-    const rows = buildEvidenceRows({ runId, clusterId, queries, results });
+  async function persistEvidenceRows({ runId, queries, results }) {
     let persisted = 0;
-    let skipped = 0;
-    for (const r of rows) {
-      const hash = crypto.createHash('sha256').update(r.promptText).digest('hex');
-      const idempotencyKey = `${runId}:${r.engine}:${hash}`;
-      const result = await conn.query(
-        `INSERT INTO citation_evidence
-           (run_id, cluster_id, engine, model, prompt_text, response_text,
-            citations_raw, citations_normalized,
-            mentioned, recommended, cited, error, detection_status, snippet, detector_reasoning, idempotency_key)
-         VALUES ($1, $2, $3, $4, $5, $6,
-                 $7::jsonb, $8::jsonb,
-                 $9, $10, $11, $12, $13, $14, $15, $16)
-         ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
-        [
-          runId,
-          r.clusterId,
-          r.engine,
-          r.model,
-          r.promptText,
-          r.responseText,
-          asJsonb(r.citationsRaw),
-          asJsonb(r.citationsNormalized),
-          !!r.mentioned,
-          !!r.recommended,
-          !!r.cited,
-          r.error,
-          r.detectionStatus || 'skipped',
-          r.snippet || null,
-          r.detectorReasoning || null,
-          idempotencyKey,
-        ]
-      );
-      if (result.rowCount > 0) {
+    const assistants = (results && results.assistants) || {};
+    for (const [rawEngine, summary] of Object.entries(assistants)) {
+      if (!summary || summary.tested === false) continue;
+      const engine = ENGINE_MAP[rawEngine] || rawEngine;
+      const queryResults = Array.isArray(summary.queries) ? summary.queries : [];
+      for (let i = 0; i < queryResults.length; i++) {
+        const q = queryResults[i];
+        const queryText = q.query || (queries && queries[i]) || '';
+        await conn.query(
+          `INSERT INTO citation_evidence
+             (test_run_id, query_text, engine, cited, citation_type, response_snippet, domain_mentioned)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            runId,
+            queryText,
+            engine,
+            !!q.cited,
+            deriveCitationType(q),
+            q.snippet || null,
+            !!q.mentioned,
+          ]
+        );
         persisted++;
-      } else {
-        skipped++;
       }
     }
-    return { persisted, skipped };
+    return { persisted };
+  }
+
+  function translateEvidence(row) {
+    return {
+      engine: row.engine,
+      prompt_text: row.query_text,
+      mentioned: row.domain_mentioned,
+      snippet: row.response_snippet,
+      cited: row.cited,
+      detection_status: row.detection_status || 'skipped',
+    };
   }
 
   async function getEvidence({ runId } = {}) {
     if (!runId) throw new Error('runId is required');
     const { rows } = await conn.query(
-      `SELECT engine, model, prompt_text, detection_status,
-              mentioned, recommended, cited, snippet
+      `SELECT query_text, engine, cited, citation_type,
+              response_snippet, domain_mentioned, detection_status
          FROM citation_evidence
-        WHERE run_id = $1
+        WHERE test_run_id = $1
         ORDER BY engine, created_at ASC`,
       [runId]
     );
-    return rows;
+    return rows.map(translateEvidence);
   }
 
-  // -------- benchmark_stats --------
-  async function computeAndStoreBenchmark({ clusterId, window = '30d' } = {}) {
-    if (!clusterId) throw new Error('clusterId is required');
-    if (!ALLOWED_WINDOWS.has(window)) {
-      throw new Error(`unsupported window: ${window}`);
-    }
-    const interval = WINDOW_TO_INTERVAL[window];
-
-    // Only 'detected' rows are included in benchmark metrics.
-    // 'failed' and 'skipped' are operational states (not negative citation
-    // outcomes) and must be excluded from all numerator and denominator
-    // calculations — counting them as negatives would distort the rates.
-    const { rows } = await conn.query(
-      `SELECT mentioned, recommended, cited, citations_normalized
-         FROM citation_evidence
-        WHERE cluster_id = $1
-          AND created_at >= NOW() - $2::interval
-          AND detection_status = 'detected'`,
-      [clusterId, interval]
-    );
-
-    const sampleSize = rows.length;
-    let mentions = 0;
-    let recs = 0;
-    let cites = 0;
-    const domainCounts = new Map();
-
-    for (const ev of rows) {
-      if (ev.mentioned) mentions += 1;
-      if (ev.recommended) recs += 1;
-      if (ev.cited) cites += 1;
-      const list = Array.isArray(ev.citations_normalized)
-        ? ev.citations_normalized
-        : [];
-      for (const entry of list) {
-        const url = typeof entry === 'string' ? entry : entry && entry.url;
-        const domain = extractDomain(url);
-        if (!domain) continue;
-        domainCounts.set(domain, (domainCounts.get(domain) || 0) + 1);
-      }
-    }
-
-    const totalCitations = Array.from(domainCounts.values()).reduce(
-      (s, n) => s + n,
-      0
-    );
-    const topCitedDomains = Array.from(domainCounts.entries())
-      .map(([domain, count]) => ({
-        domain,
-        count,
-        share: totalCitations ? count / totalCitations : 0,
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-
-    const citationRate = sampleSize ? cites / sampleSize : null;
-    const mentionRate = sampleSize ? mentions / sampleSize : null;
-    const recommendationRate = sampleSize ? recs / sampleSize : null;
-    const citationSov =
-      topCitedDomains.length && totalCitations
-        ? topCitedDomains[0].share
-        : null;
-
-    const { rows: upserted } = await conn.query(
-      `INSERT INTO benchmark_stats
-         (cluster_id, window, sample_size, citation_rate, citation_sov,
-          mention_rate, recommendation_rate, top_cited_domains, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, NOW())
-       ON CONFLICT (cluster_id, window) DO UPDATE
-         SET sample_size = EXCLUDED.sample_size,
-             citation_rate = EXCLUDED.citation_rate,
-             citation_sov = EXCLUDED.citation_sov,
-             mention_rate = EXCLUDED.mention_rate,
-             recommendation_rate = EXCLUDED.recommendation_rate,
-             top_cited_domains = EXCLUDED.top_cited_domains,
-             updated_at = NOW()
-       RETURNING *`,
-      [
-        clusterId,
-        window,
-        sampleSize,
-        citationRate,
-        citationSov,
-        mentionRate,
-        recommendationRate,
-        asJsonb(topCitedDomains),
-      ]
-    );
-    return upserted[0];
+  // -------- benchmark_stats (stub) --------
+  // 018 benchmark_stats is vertical-based, not cluster-based.
+  // Full computation is out of scope for this checkpoint.
+  async function computeAndStoreBenchmark() {
+    return null;
   }
 
-  async function getBenchmark({ clusterId, window = '30d' } = {}) {
-    const { rows } = await conn.query(
-      `SELECT * FROM benchmark_stats
-        WHERE cluster_id = $1 AND window = $2`,
-      [clusterId, window]
-    );
-    return rows[0] || null;
+  async function getBenchmark() {
+    return null;
   }
 
   return {
-    // personal orgs
-    ensurePersonalOrg,
-    // clusters
     upsertCluster,
     listClusters,
     getCluster,
-    // runs
     createRun,
     updateRunStatus,
     markRunCompleted,
     listRuns,
-    // evidence
-    recordEvidenceBatch,
     persistEvidenceRows,
     getEvidence,
-    // stats
     computeAndStoreBenchmark,
     getBenchmark,
   };
 }
 
-// ---------------- orchestration helpers ----------------
-// These wrap the service for the /api/test-ai-visibility persistence flow.
-// They live here (rather than in the route) so they can be unit-tested
-// without pulling in Express middleware / pg.
-
-function buildEvidenceRows({ runId, clusterId, queries, results }) {
-  const rows = [];
-  const assistants = (results && results.assistants) || {};
-  for (const [engine, summary] of Object.entries(assistants)) {
-    if (!summary || summary.tested === false) continue;
-    const queryResults = Array.isArray(summary.queries) ? summary.queries : [];
-    for (let i = 0; i < queryResults.length; i++) {
-      const q = queryResults[i];
-      const promptText = q.query || (queries && queries[i]) || '';
-      rows.push({
-        runId,
-        clusterId,
-        engine,
-        model: summary.model || null,
-        promptText,
-        responseText: null,
-        citationsRaw: q.citations || [],
-        citationsNormalized: q.citationsNormalized || [],
-        mentioned: !!q.mentioned,
-        recommended: !!q.recommended,
-        cited: !!q.cited,
-        snippet: q.snippet || null,
-        detectorReasoning: q.reasoning || null,
-        detectionStatus: q.detectionStatus || 'skipped',
-        error: q.error || null,
-      });
-    }
-  }
-  return rows;
-}
-
-async function persistCitationRun({
-  clusterId,
-  url,
-  queries,
-  results,
-  initiatedByUserId = null,
-  initiatedByOrgId = null,
-  service,
-}) {
-  const svc = service || createCitationMonitoringService();
-  try {
-    const cluster = await svc.getCluster(clusterId);
-    if (!cluster) return { ok: false, error: 'cluster_not_found' };
-
-    const enginesTested = Object.keys(results.assistants || {});
-    let target = null;
-    try {
-      target = new URL(url).hostname.replace(/^www\./, '');
-    } catch {
-      /* leave target null */
-    }
-
-    const run = await svc.createRun({
-      clusterId,
-      initiatedByUserId,
-      initiatedByOrgId,
-      enginesTested,
-      notes: target ? `target=${target}` : null,
-    });
-
-    const rows = buildEvidenceRows({
-      runId: run.id,
-      clusterId,
-      queries,
-      results,
-    });
-    if (rows.length) await svc.recordEvidenceBatch(rows);
-
-    const allEnginesFailed =
-      enginesTested.length > 0 &&
-      enginesTested.every(
-        (k) =>
-          results.assistants[k] && results.assistants[k].tested === false
-      );
-    await svc.markRunCompleted(run.id, {
-      status: allEnginesFailed ? 'failed' : 'completed',
-    });
-
-    const benchmark = await svc.computeAndStoreBenchmark({
-      clusterId,
-      window: '30d',
-    });
-
-    return {
-      ok: true,
-      runId: run.id,
-      evidenceCount: rows.length,
-      benchmarkUpdatedAt: benchmark && benchmark.updated_at,
-    };
-  } catch (err) {
-    // Don't surface SQL details / payloads to callers.
-    // eslint-disable-next-line no-console
-    console.error('Citation persistence failed:', err.message);
-    return { ok: false, error: 'persistence_failed' };
-  }
-}
-
-module.exports = {
-  createCitationMonitoringService,
-  ALLOWED_WINDOWS,
-  buildEvidenceRows,
-  persistCitationRun,
-  // exposed for tests
-  _internals: { extractDomain },
-};
+module.exports = { createCitationMonitoringService };

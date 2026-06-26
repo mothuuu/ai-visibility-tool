@@ -38,10 +38,10 @@ async function triggerDeeperScan({ userId, profile, plan, client }) {
       `${(profile.icps || []).length} ICPs) — TODO: wire targeted-scan engine`
   );
 
-  // Bridge: upsert a personal-org prompt cluster from the confirmed monitored
-  // prompts so Citation Monitoring has real data on first visit.
+  // Bridge: upsert a prompt cluster from the confirmed monitored prompts so
+  // Citation Monitoring has real data on first visit. userId is the owner —
+  // no personal_orgs indirection needed in the 018 schema.
   const svc = createCitationMonitoringService({ db: client });
-  const orgId = await svc.ensurePersonalOrg(userId, client);
 
   const allPrompts = profile.tracked_prompts || [];
   const monitored = allPrompts.filter((p) => p.is_monitored === true);
@@ -56,18 +56,16 @@ async function triggerDeeperScan({ userId, profile, plan, client }) {
   const canonicalPrompt = monitored[0].text;
   const promptVariants = monitored.slice(1).map((p) => p.text);
 
-  // funnel_stage is null on the cluster — each prompt's own funnel_stage is the
-  // source of truth for funnel position. The cluster does not partition by funnel.
+  // Pack canonical + variants into queries[] as the 018 schema expects.
+  // funnel_stage is not stored at the cluster level — each prompt's own
+  // funnel_stage is the source of truth for funnel position.
   const cluster = await svc.upsertCluster({
-    orgId,
     userId,
-    name: 'Default',
-    canonicalPrompt,
-    promptVariants,
-    industry: null,
-    persona: null,
-    funnelStage: null,
-    competitorDomains: [],
+    clusterName: 'Default',
+    queries: [canonicalPrompt, ...promptVariants],
+    vertical: 'general',
+    intentTier: 'explore',
+    source: 'manual',
   });
 
   console.log(
