@@ -1126,6 +1126,24 @@ router.post('/test-ai-visibility', authenticateTokenOptional, async (req, res) =
     }
 
     const evidenceResult = await citationService.persistEvidenceRows({ runId: run.id, queries, results });
+
+    let citedCount = 0;
+    let notCitedCount = 0;
+    for (const summary of Object.values(results.assistants)) {
+      if (!summary || summary.tested === false) continue;
+      for (const q of (Array.isArray(summary.queries) ? summary.queries : [])) {
+        if (q.error) continue;
+        if (q.cited) citedCount++;
+        else notCitedCount++;
+      }
+    }
+    await db.query(
+      `UPDATE citation_test_runs
+         SET prompts_tested = $2, cited_count = $3, not_cited_count = $4
+       WHERE id = $1`,
+      [run.id, queries.length, citedCount, notCitedCount]
+    );
+
     await citationService.updateRunStatus(run.id, deriveStatus(results));
 
     return res.json({ success: true, data: results, persistence: { runId: run.id, evidenceCount: evidenceResult.persisted } });
