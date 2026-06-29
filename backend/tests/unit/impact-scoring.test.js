@@ -92,14 +92,37 @@ describe('impact rollup — multiplicative behaviour (user 174)', () => {
     assert.ok(worth.score / vs.score > 2.0);
   });
 
-  it('demand_factor neutral-stub is applied and labeled', async () => {
+  it('absent volume -> demand_factor neutral_default (never drags)', async () => {
     await scoreImpact(1);
     const cable = impactFor(state.profile.tracked_prompts, CABLE);
     assert.strictEqual(cable.factors.demand_factor, 1.0);
-    assert.strictEqual(cable.factors.demand_source, 'neutral_stub');
+    assert.strictEqual(cable.factors.demand_source, 'neutral_default');
     assert.strictEqual(cable.basis, 'impact_v1');
     assert.strictEqual(cable.formula_version, 'impact_v1');
-    assert.deepStrictEqual(cable.factors, { value_band: 5, opportunity_band: 5, demand_factor: 1.0, demand_source: 'neutral_stub' });
+    assert.deepStrictEqual(cable.factors, { value_band: 5, opportunity_band: 5, demand_factor: 1.0, demand_source: 'neutral_default' });
+  });
+
+  it('volume.band activates demand_factor (band1->0.5 .. band5->1.0); refines score', () => {
+    const { computeImpact } = _internals;
+    const base = { text: CABLE, value: { band: 5 }, opportunity: { band: 5 } }; // V5×O5 = 1.0 pre-demand
+    const d1 = computeImpact({ ...base, volume: { band: 1 } });
+    const d3 = computeImpact({ ...base, volume: { band: 3 } });
+    const d5 = computeImpact({ ...base, volume: { band: 5 } });
+    assert.strictEqual(d1.factors.demand_factor, 0.5);  assert.strictEqual(d1.factors.demand_source, 'ai_inferred');
+    assert.strictEqual(d3.factors.demand_factor, 0.75);
+    assert.strictEqual(d5.factors.demand_factor, 1.0);
+    // floored mapping moves the 100-pre score, never to 0.
+    assert.strictEqual(d1.score, 50);  // 100 × 0.5
+    assert.strictEqual(d3.score, 75);  // 100 × 0.75
+    assert.strictEqual(d5.score, 100); // 100 × 1.0
+  });
+
+  it('floored demand cannot reorder the top: Cable >= worth even at worst case', () => {
+    const { computeImpact } = _internals;
+    // Worst case for ordering: Cable lowest demand (0.5), worth highest (1.0).
+    const cable = computeImpact({ value: { band: 5 }, opportunity: { band: 5 }, volume: { band: 1 } }); // 100 -> 50
+    const worth = computeImpact({ value: { band: 5 }, opportunity: { band: 3 }, volume: { band: 5 } }); // 50 -> 50
+    assert.ok(cable.score >= worth.score, 'a 2x headline gap survives the 2x demand range (floor preserved)');
   });
 
   it('multiplicative collapse: high value but floor opportunity -> ~0', () => {
@@ -109,9 +132,10 @@ describe('impact rollup — multiplicative behaviour (user 174)', () => {
     assert.strictEqual(o.band, 1);
   });
 
-  it('demand stays neutral: it never zeroes a high V/O prompt', () => {
+  it('demand stays neutral when absent: never zeroes a high V/O prompt', () => {
     const { demandFactor } = _internals;
-    assert.deepStrictEqual(demandFactor({ volume: null }), { factor: 1.0, source: 'neutral_stub' });
+    assert.deepStrictEqual(demandFactor({ volume: null }), { factor: 1.0, source: 'neutral_default' });
+    assert.deepStrictEqual(demandFactor({}), { factor: 1.0, source: 'neutral_default' });
   });
 });
 

@@ -389,9 +389,11 @@ router.post('/', authenticateToken, async (req, res) => {
           return undefined;
         })
         .then((opp) => {
-          // Impact rollup (Layer 4): pure Value × Opportunity over the bands set.
+          // Demand (Layer 5) THEN Impact (Layer 4). Demand precedes Impact so the
+          // rollup picks up demand_factor; Impact runs regardless of Demand outcome.
           if (opp && opp.status === 'scored') {
-            return require('../services/draftGeneration/impactScoring').scoreImpact(userId);
+            return require('../services/draftGeneration/demandScoring').scoreDemand(userId)
+              .then(() => require('../services/draftGeneration/impactScoring').scoreImpact(userId));
           }
           return undefined;
         })

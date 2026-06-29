@@ -20,7 +20,7 @@
 const db = require('../../db/database');
 const { resolvePlanForRequest, getDraftConfig } = require('../planService');
 const {
-  BAND_MIN, BAND_MAX, DEMAND_FACTOR_DEFAULT, BAND_THRESHOLDS, BASIS, FORMULA_VERSION,
+  BAND_MIN, BAND_MAX, DEMAND_FACTOR_DEFAULT, DEMAND_RANGE, BAND_THRESHOLDS, BASIS, FORMULA_VERSION,
 } = require('../../config/impactScoring');
 
 const ELIGIBILITY_FLAG = 'draft_enabled';
@@ -38,13 +38,22 @@ function normalizeBand(band) {
 }
 
 /**
- * Demand factor. Demand (Layer 5) is not built — return a NEUTRAL 1.0 so a
- * missing Demand never collapses impact. When Demand ships, map demand_norm into
- * the floored DEMAND_RANGE here. Returns { factor, source } for auditability.
+ * Demand factor (Layer 5 active). When a prompt carries volume.band, map it into
+ * the floored DEMAND_RANGE: demand_factor = lo + volume_norm * (hi - lo), with
+ * volume_norm = (band-1)/4. With DEMAND_RANGE [0.5,1.0]: band1 -> 0.5, band5 ->
+ * 1.0. A missing/absent volume.band -> NEUTRAL DEFAULT (1.0): Demand never DRAGS
+ * a prompt that lacks it, and even lowest Demand only halves, never zeroes (the
+ * floor is preserved so Demand refines rather than collapses). Returns
+ * { factor, source } for auditability.
  */
-function demandFactor(/* prompt */) {
-  // volume (Demand) is null today; no normalized demand signal exists yet.
-  return { factor: DEMAND_FACTOR_DEFAULT, source: 'neutral_stub' };
+function demandFactor(prompt) {
+  const band = prompt && prompt.volume && prompt.volume.band;
+  if (Number.isInteger(band)) {
+    const volumeNorm = clamp01((band - BAND_MIN) / (BAND_MAX - BAND_MIN));
+    const [lo, hi] = DEMAND_RANGE;
+    return { factor: lo + volumeNorm * (hi - lo), source: 'ai_inferred' };
+  }
+  return { factor: DEMAND_FACTOR_DEFAULT, source: 'neutral_default' };
 }
 
 /** Score (0..100) -> band (1..5). */
