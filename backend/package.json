@@ -15,6 +15,7 @@
     "value:score": "node scripts/value-score.js",
     "opportunity:evidence": "node scripts/opportunity-evidence.js",
     "opportunity:score": "node scripts/opportunity-score.js",
+    "demand:score": "node scripts/demand-score.js",
     "impact:score": "node scripts/impact-score.js"
   },
   "dependencies": {

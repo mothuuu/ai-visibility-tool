@@ -49,9 +49,12 @@ function triggerValueScoring(userId) {
       return undefined;
     })
     .then((opp) => {
-      // Impact rollup (Layer 4): pure Value × Opportunity over the bands just set.
+      // Demand (Layer 5) THEN Impact (Layer 4). Demand must precede Impact so the
+      // rollup picks up demand_factor; Impact runs regardless of Demand's outcome
+      // (absent volume => neutral demand_factor, never drags).
       if (opp && opp.status === 'scored') {
-        return require('./draftGeneration/impactScoring').scoreImpact(userId);
+        return require('./draftGeneration/demandScoring').scoreDemand(userId)
+          .then(() => require('./draftGeneration/impactScoring').scoreImpact(userId));
       }
       return undefined;
     })
