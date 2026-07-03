@@ -38,6 +38,7 @@ const { sendActionReminders } = require('./jobs/citationNetworkReminders');
 const { startTokenExpiryCron } = require('./jobs/tokenExpiry');
 const { startCitationMonitoringCron } = require('./jobs/citationMonitoring');
 const { startBenchmarkCron } = require('./jobs/benchmarkAggregation');
+const { startCitationRunCleanupCron } = require('./jobs/citationRunCleanup');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -211,4 +212,7 @@ app.listen(PORT, () => {
 
   // Schedule benchmark aggregation job (weekly Sun 3 AM UTC)
   startBenchmarkCron();
+
+  // Schedule citation run cleanup job (every 5 minutes)
+  startCitationRunCleanupCron();
 });
