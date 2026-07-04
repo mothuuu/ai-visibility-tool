@@ -6,7 +6,7 @@
  * failure before the run could be finalized), marks them as failed, and
  * refunds the tokens to the user.
  *
- * Schedule: '*/5 * * * *' (every 5 minutes)
+ * Schedule: '*\/5 * * * *' (every 5 minutes)
  * Disable: DISABLE_CITATION_CLEANUP_CRON=true
  *
  * Idempotent: the UPDATE uses WHERE status='pending' so a run that was
