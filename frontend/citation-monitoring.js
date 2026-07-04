@@ -177,7 +177,7 @@ async function checkAndShowState(clusterId) {
     const token = getAuthToken();
     try {
         const res = await fetch(
-            API_BASE_URL + '/citation-monitoring/citation-test-runs?clusterId=' +
+            API_BASE_URL + '/citation-test-runs?clusterId=' +
                 encodeURIComponent(clusterId) + '&limit=1',
             { headers: token ? { 'Authorization': 'Bearer ' + token } : {} }
         );
@@ -319,7 +319,7 @@ async function loadLatestResults(clusterId) {
 
     try {
         const res = await fetch(
-            API_BASE_URL + '/citation-monitoring/citation-test-runs?clusterId=' +
+            API_BASE_URL + '/citation-test-runs?clusterId=' +
                 encodeURIComponent(clusterId) + '&limit=1',
             { headers: { 'Authorization': 'Bearer ' + token } }
         );
@@ -347,7 +347,7 @@ async function loadLatestResults(clusterId) {
 
         // completed or partial — fetch evidence rows
         const evRes = await fetch(
-            API_BASE_URL + '/citation-monitoring/citation-evidence?runId=' + encodeURIComponent(run.id),
+            API_BASE_URL + '/citation-evidence?runId=' + encodeURIComponent(run.id),
             { headers: { 'Authorization': 'Bearer ' + token } }
         );
         const evJson = await evRes.json();
@@ -375,7 +375,7 @@ async function loadRunHistory(clusterId) {
 
     try {
         const res = await fetch(
-            API_BASE_URL + '/citation-monitoring/citation-test-runs?clusterId=' +
+            API_BASE_URL + '/citation-test-runs?clusterId=' +
                 encodeURIComponent(clusterId) + '&limit=20',
             { headers: { 'Authorization': 'Bearer ' + token } }
         );
@@ -401,7 +401,7 @@ async function loadBenchmarkStats(clusterId) {
 
     try {
         const res = await fetch(
-            API_BASE_URL + '/citation-monitoring/benchmark-stats?clusterId=' +
+            API_BASE_URL + '/benchmark-stats?clusterId=' +
                 encodeURIComponent(clusterId) + '&window=' + encodeURIComponent(windowVal),
             { headers: { 'Authorization': 'Bearer ' + token } }
         );
