@@ -103,7 +103,7 @@ router.get('/latest', authenticateToken, async (req, res) => {
       `SELECT id, run_type, engines_tested, prompts_tested, cited_count, not_cited_count,
               delta_summary, completed_at
          FROM citation_test_runs
-        WHERE user_id = $1 AND status = 'complete'
+        WHERE user_id = $1 AND status = 'completed'
         ORDER BY completed_at DESC NULLS LAST, id DESC
         LIMIT 1`,
       [userId]

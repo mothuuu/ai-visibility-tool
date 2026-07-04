@@ -142,7 +142,7 @@ async function runTestSuite(userId, options = {}) {
   } else {
     await db.query(
       `UPDATE citation_test_runs
-         SET status='complete', completed_at=NOW(),
+         SET status='completed', completed_at=NOW(),
              prompts_tested=$2, cited_count=$3, not_cited_count=$4
        WHERE id=$1`,
       [testRunId, cappedQueries.length, citedCount, notCitedCount]
