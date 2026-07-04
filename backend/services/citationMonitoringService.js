@@ -167,8 +167,8 @@ function createCitationMonitoringService({ db } = {}) {
         const queryText = q.query || (queries && queries[i]) || '';
         await conn.query(
           `INSERT INTO citation_evidence
-             (test_run_id, query_text, engine, cited, citation_type, response_snippet, domain_mentioned)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+             (test_run_id, query_text, engine, cited, citation_type, response_snippet, domain_mentioned, detection_status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [
             runId,
             queryText,
@@ -177,6 +177,7 @@ function createCitationMonitoringService({ db } = {}) {
             deriveCitationType(q),
             q.snippet || null,
             !!q.mentioned,
+            q.detectionStatus || 'skipped',
           ]
         );
         persisted++;

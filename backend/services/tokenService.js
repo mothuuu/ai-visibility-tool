@@ -463,6 +463,68 @@ async function expireOnCancellation(userId) {
 }
 
 // =============================================================================
+// REFUND
+// =============================================================================
+
+/**
+ * Refund citation test tokens to a user's purchased_balance.
+ *
+ * Opens its own connection — never uses a caller-supplied client so the
+ * refund commits independently even if the caller is in an error state.
+ * Does NOT reset purchased_expires_at (this is a refund, not a purchase).
+ *
+ * @param {number} userId
+ * @param {number} amount - Must be > 0
+ * @param {string|null} referenceId - The citation_test_runs.id as a string
+ * @returns {Promise<{monthly_remaining:number, purchased_balance:number, total_available:number}>}
+ */
+async function refundCitationTokens(userId, amount, referenceId) {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+
+    // Lock row
+    await client.query(
+      'SELECT 1 FROM token_balances WHERE user_id = $1 FOR UPDATE',
+      [userId]
+    );
+
+    // Credit purchased_balance — no expiry clock reset
+    await client.query(
+      `UPDATE token_balances
+         SET purchased_balance = purchased_balance + $2, updated_at = NOW()
+       WHERE user_id = $1`,
+      [userId, amount]
+    );
+
+    // Read authoritative balances
+    const row = await client.query(
+      'SELECT monthly_remaining, purchased_balance FROM token_balances WHERE user_id = $1',
+      [userId]
+    );
+    const { monthly_remaining, purchased_balance } = row.rows[0];
+    const balanceAfter = monthly_remaining + purchased_balance;
+
+    // Ledger entry
+    await client.query(
+      `INSERT INTO token_transactions (user_id, type, amount, balance_after, reference_type, reference_id)
+       VALUES ($1, 'refund', $2, $3, 'citation_test_refund', $4)`,
+      [userId, amount, balanceAfter, referenceId]
+    );
+
+    await client.query('COMMIT');
+    console.log(`[TokenRefund] user_id=${userId} amount=${amount} referenceId=${referenceId}`);
+
+    return { monthly_remaining, purchased_balance, total_available: balanceAfter };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 
@@ -473,5 +535,6 @@ module.exports = {
   spendTokens,
   expireMonthlyTokens,
   expirePurchasedTokens,
-  expireOnCancellation
+  expireOnCancellation,
+  refundCitationTokens
 };

@@ -1119,16 +1119,54 @@ router.post('/test-ai-visibility', authenticateTokenOptional, async (req, res) =
       }
     }
 
-    const results = await testAIVisibility(url, industry, queries);
+    let refunded = false;
+    try {
+      const results = await testAIVisibility(url, industry, queries);
 
-    if (!clusterId) {
-      return res.json({ success: true, data: results });
+      if (!clusterId) {
+        return res.json({ success: true, data: results });
+      }
+
+      const evidenceResult = await citationService.persistEvidenceRows({ runId: run.id, queries, results });
+
+      let citedCount = 0;
+      let notCitedCount = 0;
+      for (const summary of Object.values(results.assistants)) {
+        if (!summary || summary.tested === false) continue;
+        for (const q of (Array.isArray(summary.queries) ? summary.queries : [])) {
+          if (q.error) continue;
+          if (q.cited) citedCount++;
+          else notCitedCount++;
+        }
+      }
+      await db.query(
+        `UPDATE citation_test_runs
+           SET prompts_tested = $2, cited_count = $3, not_cited_count = $4
+         WHERE id = $1`,
+        [run.id, queries.length, citedCount, notCitedCount]
+      );
+
+      await citationService.updateRunStatus(run.id, deriveStatus(results));
+
+      return res.json({ success: true, data: results, persistence: { runId: run.id, evidenceCount: evidenceResult.persisted } });
+    } catch (postCommitErr) {
+      console.error('[CitationTest] post-commit failure, refunding tokens:', postCommitErr.message);
+      try {
+        await tokenService.refundCitationTokens(
+          req.user.id,
+          CITATION_TEST_TOKEN_COST, // must match the original spend — do not recalculate
+          run.id.toString()
+        );
+        refunded = true;
+        await citationService.updateRunStatus(run.id, 'failed');
+      } catch (refundErr) {
+        console.error('[CitationTest] refund also failed:', refundErr.message);
+      }
+      return res.status(500).json({
+        error: 'Test failed after tokens were spent',
+        refunded,
+      });
     }
-
-    const evidenceResult = await citationService.persistEvidenceRows({ runId: run.id, queries, results });
-    await citationService.updateRunStatus(run.id, deriveStatus(results));
-
-    return res.json({ success: true, data: results, persistence: { runId: run.id, evidenceCount: evidenceResult.persisted } });
   } catch (error) {
     console.error('AI visibility testing failed:', error.message);
     return res

@@ -66,7 +66,7 @@ function buildRouter({ service } = {}) {
   });
 
   // ---------- runs ----------
-  router.get('/citation-test-runs', authenticateTokenOptional, async (req, res) => {
+  router.get('/citation-test-runs', authenticateToken, async (req, res) => {
     const limit = parseInt(req.query.limit, 10) || 50;
     try {
       const userId = req.user?.id ?? null;
