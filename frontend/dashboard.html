@@ -166,6 +166,35 @@
             }
         }
 
+        /* Account chip - "which client account am I in" marker, top-left by the logo.
+           Aubergine/plum family (reused from the sidebar) so it reads against the header. */
+        .account-chip {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.875rem;
+            background: rgba(94, 40, 117, 0.10);
+            color: var(--violet-deep);
+            border-radius: 20px;
+            font-family: 'DM Sans', sans-serif;
+            font-weight: 600;
+            font-size: 0.875rem;
+            line-height: 1;
+            max-width: 260px;
+        }
+
+        .account-chip i {
+            color: var(--violet-rich);
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .account-chip .account-chip-email {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         .menu-toggle {
             display: none;
             background: none;
@@ -232,20 +261,6 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
-        }
-
-        .user-name {
-            font-weight: 600;
-            color: var(--gray-700);
-            font-size: 0.875rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .user-name::before {
-            content: '👤';
-            font-size: 1rem;
         }
 
         /* Upgrade Button */
@@ -661,9 +676,24 @@
             border-color: var(--pink);
         }
 
-        .stat-card.pages-tracked {
+        .stat-card.pages-tracked,
+        .stat-card.citation-monitoring {
             background: linear-gradient(135deg, #F3EBFA 0%, #F9F5FD 100%);
             border-color: var(--purple);
+        }
+
+        /* Small "latest run" tag on the citation monitoring card — signals snapshot, not a rolling total. */
+        .stat-tag {
+            display: inline-block;
+            margin-left: 0.375rem;
+            padding: 0.1rem 0.45rem;
+            background: rgba(125, 65, 165, 0.12);
+            color: var(--purple);
+            border-radius: 10px;
+            font-size: 0.5625rem;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            vertical-align: middle;
         }
 
         .stat-card.scans-month {
@@ -994,12 +1024,10 @@
                 padding: 0.5rem 0.75rem;
             }
 
-            .user-name {
+            .account-chip {
+                max-width: 160px;
                 font-size: 0.75rem;
-            }
-
-            .user-name::before {
-                font-size: 0.875rem;
+                padding: 0.4rem 0.7rem;
             }
 
             .upgrade-btn {
@@ -3781,6 +3809,10 @@
                 <i class="fas fa-bars"></i>
             </button>
             <a href="index.html" class="logo" style="text-decoration: none;"><img src="/logo.png" alt="Visible2AI - AI Visibility Score" /></a>
+            <div class="account-chip" id="accountChip" style="display: none;">
+                <i class="fas fa-envelope"></i>
+                <span class="account-chip-email" id="accountChipEmail"></span>
+            </div>
         </div>
         <div class="header-right">
             <div class="primary-domain-badge" id="primaryDomainBadge" onclick="openDomainModal()">
@@ -3791,9 +3823,8 @@
                 <span id="competitorCount">0/3 competitors</span>
             </div>
             <div class="user-section">
-                <div class="user-info">
-                    <div class="org-name" id="orgNameHeader" style="display: none; font-size: 0.75rem; color: var(--gray-500); margin-bottom: 2px;"></div>
-                    <div class="user-name" id="userName">User</div>
+                <div class="user-info" id="userInfo" style="display: none;">
+                    <div class="org-name" id="orgNameHeader" style="display: none; font-size: 0.75rem; color: var(--gray-500);"></div>
                 </div>
                 <button class="upgrade-btn" id="upgradeBtn" onclick="window.location.href=ROUTES.PLANS" title="Upgrade your plan">
                     ✨ Upgrade
@@ -3977,10 +4008,10 @@
                         <div class="stat-value" id="dashboardBrandScore">--</div>
                         <div class="stat-change" id="dashboardBrandChange">Upgrade to Pro</div>
                     </div>
-                    <div class="stat-card pages-tracked">
-                        <div class="stat-label">Pages Tracked</div>
-                        <div class="stat-value" id="dashboardPagesTracked">0</div>
-                        <div class="stat-meta" id="dashboardPagesMeta">Pro Plan</div>
+                    <div class="stat-card citation-monitoring">
+                        <div class="stat-label">Citation monitoring <span class="stat-tag">latest run</span></div>
+                        <div class="stat-value" id="dashboardCitationCount">--</div>
+                        <div class="stat-meta" id="dashboardCitationMeta">citations this run</div>
                     </div>
                     <div class="stat-card scans-month">
                         <div class="stat-label">Scans This Month</div>
