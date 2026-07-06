@@ -508,7 +508,7 @@ function updateUserInfo() {
             pro: 'Pro plan',
             enterprise: 'Enterprise plan'
         };
-        scanPlanInfo.textContent = `${planDisplayNames[user.plan] || 'Free plan'}: Analyze up to ${pageLimit} pages`;
+        scanPlanInfo.textContent = `${planDisplayNames[user.plan] || 'Free plan'} · up to ${pageLimit} pages`;
     }
 
     // Primary domain badge
