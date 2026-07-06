@@ -440,10 +440,13 @@ async function initDashboard() {
 function updateUserInfo() {
     const displayName = user.name || user.email.split('@')[0];
 
-    // Update header userName
-    const headerUserName = document.getElementById('userName');
-    if (headerUserName) {
-        headerUserName.textContent = displayName;
+    // Update header account chip (email) - "which client account am I in" marker
+    const accountChip = document.getElementById('accountChip');
+    const accountChipEmail = document.getElementById('accountChipEmail');
+    if (accountChip && accountChipEmail && user.email) {
+        accountChipEmail.textContent = user.email;
+        accountChip.title = user.email;
+        accountChip.style.display = 'flex';
     }
 
     // Update welcome section userName
@@ -626,12 +629,15 @@ function updateFeatureLocking() {
 function updateOrgInfo() {
     // Update org name in header (if element exists)
     const orgNameHeader = document.getElementById('orgNameHeader');
+    const userInfo = document.getElementById('userInfo');
     if (orgNameHeader) {
         if (organization && organization.name) {
             orgNameHeader.textContent = organization.name;
             orgNameHeader.style.display = 'block';
+            if (userInfo) userInfo.style.display = 'flex';
         } else {
             orgNameHeader.style.display = 'none';
+            if (userInfo) userInfo.style.display = 'none';
         }
     }
 

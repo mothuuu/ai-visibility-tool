@@ -166,6 +166,35 @@
             }
         }
 
+        /* Account chip - "which client account am I in" marker, top-left by the logo.
+           Aubergine/plum family (reused from the sidebar) so it reads against the header. */
+        .account-chip {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.875rem;
+            background: rgba(94, 40, 117, 0.10);
+            color: var(--violet-deep);
+            border-radius: 20px;
+            font-family: 'DM Sans', sans-serif;
+            font-weight: 600;
+            font-size: 0.875rem;
+            line-height: 1;
+            max-width: 260px;
+        }
+
+        .account-chip i {
+            color: var(--violet-rich);
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .account-chip .account-chip-email {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         .menu-toggle {
             display: none;
             background: none;
@@ -232,20 +261,6 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
-        }
-
-        .user-name {
-            font-weight: 600;
-            color: var(--gray-700);
-            font-size: 0.875rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .user-name::before {
-            content: '👤';
-            font-size: 1rem;
         }
 
         /* Upgrade Button */
@@ -994,12 +1009,10 @@
                 padding: 0.5rem 0.75rem;
             }
 
-            .user-name {
+            .account-chip {
+                max-width: 160px;
                 font-size: 0.75rem;
-            }
-
-            .user-name::before {
-                font-size: 0.875rem;
+                padding: 0.4rem 0.7rem;
             }
 
             .upgrade-btn {
@@ -3781,6 +3794,10 @@
                 <i class="fas fa-bars"></i>
             </button>
             <a href="index.html" class="logo" style="text-decoration: none;"><img src="/logo.png" alt="Visible2AI - AI Visibility Score" /></a>
+            <div class="account-chip" id="accountChip" style="display: none;">
+                <i class="fas fa-envelope"></i>
+                <span class="account-chip-email" id="accountChipEmail"></span>
+            </div>
         </div>
         <div class="header-right">
             <div class="primary-domain-badge" id="primaryDomainBadge" onclick="openDomainModal()">
@@ -3791,9 +3808,8 @@
                 <span id="competitorCount">0/3 competitors</span>
             </div>
             <div class="user-section">
-                <div class="user-info">
-                    <div class="org-name" id="orgNameHeader" style="display: none; font-size: 0.75rem; color: var(--gray-500); margin-bottom: 2px;"></div>
-                    <div class="user-name" id="userName">User</div>
+                <div class="user-info" id="userInfo" style="display: none;">
+                    <div class="org-name" id="orgNameHeader" style="display: none; font-size: 0.75rem; color: var(--gray-500);"></div>
                 </div>
                 <button class="upgrade-btn" id="upgradeBtn" onclick="window.location.href=ROUTES.PLANS" title="Upgrade your plan">
                     ✨ Upgrade
