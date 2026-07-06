@@ -523,22 +523,18 @@
         }
 
         .purple-scan-section h2 {
+            font-family: 'Syne', sans-serif;
             font-size: 1.5rem;
             font-weight: 700;
-            margin-bottom: 0.75rem;
+            margin-bottom: 0.5rem;
             color: white;
         }
 
         .purple-scan-section p {
+            font-family: 'DM Sans', sans-serif;
             font-size: 1rem;
             margin-bottom: 1.5rem;
             color: rgba(255, 255, 255, 0.9);
-        }
-
-        .purple-scan-buttons {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
         }
 
         .btn-scan-primary {
@@ -561,24 +557,98 @@
             box-shadow: 0 8px 20px rgba(255, 255, 255, 0.3);
         }
 
-        .btn-scan-secondary {
-            background: transparent;
-            color: white;
-            padding: 0.875rem 2rem;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 0.9375rem;
-            cursor: pointer;
-            transition: all 0.3s;
-            border: 2px solid white;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
+        /* Two-benefit tiles inside the purple band */
+        .scan-tiles {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
         }
 
-        .btn-scan-secondary:hover {
-            background: rgba(255, 255, 255, 0.1);
-            transform: translateY(-2px);
+        .scan-tile {
+            position: relative;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-top: 3px solid var(--tile-accent, #ffffff);
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .scan-tile.accent-cyan { --tile-accent: #00B9DA; }
+        .scan-tile.accent-pink { --tile-accent: #f31c7e; }
+
+        .scan-tile-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            background: rgba(255, 255, 255, 0.12);
+            color: var(--tile-accent, #ffffff);
+        }
+
+        .scan-tile h3 {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.1875rem;
+            font-weight: 700;
+            color: white;
+            margin: 0;
+        }
+
+        .scan-tile p {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: rgba(255, 255, 255, 0.85);
+            margin: 0;
+            flex-grow: 1;
+        }
+
+        .scan-tile-actions {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            flex-wrap: wrap;
+            margin-top: 0.5rem;
+        }
+
+        .scan-tile-link {
+            background: none;
+            border: none;
+            padding: 0;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: white;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .scan-tile-link:hover { color: rgba(255, 255, 255, 0.75); }
+
+        .scan-tile-pill {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: var(--tile-accent, #ffffff);
+            color: white;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.5625rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.2rem 0.55rem;
+            border-radius: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .scan-tiles { grid-template-columns: 1fr; }
         }
 
         /* Cards */
@@ -4025,17 +4095,35 @@
 
                 <!-- Prominent Purple Scan Section -->
                 <div class="purple-scan-section">
-                    <h2>Start a new scan or view your recent results below</h2>
-                    <p id="scanPlanInfo">Pro plan: Analyze up to 25 pages</p>
-                    <div class="purple-scan-buttons">
-                        <button class="btn-scan-primary" onclick="navigateToSection('start-new-scan')">
-                            <i class="fas fa-search"></i>
-                            Start New Scan
-                        </button>
-                        <button class="btn-scan-secondary" onclick="navigateToSection('scan-history')">
-                            <i class="fas fa-history"></i>
-                            View Recent Scans
-                        </button>
+                    <h2>Two ways to see how AI sees you</h2>
+                    <p id="scanPlanInfo">DIY plan · up to 5 pages</p>
+                    <div class="scan-tiles">
+                        <!-- Tile 1 — page scoring (cyan) -->
+                        <div class="scan-tile accent-cyan">
+                            <span class="scan-tile-icon"><i class="fas fa-file-lines"></i></span>
+                            <h3>Score your pages</h3>
+                            <p>See how AI-ready each page is and what's holding your visibility score back.</p>
+                            <div class="scan-tile-actions">
+                                <button class="btn-scan-primary" onclick="navigateToSection('start-new-scan')">
+                                    <i class="fas fa-search"></i>
+                                    Start a scan
+                                </button>
+                                <button class="scan-tile-link" onclick="navigateToSection('scan-history')">View recent scans</button>
+                            </div>
+                        </div>
+                        <!-- Tile 2 — citation tracking (hot pink) -->
+                        <div class="scan-tile accent-pink">
+                            <span class="scan-tile-pill">your edge</span>
+                            <span class="scan-tile-icon"><i class="fas fa-quote-right"></i></span>
+                            <h3>Track your AI citations</h3>
+                            <p>See which prompts ChatGPT, Claude and Perplexity answer with you — and where competitors win instead.</p>
+                            <div class="scan-tile-actions">
+                                <button class="btn-scan-primary" onclick="window.location.href='citation-monitoring.html'">
+                                    <i class="fas fa-flask"></i>
+                                    Run citation test
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
