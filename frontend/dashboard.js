@@ -1427,9 +1427,45 @@ async function loadDashboardData() {
         loadRecentScans(),
         loadLatestScores(),
         loadTrackedPages(),
+        loadCitationMonitoring(),
         loadFindings(),
         loadSubscriptionData()
     ]);
+}
+
+// Citation monitoring card — latest-run snapshot (not a rolling 30-day total).
+// Uses the exact same endpoints and computation as the Citation Monitoring page
+// (frontend/citation-monitoring.js): the most recent run from /citation-test-runs,
+// then "cited" = evidence rows where cited === true from /citation-evidence. This
+// guarantees the count reconciles with that page for the same run.
+async function loadCitationMonitoring() {
+    const countEl = document.getElementById('dashboardCitationCount');
+    const metaEl = document.getElementById('dashboardCitationMeta');
+    if (!countEl) return;
+
+    try {
+        const runsRes = await fetch(`${API_BASE_URL}/citation-test-runs?limit=1`, { headers: authHeaders() });
+        if (!runsRes.ok) { countEl.textContent = '0'; return; }
+        const runsJson = await runsRes.json();
+        const run = (runsJson && runsJson.success && Array.isArray(runsJson.data)) ? runsJson.data[0] : null;
+        if (!run) {
+            countEl.textContent = '0';
+            if (metaEl) metaEl.textContent = 'No runs yet';
+            return;
+        }
+
+        const evRes = await fetch(`${API_BASE_URL}/citation-evidence?runId=${encodeURIComponent(run.id)}`, { headers: authHeaders() });
+        if (!evRes.ok) { countEl.textContent = '0'; return; }
+        const evJson = await evRes.json();
+        const rows = (evJson && evJson.success && Array.isArray(evJson.data)) ? evJson.data : [];
+        const citedCount = rows.filter(r => r.cited).length;
+
+        countEl.textContent = String(citedCount);
+        if (metaEl) metaEl.textContent = `of ${rows.length} check${rows.length === 1 ? '' : 's'}`;
+    } catch (e) {
+        console.warn('Citation monitoring card load failed:', e.message);
+        countEl.textContent = '0';
+    }
 }
 
 // Load recent scans and populate dashboard home
@@ -1656,12 +1692,10 @@ async function loadTrackedPages() {
     const trackedPagesTotal = document.getElementById('trackedPagesTotal');
     const trackedPagesCount = document.getElementById('trackedPagesCount');
     const pageSelectorCount = document.getElementById('pageSelectorCount');
-    const dashboardPagesTracked = document.getElementById('dashboardPagesTracked');
 
     if (trackedPagesTotal) trackedPagesTotal.textContent = '0';
     if (trackedPagesCount) trackedPagesCount.textContent = '0';
     if (pageSelectorCount) pageSelectorCount.textContent = '0';
-    if (dashboardPagesTracked) dashboardPagesTracked.textContent = '0';
 }
 
 // Pack catalog — fallback map used only before the marketplace catalog loads.

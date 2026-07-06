@@ -676,9 +676,24 @@
             border-color: var(--pink);
         }
 
-        .stat-card.pages-tracked {
+        .stat-card.pages-tracked,
+        .stat-card.citation-monitoring {
             background: linear-gradient(135deg, #F3EBFA 0%, #F9F5FD 100%);
             border-color: var(--purple);
+        }
+
+        /* Small "latest run" tag on the citation monitoring card — signals snapshot, not a rolling total. */
+        .stat-tag {
+            display: inline-block;
+            margin-left: 0.375rem;
+            padding: 0.1rem 0.45rem;
+            background: rgba(125, 65, 165, 0.12);
+            color: var(--purple);
+            border-radius: 10px;
+            font-size: 0.5625rem;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            vertical-align: middle;
         }
 
         .stat-card.scans-month {
@@ -3993,10 +4008,10 @@
                         <div class="stat-value" id="dashboardBrandScore">--</div>
                         <div class="stat-change" id="dashboardBrandChange">Upgrade to Pro</div>
                     </div>
-                    <div class="stat-card pages-tracked">
-                        <div class="stat-label">Pages Tracked</div>
-                        <div class="stat-value" id="dashboardPagesTracked">0</div>
-                        <div class="stat-meta" id="dashboardPagesMeta">Pro Plan</div>
+                    <div class="stat-card citation-monitoring">
+                        <div class="stat-label">Citation monitoring <span class="stat-tag">latest run</span></div>
+                        <div class="stat-value" id="dashboardCitationCount">--</div>
+                        <div class="stat-meta" id="dashboardCitationMeta">citations this run</div>
                     </div>
                     <div class="stat-card scans-month">
                         <div class="stat-label">Scans This Month</div>
