@@ -590,22 +590,38 @@ function renderRunHistory(runs) {
     // #historyBars — mini bar chart for last 5 runs
     var barsEl = document.getElementById('historyBars');
     if (barsEl) {
-        barsEl.innerHTML =
-            '<div style="display:flex;align-items:flex-end;gap:4px;height:48px;padding:4px 28px 0;">' +
-                recent.map(function (run, i) {
-                    var h     = barH[run.status] != null ? barH[run.status] : 10;
-                    var color = i === 0 ? 'var(--brand-cyan)' : 'var(--gray-300)';
-                    var title = escapeAttr(run.status + ' · ' + relativeTime(run.started_at) + ' · bar height reflects run status, not success rate');
-                    return '<div title="' + title + '" style="flex:1;display:flex;align-items:flex-end;height:100%;">' +
-                        '<div style="width:100%;height:' + h + '%;background:' + color + ';border-radius:3px 3px 0 0;transition:height .2s;"></div>' +
-                    '</div>';
-                }).join('') +
-            '</div>';
+        if (runs.length === 0) {
+            barsEl.innerHTML =
+                '<div style="display:flex;align-items:flex-end;gap:4px;height:48px;padding:4px 28px 0;">' +
+                    [0,1,2,3,4].map(function () {
+                        return '<div style="flex:1;display:flex;align-items:flex-end;height:100%;">' +
+                            '<div style="width:100%;height:8px;background:var(--gray-200);border-radius:3px 3px 0 0;"></div>' +
+                        '</div>';
+                    }).join('') +
+                '</div>';
+        } else {
+            barsEl.innerHTML =
+                '<div style="display:flex;align-items:flex-end;gap:4px;height:48px;padding:4px 28px 0;">' +
+                    recent.map(function (run, i) {
+                        var h     = barH[run.status] != null ? barH[run.status] : 10;
+                        var color = i === 0 ? 'var(--brand-cyan)' : 'var(--gray-300)';
+                        var title = escapeAttr(run.status + ' · ' + relativeTime(run.started_at) + ' · bar height reflects run status, not success rate');
+                        return '<div title="' + title + '" style="flex:1;display:flex;align-items:flex-end;height:100%;">' +
+                            '<div style="width:100%;height:' + h + '%;background:' + color + ';border-radius:3px 3px 0 0;transition:height .2s;"></div>' +
+                        '</div>';
+                    }).join('') +
+                '</div>';
+        }
     }
 
     // #historyList — full run list
     var listEl = document.getElementById('historyList');
     if (!listEl) return;
+
+    if (runs.length === 0) {
+        listEl.innerHTML = '<p class="empty-msg" style="padding:0 28px 22px;color:var(--gray-400);">No runs yet — trigger your first test above.</p>';
+        return;
+    }
 
     var scMap = {
         completed: 'status-completed',
