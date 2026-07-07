@@ -492,8 +492,23 @@ function renderLatestResults(run, evidenceRows) {
     var nudgeEl = document.getElementById('citationNudge');
     if (nudgeEl) {
         if (notFoundRows.length > 0) {
+            // Retarget the nudge to the Findings (Diagnostics) section via the app's
+            // existing in-app section routing. dashboard.html reads ?section= on load
+            // (initDashboard) and calls navigateToSection('findings') — the same path
+            // the sidebar "Findings" item uses — so this works across environments
+            // without a hardcoded absolute URL.
+            //
+            // NOTE: ideally this would open Findings filtered to the citation-driven
+            // findings for this account's latest run. No such filter mechanism exists
+            // today: findings are scoped to scan_id only (015 schema) with no source
+            // or citation_run_id linkage, and citation-monitoring produces evidence
+            // rows (citation_test_runs / citation_evidence), not findings. Scoping to
+            // citation-monitoring results would require a findings↔citation-run link
+            // plus a Findings query param that reads it — inventing that schema is out
+            // of scope here, so we open Findings unfiltered. FOLLOW-UP: add a citation
+            // filter param once findings carry a citation-run source.
             nudgeEl.innerHTML =
-                'Improve your AI visibility — <a href="dashboard.html" class="nudge-link">view recommendations</a>.';
+                'Improve your AI visibility — <a href="dashboard.html?section=findings" class="nudge-link">view recommendations</a>.';
             nudgeEl.classList.remove('hidden');
         } else {
             nudgeEl.classList.add('hidden');
