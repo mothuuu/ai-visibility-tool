@@ -115,6 +115,37 @@ function initCitationMonitoring() {
     if (user) {
         const badge = document.getElementById('planBadge');
         if (badge) badge.textContent = (user.plan || 'free').toUpperCase();
+
+        // Header identity — mirror the dashboard header: account email chip
+        // (top-left) plus the scanned domain. Both come from the same cached
+        // `user` object the dashboard header already uses (no new fetch, no new
+        // endpoint). We never render a generic "User" placeholder: each slot is
+        // shown only when it has real data, and the email chip carries identity
+        // if the domain is unavailable.
+        const email = user.email || null;
+        const domain = user.primary_domain || null;
+
+        const chip = document.getElementById('accountChip');
+        const chipEmail = document.getElementById('accountChipEmail');
+        const emailShown = !!(chip && chipEmail && email);
+        if (emailShown) {
+            chipEmail.textContent = email;
+            chip.title = email;
+            chip.style.display = 'flex';
+        }
+
+        const domainBadge = document.getElementById('accountDomainBadge');
+        if (domainBadge) {
+            // Prefer the scanned domain. If it's unavailable, fall back to the
+            // email only when the chip isn't already showing it — so identity is
+            // always present and we never duplicate the email or leave "User".
+            const label = domain || (!emailShown ? email : null);
+            if (label) {
+                domainBadge.textContent = label;
+                domainBadge.title = domain ? ('Scanned domain: ' + domain) : label;
+                domainBadge.style.display = 'inline-flex';
+            }
+        }
     }
 
     loadClusters();
