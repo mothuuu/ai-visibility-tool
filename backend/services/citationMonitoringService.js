@@ -187,16 +187,9 @@ function createCitationMonitoringService({ db } = {}) {
     return { persisted };
   }
 
-  const ENGINE_API_MAP = {
-    chatgpt: 'openai',
-    claude: 'anthropic',
-    perplexity: 'perplexity',
-    gemini: 'gemini',
-  };
-
   function translateEvidence(row) {
     return {
-      engine: ENGINE_API_MAP[row.engine] || row.engine,
+      engine: row.engine,
       prompt_text: row.query_text,
       mentioned: row.domain_mentioned,
       snippet: row.response_snippet,

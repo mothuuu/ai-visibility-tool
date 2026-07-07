@@ -328,7 +328,7 @@ describe('citationMonitoringService — 018 schema', () => {
     assert.strictEqual(evidence.length, 1);
 
     const ev = evidence[0];
-    assert.strictEqual(ev.engine, 'openai');
+    assert.strictEqual(ev.engine, 'chatgpt');
     assert.strictEqual(ev.prompt_text, 'q1');
     assert.strictEqual(ev.mentioned, true);
     assert.strictEqual(ev.snippet, 'text');

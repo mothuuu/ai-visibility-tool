@@ -107,6 +107,10 @@ async function runQuery(query, options = {}) {
       await sleep(backoff);
     }
   }
+  console.error(
+    `[PerplexityAdapter] All attempts failed (model=${model}, ` +
+    `status=${lastErr && lastErr.status}, message=${lastErr && lastErr.message})`
+  );
   throw lastErr || new Error('Perplexity call failed');
 }
 

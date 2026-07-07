@@ -16,7 +16,7 @@ const DEFAULT_CLAUDE_OPUS_MODEL = process.env.CLAUDE_OPUS_MODEL || 'claude-opus-
 // Perplexity (Citation Monitoring engine). The adapter's default lives here now
 // instead of inline; the existing CITATION_PERPLEXITY_MODEL env override is kept.
 const DEFAULT_PERPLEXITY_MODEL =
-  process.env.CITATION_PERPLEXITY_MODEL || 'llama-3.1-sonar-small-128k-online';
+  process.env.CITATION_PERPLEXITY_MODEL || 'sonar';
 
 // Cheapest citation-bearing Perplexity model for the Opportunity evidence pass
 // (base Sonar, used with low search context). Override via OPPORTUNITY_PERPLEXITY_MODEL.
