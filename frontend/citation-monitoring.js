@@ -115,6 +115,37 @@ function initCitationMonitoring() {
     if (user) {
         const badge = document.getElementById('planBadge');
         if (badge) badge.textContent = (user.plan || 'free').toUpperCase();
+
+        // Header identity — mirror the dashboard header: account email chip
+        // (top-left) plus the scanned domain. Both come from the same cached
+        // `user` object the dashboard header already uses (no new fetch, no new
+        // endpoint). We never render a generic "User" placeholder: each slot is
+        // shown only when it has real data, and the email chip carries identity
+        // if the domain is unavailable.
+        const email = user.email || null;
+        const domain = user.primary_domain || null;
+
+        const chip = document.getElementById('accountChip');
+        const chipEmail = document.getElementById('accountChipEmail');
+        const emailShown = !!(chip && chipEmail && email);
+        if (emailShown) {
+            chipEmail.textContent = email;
+            chip.title = email;
+            chip.style.display = 'flex';
+        }
+
+        const domainBadge = document.getElementById('accountDomainBadge');
+        if (domainBadge) {
+            // Prefer the scanned domain. If it's unavailable, fall back to the
+            // email only when the chip isn't already showing it — so identity is
+            // always present and we never duplicate the email or leave "User".
+            const label = domain || (!emailShown ? email : null);
+            if (label) {
+                domainBadge.textContent = label;
+                domainBadge.title = domain ? ('Scanned domain: ' + domain) : label;
+                domainBadge.style.display = 'inline-flex';
+            }
+        }
     }
 
     loadClusters();
@@ -492,8 +523,23 @@ function renderLatestResults(run, evidenceRows) {
     var nudgeEl = document.getElementById('citationNudge');
     if (nudgeEl) {
         if (notFoundRows.length > 0) {
+            // Retarget the nudge to the Findings (Diagnostics) section via the app's
+            // existing in-app section routing. dashboard.html reads ?section= on load
+            // (initDashboard) and calls navigateToSection('findings') — the same path
+            // the sidebar "Findings" item uses — so this works across environments
+            // without a hardcoded absolute URL.
+            //
+            // NOTE: ideally this would open Findings filtered to the citation-driven
+            // findings for this account's latest run. No such filter mechanism exists
+            // today: findings are scoped to scan_id only (015 schema) with no source
+            // or citation_run_id linkage, and citation-monitoring produces evidence
+            // rows (citation_test_runs / citation_evidence), not findings. Scoping to
+            // citation-monitoring results would require a findings↔citation-run link
+            // plus a Findings query param that reads it — inventing that schema is out
+            // of scope here, so we open Findings unfiltered. FOLLOW-UP: add a citation
+            // filter param once findings carry a citation-run source.
             nudgeEl.innerHTML =
-                'Improve your AI visibility — <a href="dashboard.html" class="nudge-link">view recommendations</a>.';
+                'Improve your AI visibility — <a href="dashboard.html?section=findings" class="nudge-link">view recommendations</a>.';
             nudgeEl.classList.remove('hidden');
         } else {
             nudgeEl.classList.add('hidden');

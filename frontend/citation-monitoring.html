@@ -135,27 +135,45 @@
             gap: 1rem;
         }
 
-        .user-info {
-            padding: 0.625rem 1rem;
-            background: var(--gray-100);
-            border-radius: 8px;
+        /* Account identity — mirrors the dashboard header (email chip + scanned domain). */
+        .account-chip {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-        }
-
-        .user-name {
+            padding: 0.5rem 0.875rem;
+            background: rgba(94, 40, 117, 0.10);
+            color: var(--violet-deep);
+            border-radius: 20px;
+            font-family: 'DM Sans', sans-serif;
             font-weight: 600;
-            color: var(--gray-700);
             font-size: 0.875rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            line-height: 1;
+            max-width: 260px;
         }
 
-        .user-name::before {
-            content: '👤';
-            font-size: 1rem;
+        .account-chip i {
+            color: var(--violet-rich);
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .account-chip .account-chip-email {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .primary-domain-badge {
+            font-size: 0.875rem;
+            color: var(--brand-cyan);
+            font-weight: 600;
+            padding: 0.5rem 1rem;
+            background: #e6f7fb;
+            border-radius: 20px;
+            max-width: 220px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .plan-badge {
@@ -532,16 +550,16 @@
                 gap: 0.5rem;
             }
 
-            .user-info {
-                padding: 0.5rem 0.75rem;
-            }
-
-            .user-name {
+            .account-chip {
+                max-width: 160px;
                 font-size: 0.75rem;
+                padding: 0.4rem 0.7rem;
             }
 
-            .user-name::before {
-                font-size: 0.875rem;
+            .primary-domain-badge {
+                max-width: 130px;
+                font-size: 0.75rem;
+                padding: 0.4rem 0.7rem;
             }
 
             .logo img {
@@ -1427,12 +1445,14 @@
             <a href="dashboard.html" class="logo" style="text-decoration: none;">
                 <img src="/logo.png" alt="Visible2AI - AI Visibility Score" />
             </a>
+            <div class="account-chip" id="accountChip" style="display: none;">
+                <i class="fas fa-envelope"></i>
+                <span class="account-chip-email" id="accountChipEmail"></span>
+            </div>
         </div>
         <div class="header-right">
             <div class="user-section">
-                <div class="user-info">
-                    <div class="user-name" id="userName">User</div>
-                </div>
+                <div class="primary-domain-badge" id="accountDomainBadge" style="display: none;"></div>
                 <span class="plan-badge" id="planBadge"></span>
                 <button class="logout-btn" onclick="localStorage.clear(); window.location.href='auth.html'">Logout</button>
             </div>
