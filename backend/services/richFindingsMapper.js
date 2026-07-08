@@ -22,9 +22,20 @@
 
 const VALID_SEVERITIES = ['critical', 'high', 'medium', 'low'];
 
-// scan_recommendations.priority → card severity. The evidence engine emits a
-// severity word ("medium"); normalise casing, band numerics defensively.
-function normalizeSeverity(priority) {
+// Severity from the issue's own evidence gap (threshold - score) using the same
+// bands the detector uses. The persisted v5.1 rows carry a degenerate
+// `priority` (every row is 'medium'), so priority alone would flatten every
+// finding and never surface Critical. `evidence_json.gap` is the per-issue
+// signal — not a pillar score-band — so we prefer it and fall back to the
+// priority column only when a gap isn't present.
+function normalizeSeverity(gap, priority) {
+  const g = Number(gap);
+  if (Number.isFinite(g)) {
+    if (g > 40) return 'critical';
+    if (g > 25) return 'high';
+    if (g > 10) return 'medium';
+    return 'low';
+  }
   if (priority == null) return 'medium';
   const p = String(priority).trim().toLowerCase();
   if (VALID_SEVERITIES.includes(p)) return p;
@@ -52,24 +63,34 @@ function normalizeDifficulty(effort) {
 }
 
 // Derive detection status (Missing / Partial / Could be enhanced) from the
-// engine's own recommendation_text lead-in (e.g. "Missing Organization
-// Schema"). Returns null when it can't be inferred, so the card falls back to
-// just the status-led title rather than inventing a label.
+// engine's own recommendation_text lead-in. Real v5.1 lead words observed:
+// Missing, No, Limited, Only, Incomplete, Weak, Crawler. Returns null when it
+// can't be inferred (e.g. "Crawler Access Issues"), so the card falls back to
+// the status-led title rather than inventing a label.
+const STATUS_BY_LEAD = {
+  missing: 'Missing', no: 'Missing', add: 'Missing', absent: 'Missing',
+  partial: 'Partial', incomplete: 'Partial', limited: 'Partial', only: 'Partial', few: 'Partial',
+  weak: 'Could be enhanced', enhance: 'Could be enhanced', improve: 'Could be enhanced',
+  could: 'Could be enhanced', optimize: 'Could be enhanced', optimise: 'Could be enhanced',
+  strengthen: 'Could be enhanced', expand: 'Could be enhanced', low: 'Could be enhanced',
+};
 function deriveStatus(recommendationText) {
   const t = String(recommendationText || '').trim().toLowerCase();
   if (!t) return null;
-  if (t.startsWith('missing') || t.startsWith('no ') || t.startsWith('add ')) return 'Missing';
-  if (t.startsWith('partial') || t.startsWith('incomplete') || t.startsWith('improve')) return 'Partial';
-  if (t.startsWith('enhance') || t.startsWith('could') || t.startsWith('optimize') || t.startsWith('strengthen') || t.startsWith('expand')) return 'Could be enhanced';
-  return null;
+  const lead = t.split(/\s+/)[0];
+  return STATUS_BY_LEAD[lead] || null;
 }
 
-// score-gain: estimated_impact is a point delta from the engine. Presented as a
-// gain, never as a raw pillar score and never with a /100 denominator.
-function normalizeScoreGain(impact) {
+// score-gain: recoverable points for the issue. Prefer the engine's own gap
+// (threshold - score) since estimated_impact is a degenerate constant (3) in
+// the persisted v5.1 rows; fall back to estimated_impact. Presented as a gain,
+// never as a raw pillar score and never with a /100 denominator.
+function normalizeScoreGain(gap, impact) {
+  const g = Number(gap);
+  if (Number.isFinite(g) && g > 0) return Math.round(g);
   const n = Number(impact);
-  if (!Number.isFinite(n) || n === 0) return null;
-  return n; // caller renders "+n"
+  if (Number.isFinite(n) && n !== 0) return n;
+  return null; // caller renders "+n"
 }
 
 // Guardrail (Step 4): no "/100" may render on the findings surface. The single
@@ -103,7 +124,7 @@ function toStepArray(actionSteps) {
  * @returns {Object}
  */
 function mapRecommendationToFinding(row) {
-  const severity = normalizeSeverity(row.priority);
+  const severity = normalizeSeverity(row.gap, row.priority);
   const whatWeFound = stripHundredScale(row.findings || '');
   const whyItMatters = stripHundredScale(row.why_it_matters || row.impact_description || '');
   const status = deriveStatus(row.recommendation_text);
@@ -112,7 +133,7 @@ function mapRecommendationToFinding(row) {
 
   return {
     id: row.id,
-    severity,                                  // from the issue, not a score band
+    severity,                                  // from the issue's evidence gap, not a pillar score-band
     title,                                     // status-led; never a raw pillar number
     pillar: row.category || '',
     // legacy thin field so the dashboard card still reads well
@@ -124,7 +145,7 @@ function mapRecommendationToFinding(row) {
     what_we_found: whatWeFound,
     why_it_matters: whyItMatters,
     how_to_implement: steps,
-    score_gain: normalizeScoreGain(row.estimated_impact),
+    score_gain: normalizeScoreGain(row.gap, row.estimated_impact),
     difficulty: normalizeDifficulty(row.estimated_effort),
     subfactor_key: row.subfactor_key || null,
     engine_version: row.engine_version || null,

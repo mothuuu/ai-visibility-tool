@@ -38,7 +38,10 @@ const REC_QUERY = `
   SELECT
     id, category, subfactor_key, priority, estimated_impact, estimated_effort,
     status, recommendation_text, findings, why_it_matters, impact_description,
-    action_steps, engine_version
+    action_steps, engine_version,
+    (evidence_json->>'gap')::numeric       AS gap,
+    (evidence_json->>'score')::numeric     AS score,
+    (evidence_json->>'threshold')::numeric AS threshold
   FROM scan_recommendations
   WHERE scan_id = $1
   ORDER BY
