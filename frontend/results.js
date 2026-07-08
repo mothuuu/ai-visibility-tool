@@ -2301,15 +2301,37 @@ function renderResultsFindings(findings) {
     container.innerHTML = filtered.map((f) => {
         const pack = lookupPackForResults(f.suggested_pack_type);
         const urlCount = f.impacted_url_count || 0;
-        const desc = f.description || '';
+
+        // Rich fields from the evidence engine (scan_recommendations). Fall back
+        // gracefully to the legacy description when a rich field is absent.
+        const steps = Array.isArray(f.how_to_implement) ? f.how_to_implement : [];
+        const statusBadge = f.status
+            ? `<span class="finding-status">${escapeHtmlR(f.status)}</span>` : '';
+        // Findings lead with status + score-gain; never a raw pillar number.
+        const gain = (f.score_gain != null && f.score_gain !== '')
+            ? `<span class="finding-gain">+${escapeHtmlR(String(f.score_gain))} pts</span>` : '';
+        const diff = f.difficulty
+            ? `<span class="finding-diff">${escapeHtmlR(f.difficulty)} to implement</span>` : '';
+        const lead = (gain || diff) ? `<div class="finding-lead">${gain}${diff}</div>` : '';
+
+        const whatWeFound = f.what_we_found || '';
+        const whyItMatters = f.why_it_matters || f.description || '';
+        const sections = [
+            whatWeFound ? `<div class="finding-section"><span class="finding-label">What we found</span><div>${escapeHtmlR(whatWeFound)}</div></div>` : '',
+            whyItMatters ? `<div class="finding-section"><span class="finding-label">Why it matters</span><div>${escapeHtmlR(whyItMatters)}</div></div>` : '',
+            steps.length ? `<div class="finding-section"><span class="finding-label">How to implement</span><ol class="finding-steps">${steps.map(s => `<li>${escapeHtmlR(String(s))}</li>`).join('')}</ol></div>` : '',
+        ].join('');
+
         return `
             <div class="finding-card" data-severity="${escapeAttrR(f.severity)}">
                 <div class="finding-card-header">
                     <span class="severity-badge ${escapeAttrR(f.severity)}">${escapeHtmlR(f.severity)}</span>
+                    ${statusBadge}
                     <span class="finding-title">${escapeHtmlR(f.title || '')}</span>
                     <span class="pillar-tag">${escapeHtmlR(f.pillar || '')}</span>
                 </div>
-                ${desc ? `<div class="finding-description">${escapeHtmlR(desc)}</div>` : ''}
+                ${lead}
+                ${sections}
                 <div class="finding-card-footer">
                     <div class="finding-meta">
                         ${urlCount > 0 ? `${urlCount} page${urlCount !== 1 ? 's' : ''} affected` : ''}
