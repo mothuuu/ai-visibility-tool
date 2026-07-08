@@ -198,7 +198,7 @@ async function getLastRun(userId) {
   const r = await db.query(
     `SELECT id, completed_at FROM citation_test_runs
       WHERE user_id = $1
-        AND status = 'complete'
+        AND status = 'completed'
         AND run_type IN ('scan_time', 'scheduled')
       ORDER BY completed_at DESC LIMIT 1`,
     [userId]

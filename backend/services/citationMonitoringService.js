@@ -98,8 +98,8 @@ function createCitationMonitoringService({ db } = {}) {
   async function createRun({ userId, runType, scanId = null, enginesTested = [], client } = {}) {
     const execConn = client || conn;
     const { rows } = await execConn.query(
-      `INSERT INTO citation_test_runs (user_id, run_type, scan_id, engines_tested, status)
-       VALUES ($1, $2, $3, $4::text[], 'pending')
+      `INSERT INTO citation_test_runs (user_id, run_type, scan_id, engines_tested, status, started_at)
+       VALUES ($1, $2, $3, $4::text[], 'pending', NOW())
        RETURNING *`,
       [userId, runType, scanId, enginesTested]
     );
@@ -122,7 +122,8 @@ function createCitationMonitoringService({ db } = {}) {
     return rows[0] || null;
   }
 
-  async function markRunCompleted(runId, { status = 'complete' } = {}) {
+  async function markRunCompleted(runId, { status = 'completed' } = {}) {
+    if (!VALID_STATUSES.has(status)) throw new Error('invalid status: ' + status);
     const { rows } = await conn.query(
       `UPDATE citation_test_runs
           SET status = $2, completed_at = NOW()
