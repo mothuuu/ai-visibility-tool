@@ -22,31 +22,66 @@
 
 const VALID_SEVERITIES = ['critical', 'high', 'medium', 'low'];
 
-// Severity from the issue's own evidence gap (threshold - score) using the same
-// bands the detector uses. The persisted v5.1 rows carry a degenerate
-// `priority` (every row is 'medium'), so priority alone would flatten every
-// finding and never surface Critical. `evidence_json.gap` is the per-issue
-// signal — not a pillar score-band — so we prefer it and fall back to the
-// priority column only when a gap isn't present.
-function normalizeSeverity(gap, priority) {
-  const g = Number(gap);
-  if (Number.isFinite(g)) {
-    if (g > 40) return 'critical';
-    if (g > 25) return 'high';
-    if (g > 10) return 'medium';
-    return 'low';
-  }
-  if (priority == null) return 'medium';
-  const p = String(priority).trim().toLowerCase();
-  if (VALID_SEVERITIES.includes(p)) return p;
+// Pillar importance = the detector's own CATEGORY_WEIGHTS. Keyed by the
+// human-readable `category` the v5.1 engine persists, with a keyword fallback.
+const CATEGORY_WEIGHTS = {
+  'ai search readiness': 20,
+  'technical setup': 18,
+  'content structure': 15,
+  'trust & authority': 12,
+  'trust and authority': 12,
+  'voice optimization': 12,
+  'ai readability': 10,
+  'content freshness': 8,
+  'speed & ux': 5,
+  'speed/ux': 5,
+};
+
+function categoryWeight(category) {
+  const k = String(category || '').trim().toLowerCase();
+  if (CATEGORY_WEIGHTS[k] != null) return CATEGORY_WEIGHTS[k];
+  if (k.includes('search')) return 20;
+  if (k.includes('technical')) return 18;
+  if (k.includes('structure')) return 15;
+  if (k.includes('trust') || k.includes('authority')) return 12;
+  if (k.includes('voice')) return 12;
+  if (k.includes('readab')) return 10;
+  if (k.includes('fresh')) return 8;
+  if (k.includes('speed') || k.includes('ux')) return 5;
+  return 10; // sensible default mid-weight
+}
+
+function severityFromWeight(w) {
+  if (w >= 18) return 'critical';
+  if (w >= 12) return 'high';
+  if (w >= 8) return 'medium';
+  return 'low';
+}
+
+// Severity for the findings card.
+//
+// The persisted v5.1 rows carry a degenerate `priority` ('medium' for every
+// row) AND degenerate scores (~5-10/70, gap ~60-65 for every row), so neither
+// priority nor the evidence gap can produce a graded, "includes Critical where
+// warranted" severity. As an interim we grade by pillar importance using the
+// detector's own CATEGORY_WEIGHTS — the detector's priority is literally
+// weight x gap, and with gap ~constant that reduces to a weight ordering.
+//
+// Forward-compatible: an explicit critical/high/low from the row (or a numeric
+// priority) is respected, so once follow-up C has the scan-time engine write
+// real per-issue severities, those win and the weight gradient is bypassed.
+// A bare 'medium'/missing (today's placeholder) falls through to the gradient.
+function normalizeSeverity(category, priority) {
+  const p = String(priority == null ? '' : priority).trim().toLowerCase();
+  if (p === 'critical' || p === 'high' || p === 'low') return p;
   const n = Number(p);
-  if (Number.isFinite(n)) {
+  if (Number.isFinite(n) && p !== '') {
     if (n >= 80) return 'critical';
     if (n >= 60) return 'high';
     if (n >= 30) return 'medium';
     return 'low';
   }
-  return 'medium';
+  return severityFromWeight(categoryWeight(category));
 }
 
 // estimated_effort (S/M/L or words) → difficulty label.
@@ -124,7 +159,7 @@ function toStepArray(actionSteps) {
  * @returns {Object}
  */
 function mapRecommendationToFinding(row) {
-  const severity = normalizeSeverity(row.gap, row.priority);
+  const severity = normalizeSeverity(row.category, row.priority);
   const whatWeFound = stripHundredScale(row.findings || '');
   const whyItMatters = stripHundredScale(row.why_it_matters || row.impact_description || '');
   const status = deriveStatus(row.recommendation_text);
@@ -164,10 +199,13 @@ module.exports = {
   mapRecommendationToFinding,
   severityCounts,
   normalizeSeverity,
+  categoryWeight,
+  severityFromWeight,
   normalizeDifficulty,
   deriveStatus,
   normalizeScoreGain,
   stripHundredScale,
   toStepArray,
   VALID_SEVERITIES,
+  CATEGORY_WEIGHTS,
 };
