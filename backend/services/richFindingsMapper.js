@@ -60,19 +60,21 @@ function severityFromWeight(w) {
 
 // Severity for the findings card.
 //
-// The persisted v5.1 rows carry a degenerate `priority` ('medium' for every
-// row) AND degenerate scores (~5-10/70, gap ~60-65 for every row), so neither
-// priority nor the evidence gap can produce a graded, "includes Critical where
-// warranted" severity. As an interim we grade by pillar importance using the
-// detector's own CATEGORY_WEIGHTS — the detector's priority is literally
-// weight x gap, and with gap ~constant that reduces to a weight ordering.
+// Evidence-only generated rows (generate-on-miss) store the playbook priority
+// P0/P1/P2, mapped here P0->critical, P1->high, P2->medium.
 //
-// Forward-compatible: an explicit critical/high/low from the row (or a numeric
-// priority) is respected, so once follow-up C has the scan-time engine write
-// real per-issue severities, those win and the weight gradient is bypassed.
-// A bare 'medium'/missing (today's placeholder) falls through to the gradient.
+// The legacy v5.1 rows (e.g. scan 561) instead carry a degenerate priority
+// ('medium' for every row) and degenerate scores, so they fall through to a
+// pillar-importance gradient using the detector's own CATEGORY_WEIGHTS. Using
+// the P-notation for new rows vs. the bare word 'medium' for legacy rows keeps
+// the two cleanly separated, so 561 renders exactly as before (cache hit).
+//
+// An explicit critical/high/low (or numeric) priority is also respected.
 function normalizeSeverity(category, priority) {
   const p = String(priority == null ? '' : priority).trim().toLowerCase();
+  if (p === 'p0') return 'critical';
+  if (p === 'p1') return 'high';
+  if (p === 'p2') return 'medium';
   if (p === 'critical' || p === 'high' || p === 'low') return p;
   const n = Number(p);
   if (Number.isFinite(n) && p !== '') {
@@ -89,9 +91,10 @@ function normalizeDifficulty(effort) {
   if (effort == null || effort === '') return null;
   const e = String(effort).trim().toLowerCase();
   const map = {
-    s: 'Easy', m: 'Medium', l: 'Hard',
-    small: 'Easy', med: 'Medium', large: 'Hard',
-    easy: 'Easy', medium: 'Medium', hard: 'Hard',
+    s: 'Easy', m: 'Moderate', l: 'Hard',
+    's-m': 'Easy', 'm-l': 'Hard',
+    small: 'Easy', med: 'Moderate', large: 'Hard',
+    easy: 'Easy', moderate: 'Moderate', medium: 'Moderate', hard: 'Hard',
   };
   if (map[e]) return map[e];
   return e.charAt(0).toUpperCase() + e.slice(1);
@@ -116,16 +119,23 @@ function deriveStatus(recommendationText) {
   return STATUS_BY_LEAD[lead] || null;
 }
 
-// score-gain: recoverable points for the issue. Prefer the engine's own gap
-// (threshold - score) since estimated_impact is a degenerate constant (3) in
-// the persisted v5.1 rows; fall back to estimated_impact. Presented as a gain,
-// never as a raw pillar score and never with a /100 denominator.
-function normalizeScoreGain(gap, impact) {
+// Flat severity-based score-gain on the /1000 frame, for evidence-only rows that
+// have no rubric gap. Approved v1 (Step 6).
+const SEVERITY_GAIN = { critical: 100, high: 60, medium: 30, low: 15 };
+
+// score-gain (points, /1000 frame — never /100).
+// - Legacy rows (scan 561) carry a real evidence gap → use it (renders unchanged).
+// - Evidence-only generated rows have no gap → flat severity-based gain.
+// TODO: weight-aware cap — clamp the gain to a fraction of the category's
+// remaining headroom so low-weight pillars (e.g. Speed UX at 5%) don't show a
+// +100 they can't yield. Fast-follow, not now.
+function normalizeScoreGain(gap, severity, impact) {
   const g = Number(gap);
   if (Number.isFinite(g) && g > 0) return Math.round(g);
+  if (severity && SEVERITY_GAIN[severity] != null) return SEVERITY_GAIN[severity];
   const n = Number(impact);
   if (Number.isFinite(n) && n !== 0) return n;
-  return null; // caller renders "+n"
+  return null; // caller renders "+n"; null → card omits the element
 }
 
 // Guardrail (Step 4): no "/100" may render on the findings surface. The single
@@ -180,7 +190,7 @@ function mapRecommendationToFinding(row) {
     what_we_found: whatWeFound,
     why_it_matters: whyItMatters,
     how_to_implement: steps,
-    score_gain: normalizeScoreGain(row.gap, row.estimated_impact),
+    score_gain: normalizeScoreGain(row.gap, severity, row.estimated_impact),
     difficulty: normalizeDifficulty(row.estimated_effort),
     subfactor_key: row.subfactor_key || null,
     engine_version: row.engine_version || null,

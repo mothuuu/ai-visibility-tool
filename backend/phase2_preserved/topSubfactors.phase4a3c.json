@@ -1,0 +1,14 @@
+{
+  "top10": [
+    "technical_setup.organization_schema",
+    "technical_setup.structured_data_coverage",
+    "technical_setup.sitemap_indexing",
+    "technical_setup.crawler_access",
+    "technical_setup.social_meta_tags",
+    "ai_search_readiness.icp_faqs",
+    "ai_search_readiness.query_intent_alignment",
+    "ai_search_readiness.evidence_proof_points",
+    "trust_authority.author_bios",
+    "ai_readability.alt_text_coverage"
+  ]
+}
