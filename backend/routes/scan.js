@@ -1041,6 +1041,34 @@ async function performCompetitorScan(url) {
 
 
 
+// B1 (persist-only): capture the rubric's per-subfactor scores before the
+// category rollup drops them, so future scans can gate finding generation on
+// what the rubric actually scored (findings must not contradict the score).
+//
+// v5-enhanced nests category -> parameter -> factors with tier scores, so we
+// persist the raw per-category { score, weight, subfactors } verbatim rather
+// than reshaping it — the resolver mapping + gate are a follow-up, validated
+// against a real payload. Additive only: total_score and categoryBreakdown are
+// untouched, and any failure here is swallowed so scan completion never breaks.
+function buildSubfactorScores(v5Results) {
+  try {
+    const out = {};
+    const cats = (v5Results && v5Results.categories) || {};
+    for (const [cat, data] of Object.entries(cats)) {
+      if (!data || typeof data !== 'object') continue;
+      out[cat] = {
+        score: typeof data.score === 'number' ? data.score : null,
+        weight: typeof data.weight === 'number' ? data.weight : null,
+        subfactors: data.subfactors || null,
+      };
+    }
+    return out;
+  } catch (err) {
+    console.warn('[Scan] buildSubfactorScores failed (non-fatal):', err.message);
+    return {};
+  }
+}
+
 async function performV5Scan(url, plan, pages = null, userProgress = null, userIndustry = null) {
   console.log('🔬 Starting V5 rubric analysis for:', url);
 
@@ -1105,6 +1133,8 @@ async function performV5Scan(url, plan, pages = null, userProgress = null, userI
         scannedAt: new Date().toISOString(),
         rubricVersion: 'V5',
         categoryBreakdown: categories,
+        // B1: raw per-subfactor rubric scores for future finding-gating (additive).
+        subfactorScores: buildSubfactorScores(v5Results),
         metadata: v5Results.metadata,
         scanEvidence: scanEvidence
       }
