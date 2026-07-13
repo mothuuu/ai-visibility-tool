@@ -28,6 +28,7 @@ const {
   TOP_10_SUBFACTORS,
 } = require('../phase2_preserved/renderer');
 const { getPlaybookEntry } = require('../phase2_preserved/subfactorPlaybookMap');
+const { gateRows } = require('./findingsGate');
 
 // Synthetic rubricResult: every top-10 subfactor present with a below-threshold
 // score so `extractFailingSubfactors` surfaces them all; the renderer's
@@ -91,7 +92,7 @@ const INSERT_SQL = `
  * Generate the evidence-only rows for a scan (no DB writes). Exported so the
  * mapping can be smoke-tested against a scanEvidence fixture without a database.
  */
-async function generateRows({ scanId, scan, scanEvidence, industry }) {
+async function generateRows({ scanId, scan, scanEvidence, industry, subfactorScores }) {
   const rubricResult = buildSyntheticRubric();
   const context = industry ? { detected_industry: industry } : {};
   const scanObj = { id: scanId, ...(scan || {}) };
@@ -103,14 +104,31 @@ async function generateRows({ scanId, scan, scanEvidence, industry }) {
     context,
   });
 
-  return (recs || []).map((rec) => recToRow(scanId, rec));
+  let rows = (recs || []).map((rec) => recToRow(scanId, rec));
+
+  // B1 gate: when the scan carries rubric subfactor scores (future scans),
+  // suppress findings the rubric already credits (leaf >= full credit), so
+  // findings can't contradict the score. Ungatable resolvers and scans without
+  // subfactorScores fall through unchanged (evidence-only).
+  if (subfactorScores && typeof subfactorScores === 'object') {
+    const { kept, suppressed } = gateRows(rows, subfactorScores);
+    if (suppressed.length) {
+      console.log(
+        `[Findings] scan ${scanId}: rubric-gated ${suppressed.length} finding(s): ` +
+        suppressed.map(s => `${s.subfactor_key} (${s.reason})`).join('; ')
+      );
+    }
+    rows = kept;
+  }
+
+  return rows;
 }
 
 /**
  * Generate-on-miss + persist, idempotently. Returns { generated, alreadyExisted }.
  * Only writes when the scan has zero rows (re-checked inside the lock).
  */
-async function generateAndPersist({ scanId, scan, scanEvidence, industry }) {
+async function generateAndPersist({ scanId, scan, scanEvidence, industry, subfactorScores }) {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -126,7 +144,7 @@ async function generateAndPersist({ scanId, scan, scanEvidence, industry }) {
       return { generated: 0, alreadyExisted: true };
     }
 
-    const rows = await generateRows({ scanId, scan, scanEvidence, industry });
+    const rows = await generateRows({ scanId, scan, scanEvidence, industry, subfactorScores });
     for (const r of rows) {
       await client.query(INSERT_SQL, [
         r.scan_id, r.category, r.subfactor_key, r.priority, r.estimated_effort, r.status,
