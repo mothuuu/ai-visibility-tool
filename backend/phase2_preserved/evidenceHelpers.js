@@ -250,15 +250,25 @@ function ttfbMs(evidence) {
  */
 function robotsBlocksAICrawlers(evidence) {
   const ev = getEvidence(evidence);
-  const robotsTxt = ev.crawler?.robotsTxt || '';
-  if (typeof robotsTxt !== 'string') return false;
-  // Simple heuristic: check for known AI bot disallow rules
-  const aiCrawlers = ['GPTBot', 'CCBot', 'Google-Extended', 'anthropic-ai', 'ClaudeBot'];
-  const lower = robotsTxt.toLowerCase();
-  return aiCrawlers.some(bot => {
-    const botLower = bot.toLowerCase();
-    return lower.includes(`user-agent: ${botLower}`) && lower.includes('disallow: /');
-  });
+  const robots = ev.crawler?.robotsTxt;
+
+  // Current crawler output is an OBJECT:
+  //   { found, allowsAllAI, blockedAICrawlers, hasAISpecificRules }
+  // A block means the parser found an AI crawler explicitly disallowed.
+  if (robots && typeof robots === 'object') {
+    if (Array.isArray(robots.blockedAICrawlers) && robots.blockedAICrawlers.length > 0) return true;
+    if (robots.allowsAllAI === false) return true;
+    return false;
+  }
+
+  // Legacy fallback: raw robots.txt string content.
+  if (typeof robots === 'string' && robots) {
+    const aiCrawlers = ['gptbot', 'ccbot', 'google-extended', 'anthropic-ai', 'claudebot'];
+    const lower = robots.toLowerCase();
+    return aiCrawlers.some(bot => lower.includes(`user-agent: ${bot}`) && lower.includes('disallow: /'));
+  }
+
+  return false;
 }
 
 /**

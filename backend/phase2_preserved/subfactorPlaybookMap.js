@@ -340,32 +340,36 @@ const SUBFACTOR_TO_PLAYBOOK = {
     effort: 'S-M',
     impact: 'High',
     automation_level: 'manual',
-    // Phase 4A.3c: State-keyed templates
+    // Phase 4A.3c: State-keyed templates. crawler_access is decided from robots
+    // evidence only (TTFB lives in Speed UX), so the "blocked" language appears
+    // ONLY on BLOCKING; PARTIAL describes a missing robots.txt, not a block.
     finding_templates: {
       BLOCKING: 'Your robots.txt file is blocking AI crawlers (GPTBot, CCBot, etc.) from accessing {{domain}}. AI systems cannot index your content.',
-      PARTIAL: 'Crawler access is available but server response time (TTFB: {{ttfb}}ms) exceeds recommended thresholds, reducing crawl efficiency.',
-      default: 'Potential crawler access issues detected on {{domain}}.'
+      PARTIAL: 'No robots.txt file was detected on {{domain}}, so crawler directives cannot be confirmed. This is not a block — crawlers can still reach your pages.',
+      default: 'Review crawler access directives on {{domain}}.'
     },
-    why_it_matters_template: 'AI crawlers may be blocked from accessing your content. If crawlers cannot reach your pages, your content will not appear in AI recommendations.',
+    why_it_matters_template: {
+      BLOCKING: 'Your robots.txt blocks AI crawlers (GPTBot, CCBot, and others) from reaching your content. If crawlers cannot access your pages, your content will not appear in AI recommendations.',
+      PARTIAL: 'No robots.txt was detected, so AI crawlers have no explicit access directives. Adding a robots.txt that welcomes AI crawlers (and points to your sitemap) makes your crawl intent clear.',
+      default: 'AI crawlers need clear, unobstructed access to your pages to include your content in AI recommendations.'
+    },
     recommendation_template: {
       BLOCKING: 'Update your robots.txt to explicitly allow GPTBot, CCBot, and Google-Extended crawlers. These AI bots need access to index your content.',
-      PARTIAL: 'Optimize server response time to under 500ms TTFB. Slow responses reduce crawl completeness and may signal poor quality.',
+      PARTIAL: 'Add a robots.txt that explicitly allows AI crawlers (GPTBot, CCBot, Google-Extended) and references your sitemap.',
       default: 'Review and optimize crawler access to your site.'
     },
-    what_to_include_template: 'Ensure robots.txt allows AI crawlers, server TTFB is under 500ms, and no authentication or geo-blocking interferes with crawler access.',
+    what_to_include_template: 'Ensure robots.txt exists and allows AI crawlers, references your sitemap, and that no authentication or geo-blocking interferes with crawler access.',
     action_items_template: [
-      'Review robots.txt for overly restrictive rules',
-      'Ensure GPTBot, CCBot, and other AI crawlers are not blocked',
-      'Check server response times (should be under 500ms)',
-      'Verify no authentication or geo-blocking issues'
+      'Add or review robots.txt at your site root',
+      'Ensure GPTBot, CCBot, Google-Extended and other AI crawlers are allowed',
+      'Reference your sitemap from robots.txt',
+      'Verify no authentication or geo-blocking blocks crawlers'
     ],
     examples_template: [
       'Recommended robots.txt:\n```\nUser-agent: *\nAllow: /\n\nUser-agent: GPTBot\nAllow: /\n\nSitemap: {{site_url}}/sitemap.xml\n```'
     ],
     evidence_selectors: [
-      'crawler.robotsTxt',
-      'performance.ttfb',
-      'performance.responseTime'
+      'crawler.robotsTxt'
     ]
   },
 
