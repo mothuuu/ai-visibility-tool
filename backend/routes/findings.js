@@ -125,11 +125,13 @@ router.get('/:scanId/findings', authenticateToken, async (req, res) => {
           domain_type: scanRow.domain_type || null,
           organization_id: scanRow.organization_id || null,
         };
-        const industry = scanRow.industry
-          || (parseDetailedAnalysis(scanRow.detailed_analysis) || {}).industry
-          || null;
+        const da = parseDetailedAnalysis(scanRow.detailed_analysis) || {};
+        const industry = scanRow.industry || da.industry || null;
+        // B1: present only on future scans; when absent the generator skips the
+        // gate and behaves exactly as today (evidence-only) for existing scans.
+        const subfactorScores = da.subfactorScores || null;
 
-        const result = await generateAndPersist({ scanId, scan, scanEvidence, industry });
+        const result = await generateAndPersist({ scanId, scan, scanEvidence, industry, subfactorScores });
         // Re-read (covers both this generation and a race that lost the lock).
         const regen = await db.query(REC_QUERY, [scanId]);
         if (regen.rows.length > 0) {
