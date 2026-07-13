@@ -105,18 +105,28 @@ const DETECTION_FUNCTIONS = {
    */
   'technical_setup.crawler_access': (evidence) => {
     const ev = getEvidence(evidence);
+    const robots = ev.crawler?.robotsTxt;
+
+    // Crawler access is decided from ROBOTS evidence only. Server response time
+    // (TTFB) is not crawler-access evidence — whether a bot is blocked (robots)
+    // is unrelated to how fast the server responds — and it already lives in
+    // Speed UX (serverResponse/crawlerResponse). "Can't determine" must never be
+    // rendered as a Critical block claim, so there is no TTFB fall-through here.
     if (robotsBlocksAICrawlers(ev)) {
-      return DETECTION_STATE.BLOCKING;
+      return DETECTION_STATE.BLOCKING; // an AI crawler is genuinely disallowed
     }
-    const ttfb = ev.performance?.ttfb;
-    if (typeof ttfb === 'number' && ttfb > 2000) {
-      return DETECTION_STATE.PARTIAL;
+
+    const isObj = robots && typeof robots === 'object';
+    const found = isObj ? robots.found === true : !!robots;
+    const allowsAll = isObj
+      && robots.allowsAllAI === true
+      && (!Array.isArray(robots.blockedAICrawlers) || robots.blockedAICrawlers.length === 0);
+
+    if (found && allowsAll) {
+      return DETECTION_STATE.COMPLETE; // robots present and welcomes all crawlers
     }
-    // If no blocking and reasonable TTFB, consider complete
-    if (ttfb && ttfb < 500) {
-      return DETECTION_STATE.COMPLETE;
-    }
-    // Default: can't determine, treat as partial
+
+    // No robots.txt (or unreadable): an honest lesser signal — NOT a block.
     return DETECTION_STATE.PARTIAL;
   },
 
