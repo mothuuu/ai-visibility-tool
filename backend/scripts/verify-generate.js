@@ -61,8 +61,10 @@ const SAMPLE_SQL = `
       organization_id: s.organization_id || null,
     };
     const industry = s.industry || (da && da.industry) || null;
+    const subfactorScores = (da && da.subfactorScores) || null; // B1: gate when present
+    console.log(`subfactorScores present=${!!subfactorScores} (gate ${subfactorScores ? 'active' : 'skipped — evidence-only'})`);
 
-    const result = await generateAndPersist({ scanId, scan, scanEvidence, industry });
+    const result = await generateAndPersist({ scanId, scan, scanEvidence, industry, subfactorScores });
     console.log('generateAndPersist:', JSON.stringify(result));
 
     const after = await db.query(
