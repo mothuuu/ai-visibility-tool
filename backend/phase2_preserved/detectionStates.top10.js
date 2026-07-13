@@ -78,15 +78,26 @@ const DETECTION_FUNCTIONS = {
    */
   'technical_setup.sitemap_indexing': (evidence) => {
     const ev = getEvidence(evidence);
-    if (hasSitemap(ev)) {
-      // Check if sitemap has issues
-      const sitemapUrls = ev.crawler?.sitemap?.urls;
-      if (Array.isArray(sitemapUrls) && sitemapUrls.length === 0) {
-        return DETECTION_STATE.PARTIAL;
-      }
-      return DETECTION_STATE.COMPLETE;
-    }
-    return DETECTION_STATE.NOT_FOUND;
+    const sm = ev.crawler?.sitemap || {};
+
+    // Honor `detected` and the REAL url count, not just the flat `urls` array.
+    // A sitemap INDEX (e.g. Yoast sitemap_index.xml) carries its count in
+    // `totalUrls` / classified lists while the flat `urls` array is empty ([]) —
+    // keying on `urls` alone produced a false "Missing sitemap" on sites that
+    // clearly have one. Return contract unchanged: COMPLETE / PARTIAL / NOT_FOUND.
+    const detected = !!(sm.detected || ev.crawler?.sitemapDetected || ev.technical?.hasSitemapLink);
+    if (!detected) return DETECTION_STATE.NOT_FOUND;
+
+    const totalUrls = Number(sm.totalUrls) || 0;
+    const flatUrls = Array.isArray(sm.urls) ? sm.urls.length : 0;
+    const classified =
+      (Array.isArray(sm.blogUrls) && sm.blogUrls.length > 0) ||
+      (Array.isArray(sm.faqUrls) && sm.faqUrls.length > 0) ||
+      sm.hasBlogUrls === true ||
+      sm.hasFaqUrls === true;
+
+    if (totalUrls > 0 || flatUrls > 0 || classified) return DETECTION_STATE.COMPLETE;
+    return DETECTION_STATE.PARTIAL; // detected but genuinely empty
   },
 
   /**

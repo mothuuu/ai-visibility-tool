@@ -518,8 +518,9 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
       }
     }
 
-    // Step 6: Assess evidence quality
-    const evidenceAssessment = assessEvidenceQuality(scanEvidence, entry, context);
+    // Step 6: Assess evidence quality (pass the resolved detection state so the
+    // evidence-coverage label can be phrased to match the card's status).
+    const evidenceAssessment = assessEvidenceQuality(scanEvidence, entry, { ...context, detectionState });
     let { quality: evidenceQuality, confidence, summary: evidenceSummary, details: evidenceDetails } = evidenceAssessment;
 
     // Step 7: Check if recommendation should be skipped (noise filtering)

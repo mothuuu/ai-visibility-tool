@@ -295,19 +295,28 @@ function assessEvidenceQuality(scanEvidence, playbookEntry, context = {}) {
     } else if (selectors.length > 0) {
       // Use evidence_selectors for quality determination
       const coverage = Object.keys(found).length / selectors.length;
+      const nFound = Object.keys(found).length;
+
+      // The selector count reflects checks performed, not the target feature
+      // being present. On a gap finding (detection state != COMPLETE) the label
+      // must never say "found" — that contradicts a Missing/Partial status.
+      // "found" is reserved for COMPLETE (confirming evidence, which is
+      // suppressed from the findings surface anyway).
+      const isPresent = context.detectionState === 'COMPLETE';
+      const noun = isPresent ? 'evidence selectors found' : 'evidence signals checked';
 
       if (coverage >= 0.7) {
         quality = EVIDENCE_QUALITY.MEDIUM;
         confidence = CONFIDENCE_THRESHOLDS.MEDIUM + coverage * 0.2;
-        summaryParts.push(`${Object.keys(found).length}/${selectors.length} evidence selectors found`);
+        summaryParts.push(`${nFound}/${selectors.length} ${noun}`);
       } else if (coverage >= 0.3) {
         quality = EVIDENCE_QUALITY.WEAK;
         confidence = CONFIDENCE_THRESHOLDS.WEAK + coverage * 0.3;
-        summaryParts.push(`Only ${Object.keys(found).length}/${selectors.length} evidence selectors found`);
+        summaryParts.push(`Only ${nFound}/${selectors.length} ${noun}`);
       } else {
         quality = EVIDENCE_QUALITY.WEAK;
         confidence = CONFIDENCE_THRESHOLDS.WEAK;
-        summaryParts.push(`Insufficient evidence: ${Object.keys(found).length}/${selectors.length} selectors found`);
+        summaryParts.push(`Insufficient evidence: ${nFound}/${selectors.length} ${isPresent ? 'selectors found' : 'signals checked'}`);
       }
     } else {
       // No selectors defined - default to weak
