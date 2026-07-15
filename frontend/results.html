@@ -155,6 +155,77 @@
             font-weight: 600;
         }
 
+        /* "How does the score work?" — quiet contextual note + popover */
+        .score-help {
+            position: relative;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        .score-help-trigger {
+            background: none;
+            border: none;
+            padding: 4px 6px;
+            font: inherit;
+            font-size: 12.5px;
+            font-weight: 500;
+            text-transform: none;
+            letter-spacing: 0;
+            color: #94a3b8;
+            cursor: pointer;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            border-radius: 6px;
+        }
+        .score-help-trigger:hover,
+        .score-help-trigger:focus-visible {
+            color: #475569;
+            outline: none;
+        }
+        .score-help-trigger:focus-visible {
+            box-shadow: 0 0 0 2px rgba(0, 185, 218, 0.4);
+        }
+        .score-help-popover {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            width: max-content;
+            max-width: min(320px, calc(100vw - 24px));
+            box-sizing: border-box;
+            background: #1f2937;
+            color: #f1f5f9;
+            text-align: left;
+            text-transform: none;
+            letter-spacing: 0;
+            font-size: 13px;
+            font-weight: 400;
+            line-height: 1.5;
+            padding: 12px 14px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            z-index: 60;
+            opacity: 0;
+            visibility: hidden;
+            transform-origin: top center;
+            transition: opacity 0.15s ease, visibility 0.15s ease;
+        }
+        .score-help-popover::before {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-bottom-color: #1f2937;
+        }
+        .score-help.open .score-help-popover {
+            opacity: 1;
+            visibility: visible;
+        }
+
         .score-grade {
             font-size: 28px;
             font-weight: 700;
@@ -1390,6 +1461,14 @@
                 </div>
                 <div class="score-grade" id="scoreGrade">--</div>
                 <div class="score-label">Overall AI Visibility</div>
+                <!-- Contextual note explaining why the score doesn't move until re-scan -->
+                <span class="score-help" id="scoreHelp">
+                    <button type="button" class="score-help-trigger" id="scoreHelpTrigger"
+                            aria-describedby="scoreHelpPopover" aria-expanded="false">
+                        <span aria-hidden="true">ⓘ</span> How does the score work?
+                    </button>
+                    <span class="score-help-popover" id="scoreHelpPopover" role="tooltip">Your AI Visibility Score is a weighted composite of many factors and reflects your site as of your last scan. Implementing a recommendation won't change the score until you run a new scan — and because each factor is weighted, some fixes move the score more than others. For the biggest gains, address the higher-impact items and re-scan to see your progress.</span>
+                </span>
             </div>
         </div>
 
@@ -1545,5 +1624,63 @@
 
     <!-- AI Support Chat Widget -->
     <script src="support-chat.js"></script>
+    <script>
+    // "How does the score work?" popover — hover/focus on hover-capable devices,
+    // tap-toggle on touch. Capability detected via (hover: none), not width.
+    (function () {
+        var wrap = document.getElementById('scoreHelp');
+        var trigger = document.getElementById('scoreHelpTrigger');
+        var pop = document.getElementById('scoreHelpPopover');
+        if (!wrap || !trigger || !pop) return;
+
+        var hoverCapable = !(window.matchMedia && window.matchMedia('(hover: none)').matches);
+
+        function position() {
+            // Keep the popover inside the viewport (it sits near the top of the page).
+            pop.style.transform = 'translateX(-50%)';
+            var r = pop.getBoundingClientRect();
+            var pad = 8, shift = 0;
+            if (r.left < pad) shift = pad - r.left;
+            else if (r.right > window.innerWidth - pad) shift = (window.innerWidth - pad) - r.right;
+            if (shift) pop.style.transform = 'translateX(calc(-50% + ' + Math.round(shift) + 'px))';
+        }
+        function open() {
+            if (wrap.classList.contains('open')) return;
+            wrap.classList.add('open');
+            trigger.setAttribute('aria-expanded', 'true');
+            position();
+        }
+        function close() {
+            if (!wrap.classList.contains('open')) return;
+            wrap.classList.remove('open');
+            trigger.setAttribute('aria-expanded', 'false');
+        }
+
+        if (hoverCapable) {
+            trigger.addEventListener('mouseenter', open);
+            wrap.addEventListener('mouseleave', close);   // wrap (not trigger) so moving onto the popover keeps it open
+            trigger.addEventListener('focus', open);       // keyboard
+            trigger.addEventListener('blur', close);
+            trigger.addEventListener('click', open);       // fallback way in if capability is mis-detected
+        } else {
+            // Touch / no-hover: tap toggles; no hover handlers (avoids open-then-instant-close flicker).
+            trigger.addEventListener('click', function (e) {
+                e.stopPropagation();
+                wrap.classList.contains('open') ? close() : open();
+            });
+        }
+
+        // Close on outside tap/click and on Esc (both modes).
+        document.addEventListener('click', function (e) {
+            if (wrap.classList.contains('open') && !wrap.contains(e.target)) close();
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' || e.key === 'Esc') close();
+        });
+        window.addEventListener('resize', function () {
+            if (wrap.classList.contains('open')) position();
+        });
+    })();
+    </script>
 </body>
 </html>
