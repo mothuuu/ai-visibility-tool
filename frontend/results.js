@@ -2317,7 +2317,7 @@ function renderResultsFindings(findings) {
         const whatWeFound = f.what_we_found || '';
         const whyItMatters = f.why_it_matters || f.description || '';
         const sections = [
-            whatWeFound ? `<div class="finding-section"><span class="finding-label">What we found</span><div>${escapeHtmlR(whatWeFound)}</div></div>` : '',
+            whatWeFound ? `<div class="finding-section"><span class="finding-label">What we found</span><div style="white-space:pre-line">${escapeHtmlR(whatWeFound)}</div></div>` : '',
             whyItMatters ? `<div class="finding-section"><span class="finding-label">Why it matters</span><div>${escapeHtmlR(whyItMatters)}</div></div>` : '',
             steps.length ? `<div class="finding-section"><span class="finding-label">How to implement</span><ol class="finding-steps">${steps.map(s => `<li>${escapeHtmlR(String(s))}</li>`).join('')}</ol></div>` : '',
         ].join('');

@@ -228,6 +228,18 @@ function isRealContentImage(img) {
 }
 
 /**
+ * Whether a single image carries usable alt text.
+ * `hasAlt` is the extractor's flag; we also honour a non-empty `alt` string so
+ * the count and the specific missing-alt list are computed from one rule.
+ * @param {Object} img
+ * @returns {boolean}
+ */
+function imageHasAlt(img) {
+  if (!img || typeof img !== 'object') return false;
+  return img.hasAlt === true || (typeof img.alt === 'string' && img.alt.trim() !== '');
+}
+
+/**
  * Alt-text coverage stats, counting real content images only.
  *
  * When the per-image `media.images` array is present we recompute total /
@@ -242,9 +254,7 @@ function imageAltStats(evidence) {
   if (images && images.length) {
     const real = images.filter(isRealContentImage);
     const total = real.length;
-    const withAlt = real.filter(img =>
-      img.hasAlt === true || (typeof img.alt === 'string' && img.alt.trim() !== '')
-    ).length;
+    const withAlt = real.filter(imageHasAlt).length;
     const withoutAlt = total - withAlt;
     return { total, withAlt, withoutAlt };
   }
@@ -253,6 +263,22 @@ function imageAltStats(evidence) {
   const withAlt = ev.media?.imagesWithAlt || 0;
   const withoutAlt = ev.media?.imagesWithoutAlt || (total - withAlt);
   return { total, withAlt, withoutAlt };
+}
+
+/**
+ * The specific real content images that are missing alt text.
+ *
+ * This is exactly the set `imageAltStats().withoutAlt` counts — same real-image
+ * filter (data: URIs excluded), same alt rule — so the list rendered on the card
+ * can never disagree with the count. Returns [] when the per-image array is
+ * absent (only aggregate counts persisted) or nothing is missing.
+ * @param {Object} evidence
+ * @returns {Array<Object>} image objects ({ src, alt, hasAlt, ... })
+ */
+function missingAltImages(evidence) {
+  const ev = getEvidence(evidence);
+  const images = Array.isArray(ev.media?.images) ? ev.media.images : [];
+  return images.filter(img => isRealContentImage(img) && !imageHasAlt(img));
 }
 
 /**
@@ -411,6 +437,8 @@ module.exports = {
   missingCommonSchemas,
   imageAltStats,
   isRealContentImage,
+  imageHasAlt,
+  missingAltImages,
   headingInfo,
   ttfbMs,
   robotsBlocksAICrawlers,

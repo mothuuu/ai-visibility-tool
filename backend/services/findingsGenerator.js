@@ -68,7 +68,11 @@ function recToRow(scanId, rec) {
     estimated_effort: entry.effort || null,           // 'S'/'M'/'L'/… → difficulty in the mapper
     status: 'pending',
     recommendation_text: rec.gap || entry.playbook_gap || null,   // status-led title
-    findings: rec.evidence_summary || rec.finding || null,        // "X/Y evidence selectors found"
+    // "What we found": when a finding lists specific evidence items (count line +
+    // the exact items to fix, e.g. the images missing alt) use that; otherwise
+    // keep the existing source unchanged for every other finding (evidence
+    // summary, then finding prose) — this PR only upgrades the alt-text path.
+    findings: rec.what_we_found || rec.evidence_summary || rec.finding || null,
     why_it_matters: rec.why_it_matters || null,
     impact_description: rec.why_it_matters || null,
     action_steps: JSON.stringify(actionSteps),
