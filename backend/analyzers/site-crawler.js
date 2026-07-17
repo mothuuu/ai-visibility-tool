@@ -744,8 +744,29 @@ class SiteCrawler {
   }
 
   hasGoodAltText(evidence) {
-    if (evidence.media.imageCount === 0) return true;
-    const coverage = evidence.media.imagesWithAlt / evidence.media.imageCount;
+    const media = evidence.media || {};
+    // Count real content images only. Lazy-load libraries inject data: URI
+    // placeholder <img> elements that carry no alt-text signal; counting them
+    // as missing-alt drags coverage below the bar on pages whose real images
+    // are all captioned. Mirror imageAltStats() so the score and the alt-text
+    // finding agree. Fall back to pre-computed counts when no array exists.
+    const images = Array.isArray(media.images) ? media.images : null;
+    let total, withAlt;
+    if (images && images.length) {
+      const real = images.filter(img => {
+        const src = img && typeof img.src === 'string' ? img.src.trim() : '';
+        return !src.toLowerCase().startsWith('data:');
+      });
+      total = real.length;
+      withAlt = real.filter(img =>
+        img.hasAlt === true || (typeof img.alt === 'string' && img.alt.trim() !== '')
+      ).length;
+    } else {
+      total = media.imageCount || 0;
+      withAlt = media.imagesWithAlt || 0;
+    }
+    if (total === 0) return true;
+    const coverage = withAlt / total;
     return coverage >= 0.9; // 90% coverage = good
   }
 

@@ -50,7 +50,7 @@ const {
   validateNoPlaceholderLeaks: strictLeakCheck
 } = require('./placeholderResolver');
 
-const { buildEvidenceContext } = require('./evidenceHelpers');
+const { buildEvidenceContext, imageAltStats } = require('./evidenceHelpers');
 
 const {
   getDetectionState,
@@ -156,10 +156,12 @@ function buildPlaceholderContext(scanEvidence, context, scan) {
     .flat()
     .length;
 
-  // Count images
-  const totalImages = evidence.media?.imageCount || 0;
-  const imagesWithAlt = evidence.media?.imagesWithAlt || 0;
-  const imagesWithoutAlt = evidence.media?.imagesWithoutAlt || totalImages - imagesWithAlt;
+  // Count images — real content images only (excludes data: URI lazy-load
+  // placeholders), so {{images_without_alt}} matches the finding's own tally.
+  const altStats = imageAltStats(evidence);
+  const totalImages = altStats.total;
+  const imagesWithAlt = altStats.withAlt;
+  const imagesWithoutAlt = altStats.withoutAlt;
 
   // Count schema types
   const schemaTypes = evidence.technical?.structuredData?.map(s => s.type || s['@type']) || [];
