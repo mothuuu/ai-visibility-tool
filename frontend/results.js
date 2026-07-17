@@ -2316,8 +2316,31 @@ function renderResultsFindings(findings) {
 
         const whatWeFound = f.what_we_found || '';
         const whyItMatters = f.why_it_matters || f.description || '';
+
+        // Prefer the structured list (clickable evidence links) when present.
+        // Each item's visible text is the short path; the link opens the real
+        // asset on the SCANNED site in a new tab. url:null items and the
+        // "…and N more" line stay plain text — never broken links.
+        const wwfItems = f.what_we_found_items;
+        let whatWeFoundHtml = '';
+        if (wwfItems && Array.isArray(wwfItems.items) && wwfItems.items.length) {
+            const lead = wwfItems.lead
+                ? `<div class="finding-evidence-lead">${escapeHtmlR(wwfItems.lead)}</div>` : '';
+            const lis = wwfItems.items.map((it) => {
+                const label = escapeHtmlR(String(it.label || ''));
+                return (typeof it.url === 'string' && /^https?:\/\//i.test(it.url))
+                    ? `<li><a href="${escapeAttrR(it.url)}" target="_blank" rel="noopener noreferrer">${label}</a></li>`
+                    : `<li>${label}</li>`;
+            }).join('');
+            const more = (Number(wwfItems.moreCount) > 0)
+                ? `<li class="finding-evidence-more">…and ${escapeHtmlR(String(wwfItems.moreCount))} more</li>` : '';
+            whatWeFoundHtml = `<div class="finding-section"><span class="finding-label">What we found</span>${lead}<ul class="finding-evidence-list">${lis}${more}</ul></div>`;
+        } else if (whatWeFound) {
+            whatWeFoundHtml = `<div class="finding-section"><span class="finding-label">What we found</span><div style="white-space:pre-line">${escapeHtmlR(whatWeFound)}</div></div>`;
+        }
+
         const sections = [
-            whatWeFound ? `<div class="finding-section"><span class="finding-label">What we found</span><div style="white-space:pre-line">${escapeHtmlR(whatWeFound)}</div></div>` : '',
+            whatWeFoundHtml,
             whyItMatters ? `<div class="finding-section"><span class="finding-label">Why it matters</span><div>${escapeHtmlR(whyItMatters)}</div></div>` : '',
             steps.length ? `<div class="finding-section"><span class="finding-label">How to implement</span><ol class="finding-steps">${steps.map(s => `<li>${escapeHtmlR(String(s))}</li>`).join('')}</ol></div>` : '',
         ].join('');

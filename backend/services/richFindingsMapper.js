@@ -146,6 +146,35 @@ function stripHundredScale(text) {
   return String(text).replace(/\b(\d{1,3})\s*\/\s*100\b/g, (_, n) => `${Number(n) * 10}/1000`);
 }
 
+// Normalize the persisted specific-evidence list into a safe card payload:
+// { lead, items:[{label, url|null}], moreCount }. Accepts a JSONB object (pg) or
+// a JSON string. Every url is validated to http(s) — anything else becomes null
+// so the frontend renders plain text, never a link with an unsafe scheme.
+function normalizeWhatWeFoundItems(raw) {
+  let v = raw;
+  if (typeof v === 'string') {
+    try { v = JSON.parse(v); } catch (_) { return null; }
+  }
+  if (!v || typeof v !== 'object' || !Array.isArray(v.items)) return null;
+
+  const items = v.items
+    .map(it => {
+      if (!it || typeof it !== 'object') return null;
+      const label = stripHundredScale(String(it.label == null ? '' : it.label));
+      if (!label) return null;
+      const url = (typeof it.url === 'string' && /^https?:\/\//i.test(it.url.trim()))
+        ? it.url.trim()
+        : null;
+      return { label, url };
+    })
+    .filter(Boolean);
+  if (!items.length) return null;
+
+  const moreCount = Number.isFinite(Number(v.moreCount)) ? Math.max(0, Number(v.moreCount)) : 0;
+  const lead = v.lead == null ? '' : stripHundredScale(String(v.lead));
+  return { lead, items, moreCount };
+}
+
 // action_steps may arrive as a JS array (JSONB) or a JSON/text string.
 function toStepArray(actionSteps) {
   if (Array.isArray(actionSteps)) {
@@ -188,6 +217,9 @@ function mapRecommendationToFinding(row) {
     // rich fields (results page)
     status,
     what_we_found: whatWeFound,
+    // Structured list for clickable evidence links (alt-text images now); null
+    // when absent → frontend renders what_we_found as plain text.
+    what_we_found_items: normalizeWhatWeFoundItems(row.what_we_found_items),
     why_it_matters: whyItMatters,
     how_to_implement: steps,
     score_gain: normalizeScoreGain(row.gap, severity, row.estimated_impact),
@@ -216,6 +248,7 @@ module.exports = {
   normalizeScoreGain,
   stripHundredScale,
   toStepArray,
+  normalizeWhatWeFoundItems,
   VALID_SEVERITIES,
   CATEGORY_WEIGHTS,
 };

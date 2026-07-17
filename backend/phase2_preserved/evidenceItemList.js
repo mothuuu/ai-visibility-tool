@@ -74,6 +74,57 @@ function renderEvidenceList(items, opts = {}) {
 }
 
 /**
+ * The scanned site's origin (scheme + host), for resolving relative image/page
+ * paths to absolute URLs that open on the CLIENT site — never the app's own
+ * origin. Derived from the scan's own URL/domain, in priority order.
+ *
+ * @param {Object} scanEvidence
+ * @param {Object} [scan] - { url, domain }
+ * @returns {string|null}
+ */
+function deriveScannedOrigin(scanEvidence, scan) {
+  const ev = getEvidence(scanEvidence);
+  const candidates = [ev && ev.url, scan && scan.url, scan && scan.domain];
+  for (const c of candidates) {
+    if (typeof c !== 'string' || !c.trim()) continue;
+    const s = c.trim();
+    try { return new URL(s).origin; } catch (_) { /* not absolute */ }
+    try { return new URL('https://' + s.replace(/^\/+/, '')).origin; } catch (_) { /* give up */ }
+  }
+  return null;
+}
+
+/**
+ * Resolve an image/page `src` to an absolute http(s) URL, using the scanned
+ * origin for relative paths. Returns null when it can't be resolved to a real
+ * link (data: URIs, non-http schemes, malformed, or a relative path with no
+ * known origin) — the caller then renders plain text, never a broken link.
+ *
+ * @param {string} src
+ * @param {string|null} origin - the scanned site's origin
+ * @returns {string|null}
+ */
+function resolveAbsoluteUrl(src, origin) {
+  if (typeof src !== 'string') return null;
+  const s = src.trim();
+  if (!s || s.toLowerCase().startsWith('data:')) return null;
+
+  // Already absolute?
+  try {
+    const u = new URL(s);
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : null;
+  } catch (_) { /* relative — resolve against the scanned origin */ }
+
+  if (origin) {
+    try {
+      const u = new URL(s, origin);
+      return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : null;
+    } catch (_) { /* fall through */ }
+  }
+  return null;
+}
+
+/**
  * Build the specific-evidence block to append under a finding's What-we-found,
  * keyed by the finding's canonical subfactor. Returns '' when the finding has
  * no list treatment or the list is empty (so the caller appends nothing).
@@ -102,9 +153,50 @@ function buildSpecificEvidenceBlock(canonicalKey, scanEvidence, opts = {}) {
   }
 }
 
+/**
+ * Structured variant of the specific-evidence list, for the frontend to render
+ * as clickable links. Each item carries a short readable `label` (display text)
+ * and an absolute `url` (link target on the SCANNED site) — or url:null when it
+ * can't be resolved, so the frontend renders that item as plain text.
+ *
+ * Same filtered set + cap as buildSpecificEvidenceBlock, so text and links agree.
+ * Generic given an absolute-URL resolver — other findings add a case here.
+ *
+ * @param {string} canonicalKey
+ * @param {Object} scanEvidence
+ * @param {Object} [opts] - { scan, cap, origin }
+ * @returns {{ items: Array<{label:string,url:string|null}>, moreCount: number } | null}
+ */
+function buildSpecificEvidenceItems(canonicalKey, scanEvidence, opts = {}) {
+  const ev = getEvidence(scanEvidence);
+  const cap = opts.cap || DEFAULT_CAP;
+  const origin = opts.origin || deriveScannedOrigin(ev, opts.scan);
+
+  switch (canonicalKey) {
+    case 'ai_readability.alt_text_coverage': {
+      const missing = missingAltImages(ev);
+      if (!missing.length) return null;
+      const items = missing.slice(0, cap)
+        .map(img => ({
+          label: formatReadablePath(img && img.src),
+          url: resolveAbsoluteUrl(img && img.src, origin),
+        }))
+        .filter(it => it.label);
+      if (!items.length) return null;
+      const moreCount = Math.max(0, missing.length - items.length);
+      return { items, moreCount };
+    }
+    default:
+      return null;
+  }
+}
+
 module.exports = {
   DEFAULT_CAP,
   formatReadablePath,
   renderEvidenceList,
+  deriveScannedOrigin,
+  resolveAbsoluteUrl,
   buildSpecificEvidenceBlock,
+  buildSpecificEvidenceItems,
 };

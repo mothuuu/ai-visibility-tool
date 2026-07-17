@@ -44,7 +44,8 @@ const REC_QUERY = `
     action_steps, engine_version,
     (evidence_json->>'gap')::numeric       AS gap,
     (evidence_json->>'score')::numeric     AS score,
-    (evidence_json->>'threshold')::numeric AS threshold
+    (evidence_json->>'threshold')::numeric AS threshold,
+    evidence_json->'what_we_found_items'   AS what_we_found_items
   FROM scan_recommendations
   WHERE scan_id = $1
   ORDER BY
