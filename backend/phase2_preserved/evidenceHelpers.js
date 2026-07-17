@@ -207,8 +207,48 @@ function missingCommonSchemas(evidence) {
  * @param {Object} evidence
  * @returns {{ total: number, withAlt: number, withoutAlt: number }}
  */
+/**
+ * Whether an image counts as "real content" for alt-text coverage.
+ *
+ * Lazy-load libraries inject `data:image/svg+xml,...` (and other data:) URIs as
+ * placeholder/spacer <img> elements before the real asset loads. Those carry no
+ * meaningful alt-text signal, yet a plain `hasAlt` tally counts each one as a
+ * missing-alt image and manufactures a false "Incomplete Image Alt Text"
+ * finding on sites whose real images are all captioned. Exclude any image whose
+ * `src` is a data: URI from BOTH the total and the missing-alt count.
+ *
+ * @param {Object} img - one entry from evidence.media.images
+ * @returns {boolean}
+ */
+function isRealContentImage(img) {
+  if (!img || typeof img !== 'object') return false;
+  const src = typeof img.src === 'string' ? img.src.trim() : '';
+  if (src.toLowerCase().startsWith('data:')) return false;
+  return true;
+}
+
+/**
+ * Alt-text coverage stats, counting real content images only.
+ *
+ * When the per-image `media.images` array is present we recompute total /
+ * withAlt / withoutAlt from it, excluding data: URI placeholders, so the number
+ * the finding reports matches what a human sees. When only the pre-computed
+ * counts exist (no array), we fall back to them unchanged.
+ */
 function imageAltStats(evidence) {
   const ev = getEvidence(evidence);
+  const images = Array.isArray(ev.media?.images) ? ev.media.images : null;
+
+  if (images && images.length) {
+    const real = images.filter(isRealContentImage);
+    const total = real.length;
+    const withAlt = real.filter(img =>
+      img.hasAlt === true || (typeof img.alt === 'string' && img.alt.trim() !== '')
+    ).length;
+    const withoutAlt = total - withAlt;
+    return { total, withAlt, withoutAlt };
+  }
+
   const total = ev.media?.imageCount || ev.media?.totalImages || 0;
   const withAlt = ev.media?.imagesWithAlt || 0;
   const withoutAlt = ev.media?.imagesWithoutAlt || (total - withAlt);
@@ -370,6 +410,7 @@ module.exports = {
   detectedSchemaTypes,
   missingCommonSchemas,
   imageAltStats,
+  isRealContentImage,
   headingInfo,
   ttfbMs,
   robotsBlocksAICrawlers,
