@@ -51,6 +51,7 @@ const {
 } = require('./placeholderResolver');
 
 const { buildEvidenceContext, imageAltStats } = require('./evidenceHelpers');
+const { buildSpecificEvidenceBlock } = require('./evidenceItemList');
 
 const {
   getDetectionState,
@@ -554,6 +555,20 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
       whatToInclude = resolveTemplate(entry.what_to_include_template, mergedContext, resolveOpts);
     }
 
+    // Step 8b: Append the specific evidence list to "What we found" when the
+    // finding supports it (alt-text now; author-bios / OG tags can opt in via
+    // evidenceItemList). The list uses the SAME filtered set as the finding's
+    // count, so the two agree. Empty list → block is '' → nothing appended.
+    // `whatWeFound` becomes the canonical card text (count line + the specific
+    // items), replacing the internal "N/N evidence signals checked" accounting.
+    let whatWeFound = null;
+    if (finding) {
+      const specificBlock = buildSpecificEvidenceBlock(entry.canonical_key, scanEvidence);
+      if (specificBlock) {
+        whatWeFound = `${finding}\n\n${specificBlock}`;
+      }
+    }
+
     // Resolve existing templates (use strict resolver for Top 10, legacy for others)
     const whyItMatters = isTop10
       ? resolveTemplate(entry.why_it_matters_template, mergedContext, resolveOpts)
@@ -599,6 +614,10 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
       gap: entry.playbook_gap,
       // Phase 4A.3c: 5 sections
       finding: finding,
+      // Canonical "What we found" card text when a finding lists specific
+      // evidence items (count line + the items). Null → the persistence layer
+      // falls back to its existing source. See evidenceItemList.
+      what_we_found: whatWeFound,
       why_it_matters: whyItMatters,
       recommendation: recommendationText,
       what_to_include: whatToInclude,
