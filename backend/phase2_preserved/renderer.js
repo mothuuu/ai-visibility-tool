@@ -51,7 +51,7 @@ const {
 } = require('./placeholderResolver');
 
 const { buildEvidenceContext, imageAltStats } = require('./evidenceHelpers');
-const { buildSpecificEvidenceBlock } = require('./evidenceItemList');
+const { buildSpecificEvidenceBlock, buildSpecificEvidenceItems } = require('./evidenceItemList');
 
 const {
   getDetectionState,
@@ -601,6 +601,21 @@ async function renderRecommendations({ scan, rubricResult, scanEvidence, context
     evidenceJson.gap = failing.gap;
     if (detectionState) {
       evidenceJson.detection_state = detectionState;
+    }
+
+    // Persist the specific evidence items (readable label + absolute URL on the
+    // scanned site) so the results page can render the What-we-found list as
+    // clickable links. Same filtered set as the text list above; url:null items
+    // render as plain text. `lead` is the finding's count line.
+    if (whatWeFound) {
+      const wwfItems = buildSpecificEvidenceItems(entry.canonical_key, scanEvidence, { scan });
+      if (wwfItems && wwfItems.items.length) {
+        evidenceJson.what_we_found_items = {
+          lead: finding || '',
+          items: wwfItems.items,
+          moreCount: wwfItems.moreCount,
+        };
+      }
     }
 
     // Determine target level (site vs page)
