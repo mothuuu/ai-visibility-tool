@@ -2318,24 +2318,12 @@ function renderResultsFindings(findings) {
         const whyItMatters = f.why_it_matters || f.description || '';
 
         // Prefer the structured list (clickable evidence links) when present.
-        // Each item's visible text is the short path; the link opens the real
-        // asset on the SCANNED site in a new tab. url:null items and the
-        // "…and N more" line stay plain text — never broken links.
+        // Renders every item but collapses to the first N with an in-place
+        // "Show all" toggle (see renderEvidenceLinkList). Falls back to plain
+        // text when no structured items exist.
         const wwfItems = f.what_we_found_items;
-        let whatWeFoundHtml = '';
-        if (wwfItems && Array.isArray(wwfItems.items) && wwfItems.items.length) {
-            const lead = wwfItems.lead
-                ? `<div class="finding-evidence-lead">${escapeHtmlR(wwfItems.lead)}</div>` : '';
-            const lis = wwfItems.items.map((it) => {
-                const label = escapeHtmlR(String(it.label || ''));
-                return (typeof it.url === 'string' && /^https?:\/\//i.test(it.url))
-                    ? `<li><a href="${escapeAttrR(it.url)}" target="_blank" rel="noopener noreferrer">${label}</a></li>`
-                    : `<li>${label}</li>`;
-            }).join('');
-            const more = (Number(wwfItems.moreCount) > 0)
-                ? `<li class="finding-evidence-more">…and ${escapeHtmlR(String(wwfItems.moreCount))} more</li>` : '';
-            whatWeFoundHtml = `<div class="finding-section"><span class="finding-label">What we found</span>${lead}<ul class="finding-evidence-list">${lis}${more}</ul></div>`;
-        } else if (whatWeFound) {
+        let whatWeFoundHtml = renderEvidenceLinkList(wwfItems);
+        if (!whatWeFoundHtml && whatWeFound) {
             whatWeFoundHtml = `<div class="finding-section"><span class="finding-label">What we found</span><div style="white-space:pre-line">${escapeHtmlR(whatWeFound)}</div></div>`;
         }
 
@@ -2377,6 +2365,59 @@ function renderResultsFindings(findings) {
             window.location.href = `dashboard.html?section=execution-packs&autoPurchase=${encodeURIComponent(packKey)}&scanId=${encodeURIComponent(resultsScanId)}`;
         });
     });
+
+    // Expand/collapse the "What we found" evidence list. Per-card and local:
+    // the toggle scopes to its own finding-section, so cards are independent.
+    // <button> gives native Enter/Space; aria-expanded tracks state.
+    container.querySelectorAll('.finding-evidence-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const section = btn.closest('.finding-section');
+            const list = section && section.querySelector('.finding-evidence-list');
+            if (!list) return;
+            const collapsed = list.classList.toggle('collapsed');
+            btn.setAttribute('aria-expanded', String(!collapsed));
+            const total = list.querySelectorAll('.finding-evidence-item').length;
+            btn.textContent = collapsed ? `Show all ${total}` : 'Show less';
+        });
+    });
+}
+
+// Shared "What we found" evidence-list renderer. Given the structured
+// { lead, items:[{label, url|null}] } payload, renders a clickable link list
+// (visible text = short path, href = absolute URL on the scanned site, opened
+// in a new tab). Reusable across findings (alt-text now; author bios / OG next).
+//
+// Collapsed by default to the first EVIDENCE_LIST_DISPLAY_CAP items; when there
+// are more, the rest are rendered but hidden (CSS `.collapsed`, still in the DOM
+// so expanding is instant and links are identical) and a "Show all N" toggle is
+// emitted. Toggle wiring lives in renderResultsFindings. Returns '' when there
+// are no items (caller falls back to plain text).
+const EVIDENCE_LIST_DISPLAY_CAP = 12;
+
+function renderEvidenceLinkList(wwfItems) {
+    if (!wwfItems || !Array.isArray(wwfItems.items) || wwfItems.items.length === 0) return '';
+    const items = wwfItems.items;
+    const total = items.length;
+    const collapsible = total > EVIDENCE_LIST_DISPLAY_CAP;
+
+    const lead = wwfItems.lead
+        ? `<div class="finding-evidence-lead">${escapeHtmlR(wwfItems.lead)}</div>` : '';
+
+    const lis = items.map((it, i) => {
+        const label = escapeHtmlR(String(it.label || ''));
+        const inner = (typeof it.url === 'string' && /^https?:\/\//i.test(it.url))
+            ? `<a href="${escapeAttrR(it.url)}" target="_blank" rel="noopener noreferrer">${label}</a>`
+            : label;
+        const extra = (collapsible && i >= EVIDENCE_LIST_DISPLAY_CAP) ? ' finding-evidence-extra' : '';
+        return `<li class="finding-evidence-item${extra}">${inner}</li>`;
+    }).join('');
+
+    const listClass = collapsible ? 'finding-evidence-list collapsed' : 'finding-evidence-list';
+    const toggle = collapsible
+        ? `<button type="button" class="finding-evidence-toggle" aria-expanded="false">Show all ${escapeHtmlR(String(total))}</button>`
+        : '';
+
+    return `<div class="finding-section"><span class="finding-label">What we found</span>${lead}<ul class="${listClass}">${lis}</ul>${toggle}</div>`;
 }
 
 function renderFixThisButtonForResults(pack) {

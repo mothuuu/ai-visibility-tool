@@ -569,7 +569,13 @@
         .finding-card .finding-evidence-list li { margin-bottom: 2px; word-break: break-word; }
         .finding-card .finding-evidence-list a { color: #6d28d9; text-decoration: underline; }
         .finding-card .finding-evidence-list a:hover { color: #5b21b6; }
-        .finding-card .finding-evidence-list .finding-evidence-more { list-style: none; margin-left: -18px; color: #9ca3af; }
+        .finding-card .finding-evidence-list.collapsed .finding-evidence-extra { display: none; }
+        .finding-card .finding-evidence-toggle {
+            margin-top: 6px; padding: 0; background: none; border: none; cursor: pointer;
+            color: #6d28d9; font-size: 13px; font-weight: 600; text-decoration: underline;
+        }
+        .finding-card .finding-evidence-toggle:hover { color: #5b21b6; }
+        .finding-card .finding-evidence-toggle:focus-visible { outline: 2px solid #6d28d9; outline-offset: 2px; border-radius: 3px; }
         .finding-card-footer {
             display: flex; align-items: center; justify-content: space-between; gap: 12px;
             flex-wrap: wrap;
