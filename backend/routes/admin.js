@@ -239,122 +239,128 @@ router.get('/health', authenticateAdmin, async (req, res) => {
 // the tested extractRootDomain() (www/subdomain stripping) because guest scans
 // don't persist a domain column. Score is scans.total_score (/1000; NULL while
 // processing/failed — excluded from trend math but the scan still counts).
+const LEAD_EXPORT_SQL = `
+  SELECT s.id, s.url, s.total_score AS score, s.created_at,
+         s.user_id, u.email AS user_email, u.plan AS user_plan
+    FROM scans s
+    LEFT JOIN users u ON s.user_id = u.id
+   ORDER BY s.created_at ASC NULLS LAST, s.id ASC
+`;
+
+const LEAD_EXPORT_HEADER = [
+  'lead_type', 'email', 'plan', 'primary_domain', 'total_scans',
+  'first_scan_date', 'last_scan_date', 'latest_score', 'first_score',
+  'score_trend', 'all_domains_scanned',
+];
+
+// Aggregate raw scan rows (from LEAD_EXPORT_SQL, created_at ASC) into one lead
+// per registered user / per guest root-domain. Pure — no DB, no res — so the
+// verification harness can run it against live rows with zero HTTP/auth/deploy.
+function aggregateScanLeads(rows) {
+  const groups = new Map();
+  const domainOf = (url) => {
+    const d = extractRootDomain(url);
+    return (d && d.trim()) ? d.trim().toLowerCase() : (url || '(unknown)');
+  };
+
+  for (const r of rows) {
+    const isGuest = r.user_id == null;
+    const domain = domainOf(r.url);
+    const key = isGuest ? `guest::${domain}` : `user::${r.user_id}`;
+
+    let g = groups.get(key);
+    if (!g) {
+      g = {
+        lead_type: isGuest ? 'guest' : 'user',
+        email: isGuest ? '' : (r.user_email || ''),
+        plan: isGuest ? 'guest' : (r.user_plan || 'free'),
+        scans: [],
+        domainCounts: new Map(),  // domain → count (for most-scanned)
+        domainOrder: [],          // distinct domains, first-seen order
+      };
+      groups.set(key, g);
+    }
+
+    const score = (r.score === null || r.score === undefined) ? null : Number(r.score);
+    g.scans.push({ domain, score, created_at: r.created_at });
+
+    if (!g.domainCounts.has(domain)) g.domainOrder.push(domain);
+    g.domainCounts.set(domain, (g.domainCounts.get(domain) || 0) + 1);
+  }
+
+  const fmtDate = (d) => {
+    if (!d) return '';
+    const dt = (d instanceof Date) ? d : new Date(d);
+    return isNaN(dt.getTime()) ? '' : dt.toISOString().slice(0, 10); // YYYY-MM-DD
+  };
+
+  const leads = [];
+  for (const g of groups.values()) {
+    // Scans arrive in created_at ASC order from SQL; keep that for first/last.
+    const scans = g.scans;
+    const total_scans = scans.length;
+    const first_scan_date = fmtDate(scans[0] && scans[0].created_at);
+    const last_scan_date = fmtDate(scans[total_scans - 1] && scans[total_scans - 1].created_at);
+
+    // Score trend from SCORED scans only (NULL scores don't count as data points).
+    const scored = scans.filter(s => s.score !== null && Number.isFinite(s.score));
+    const first_score = scored.length ? scored[0].score : '';
+    const latest_score = scored.length ? scored[scored.length - 1].score : '';
+    let score_trend;
+    if (scored.length <= 1) {
+      score_trend = 'single_scan';
+    } else {
+      const diff = scored[scored.length - 1].score - scored[0].score;
+      if (Math.abs(diff) <= 3) score_trend = 'flat';
+      else score_trend = diff > 0 ? 'improving' : 'declining';
+    }
+
+    // primary_domain = most-scanned domain (ties → most recently seen).
+    let primary_domain = '';
+    let best = -1;
+    for (const dom of g.domainOrder) {
+      const c = g.domainCounts.get(dom);
+      if (c >= best) { best = c; primary_domain = dom; } // >= so later (more recent) wins ties
+    }
+
+    leads.push({
+      lead_type: g.lead_type,
+      email: g.email,
+      plan: g.plan,
+      primary_domain,
+      total_scans,
+      first_scan_date,
+      last_scan_date,
+      latest_score,
+      first_score,
+      score_trend,
+      all_domains_scanned: g.domainOrder.join(';'),
+    });
+  }
+
+  // Sort: warm leads (guests + free-plan users) first, then total_scans DESC,
+  // then most-recent activity — warmest outreach targets at the top.
+  const isWarm = (l) => l.lead_type === 'guest' || String(l.plan).toLowerCase() === 'free';
+  leads.sort((a, b) => {
+    const wa = isWarm(a) ? 0 : 1;
+    const wb = isWarm(b) ? 0 : 1;
+    if (wa !== wb) return wa - wb;
+    if (b.total_scans !== a.total_scans) return b.total_scans - a.total_scans;
+    return (b.last_scan_date || '').localeCompare(a.last_scan_date || '');
+  });
+
+  return leads;
+}
+
+function buildLeadsCsv(leads) {
+  return buildCsv(LEAD_EXPORT_HEADER, leads.map(l => LEAD_EXPORT_HEADER.map(h => l[h])));
+}
+
 router.get('/scans/export', authenticateAdmin, requirePermission('export_data'), async (req, res) => {
   try {
-    // One flat pull; aggregation happens in Node so domain canonicalization and
-    // score-trend logic reuse app utilities instead of fragile SQL.
-    const { rows } = await db.query(`
-      SELECT s.id, s.url, s.total_score AS score, s.created_at,
-             s.user_id, u.email AS user_email, u.plan AS user_plan
-        FROM scans s
-        LEFT JOIN users u ON s.user_id = u.id
-       ORDER BY s.created_at ASC NULLS LAST, s.id ASC
-    `);
-
-    // key → aggregate accumulator
-    const groups = new Map();
-
-    const domainOf = (url) => {
-      const d = extractRootDomain(url);
-      return (d && d.trim()) ? d.trim().toLowerCase() : (url || '(unknown)');
-    };
-
-    for (const r of rows) {
-      const isGuest = r.user_id == null;
-      const domain = domainOf(r.url);
-      const key = isGuest ? `guest::${domain}` : `user::${r.user_id}`;
-
-      let g = groups.get(key);
-      if (!g) {
-        g = {
-          lead_type: isGuest ? 'guest' : 'user',
-          email: isGuest ? '' : (r.user_email || ''),
-          plan: isGuest ? 'guest' : (r.user_plan || 'free'),
-          scans: [],
-          domainCounts: new Map(),  // domain → count (for most-scanned)
-          domainOrder: [],          // distinct domains, first-seen order
-        };
-        groups.set(key, g);
-      }
-
-      const score = (r.score === null || r.score === undefined) ? null : Number(r.score);
-      g.scans.push({ domain, score, created_at: r.created_at });
-
-      if (!g.domainCounts.has(domain)) g.domainOrder.push(domain);
-      g.domainCounts.set(domain, (g.domainCounts.get(domain) || 0) + 1);
-    }
-
-    const fmtDate = (d) => {
-      if (!d) return '';
-      const dt = (d instanceof Date) ? d : new Date(d);
-      return isNaN(dt.getTime()) ? '' : dt.toISOString().slice(0, 10); // YYYY-MM-DD
-    };
-
-    const leads = [];
-    for (const g of groups.values()) {
-      // Scans arrive in created_at ASC order from SQL; keep that for first/last.
-      const scans = g.scans;
-      const total_scans = scans.length;
-      const first_scan_date = fmtDate(scans[0] && scans[0].created_at);
-      const last_scan_date = fmtDate(scans[total_scans - 1] && scans[total_scans - 1].created_at);
-
-      // Score trend from SCORED scans only (NULL scores don't count as data points).
-      const scored = scans.filter(s => s.score !== null && Number.isFinite(s.score));
-      const first_score = scored.length ? scored[0].score : '';
-      const latest_score = scored.length ? scored[scored.length - 1].score : '';
-      let score_trend;
-      if (scored.length <= 1) {
-        score_trend = 'single_scan';
-      } else {
-        const diff = scored[scored.length - 1].score - scored[0].score;
-        if (Math.abs(diff) <= 3) score_trend = 'flat';
-        else score_trend = diff > 0 ? 'improving' : 'declining';
-      }
-
-      // primary_domain = most-scanned domain (ties → most recently seen).
-      let primary_domain = '';
-      let best = -1;
-      for (const dom of g.domainOrder) {
-        const c = g.domainCounts.get(dom);
-        if (c >= best) { best = c; primary_domain = dom; } // >= so later (more recent) wins ties
-      }
-
-      const all_domains_scanned = g.domainOrder.join(';');
-
-      leads.push({
-        lead_type: g.lead_type,
-        email: g.email,
-        plan: g.plan,
-        primary_domain,
-        total_scans,
-        first_scan_date,
-        last_scan_date,
-        latest_score,
-        first_score,
-        score_trend,
-        all_domains_scanned,
-      });
-    }
-
-    // Sort: warm leads (guests + free-plan users) first, then total_scans DESC,
-    // then most-recent activity — warmest outreach targets at the top.
-    const isWarm = (l) => l.lead_type === 'guest' || String(l.plan).toLowerCase() === 'free';
-    leads.sort((a, b) => {
-      const wa = isWarm(a) ? 0 : 1;
-      const wb = isWarm(b) ? 0 : 1;
-      if (wa !== wb) return wa - wb;
-      if (b.total_scans !== a.total_scans) return b.total_scans - a.total_scans;
-      return (b.last_scan_date || '').localeCompare(a.last_scan_date || '');
-    });
-
-    const header = [
-      'lead_type', 'email', 'plan', 'primary_domain', 'total_scans',
-      'first_scan_date', 'last_scan_date', 'latest_score', 'first_score',
-      'score_trend', 'all_domains_scanned',
-    ];
-    const csvRows = leads.map(l => header.map(h => l[h]));
-    const csv = buildCsv(header, csvRows);
-
+    const { rows } = await db.query(LEAD_EXPORT_SQL);
+    const leads = aggregateScanLeads(rows);
+    const csv = buildLeadsCsv(leads);
     const today = new Date().toISOString().slice(0, 10);
 
     try {
@@ -372,5 +378,11 @@ router.get('/scans/export', authenticateAdmin, requirePermission('export_data'),
     return res.status(500).json({ success: false, error: 'Failed to export scan leads', message: error.message });
   }
 });
+
+// Expose the pure helpers (and SQL) for the read-only verification harness.
+router.LEAD_EXPORT_SQL = LEAD_EXPORT_SQL;
+router.LEAD_EXPORT_HEADER = LEAD_EXPORT_HEADER;
+router.aggregateScanLeads = aggregateScanLeads;
+router.buildLeadsCsv = buildLeadsCsv;
 
 module.exports = router;
