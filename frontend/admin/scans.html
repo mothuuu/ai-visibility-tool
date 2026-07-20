@@ -287,7 +287,9 @@
                 </div>
 
                 <button class="btn btn-primary" onclick="applyFilters()" style="margin-top: 20px;">Apply</button>
+                <button class="btn btn-primary" id="exportAllBtn" onclick="exportAllScans()" style="margin-top: 20px; background: #f31c7e; border-color: #f31c7e;">Export All</button>
             </div>
+            <div id="exportError" style="display: none; margin-top: 10px; color: #e53e3e; font-size: 13px;"></div>
         </div>
 
         <!-- Scans Table -->
@@ -480,6 +482,56 @@
                 sort_by: document.getElementById('sortBy').value
             };
             loadScans(1);
+        }
+
+        // Export ALL scan-derived leads (registered + guests) as a CSV.
+        // Always the full dataset — current search/sort filters do not apply.
+        async function exportAllScans() {
+            const btn = document.getElementById('exportAllBtn');
+            const errEl = document.getElementById('exportError');
+            const originalLabel = btn.textContent;
+            errEl.style.display = 'none';
+            btn.disabled = true;
+            btn.textContent = 'Generating…';
+
+            try {
+                const token = AdminUtils.getAuthToken();
+                if (!token) { AdminUtils.redirectToLogin(); return; }
+
+                const response = await fetch(`${AdminUtils.API_BASE_URL}/admin/scans/export`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.status === 401 || response.status === 403) {
+                    throw new Error('Not authorized to export (admin export permission required).');
+                }
+                if (!response.ok) {
+                    let msg = `Export failed (HTTP ${response.status}).`;
+                    try { const j = await response.json(); msg = j.message || j.error || msg; } catch (_) {}
+                    throw new Error(msg);
+                }
+
+                const blob = await response.blob();
+                const disposition = response.headers.get('Content-Disposition') || '';
+                const match = disposition.match(/filename="([^"]+)"/);
+                const filename = match ? match[1] : `visible2ai-scan-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+
+                const objectUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = objectUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(objectUrl);
+            } catch (error) {
+                console.error('Export failed:', error);
+                errEl.textContent = `Export failed: ${error.message}`;
+                errEl.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalLabel;
+            }
         }
 
         // Initialize on load

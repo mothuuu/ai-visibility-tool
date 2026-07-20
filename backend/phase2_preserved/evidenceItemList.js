@@ -159,32 +159,34 @@ function buildSpecificEvidenceBlock(canonicalKey, scanEvidence, opts = {}) {
  * and an absolute `url` (link target on the SCANNED site) — or url:null when it
  * can't be resolved, so the frontend renders that item as plain text.
  *
- * Same filtered set + cap as buildSpecificEvidenceBlock, so text and links agree.
- * Generic given an absolute-URL resolver — other findings add a case here.
+ * The FULL filtered set is returned (no server-side cap): the frontend shows the
+ * first N by default and reveals the rest via an in-place "Show all" toggle, so
+ * every link must already be in the payload. Same filtered set as
+ * buildSpecificEvidenceBlock, so text and links agree. `moreCount` is retained
+ * (0) for payload-shape compatibility. Generic given an absolute-URL resolver —
+ * other findings add a case here.
  *
  * @param {string} canonicalKey
  * @param {Object} scanEvidence
- * @param {Object} [opts] - { scan, cap, origin }
+ * @param {Object} [opts] - { scan, origin }
  * @returns {{ items: Array<{label:string,url:string|null}>, moreCount: number } | null}
  */
 function buildSpecificEvidenceItems(canonicalKey, scanEvidence, opts = {}) {
   const ev = getEvidence(scanEvidence);
-  const cap = opts.cap || DEFAULT_CAP;
   const origin = opts.origin || deriveScannedOrigin(ev, opts.scan);
 
   switch (canonicalKey) {
     case 'ai_readability.alt_text_coverage': {
       const missing = missingAltImages(ev);
       if (!missing.length) return null;
-      const items = missing.slice(0, cap)
+      const items = missing
         .map(img => ({
           label: formatReadablePath(img && img.src),
           url: resolveAbsoluteUrl(img && img.src, origin),
         }))
         .filter(it => it.label);
       if (!items.length) return null;
-      const moreCount = Math.max(0, missing.length - items.length);
-      return { items, moreCount };
+      return { items, moreCount: 0 };
     }
     default:
       return null;
