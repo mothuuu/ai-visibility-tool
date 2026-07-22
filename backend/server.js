@@ -20,6 +20,7 @@ const organizationRoutes = require('./routes/organization');
 const findingsRoutes = require('./routes/findings');
 const tokenRoutes = require('./routes/tokens');
 const packRoutes = require('./routes/packs');
+const recommendationRoutes = require('./routes/recommendations');
 const citationRoutes = require('./routes/citations');
 const benchmarkRoutes = require('./routes/benchmarks');
 
@@ -133,6 +134,7 @@ app.use('/api', require('./routes/citation-monitoring')); // Phase 3: Citation M
 app.use('/api/org', organizationRoutes); // Phase 3B: Organization/Team management
 app.use('/api/tokens', authenticateToken, requireCompletedProfile, tokenRoutes); // Token balance and purchase
 app.use('/api/packs', authenticateToken, requireCompletedProfile, packRoutes); // Phase 2: Pack purchase / catalog / history
+app.use('/api/recommendations', authenticateToken, requireCompletedProfile, recommendationRoutes); // Phase 1: paid recommendation unlock (schema pack)
 app.use('/api/citations', authenticateToken, requireCompletedProfile, citationRoutes); // Phase 3: Citation latest/history/detail
 app.use('/api/benchmarks', authenticateToken, requireCompletedProfile, benchmarkRoutes); // Phase 3: Vertical benchmarks
 app.use('/api/profile', require('./routes/profile')); // Step 5: Visibility profile intake/edit

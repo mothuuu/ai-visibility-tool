@@ -35,6 +35,9 @@ const db = require('../db/database');
 const { authenticateToken } = require('../middleware/auth');
 const { mapRecommendationToFinding, severityCounts } = require('../services/richFindingsMapper');
 const { generateAndPersist } = require('../services/findingsGenerator');
+const TokenService = require('../services/tokenService');
+const { getPricing, categoryForSubfactorKey } = require('../config/recommendationPricing');
+const { loadExistingUnlock } = require('../services/recommendationUnlockService');
 
 // Column set + deterministic ordering (severity, then score gain, then id).
 const REC_QUERY = `
@@ -74,8 +77,67 @@ function getScanEvidence(detailedAnalysis) {
   return (ev && typeof ev === 'object') ? ev : null;
 }
 
-function respondWithRows(res, rows, extra = {}) {
+/**
+ * Attach the paid-recommendation gate to schema-category findings (one round
+ * trip: unlock state + price from config, no separate poll). Additive and
+ * best-effort — any failure (e.g. the recommendation_unlocks table not yet
+ * migrated) leaves findings untouched; the free surface must never break.
+ *
+ * Slim scans (no scanEvidence) get NO gate — the paid artifact can't exist there.
+ *
+ * @param {Array} findings - mapped finding objects
+ * @param {{ userId:number, scanId:number, hasEvidence:boolean }} ctx
+ */
+async function attachRecommendationGates(findings, ctx) {
+  const { userId, scanId, hasEvidence } = ctx || {};
+  if (!hasEvidence) return; // slim/foreign scan → no gate section at all
+
+  // Which findings are gated, and by which paid category?
+  const gated = [];
+  for (const f of findings) {
+    const type = categoryForSubfactorKey(f.subfactor_key);
+    if (type) gated.push({ f, type });
+  }
+  if (gated.length === 0) return;
+
+  try {
+    // One unlock covers ALL applicable schema for the scan (per_scan_all_applicable),
+    // so state is per (user, scan, type) — fetch each distinct type once.
+    const types = [...new Set(gated.map(g => g.type))];
+    const unlockByType = {};
+    for (const type of types) {
+      unlockByType[type] = await loadExistingUnlock(userId, scanId, type);
+    }
+    const balance = (await TokenService.getBalance(userId)).total_available;
+
+    for (const { f, type } of gated) {
+      const pricing = getPricing(type);
+      const unlock = unlockByType[type];
+      const unlocked = !!unlock;
+      f.recommendation = {
+        type,
+        price: pricing.tokens,
+        unit: pricing.unit,
+        label: pricing.label,
+        description: pricing.description,
+        locked: !unlocked,
+        unlocked,
+        artifact: unlocked ? unlock.artifact : null,
+        tokens_spent: unlocked ? unlock.tokens_spent : null,
+        balance,
+      };
+    }
+  } catch (err) {
+    // Never break findings over the gate — log and serve findings without it.
+    console.warn(
+      `[Findings] scan ${scanId}: gate augmentation skipped: ${err && err.message ? err.message : err}`
+    );
+  }
+}
+
+async function respondWithRows(res, rows, ctx, extra = {}) {
   const findings = rows.map(mapRecommendationToFinding);
+  await attachRecommendationGates(findings, ctx);
   return res.json({
     findings,
     total_count: findings.length,
@@ -107,15 +169,19 @@ router.get('/:scanId/findings', authenticateToken, async (req, res) => {
     }
     const scanRow = scanResult.rows[0];
 
+    // Evidence presence drives the paid-recommendation gate (slim scans get none)
+    // and is also what the cache-miss generator reads. Parse once up front.
+    const scanEvidence = getScanEvidence(scanRow.detailed_analysis);
+    const evKeys = scanEvidence ? Object.keys(scanEvidence) : [];
+    const gateCtx = { userId, scanId, hasEvidence: !!scanEvidence };
+
     // 2) Cache hit: rows exist → map and serve, never regenerate.
     const recResult = await db.query(REC_QUERY, [scanId]);
     if (recResult.rows.length > 0) {
-      return respondWithRows(res, recResult.rows);
+      return respondWithRows(res, recResult.rows, gateCtx);
     }
 
     // 3) Cache miss: generate evidence-only rows from the stored scanEvidence.
-    const scanEvidence = getScanEvidence(scanRow.detailed_analysis);
-    const evKeys = scanEvidence ? Object.keys(scanEvidence) : [];
 
     if (scanEvidence) {
       try {
@@ -136,7 +202,7 @@ router.get('/:scanId/findings', authenticateToken, async (req, res) => {
         // Re-read (covers both this generation and a race that lost the lock).
         const regen = await db.query(REC_QUERY, [scanId]);
         if (regen.rows.length > 0) {
-          return respondWithRows(res, regen.rows, { generated: !result.alreadyExisted });
+          return respondWithRows(res, regen.rows, gateCtx, { generated: !result.alreadyExisted });
         }
         // Generated zero rows (e.g. every top-10 subfactor COMPLETE) → empty-state.
         console.warn(
