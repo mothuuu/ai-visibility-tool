@@ -93,9 +93,44 @@ function rawJsonLdHasOrgFamily(obj) {
   return false;
 }
 
+/**
+ * Recursively collect every @type value from a parsed JSON-LD object/array into
+ * a Set of strings. Mirrors the traversal used to build `allSchemaTypes` in the
+ * extractor (handles @graph arrays, nested objects, @type arrays). Self-contained
+ * so callers that only have stored `raw` blocks can enumerate present types
+ * without re-parsing script tags. Never throws: non-object input is a no-op.
+ *
+ * @param {*} obj - parsed JSON-LD value
+ * @param {Set<string>} [out] - accumulator (created if omitted)
+ * @returns {Set<string>}
+ */
+function collectSchemaTypes(obj, out = new Set()) {
+  if (!obj || typeof obj !== 'object') return out;
+
+  if (Array.isArray(obj)) {
+    for (const item of obj) collectSchemaTypes(item, out);
+    return out;
+  }
+
+  const t = obj['@type'];
+  if (Array.isArray(t)) {
+    for (const x of t) if (typeof x === 'string') out.add(x);
+  } else if (typeof t === 'string') {
+    out.add(t);
+  }
+
+  for (const key in obj) {
+    if (key === '@type') continue;
+    const val = obj[key];
+    if (val && typeof val === 'object') collectSchemaTypes(val, out);
+  }
+  return out;
+}
+
 module.exports = {
   ORGANIZATION_SCHEMA_FAMILY,
   isOrgFamilyType,
   anyOrgFamilyInTypes,
   rawJsonLdHasOrgFamily,
+  collectSchemaTypes,
 };
