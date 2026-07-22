@@ -6,6 +6,8 @@
  * All functions are null-safe and never throw.
  */
 
+const { isOrgFamilyType, rawJsonLdHasOrgFamily } = require('../analyzers/schemaFamilies');
+
 // ========================================
 // CORE ACCESSORS
 // ========================================
@@ -149,7 +151,24 @@ function hasFAQSchema(evidence) {
 
 function hasOrganizationSchema(evidence) {
   const ev = getEvidence(evidence);
-  return ev.technical?.hasOrganizationSchema === true || hasSchemaType(evidence, 'Organization');
+  // Primary: the corrected extractor flag (already Organization-family aware).
+  if (ev.technical?.hasOrganizationSchema === true) return true;
+
+  // Fallback (re-verify from stored evidence): scan structuredData for any
+  // Organization-family @type. Top-level `type` is often null on @graph sites
+  // (proven by scan 922), so when it doesn't match we recurse the raw block.
+  const structuredData = ev.technical?.structuredData;
+  if (!Array.isArray(structuredData)) return false;
+  return structuredData.some(s => {
+    if (!s || typeof s !== 'object') return false;
+    if (isOrgFamilyType(s.type || s['@type'])) return true;
+    let raw = s.raw;
+    if (raw == null) return false;
+    if (typeof raw === 'string') {
+      try { raw = JSON.parse(raw); } catch (e) { return false; } // never throw; skip block
+    }
+    return rawJsonLdHasOrgFamily(raw);
+  });
 }
 
 function hasArticleSchema(evidence) {
