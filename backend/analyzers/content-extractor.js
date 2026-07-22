@@ -4,6 +4,7 @@ const { URL } = require('url');
 const EntityAnalyzer = require('./entity-analyzer');
 const VOCABULARY = require('../config/detection-vocabulary');
 const { safeHead, safeGet } = require('../utils/safe-http');
+const { anyOrgFamilyInTypes } = require('./schemaFamilies');
 const {
   CONFIDENCE_LEVELS,
   EVIDENCE_SOURCES,
@@ -1431,7 +1432,9 @@ class ContentExtractor {
     return {
       // Structured Data
       structuredData,
-      hasOrganizationSchema: allSchemaTypes.has('Organization'),
+      // Organization family (incl. subtypes like LocalBusiness/RealEstateAgent);
+      // allSchemaTypes already recurses @graph/nesting. See schemaFamilies.js.
+      hasOrganizationSchema: anyOrgFamilyInTypes(allSchemaTypes),
       hasLocalBusinessSchema: allSchemaTypes.has('LocalBusiness'),
       hasFAQSchema: allSchemaTypes.has('FAQPage'),
       hasArticleSchema: allSchemaTypes.has('Article') || allSchemaTypes.has('BlogPosting'),
