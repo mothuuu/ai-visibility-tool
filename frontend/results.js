@@ -2361,6 +2361,7 @@ function renderResultsFindings(findings) {
                     </div>
                     ${renderFixThisButtonForResults(pack)}
                 </div>
+                ${renderResultsSchemaGate(f)}
             </div>
         `;
     }).join('');
@@ -2376,6 +2377,24 @@ function renderResultsFindings(findings) {
             // Deep-link to dashboard's marketplace with the purchase modal pre-opened
             window.location.href = `dashboard.html?section=execution-packs&autoPurchase=${encodeURIComponent(packKey)}&scanId=${encodeURIComponent(resultsScanId)}`;
         });
+    });
+
+    // Schema recommendation gate: unlock buttons.
+    container.querySelectorAll('[data-gate-unlock]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (btn.getAttribute('data-loading') === '1') return; // no double submit
+            const scanId = parseInt(btn.getAttribute('data-gate-scan'), 10);
+            const type = btn.getAttribute('data-gate-type');
+            unlockResultsSchemaRecommendation(scanId, type, btn);
+        });
+    });
+    // Schema gate: top-up links (insufficient balance) → dashboard's token bundle flow.
+    container.querySelectorAll('[data-gate-topup]').forEach(btn => {
+        btn.addEventListener('click', () => { window.location.href = 'dashboard.html'; });
+    });
+    // Schema gate: per-block copy buttons.
+    container.querySelectorAll('.schema-copy-btn[data-copy]').forEach(btn => {
+        btn.addEventListener('click', () => copyResultsSchemaBlock(btn));
     });
 }
 
@@ -2409,6 +2428,157 @@ function lookupPackForResults(suggestedType) {
     const cfg = RESULTS_PACK_CATALOG[suggestedType];
     if (!cfg) return null;
     return { key: suggestedType, ...cfg };
+}
+
+// ===========================================================================
+// Paid recommendation gate (Phase 1.1: Schema Markup Pack on the results page)
+// Duplicated from dashboard.js — consolidate later. Adapted to results.js
+// conventions (escapeHtmlR, resultsScanId, loadFindingsForResults) and to the
+// results.html palette (no CSS vars, no FontAwesome). Same CSS class names and
+// state machine as dashboard.js; driven entirely by the API `recommendation`
+// object — nothing hardcoded.
+// ===========================================================================
+function renderResultsSchemaGate(f) {
+    const rec = f && f.recommendation;
+    if (!rec) return '';                    // free finding / slim scan → no gate at all
+    if (!resultsScanId) return '';
+
+    // Unlocked: show the persisted artifact (immediately after unlock AND on reload).
+    if (rec.unlocked && rec.artifact && Array.isArray(rec.artifact.blocks)) {
+        return renderResultsSchemaArtifact(rec.artifact);
+    }
+
+    const balance = (rec.balance != null) ? rec.balance : 0;
+    const price = rec.price;
+
+    // Insufficient balance: no broken button — message + top-up link.
+    if (balance < price) {
+        const shortfall = Math.max(0, price - balance);
+        return `
+            <div class="schema-gate" data-gate-type="${escapeAttrR(rec.type)}" data-gate-scan="${escapeAttrR(resultsScanId)}">
+                <div class="schema-gate-head">${escapeHtmlR(rec.label)}</div>
+                <div class="schema-gate-sub">${escapeHtmlR(rec.description || 'Ready-to-paste JSON-LD for this scan.')}</div>
+                <div class="schema-gate-insufficient">
+                    You need ${price} tokens (you have ${balance}).
+                    <button class="schema-topup-link" type="button" data-gate-topup>Get ${shortfall} more tokens</button>
+                </div>
+            </div>
+        `;
+    }
+
+    // Locked & affordable: the CTA.
+    return `
+        <div class="schema-gate" data-gate-type="${escapeAttrR(rec.type)}" data-gate-scan="${escapeAttrR(resultsScanId)}">
+            <div class="schema-gate-head">${escapeHtmlR(rec.label)}</div>
+            <div class="schema-gate-sub">${escapeHtmlR(rec.description || 'Ready-to-paste JSON-LD for this scan.')}</div>
+            <div class="schema-gate-actions">
+                <button class="schema-gate-btn" type="button" data-gate-unlock data-gate-scan="${escapeAttrR(resultsScanId)}" data-gate-type="${escapeAttrR(rec.type)}">
+                    Generate Schema Pack · ${price} tokens
+                </button>
+                <span class="schema-gate-balance">You have ${balance} token${balance === 1 ? '' : 's'}</span>
+            </div>
+        </div>
+    `;
+}
+
+// Render the unlocked artifact: one code area + copy button + instructions per block.
+function renderResultsSchemaArtifact(artifact) {
+    const blocks = Array.isArray(artifact.blocks) ? artifact.blocks : [];
+    const rows = blocks.map(b => {
+        const isEnh = b.status === 'enhancement';
+        return `
+            <div class="schema-block">
+                <div class="schema-block-head">
+                    <span class="schema-block-type">${escapeHtmlR(b.schema_type)}</span>
+                    <span class="schema-block-status ${isEnh ? 'enhance' : 'missing'}">${isEnh ? 'Enhancement' : 'Missing'}</span>
+                    <button class="schema-copy-btn" type="button" data-copy>Copy</button>
+                </div>
+                <pre class="schema-code"><code>${escapeHtmlR(b.jsonld)}</code></pre>
+                <div class="schema-block-instructions">${escapeHtmlR(b.instructions)}</div>
+            </div>
+        `;
+    }).join('');
+    return `
+        <div class="schema-gate unlocked">
+            <div class="schema-gate-head">✓ Schema Markup Pack — unlocked</div>
+            ${rows}
+        </div>
+    `;
+}
+
+// Copy one block's raw JSON-LD (textContent un-escapes back to the real string).
+function copyResultsSchemaBlock(btn) {
+    const block = btn.closest('.schema-block');
+    const codeEl = block && block.querySelector('.schema-code code');
+    if (!codeEl) return;
+    const text = codeEl.textContent || '';
+    const flash = () => {
+        const original = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(flash).catch(() => { btn.textContent = 'Copy failed'; });
+    } else {
+        flash();
+    }
+}
+
+// Swap a gate into a message state (error / insufficient) with retry / top-up.
+function renderResultsGateMessage(gate, message, opts) {
+    if (!gate) return;
+    opts = opts || {};
+    const actions = [];
+    if (opts.retry) actions.push('<button class="schema-gate-btn" type="button" data-gate-retry>Retry</button>');
+    if (opts.topup) actions.push('<button class="schema-topup-link" type="button" data-gate-topup>Get more tokens</button>');
+    gate.innerHTML = `
+        <div class="schema-gate-head">⚠ ${escapeHtmlR(message)}</div>
+        ${actions.length ? `<div class="schema-gate-actions">${actions.join('')}</div>` : ''}
+    `;
+    const retry = gate.querySelector('[data-gate-retry]');
+    if (retry) retry.addEventListener('click', () => { loadFindingsForResults(resultsScanId, resultsUserTier); });
+    const topup = gate.querySelector('[data-gate-topup]');
+    if (topup) topup.addEventListener('click', () => { window.location.href = 'dashboard.html'; });
+}
+
+// Spend tokens → generate → persist, then re-render from the API (never charges
+// on failure; the backend rolls back). Guards against double-submit.
+async function unlockResultsSchemaRecommendation(scanId, type, btn) {
+    const gate = btn.closest('.schema-gate');
+    btn.setAttribute('data-loading', '1');
+    btn.disabled = true;
+    const original = btn.innerHTML;
+    btn.innerHTML = '<span class="schema-spinner"></span> Generating…';
+    try {
+        const authToken = localStorage.getItem('authToken') || '';
+        const res = await fetch(`${API_BASE_URL}/recommendations/${scanId}/unlock`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+            body: JSON.stringify({ type })
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (res.ok) {
+            // Re-fetch so THIS card and every other schema card show the unlocked
+            // artifact + updated balance from persistence (one unlock covers all).
+            await loadFindingsForResults(resultsScanId, resultsUserTier);
+            return;
+        }
+        if (res.status === 402) {
+            const price = data.price != null ? data.price : '';
+            const bal = data.balance != null ? data.balance : 0;
+            renderResultsGateMessage(gate, `You need ${price} tokens (you have ${bal}).`, { topup: true });
+            return;
+        }
+        // 409 (no evidence) / 500 (generation failed) / other → not charged.
+        renderResultsGateMessage(gate, data.error || 'Generation failed — you were not charged.', { retry: true });
+    } catch (e) {
+        renderResultsGateMessage(gate, 'Generation failed — you were not charged.', { retry: true });
+    } finally {
+        btn.removeAttribute('data-loading');
+        if (document.body.contains(btn)) { btn.disabled = false; btn.innerHTML = original; }
+    }
 }
 
 function renderUpgradeBannerIfNeeded(data) {
