@@ -196,6 +196,11 @@ const PLAN_ALIASES = {
   'tier_silver': 'diy',
   'tier_bronze': 'free',
 
+  // Annual variants → base tier (interval affects billing only, not tier)
+  'starter_annual': 'diy',
+  'diy_annual': 'diy',
+  'pro_annual': 'pro',
+
   // Legacy/alternative names
   'basic': 'diy',
   'professional': 'pro',
