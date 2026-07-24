@@ -1151,8 +1151,8 @@
         }
 
         /* ================================ */
-        /* LAUNCH PROMO BANNER              */
-        /* Remove after June 30, 2026       */
+        /* CITATION MONITORING PROMO BANNER */
+        /* Remove after October 31, 2026    */
         /* ================================ */
         .launch-banner {
             background: #1a1a2e;
@@ -1261,6 +1261,25 @@
         .launch-price-label {
             font-size: 15px;
             color: rgba(255,255,255,0.8);
+        }
+
+        .launch-banner-body {
+            font-size: 16px;
+            color: rgba(255,255,255,0.85);
+            max-width: 520px;
+            line-height: 1.5;
+            margin-bottom: 14px;
+        }
+
+        .launch-banner-body strong {
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        .launch-promo-code {
+            color: var(--cyan);
+            font-weight: 800;
+            letter-spacing: 0.03em;
         }
 
         .launch-fine-print {
@@ -2893,22 +2912,22 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                 <p class="section-subtitle">Start free. Upgrade when you're ready to dominate AI search.</p>
             </div>
 
-            <!-- LAUNCH PROMO: Remove after June 30, 2026 -->
+            <!-- CITATION MONITORING LAUNCH PROMO: Remove after October 31, 2026 -->
             <div class="launch-banner">
                 <div class="launch-banner-content">
                     <div class="launch-banner-tag">
-                        🎉 Launch Pricing
-                        <span class="countdown-text">Ends June 30, 2026</span>
+                        🎉 New
+                        <span class="countdown-text">Ends October 31, 2026</span>
                     </div>
                     <div class="launch-banner-headline">
-                        Lock in <span class="highlight">$19/mo forever</span>. No catch.
+                        NEW: <span class="highlight">Citation Monitoring</span> is here
                     </div>
-                    <div class="launch-price-box">
-                        <span class="launch-price-new">$19</span>
-                        <span class="launch-price-label">/mo locked for life</span>
+                    <div class="launch-banner-body">
+                        Track exactly where AI assistants cite you — and where competitors get cited instead.
+                        <strong>Launch offer: 20% off your first 3 months with code <span class="launch-promo-code">CITATION20</span>.</strong>
                     </div>
                     <div class="launch-fine-print">
-                        <strong>How it works:</strong> Sign up for the Starter plan before June 30, 2026 and lock in $19/mo forever. Cancel anytime.
+                        Applies to monthly plans. Ends October 31, 2026.
                     </div>
                 </div>
 
@@ -3698,9 +3717,12 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
         // annual Stripe products exist. All checkout flows use monthly.
         const currentBilling = 'monthly';
 
-        // LAUNCH PROMO: Countdown timer - Remove after June 30, 2026
+        // CITATION MONITORING PROMO: Countdown timer - Remove after October 31, 2026
         (function initLaunchCountdown() {
-            const deadline = new Date('June 30, 2026 23:59:59').getTime();
+            // 2026-10-31 23:59:59 America/Toronto. Toronto is EDT (UTC-4) on that
+            // date (DST ends Nov 1, 2026), so pin the offset explicitly — the
+            // deadline is the same instant for every viewer regardless of their TZ.
+            const deadline = new Date('2026-10-31T23:59:59-04:00').getTime();
 
             function updateLaunchCountdown() {
                 const now = new Date().getTime();

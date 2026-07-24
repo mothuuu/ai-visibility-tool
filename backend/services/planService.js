@@ -112,6 +112,10 @@ function normalizePlan(plan) {
     'tier_platinum': 'enterprise',
     'tier_silver': 'diy',
     'tier_bronze': 'free',
+    // Annual variants → base tier (interval affects billing only, not tier)
+    'starter_annual': 'diy',
+    'diy_annual': 'diy',
+    'pro_annual': 'pro',
     // Legacy/alternative names
     'starter': 'diy',
     'basic': 'diy',
@@ -1013,8 +1017,14 @@ function normalizePlanName(planName) {
  * Map a normalized plan name to the effective plan used for entitlement lookup.
  *
  * Backward-compat mappings:
- *   'diy'      → 'starter'
- *   'freemium' → 'free'
+ *   'diy'            → 'starter'
+ *   'starter_annual' → 'starter'   (annual billing, same entitlements)
+ *   'pro_annual'     → 'pro'       (annual billing, same entitlements)
+ *   'freemium'       → 'free'
+ *
+ * Annual variants share their base tier's entitlements — the interval only
+ * affects billing, never features — so they normalize here rather than
+ * duplicating any entitlement object.
  *
  * @param {string|null|undefined} planName - Raw or normalized plan name
  * @returns {string} Effective plan key (matches PLAN_ENTITLEMENTS keys)
@@ -1022,8 +1032,10 @@ function normalizePlanName(planName) {
 function getEffectivePlan(planName) {
   const normalized = normalizePlanName(planName);
 
-  if (normalized === 'diy')      return 'starter';
-  if (normalized === 'freemium') return 'free';
+  if (normalized === 'diy')                                    return 'starter';
+  if (normalized === 'starter_annual' || normalized === 'diy_annual') return 'starter';
+  if (normalized === 'pro_annual')                             return 'pro';
+  if (normalized === 'freemium')                               return 'free';
 
   return normalized;
 }

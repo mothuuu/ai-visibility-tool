@@ -10,19 +10,22 @@ const { handleCitationNetworkWebhook } = require('../services/citationNetworkWeb
 // so a missing env var fails fast with a 500 (same shape as token top-ups)
 // instead of silently sending a fake price to Stripe.
 //
-// Stripe-facing plan keys are 'starter' and 'pro' (Enterprise is sales-led).
-// Annual billing is intentionally NOT supported here — annual Stripe products
-// don't exist yet; the checkout always uses monthly. Any `billing` parameter
-// sent by the client is ignored.
+// Stripe-facing plan keys are 'starter'/'pro' (monthly) and 'starter_annual'/
+// 'pro_annual' (annual). Enterprise/agency are sales-led (monthly only). The
+// annual variants map to their own Stripe price IDs; the webhook resolves the
+// resulting subscription back to the base tier from the price ID (Stripe is the
+// source of truth for the billing interval, so no billing column is written).
 const PLAN_TO_ENV_KEY = {
-  starter:    'STRIPE_STARTER_PRICE_ID',
-  pro:        'STRIPE_PRO_PRICE_ID',
-  enterprise: 'STRIPE_ENTERPRISE_PRICE_ID',
-  agency:     'STRIPE_AGENCY_PRICE_ID'
+  starter:        'STRIPE_STARTER_PRICE_ID',
+  pro:            'STRIPE_PRO_PRICE_ID',
+  enterprise:     'STRIPE_ENTERPRISE_PRICE_ID',
+  agency:         'STRIPE_AGENCY_PRICE_ID',
+  starter_annual: 'STRIPE_STARTER_ANNUAL_PRICE_ID',
+  pro_annual:     'STRIPE_PRO_ANNUAL_PRICE_ID'
 };
 
 // Backward-compat alias map: clients with cached JS may still send plan='diy'.
-const PLAN_ALIASES = { diy: 'starter' };
+const PLAN_ALIASES = { diy: 'starter', diy_annual: 'starter_annual' };
 
 // Test endpoint to verify routes are loaded
 router.get('/test', (req, res) => {
@@ -43,19 +46,23 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
     const { domain, plan: rawPlan = 'starter' } = req.body;
     // Normalize legacy 'diy' to 'starter' so cached client builds still work.
     const plan = PLAN_ALIASES[rawPlan] || rawPlan;
-    // Annual billing isn't supported yet (no annual Stripe products). Any
-    // `billing` parameter from the client is intentionally ignored.
-    const billing = 'monthly';
+    // Annual variants (starter_annual / pro_annual) use their own Stripe price
+    // ID; billing_cycle is recorded in metadata for reference only.
+    const isAnnual = /_annual$/.test(plan);
+    const billing = isAnnual ? 'annual' : 'monthly';
+    // Base tier for metadata — the user's stored plan is set by the webhook from
+    // the price ID, so metadata carries the normalized base ('starter'/'pro').
+    const basePlan = plan.replace(/_annual$/, '');
     const userId = req.user.id;
     const email = req.user.email;
 
-    console.log(`🛒 Checkout request: User ${userId} (${email}) for ${plan} plan (monthly billing)`);
+    console.log(`🛒 Checkout request: User ${userId} (${email}) for ${plan} plan (${billing} billing)`);
 
     if (!domain) {
       return res.status(400).json({ error: 'Domain required' });
     }
 
-    if (!['starter', 'pro', 'enterprise', 'agency'].includes(plan)) {
+    if (!['starter', 'pro', 'enterprise', 'agency', 'starter_annual', 'pro_annual'].includes(plan)) {
       return res.status(400).json({ error: 'Invalid plan' });
     }
 
@@ -68,7 +75,7 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
       return res.status(500).json({ error: `${plan} plan is not configured` });
     }
 
-    console.log(`💰 Using price ID: ${priceId} (monthly)`);
+    console.log(`💰 Using price ID: ${priceId} (${billing})`);
 
     // Get or create Stripe customer
     let customerId = req.user.stripe_customer_id;
@@ -88,20 +95,26 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
       console.log(`✅ Stripe customer created: ${customerId}`);
     }
 
-    // Build subscription_data with metadata
+    // Store the NORMALIZED base plan in metadata ('starter'/'pro'), so any
+    // metadata-based consumer sees the same value monthly writes; the annual
+    // interval lives on the Stripe subscription/price itself.
     const subscriptionData = {
       metadata: {
         userId: userId.toString(),
         domain,
-        plan,
+        plan: basePlan,
         billing_cycle: billing
       }
     };
 
-    // Create Checkout Session
+    // Create Checkout Session. allow_promotion_codes lets customers enter the
+    // CITATION20 launch code at checkout — Stripe owns the coupon entirely
+    // (eligibility, monthly-only restriction, expiry); we implement no coupon
+    // logic here.
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       payment_method_types: ['card'],
+      allow_promotion_codes: true,
       line_items: [
         {
           price: priceId,
@@ -110,17 +123,17 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
       ],
       mode: 'subscription',
       success_url: `${process.env.FRONTEND_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/checkout.html?plan=${plan}`,
+      cancel_url: `${process.env.FRONTEND_URL}/checkout.html?plan=${basePlan}`,
       metadata: {
         userId: userId.toString(),
         domain,
-        plan,
+        plan: basePlan,
         billing_cycle: billing
       },
       subscription_data: subscriptionData
     });
 
-    console.log(`✅ Checkout session created: ${session.id} (monthly billing)`);
+    console.log(`✅ Checkout session created: ${session.id} (${billing} billing)`);
     res.json({ url: session.url });
   } catch (error) {
     console.error('❌ Checkout session creation failed:', error);
