@@ -1078,76 +1078,70 @@
         }
 
         /* Billing Toggle Styles */
-        .billing-toggle-container {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 3rem;
-        }
-
+        /* Monthly / Annual toggle (pill slider) — mirrors the toggle on
+           plans.html so both surfaces stay visually and behaviorally identical.
+           NOTE (tech debt): duplicated from plans.html because the two pages
+           have separate inline <style> blocks and share no stylesheet. */
         .billing-toggle {
-            display: flex;
-            background: #f5f5f5;
-            border-radius: 50px;
-            padding: 4px;
-            gap: 4px;
+            display: inline-flex;
+            gap: 0.25rem;
+            margin: 0 auto 2rem;
+            padding: 0.3rem;
+            background: #f3f4f6;
+            border-radius: 999px;
+            position: relative;
+            left: 50%;
+            transform: translateX(-50%);
         }
-
-        .billing-option {
-            padding: 12px 24px;
-            border-radius: 50px;
-            font-size: 0.9375rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
+        .billing-toggle-option {
             border: none;
             background: transparent;
-            color: #6B7280;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .billing-option.active {
-            background: white;
-            color: #1F2937;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        .billing-option:hover:not(.active) {
             color: #374151;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.5rem 1.25rem;
+            border-radius: 999px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: background 0.2s ease, color 0.2s ease;
         }
-
-        .billing-discount {
-            color: #f31c7e;
-            font-size: 0.8125rem;
+        .billing-toggle-option.active {
+            background: linear-gradient(135deg, #00B9DA 0%, #7030A0 100%);
+            color: #fff;
+        }
+        .billing-toggle-hint {
+            font-size: 0.65rem;
             font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 0.1rem 0.4rem;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.25);
+        }
+        .billing-toggle-option:not(.active) .billing-toggle-hint {
+            background: rgba(124, 58, 237, 0.12);
+            color: #7030A0;
         }
 
-        /* Pricing visibility based on billing mode */
-        .annual-price,
-        .annual-note {
-            display: block;
-        }
-
-        .monthly-price,
-        .monthly-note {
-            display: none;
-        }
-
-        body.monthly-mode .annual-price,
-        body.monthly-mode .annual-note {
-            display: none;
-        }
-
-        body.monthly-mode .monthly-price,
-        body.monthly-mode .monthly-note {
-            display: block;
-        }
-
-        .plan-billing-note {
-            font-size: 0.8125rem;
-            color: #6B7280;
-            margin-top: 0.25rem;
+        /* "2 months free" badge — reuses the homepage MOST POPULAR pill
+           gradient (cyan → pink). Absolutely positioned below the top plan
+           badge so both can show at once. Toggled on for Annual via JS. */
+        .plan-annual-badge {
+            position: absolute;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%);
+            color: #fff;
+            font-size: 0.62rem;
+            font-weight: 700;
+            padding: 0.22rem 0.7rem;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
         }
 
         /* ================================ */
@@ -2972,11 +2966,16 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
             </div>
             <!-- END LAUNCH PROMO -->
 
-            <!-- Annual billing intentionally removed until Stripe annual products exist. -->
-            <!-- All pricing on this page is monthly. -->
+            <!-- Monthly / Annual billing toggle (display-only; mirrors plans.html).
+                 CTAs are unaffected — plan selection happens on plans.html post-signup. -->
+            <div class="billing-toggle" role="group" aria-label="Billing interval">
+                <button type="button" class="billing-toggle-option active" id="billingMonthlyBtn"
+                        aria-pressed="true" onclick="setBilling('monthly')">Monthly</button>
+                <button type="button" class="billing-toggle-option" id="billingAnnualBtn"
+                        aria-pressed="false" onclick="setBilling('annual')">Annual <span class="billing-toggle-hint">Save 2 months</span></button>
+            </div>
 
-
-            <div class="pricing-grid" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="pricing-grid" id="homepagePricingGrid" style="grid-template-columns: repeat(4, 1fr);">
                 <!-- Card 1: Free -->
                 <div class="pricing-card">
                     <span class="plan-badge badge-free" style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 8px 20px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; background: linear-gradient(135deg, var(--purple) 0%, var(--pink) 100%); color: white;">FREE FOREVER</span>
@@ -2999,9 +2998,10 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                 <!-- Card 2: Starter (Most Popular) -->
                 <div class="pricing-card featured">
                     <span class="plan-badge badge-popular" style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 8px 20px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%); color: white;">MOST POPULAR</span>
+                    <div class="plan-annual-badge" id="starterAnnualBadge" style="display: none;">2 months free</div>
                     <div class="plan-name" style="margin-top: 10px;">Starter</div>
-                    <div class="plan-price">$19</div>
-                    <div class="plan-price-small">
+                    <div class="plan-price" id="starterPrice">$19</div>
+                    <div class="plan-price-small" id="starterNote">
                         per month
                         <br><span style="font-size: 14px; color: #4a5568;">Full findings + 50 monthly tokens.</span>
                     </div>
@@ -3022,9 +3022,10 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
                 <!-- Card 3: Pro -->
                 <div class="pricing-card">
                     <span class="plan-badge" style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 8px 20px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; background: linear-gradient(135deg, #4DACA6 0%, #f31c7e 100%); color: white;">BEST VALUE</span>
+                    <div class="plan-annual-badge" id="proAnnualBadge" style="display: none;">2 months free</div>
                     <div class="plan-name" style="margin-top: 10px;">Pro</div>
-                    <div class="plan-price">$49</div>
-                    <div class="plan-price-small">
+                    <div class="plan-price" id="proPrice">$49</div>
+                    <div class="plan-price-small" id="proNote">
                         per month
                         <br><span style="font-size: 14px; color: #4a5568;">Brand Visibility Index + 150 monthly tokens.</span>
                     </div>
@@ -3754,6 +3755,42 @@ No guesswork. No jargon. Just clear actions you can implement today.</p>
         })();
 
         // Navigate to checkout with current billing selection
+        // Homepage pricing display state. Monthly/Annual prices + notes for the
+        // two toggle-affected cards (Starter, Pro). Free and Enterprise never change.
+        // Display-only: this does NOT drive checkout — CTAs are untouched and plan
+        // selection happens on plans.html post-signup.
+        const HOMEPAGE_PRICES = {
+            starter: {
+                monthly: { price: '$19', note: 'per month<br><span style="font-size: 14px; color: #4a5568;">Full findings + 50 monthly tokens.</span>' },
+                annual:  { price: '$15', note: 'per month, billed annually ($180/yr)<br><span style="font-size: 14px; color: #4a5568;">Full findings + 50 monthly tokens.</span>' }
+            },
+            pro: {
+                monthly: { price: '$49', note: 'per month<br><span style="font-size: 14px; color: #4a5568;">Brand Visibility Index + 150 monthly tokens.</span>' },
+                annual:  { price: '$39', note: 'per month, billed annually ($468/yr)<br><span style="font-size: 14px; color: #4a5568;">Brand Visibility Index + 150 monthly tokens.</span>' }
+            }
+        };
+
+        // Toggle the homepage pricing display between monthly and annual.
+        // Purely visual: swaps Starter/Pro prices, notes, and "2 months free"
+        // badges. Does not alter CTA destinations or the checkout billing param.
+        function setBilling(mode) {
+            const isAnnual = mode === 'annual';
+
+            const monthlyBtn = document.getElementById('billingMonthlyBtn');
+            const annualBtn = document.getElementById('billingAnnualBtn');
+            monthlyBtn.classList.toggle('active', !isAnnual);
+            monthlyBtn.setAttribute('aria-pressed', String(!isAnnual));
+            annualBtn.classList.toggle('active', isAnnual);
+            annualBtn.setAttribute('aria-pressed', String(isAnnual));
+
+            ['starter', 'pro'].forEach((key) => {
+                const variant = HOMEPAGE_PRICES[key][isAnnual ? 'annual' : 'monthly'];
+                document.getElementById(key + 'Price').textContent = variant.price;
+                document.getElementById(key + 'Note').innerHTML = variant.note;
+                document.getElementById(key + 'AnnualBadge').style.display = isAnnual ? 'block' : 'none';
+            });
+        }
+
         function goToCheckout(plan) {
             // Close modal if open
             closeComingSoonModal();
