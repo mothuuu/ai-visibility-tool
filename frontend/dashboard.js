@@ -2441,9 +2441,9 @@ document.addEventListener('click', function(event) {
         closeDomainModal();
     }
 
-    const comingSoonModal = document.getElementById('comingSoonModal');
-    if (comingSoonModal && event.target === comingSoonModal) {
-        closeComingSoonModal();
+    const changePlanModal = document.getElementById('changePlanModal');
+    if (changePlanModal && event.target === changePlanModal) {
+        closeChangePlanModal();
     }
 });
 
@@ -2574,8 +2574,6 @@ async function loadSubscriptionData() {
         // Set plan-based information (features for display)
         const planInfo = {
             free: {
-                name: 'Free Plan',
-                price: '$0/month',
                 features: [
                     '2 scans per month',
                     'Track 1 page',
@@ -2584,8 +2582,6 @@ async function loadSubscriptionData() {
                 ]
             },
             diy: {
-                name: 'DIY Plan',
-                price: '$29/month',
                 features: [
                     '25 scans per month',
                     'Up to 5 pages of the same domain',
@@ -2595,8 +2591,6 @@ async function loadSubscriptionData() {
                 ]
             },
             pro: {
-                name: 'Pro Plan',
-                price: '$149/month',
                 features: [
                     '50 scans per month',
                     'Up to 25 pages of the same domain',
@@ -2606,8 +2600,6 @@ async function loadSubscriptionData() {
                 ]
             },
             agency: {
-                name: 'Agency Plan',
-                price: '$299/month',
                 features: [
                     'Unlimited scans',
                     'Unlimited pages per domain',
@@ -2617,8 +2609,6 @@ async function loadSubscriptionData() {
                 ]
             },
             enterprise: {
-                name: 'Enterprise Plan',
-                price: '$499/month',
                 features: [
                     'Unlimited scans',
                     'Unlimited pages per domain',
@@ -2633,8 +2623,9 @@ async function loadSubscriptionData() {
         const currentPlan = planInfo[user.plan] || planInfo.free;
 
         // Update plan information
-        document.getElementById('billingPlanName').textContent = currentPlan.name;
-        document.getElementById('billingPlanPrice').textContent = currentPlan.price;
+        const planDisplay = getPlanDisplay(user.plan);
+        document.getElementById('billingPlanName').textContent = planDisplay.name;
+        document.getElementById('billingPlanPrice').textContent = planDisplay.price;
 
         // Update features
         const featuresHtml = currentPlan.features.map(feature =>
@@ -2706,164 +2697,34 @@ async function loadSubscriptionData() {
     }
 }
 
-// Billing Page Functions
-let selectedPlanForChange = null;
-
+// "Your Plan" modal — shows the user's current plan + token balance and routes
+// to plans.html for any change. No in-modal checkout; prices come from the
+// PLAN_DISPLAY config (never hardcoded here).
 function openChangePlanModal() {
+    const planKey = (user && user.plan) || 'free';
+    const display = getPlanDisplay(planKey);
+
+    // Current plan name + billed price from real plan state
+    document.getElementById('currentPlanName').textContent = display.name;
+    document.getElementById('currentPlanPrice').textContent = display.price;
+
+    // Token balance from the existing balance state the dashboard already loads
+    const tokens = (typeof tokenBalanceData !== 'undefined' && tokenBalanceData && tokenBalanceData.total_available != null)
+        ? tokenBalanceData.total_available
+        : 0;
+    document.getElementById('currentPlanTokens').textContent = `${tokens} token${tokens === 1 ? '' : 's'}`;
+
+    // "Manage billing" (Stripe portal) is for paid plans only
+    const manageLink = document.getElementById('managePlanBillingLink');
+    if (manageLink) {
+        manageLink.style.display = (planKey === 'free') ? 'none' : '';
+    }
+
     document.getElementById('changePlanModal').style.display = 'flex';
-
-    // Hide the dynamic note initially
-    document.getElementById('planChangeNote').style.display = 'none';
-
-    // Plan hierarchy for comparison
-    const planRanks = {
-        free: 0,
-        diy: 1,
-        pro: 2,
-        enterprise: 3
-    };
-
-    // Show current plan badge
-    const currentPlanRank = planRanks[user.plan] || 0;
-
-    // Setup plan selection handlers
-    document.querySelectorAll('.plan-option').forEach(option => {
-        const planType = option.dataset.plan;
-
-        // Remove any existing current badges
-        const existingBadge = option.querySelector('.current-badge, #proCurrentBadge, #diyCurrentBadge, #enterpriseCurrentBadge');
-        if (existingBadge) {
-            existingBadge.style.display = 'none';
-        }
-
-        // Show CURRENT badge on user's current plan
-        if (planType === user.plan) {
-            // For Pro plan, show the badge
-            if (planType === 'pro') {
-                const proBadge = document.getElementById('proCurrentBadge');
-                if (proBadge) proBadge.style.display = 'inline-block';
-            } else {
-                // For other plans, add badge dynamically
-                const header = option.querySelector('div[style*="font-weight: 700"]');
-                if (header && !header.querySelector('.current-badge')) {
-                    const badge = document.createElement('span');
-                    badge.className = 'current-badge';
-                    badge.style.cssText = 'font-size: 0.625rem; background: var(--brand-cyan); color: white; padding: 0.25rem 0.5rem; border-radius: 10px; font-weight: 700; margin-left: 0.5rem;';
-                    badge.textContent = 'CURRENT';
-                    header.appendChild(badge);
-                }
-            }
-        }
-
-        option.addEventListener('click', function() {
-            // Remove selected from all
-            document.querySelectorAll('.plan-option').forEach(o => o.classList.remove('selected'));
-            // Add selected to clicked
-            this.classList.add('selected');
-            selectedPlanForChange = this.dataset.plan;
-
-            // Show/hide dynamic note based on upgrade or downgrade
-            const selectedPlanRank = planRanks[selectedPlanForChange] || 0;
-            const noteDiv = document.getElementById('planChangeNote');
-            const noteText = document.getElementById('planChangeNoteText');
-
-            if (selectedPlanForChange === user.plan) {
-                // Same plan - hide note
-                noteDiv.style.display = 'none';
-            } else if (selectedPlanRank > currentPlanRank) {
-                // Upgrading
-                noteDiv.style.display = 'block';
-                noteText.innerHTML = '<i class="fas fa-info-circle"></i> <strong>Note:</strong> Plan changes are pro-rated. You\'ll be credited for unused time on your current plan.';
-            } else {
-                // Downgrading
-                noteDiv.style.display = 'block';
-
-                // Calculate renewal date (example: 30 days from now)
-                const renewalDate = new Date();
-                renewalDate.setDate(renewalDate.getDate() + 30);
-                const formattedDate = renewalDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-
-                const planDisplayNames = {
-                    free: 'Free',
-                    diy: 'DIY',
-                    pro: 'Pro',
-                    enterprise: 'Enterprise'
-                };
-                const currentPlanName = planDisplayNames[user.plan] || 'current';
-
-                noteText.innerHTML = `📅 <strong>Your access continues until: ${formattedDate}</strong><br>You won't be charged again, and you can keep using ${currentPlanName} features until this date.`;
-            }
-        });
-    });
 }
 
 function closeChangePlanModal() {
     document.getElementById('changePlanModal').style.display = 'none';
-    selectedPlanForChange = null;
-    // Remove all selected classes
-    document.querySelectorAll('.plan-option').forEach(o => o.classList.remove('selected'));
-}
-
-async function confirmPlanChange() {
-    if (!selectedPlanForChange) {
-        showXeoAlert('Select a Plan', 'Please select a plan before confirming.');
-        return;
-    }
-
-    if (selectedPlanForChange === user.plan) {
-        showXeoAlert('Same Plan', 'You are already on this plan.');
-        return;
-    }
-
-    // FIX FOR MODAL STACKING: Close the change plan modal FIRST
-    closeChangePlanModal();
-
-    // Wait brief moment for modal close animation
-    await new Promise(resolve => setTimeout(resolve, 200));
-
-    // Check if selected plan is Pro or Enterprise - show "Coming Soon" modal
-    if (selectedPlanForChange === 'pro' || selectedPlanForChange === 'enterprise') {
-        document.getElementById('comingSoonModal').style.display = 'flex';
-        return;
-    }
-
-    // For DIY plan - proceed with plan change
-    const planNames = {
-        free: 'Free Plan',
-        diy: 'DIY Plan ($29/month)',
-        pro: 'Pro Plan ($149/month)',
-        enterprise: 'Enterprise Plan ($499/month)'
-    };
-
-    const confirmed = await showXeoConfirm(
-        'Confirm Plan Change',
-        `Are you sure you want to change to ${planNames[selectedPlanForChange]}?\n\nChanges will be pro-rated and take effect immediately.`
-    );
-
-    if (!confirmed) {
-        // If user cancels, reopen the change plan modal
-        openChangePlanModal();
-        return;
-    }
-
-    try {
-        showLoading();
-
-        // In production, this would call the backend API
-        // For now, we'll show a message to use Stripe Portal
-        hideLoading();
-        showXeoAlert('Plan Change', 'Please use the Stripe Portal to change your plan. This ensures secure payment processing and immediate activation.');
-
-        // Optionally open Stripe Portal
-        setTimeout(() => {
-            openStripePortal();
-        }, 2000);
-
-    } catch (error) {
-        hideLoading();
-        console.error('Plan change error:', error);
-        showXeoAlert('Error', `Unable to change plan: ${error.message}`);
-    }
 }
 
 function openCancelSubscriptionModal() {
@@ -2957,8 +2818,6 @@ async function loadBillingData() {
     try {
         const planInfo = {
             free: {
-                name: 'Free Plan',
-                price: '$0/month',
                 features: [
                     '2 scans per month',
                     'Track 1 page',
@@ -2970,8 +2829,6 @@ async function loadBillingData() {
                 competitorsLimit: 0
             },
             diy: {
-                name: 'DIY Plan',
-                price: '$29/month',
                 features: [
                     '25 scans per month',
                     'Up to 5 pages of the same domain',
@@ -2984,8 +2841,6 @@ async function loadBillingData() {
                 competitorsLimit: 2
             },
             pro: {
-                name: 'Pro Plan',
-                price: '$149/month',
                 features: [
                     '50 scans per month',
                     'Up to 25 pages of the same domain',
@@ -2998,8 +2853,6 @@ async function loadBillingData() {
                 competitorsLimit: 3
             },
             enterprise: {
-                name: 'Enterprise Plan',
-                price: '$499/month',
                 features: [
                     '200 scans per month',
                     'Up to 100 pages of the same domain',
@@ -3017,8 +2870,9 @@ async function loadBillingData() {
         const currentPlan = planInfo[user.plan] || planInfo.free;
 
         // Update Current Plan section
-        document.getElementById('billingPlanName').textContent = currentPlan.name;
-        document.getElementById('billingPlanPrice').textContent = currentPlan.price;
+        const planDisplay = getPlanDisplay(user.plan);
+        document.getElementById('billingPlanName').textContent = planDisplay.name;
+        document.getElementById('billingPlanPrice').textContent = planDisplay.price;
 
         // Update renewal date
         const renewalDate = new Date();
@@ -3080,35 +2934,6 @@ async function loadBillingData() {
 
     } catch (error) {
         console.error('Error loading billing data:', error);
-    }
-}
-
-// Coming Soon Modal Functions
-function closeComingSoonModal() {
-    document.getElementById('comingSoonModal').style.display = 'none';
-}
-
-async function selectDiyPlan() {
-    // Close coming soon modal
-    closeComingSoonModal();
-
-    // Wait brief moment
-    await new Promise(resolve => setTimeout(resolve, 200));
-
-    // Set selected plan to DIY
-    selectedPlanForChange = 'diy';
-
-    // Open change plan modal with DIY pre-selected
-    openChangePlanModal();
-
-    // Pre-select DIY plan
-    const diyOption = document.querySelector('.plan-option[data-plan="diy"]');
-    if (diyOption) {
-        document.querySelectorAll('.plan-option').forEach(o => o.classList.remove('selected'));
-        diyOption.classList.add('selected');
-
-        // Trigger the selection logic to show the upgrade note
-        diyOption.click();
     }
 }
 
@@ -5962,6 +5787,24 @@ const TOKEN_BUNDLES = [
 const ROUTES = {
     PLANS: 'plans.html'
 };
+
+// Single source of truth for plan display name + billed price shown in the
+// dashboard (the "Your Plan" modal and the billing page). Real prices only —
+// checkout lives on plans.html; never hardcode plan prices anywhere else.
+// 'diy'/'starter' are the same tier (legacy vs current key). Enterprise/Agency
+// are custom-priced (contact sales), so they show a label rather than a number.
+const PLAN_DISPLAY = {
+    free:       { name: 'Free',       price: '$0/month'  },
+    diy:        { name: 'Starter',    price: '$19/month' },
+    starter:    { name: 'Starter',    price: '$19/month' },
+    pro:        { name: 'Pro',        price: '$49/month' },
+    agency:     { name: 'Agency',     price: 'Custom pricing' },
+    enterprise: { name: 'Enterprise', price: 'Custom pricing' }
+};
+
+function getPlanDisplay(planKey) {
+    return PLAN_DISPLAY[planKey] || PLAN_DISPLAY.free;
+}
 
 // Resolve a user plan to its PLANS_CONFIG key.
 // Backend stores 'diy'; UI treats it as 'starter'.

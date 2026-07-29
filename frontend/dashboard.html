@@ -2076,18 +2076,6 @@
             margin-bottom: 0.5rem;
         }
 
-        /* Plan Option Cards */
-        .plan-option:hover {
-            border-color: var(--brand-cyan) !important;
-            transform: translateY(-4px);
-            box-shadow: 0 8px 20px rgba(0, 185, 218, 0.2);
-        }
-
-        .plan-option.selected {
-            border-color: var(--brand-cyan) !important;
-            background: linear-gradient(135deg, #e6f7fb 0%, #f0e6ff 100%) !important;
-        }
-
         /* Coming Soon Nav Items */
         .nav-item.coming-soon {
             opacity: 0.5;
@@ -5968,10 +5956,10 @@
 
                         <div style="margin-bottom: 1.5rem;">
                             <div style="font-size: 1.5rem; font-weight: 700; background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-pink) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 0.5rem;" id="billingPlanName">
-                                Pro Plan
+                                —
                             </div>
                             <div style="font-size: 1.25rem; font-weight: 600; color: var(--gray-700); margin-bottom: 0.25rem;" id="billingPlanPrice">
-                                $149/month
+                                —
                             </div>
                             <div style="font-size: 0.875rem; color: var(--gray-500);" id="billingRenewalDate">
                                 Renews on January 15, 2026
@@ -6406,83 +6394,40 @@
         </div>
     </div>
 
-    <!-- Change Plan Modal -->
+    <!-- Change Plan Modal — current-plan panel that routes to plans.html.
+         Checkout is NOT built here; plans.html is the single pricing surface. -->
     <div id="changePlanModal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-content" style="max-width: 460px;">
             <div class="modal-header">
-                <h2 class="modal-title">Change Your Plan</h2>
+                <h2 class="modal-title">Your Plan</h2>
             </div>
-            <p style="color: var(--gray-600); margin-bottom: 1.5rem;">
-                Choose a plan that fits your needs. Changes take effect immediately with pro-rated billing.
+
+            <!-- Current plan (name + billed price from real plan state, never hardcoded) -->
+            <div style="border: 2px solid var(--brand-cyan); border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; background: linear-gradient(135deg, #e6f7fb 0%, #f0e6ff 100%);">
+                <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gray-500); font-weight: 700; margin-bottom: 0.5rem;">Current plan</div>
+                <div style="font-size: 1.5rem; font-weight: 800; color: var(--gray-900);" id="currentPlanName">—</div>
+                <div style="font-size: 1.125rem; font-weight: 600; color: var(--gray-700); margin-top: 0.25rem;" id="currentPlanPrice">—</div>
+            </div>
+
+            <!-- Token balance (from existing balance state) -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.875rem 1rem; background: var(--gray-50); border-radius: 10px; margin-bottom: 1.5rem;">
+                <span style="color: var(--gray-600); font-size: 0.875rem;">Execution Pack token balance</span>
+                <span style="color: var(--gray-900); font-weight: 700;" id="currentPlanTokens">—</span>
+            </div>
+
+            <p style="color: var(--gray-600); font-size: 0.8125rem; margin-bottom: 1.5rem; text-align: center;">
+                Compare plans and upgrade on our plans page — secure checkout is handled there.
             </p>
 
-            <!-- Plan Selection Grid -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
-                <!-- DIY Plan -->
-                <div class="plan-option" data-plan="diy" style="border: 2px solid var(--gray-200); border-radius: 12px; padding: 1.5rem; cursor: pointer; transition: all 0.3s; background: linear-gradient(135deg, #f0f9ff 0%, #fef3f2 100%);">
-                    <div style="font-size: 1rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.25rem;">DIY</div>
-                    <div style="font-size: 0.625rem; color: var(--gray-600); margin-bottom: 0.75rem;">For solopreneurs & small teams</div>
-                    <div style="font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-pink) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 1rem;">
-                        $29<span style="font-size: 0.875rem; color: var(--gray-500);">/mo</span>
-                    </div>
-                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.7rem; color: var(--gray-600); line-height: 1.6;">
-                        <li style="padding: 0.25rem 0;">✓ 25 scans per month</li>
-                        <li style="padding: 0.25rem 0;">✓ Up to 5 pages of the same domain</li>
-                        <li style="padding: 0.25rem 0;">✓ Website Visibility Index (full)</li>
-                        <li style="padding: 0.25rem 0;">✓ Copy-paste code snippets</li>
-                        <li style="padding: 0.25rem 0;">✓ Competitor scanning</li>
-                    </ul>
-                </div>
-
-                <!-- Pro Plan -->
-                <div class="plan-option" data-plan="pro" style="border: 2px solid var(--brand-cyan); border-radius: 12px; padding: 1.5rem; cursor: pointer; transition: all 0.3s; background: linear-gradient(135deg, #e6f7fb 0%, #f0e6ff 100%);">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
-                        <div style="font-size: 1rem; font-weight: 700; color: var(--gray-900);">Pro</div>
-                        <span id="proCurrentBadge" style="font-size: 0.625rem; background: var(--brand-cyan); color: white; padding: 0.25rem 0.5rem; border-radius: 10px; font-weight: 700; display: none;">CURRENT</span>
-                    </div>
-                    <div style="font-size: 0.625rem; color: var(--gray-600); margin-bottom: 0.75rem;">For growing businesses</div>
-                    <div style="font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-pink) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 1rem;">
-                        $149<span style="font-size: 0.875rem; color: var(--gray-500);">/mo</span>
-                    </div>
-                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.7rem; color: var(--gray-600); line-height: 1.6;">
-                        <li style="padding: 0.25rem 0;">✓ 50 scans per month</li>
-                        <li style="padding: 0.25rem 0;">✓ Up to 25 pages of the same domain</li>
-                        <li style="padding: 0.25rem 0;">✓ Website Visibility Index (full) & Brand Visibility Index (Lite)</li>
-                        <li style="padding: 0.25rem 0;">✓ Copy-paste code snippets</li>
-                        <li style="padding: 0.25rem 0;">✓ 3 competitor analyses</li>
-                    </ul>
-                </div>
-
-                <!-- Enterprise Plan -->
-                <div class="plan-option" data-plan="enterprise" style="border: 2px solid var(--gray-200); border-radius: 12px; padding: 1.5rem; cursor: pointer; transition: all 0.3s; background: linear-gradient(135deg, #fef3f2 0%, #fff7ed 100%);">
-                    <div style="font-size: 1rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.25rem;">Enterprise</div>
-                    <div style="font-size: 0.625rem; color: var(--gray-600); margin-bottom: 0.75rem;">For enterprise & mid-market companies</div>
-                    <div style="font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-pink) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 1rem;">
-                        $499<span style="font-size: 0.875rem; color: var(--gray-500);">/mo</span>
-                    </div>
-                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.7rem; color: var(--gray-600); line-height: 1.6;">
-                        <li style="padding: 0.25rem 0;">✓ 200 scans per month</li>
-                        <li style="padding: 0.25rem 0;">✓ Up to 100 pages of the same domain</li>
-                        <li style="padding: 0.25rem 0;">✓ Website Visibility Index (full) & Brand Visibility Index (Full)</li>
-                        <li style="padding: 0.25rem 0;">✓ 10 competitor analyses</li>
-                        <li style="padding: 0.25rem 0;">✓ Advanced AI monitoring (50+ queries)</li>
-                        <li style="padding: 0.25rem 0;">✓ Media & social tracking</li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- Dynamic Upgrade/Downgrade Note (initially hidden) -->
-            <div id="planChangeNote" style="display: none; background: #fff3cd; border: 2px solid #ffc107; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                <p id="planChangeNoteText" style="margin: 0; color: #856404; font-size: 0.875rem;">
-                </p>
-            </div>
-
-            <div class="modal-actions">
-                <button class="btn btn-secondary" style="flex: 1;" onclick="closeChangePlanModal()">
-                    Cancel
+            <div class="modal-actions" style="flex-direction: column; gap: 0.75rem;">
+                <button class="btn btn-primary" style="width: 100%;" onclick="window.location.href = ROUTES.PLANS">
+                    View plans &amp; upgrade
                 </button>
-                <button class="btn btn-primary" style="flex: 1;" id="confirmPlanChangeBtn" onclick="confirmPlanChange()">
-                    Change Plan
+                <button class="btn btn-secondary" style="width: 100%;" id="managePlanBillingLink" onclick="openStripePortal()">
+                    Manage billing
+                </button>
+                <button class="btn btn-secondary" style="width: 100%; border: none; background: transparent; color: var(--gray-500);" onclick="closeChangePlanModal()">
+                    Close
                 </button>
             </div>
         </div>
@@ -6548,38 +6493,6 @@
                 <button class="btn btn-danger" style="flex: 1;" onclick="confirmCancelSubscription()">
                     Yes, Cancel
                 </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Coming Soon Modal for Pro & Enterprise -->
-    <div id="comingSoonModal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 550px; padding: 0; overflow: hidden;">
-            <!-- Header with Gradient -->
-            <div style="background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%); padding: 2rem; text-align: center; border-radius: 20px 20px 0 0;">
-                <h2 style="color: white; font-size: 1.75rem; font-weight: 700; margin: 0 0 0.5rem 0;">
-                    Coming Soon
-                </h2>
-                <p style="color: rgba(255, 255, 255, 0.9); font-size: 1rem; margin: 0;">
-                    This plan will be available soon
-                </p>
-            </div>
-
-            <!-- Body -->
-            <div style="padding: 2rem; background: white; border-radius: 0 0 20px 20px;">
-                <p style="color: #374151; font-size: 1rem; line-height: 1.6; margin: 0 0 2rem 0;">
-                    We're working hard to bring this plan to you. Please check back soon or start with our <strong>DIY plan</strong> for immediate access.
-                </p>
-
-                <!-- Buttons -->
-                <div style="display: flex; gap: 1rem;">
-                    <button class="btn btn-secondary" style="flex: 1; padding: 0.875rem 2rem; border: 2px solid #E5E7EB; color: #374151; font-weight: 600; border-radius: 8px;" onclick="closeComingSoonModal()">
-                        Close
-                    </button>
-                    <button class="btn btn-primary" style="flex: 1; padding: 0.875rem 2rem; background: linear-gradient(135deg, #00B9DA 0%, #f31c7e 100%); color: white; font-weight: 600; border-radius: 8px; border: none;" onclick="selectDiyPlan()">
-                        Try DIY Plan
-                    </button>
-                </div>
             </div>
         </div>
     </div>
