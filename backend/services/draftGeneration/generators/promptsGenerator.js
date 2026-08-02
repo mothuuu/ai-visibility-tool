@@ -1,24 +1,25 @@
 /**
- * Prompts generator (REAL, LLM-backed) — G4.
+ * Prompts generator (REAL, LLM-backed) — SAVE-TIME suggestions.
  *
- * Produces the best-suggested discovery prompts for the visibility-profile draft
- * and returns the contribution
- *   { tracked_prompts: [ { text, funnel_stage, is_monitored, volume: null }, ... ] }.
+ * Produces suggested discovery prompts for the Top Queries picker. It is NO
+ * LONGER part of the background draft pipeline (see generators/index.js) — it is
+ * invoked at SAVE time, on first profile completion, from the user's CONFIRMED
+ * icps + competitors, and returns
+ *   { tracked_prompts: [ { text, funnel_stage, is_monitored:false,
+ *                          source:"suggested", volume:null }, ... ] }
+ * with `suggestions_per_stage` (default 10) queries per funnel stage
+ * (TOFU / MOFU / BOFU) — 30 total by default. All items are SUGGESTIONS
+ * (is_monitored=false, source="suggested", volume=null) until the user picks
+ * (selection persistence is a later build).
  *
- * Runs after icps (and competitors), so it reasons from G1's basics + G2's ICPs
- * in ctx.profile (falling back to raw scan content). Asks the model for the
- * discovery queries real customers type into AI assistants (ChatGPT, Claude,
- * Perplexity, Gemini) when looking for this kind of business, each tagged with a
- * funnel stage (TOFU / MOFU / BOFU) with a spread across the three.
+ * Count comes from ctx.draftConfig.suggestions_per_stage (NOT the legacy
+ * populated_prompts_min/max). One LLM call PER STAGE, run in parallel (~5s), so
+ * per-stage counts are reliable; a stage whose call fails degrades to empty
+ * without affecting the others.
  *
- * Count respects ctx.draftConfig.populated_prompts_min/max (3–5). is_monitored
- * defaults true within the populated set, never exceeding ctx.draftConfig.
- * monitoring_cap. volume is ALWAYS null here — estimation is a later feature
- * (Walther's token unlock), never done in this generator.
- *
- * GRACEFUL DEGRADATION (job contract — must never throw the run): on LLM failure
- * / timeout / unparseable output, or when there's no usable context, returns an
- * empty list.
+ * GRACEFUL DEGRADATION (must never throw): on LLM failure / timeout /
+ * unparseable output / no usable context, returns an empty list so the picker
+ * can still let the user add their own. `extraContext` doc-upload seam preserved.
  *
  * Uses the existing Claude adapter (services/engines/claudeAdapter.js) — no new
  * client. `claudeAdapter.runQuery` is called via property access so tests can stub it.
@@ -27,15 +28,18 @@
 const claudeAdapter = require('../../engines/claudeAdapter');
 const { parseJsonArray } = require('../llmJson');
 
-const DEFAULT_MIN = 3;
-const DEFAULT_MAX = 5;
-const HARD_MAX = 5;          // never return more than this
+const DEFAULT_PER_STAGE = 10;
 const LLM_MAX_CHARS = 4000;
 
-const FUNNEL_STAGES = new Set(['TOFU', 'MOFU', 'BOFU']);
+// Funnel stages + the flavor of query the model should produce for each.
+const STAGES = [
+  { key: 'TOFU', desc: 'awareness / top-of-funnel — broad discovery ("best …", "how do I …", "what is …") where the buyer does not yet know specific brands' },
+  { key: 'MOFU', desc: 'comparison / consideration / middle-of-funnel — ("X vs Y", "alternatives to …", "compare …", "which … is best for …") where the buyer is weighing options' },
+  { key: 'BOFU', desc: 'decision / bottom-of-funnel — ("… pricing", "… reviews", "is … worth it", "… near me") where the buyer is close to choosing' },
+];
 
 // ---------------------------------------------------------------------------
-// helpers (self-contained per generator, consistent with G1–G3)
+// helpers
 // ---------------------------------------------------------------------------
 
 function toText(v) {
@@ -62,19 +66,7 @@ function posInt(v) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-/** Normalize a funnel stage to TOFU/MOFU/BOFU, or null if undeterminable. */
-function normalizeFunnel(v) {
-  const s = cleanStr(v);
-  if (!s) return null;
-  const u = s.toUpperCase();
-  if (FUNNEL_STAGES.has(u)) return u;
-  if (/AWARE|DISCOVER|\bTOP\b|TOP[\s-]?OF/.test(u)) return 'TOFU';
-  if (/COMPAR|CONSIDER|MIDDLE|EVAL|VS\b/.test(u)) return 'MOFU';
-  if (/DECISION|PURCHAS|BOTTOM|\bBUY\b|PRICE|COST/.test(u)) return 'BOFU';
-  return null;
-}
-
-/** Compact fallback context from raw scan content (when G1 fields are absent). */
+/** Compact fallback context from raw scan content (when profile fields are absent). */
 function gatherSiteText(scan) {
   const s = scan || {};
   const ev = (s.detailed_analysis || {}).scanEvidence || {};
@@ -94,9 +86,13 @@ function gatherSiteText(scan) {
   return parts.join('\n\n').trim();
 }
 
+const compNames = (list) =>
+  asStrings((Array.isArray(list) ? list : []).map((c) => (typeof c === 'string' ? c : (c && c.name)))).slice(0, 6);
+
 /**
- * Best-available business context: prefer G1's clean fields + G2's ICPs; else
- * raw scan content. extraContext = forward doc-upload seam (no-op today).
+ * Business context from the CONFIRMED profile: basics + ICPs + competitors.
+ * Falls back to raw scan content when profile fields are absent. extraContext =
+ * forward doc-upload seam (no-op today).
  */
 function buildContext(ctx, extraContext) {
   const p = (ctx && ctx.profile) || {};
@@ -109,6 +105,11 @@ function buildContext(ctx, extraContext) {
   const icps = asStrings((Array.isArray(p.icps) ? p.icps : []).map((i) => (typeof i === 'string' ? i : (i && i.text)))).slice(0, 8);
   if (icps.length) lines.push(`Target customers (ICPs): ${icps.join('; ')}`);
 
+  const cbiz = compNames(p.competitors_business);
+  if (cbiz.length) lines.push(`Direct competitors: ${cbiz.join('; ')}`);
+  const cvis = compNames(p.competitors_visibility);
+  if (cvis.length) lines.push(`Authoritative sources in the space: ${cvis.join('; ')}`);
+
   let context = lines.length ? lines.join('\n') : gatherSiteText(ctx && ctx.scan);
 
   const extra = extraContext && toText(extraContext.documentText || extraContext.text);
@@ -119,21 +120,16 @@ function buildContext(ctx, extraContext) {
   return context;
 }
 
-function buildQuery(context, min, max) {
+function buildStageQuery(context, stage, n) {
   return [
-    'List the discovery queries real customers type into AI assistants (ChatGPT, Claude, Perplexity,',
-    'Gemini) when looking for a business like the one described below — the queries where this brand',
-    'wants to surface. Phrase them the way a customer would actually ask.',
-    '',
-    'Assign each query a funnel_stage:',
-    '- "TOFU": awareness (e.g. "best luxury beachfront condos in Nassau")',
-    '- "MOFU": comparison / consideration (e.g. "Goldwynn Bahamas vs Albany")',
-    '- "BOFU": decision (e.g. "Cable Beach condo prices", "is X worth it")',
-    'Aim for a spread across TOFU, MOFU and BOFU.',
+    `List exactly ${n} discovery queries that real customers type into AI assistants (ChatGPT, Claude,`,
+    'Perplexity, Gemini) when looking for a business like the one described below.',
+    `These must all be ${stage.key} queries: ${stage.desc}.`,
+    'Phrase them the way a customer would actually ask. Do not number them. Avoid duplicates.',
     '',
     'Return STRICT JSON ONLY — no prose, no markdown, no code fences — as an array of objects:',
-    '[{"text": "...", "funnel_stage": "TOFU|MOFU|BOFU"}]',
-    `Return between ${min} and ${max} queries.`,
+    '[{"text": "..."}]',
+    `Return exactly ${n} objects.`,
     '',
     'Business context:',
     '"""',
@@ -155,41 +151,49 @@ module.exports = {
   },
 
   /**
-   * @param {object} ctx            generator context (ctx.profile carries G1/G2; ctx.draftConfig the caps)
+   * @param {object} ctx            generator context (ctx.profile = confirmed basics+icps+competitors)
    * @param {object} [extraContext] reserved seam for future parsed-document text
    */
   async run(ctx, extraContext) {
-    const cfg = (ctx && ctx.draftConfig) || {};
-    const max = Math.min(posInt(cfg.populated_prompts_max) || DEFAULT_MAX, HARD_MAX);
-    const min = Math.min(posInt(cfg.populated_prompts_min) || DEFAULT_MIN, max);
-    // monitoring_cap: null/undefined => no limit (Enterprise). 0 => none monitored.
-    const cap = cfg.monitoring_cap == null ? null : (posInt(cfg.monitoring_cap) || 0);
-
     try {
+      const cfg = (ctx && ctx.draftConfig) || {};
+      // 0/missing handling: an explicit 0 (freemium) => no suggestions; missing => default.
+      const perStage =
+        cfg.suggestions_per_stage === 0 ? 0 : (posInt(cfg.suggestions_per_stage) || DEFAULT_PER_STAGE);
+      if (perStage <= 0) return { tracked_prompts: [] };
+
       const context = buildContext(ctx, extraContext);
       if (!context) return { tracked_prompts: [] };
 
-      const out = await claudeAdapter.runQuery(buildQuery(context, min, max));
-      const parsed = parseJsonArray(out, 'prompts');
-      if (!parsed) return { tracked_prompts: [] };
+      // One call per stage, in parallel; a stage failure degrades to [] only for it.
+      const stageResults = await Promise.all(
+        STAGES.map(async (stage) => {
+          try {
+            const out = await claudeAdapter.runQuery(buildStageQuery(context, stage, perStage));
+            const parsed = parseJsonArray(out, `prompts:${stage.key}`);
+            if (!parsed) return [];
+            const items = [];
+            const seen = new Set();
+            for (const item of parsed) {
+              const text = cleanStr(typeof item === 'string' ? item : (item && (item.text || item.query || item.prompt)));
+              if (!text) continue;
+              const key = text.toLowerCase();
+              if (seen.has(key)) continue;
+              seen.add(key);
+              items.push({ text, funnel_stage: stage.key, is_monitored: false, source: 'suggested', volume: null });
+              if (items.length >= perStage) break; // cap at N per stage
+            }
+            return items;
+          } catch (err) {
+            console.warn(`[prompts:${stage.key}] suggestion generation failed (${err && err.message ? err.message : err}); returning empty for stage`);
+            return [];
+          }
+        })
+      );
 
-      const items = [];
-      for (const item of parsed) {
-        const text = cleanStr(typeof item === 'string' ? item : (item && (item.text || item.query || item.prompt)));
-        if (!text) continue;
-        const funnel_stage = normalizeFunnel(item && (item.funnel_stage || item.stage || item.funnel));
-        items.push({ text, funnel_stage, is_monitored: true, volume: null }); // volume ALWAYS null
-        if (items.length >= max) break; // respect populated_prompts_max
-      }
-
-      // is_monitored within the populated set, never exceeding monitoring_cap.
-      items.forEach((it, i) => {
-        it.is_monitored = cap == null ? true : i < cap;
-      });
-
-      return { tracked_prompts: items };
+      return { tracked_prompts: stageResults.flat() };
     } catch (err) {
-      console.warn(`[prompts] LLM generation failed (${err && err.message ? err.message : err}); returning empty list`);
+      console.warn(`[prompts] suggestion generation failed (${err && err.message ? err.message : err}); returning empty list`);
       return { tracked_prompts: [] };
     }
   },
