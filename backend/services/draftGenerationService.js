@@ -255,14 +255,16 @@ async function generateDraft(userId, { pipeline = PIPELINE } = {}) {
   // 5) Wholesale-failure guard. A dead model / API outage makes EVERY LLM-backed
   //    generator catch its own error and return empty — so the per-field status
   //    reads "ran" but the draft has no real content. The only reliable signal is
-  //    the content itself: the four LLM list-generators (icps, both competitor
-  //    columns, prompts) all empty means generation produced nothing. (Basics
-  //    aren't a signal — scan_extraction has a deterministic hostname fallback.)
+  //    the content itself: the THREE LLM list-generators in the background pipeline
+  //    (icps, both competitor columns) all empty means generation produced nothing.
+  //    (Prompts are no longer generated in the background — they are a save-time
+  //    suggestion flow — so tracked_prompts is not a signal here. Basics aren't a
+  //    signal either — scan_extraction has a deterministic hostname fallback.)
   //    In that case ABORT: never overwrite the existing profile (which may hold a
   //    user's manually-entered data, since persistDraft writes where
   //    draft_generated_at IS NULL), and never report success. Partial failures
   //    (some content) still persist — per-field graceful degradation is kept.
-  const LIST_FIELDS = ['icps', 'competitors_business', 'competitors_visibility', 'tracked_prompts'];
+  const LIST_FIELDS = ['icps', 'competitors_business', 'competitors_visibility'];
   const hasContent = LIST_FIELDS.some(
     (k) => Array.isArray(ctx.profile[k]) && ctx.profile[k].length > 0
   );

@@ -22,7 +22,13 @@
   'use strict';
 
   const ICP_MAX = 5;
-  const PROMPT_SOFT_CAP = 10;
+  // Absolute safety ceiling on TOTAL prompts (monitored + unmonitored, suggested +
+  // custom) a user can manage — a guard against runaway list growth, NOT the
+  // monitoring cap. The save-time picker seeds 30 suggestions (10 per funnel
+  // stage) and edit mode carries them forward, so this must comfortably clear 30
+  // plus room for customs. What is actually TRACKED is governed separately by
+  // draft_config.monitoring_cap (never hardcoded). Keep well above 30.
+  const PROMPT_SOFT_CAP = 60;
   const DEFAULT_PRIORITY_FOCUS = 'All — optimize for the whole brand';
 
   // ---- html / value helpers ---------------------------------------------
@@ -36,12 +42,15 @@
 
   // ICP / competitor / prompt entries may be plain strings or objects, and the
   // generators accept several key aliases for the text/name (text|query|prompt,
-  // name|title|company|brand|source|publication). Mirror those here so stored
-  // items always render regardless of which key holds the value.
+  // name|title|company|brand|publication). Mirror those here so stored items
+  // always render regardless of which key holds the value.
+  // NOTE: `source` is intentionally NOT an alias — prompt items now store their
+  // provenance ('suggested'|'custom') under `source`, so treating it as display
+  // text would render/persist a blank custom prompt as the literal "custom".
   const itemText = (it) =>
     typeof it === 'string'
       ? it
-      : str(it && (it.text || it.query || it.prompt || it.name || it.label || it.title || it.company || it.brand || it.source || it.publication));
+      : str(it && (it.text || it.query || it.prompt || it.name || it.label || it.title || it.company || it.brand || it.publication));
 
   // Pull a competitor's url, mirroring the generators' url aliases.
   const itemUrl = (it) =>
@@ -53,11 +62,22 @@
     if (it && typeof it === 'object') return { text: itemText(it), selected: it.selected !== false };
     return { text: str(it), selected: true };
   }
+  // Prompt provenance: 'suggested' (AI, save-time), 'custom' (user-added), or null.
+  function normalizeSource(v) {
+    const s = str(v).toLowerCase();
+    return s === 'suggested' || s === 'custom' ? s : null;
+  }
   function normalizePromptItem(p) {
     if (p && typeof p === 'object') {
-      return { text: itemText(p), volume: p.volume == null ? null : p.volume, is_monitored: p.is_monitored !== false, funnel_stage: normalizeFunnelStage(p.funnel_stage) };
+      return {
+        text: itemText(p),
+        volume: p.volume == null ? null : p.volume,
+        is_monitored: p.is_monitored === true, // explicit: suggestions default FALSE
+        funnel_stage: normalizeFunnelStage(p.funnel_stage),
+        source: normalizeSource(p.source),
+      };
     }
-    return { text: str(p), volume: null, is_monitored: true, funnel_stage: null };
+    return { text: str(p), volume: null, is_monitored: true, funnel_stage: null, source: null };
   }
   // Competitor item: { name, url }. Priority IS the array index + 1 (no stored field).
   function normalizeCompetitor(it) {
@@ -380,11 +400,14 @@
            <i class="fas fa-unlock"></i> See all your queries + volumes
          </button>`
       : '';
-    return `
-      <div class="vp-section-head">
+    const head = ui && ui.picker
+      ? '' // the picker's own header covers the title
+      : `<div class="vp-section-head">
         <h2 class="vp-section-title">Top queries in your vertical ${badge(listBadgeType(prompts.length > 0), 'prompts')}</h2>
         <p class="vp-section-sub">These will be the discovery prompts we track across ChatGPT, Claude, Perplexity, and Gemini. Grouped by funnel stage — re-tag with the dropdown.</p>
-      </div>
+      </div>`;
+    return `
+      ${head}
       <div class="vp-monitor-cap" data-monitor-cap>${esc(monitoringCapText(state, config))}</div>
       ${capHint}
       ${groupsHtml}
@@ -425,12 +448,52 @@
     return `
       <div data-section="cta">
         <div class="vp-cta-row">
-          <span class="vp-progress">0 of 6 required fields ready · 0 of 2 optional answered</span>
+          <span class="vp-progress">0 of 5 required fields ready · 0 of 2 optional answered</span>
           <button class="vp-cta" type="button" data-cta-label="${esc(label)}" disabled>${esc(label)}</button>
         </div>
         <p class="vp-cta-reason" style="display:none"></p>
         <p class="vp-submit-msg" role="status" style="display:none"></p>
       </div>`;
+  }
+
+  // ---- Save-time prompt picker (Build 2) --------------------------------
+  function pickerHeader() {
+    return `
+      <header class="vp-header">
+        <h1>Pick the queries to monitor</h1>
+        <p class="vp-subhead">We drafted these from your profile. Select the ones to track now (up to your plan limit) and add your own. The rest are saved and can be promoted later.</p>
+      </header>`;
+  }
+  function pickerCta() {
+    const label = CTA_LABEL.picker;
+    return `
+      <div data-section="cta">
+        <div class="vp-cta-row">
+          <span class="vp-progress">0 selected</span>
+          <button class="vp-cta" type="button" data-cta-label="${esc(label)}" disabled>${esc(label)}</button>
+        </div>
+        <p class="vp-cta-reason" style="display:none"></p>
+        <p class="vp-submit-msg" role="status" style="display:none"></p>
+      </div>`;
+  }
+
+  // Graceful downgrade: keep monitored ≤ cap by unmonitoring SUGGESTED picks
+  // first, then customs only if still over. Mutates state in place.
+  function trimMonitoredToCap(state, config) {
+    const cap = config ? config.monitoring_cap : null;
+    if (cap == null || !state || !Array.isArray(state.tracked_prompts)) return;
+    let monitored = state.tracked_prompts.filter((p) => p && p.is_monitored).length;
+    if (monitored <= cap) return;
+    // Pass 1: drop suggested (non-custom) monitored picks.
+    for (const p of state.tracked_prompts) {
+      if (monitored <= cap) break;
+      if (p && p.is_monitored && p.source !== 'custom') { p.is_monitored = false; monitored--; }
+    }
+    // Pass 2: only if customs alone still exceed the cap.
+    for (const p of state.tracked_prompts) {
+      if (monitored <= cap) break;
+      if (p && p.is_monitored) { p.is_monitored = false; monitored--; }
+    }
   }
 
   // ---- working-profile state model (Step 9a) ----------------------------
@@ -531,13 +594,16 @@
     const namedOk = (it) => str(typeof it === 'string' ? it : (it && it.name)).length > 0;
 
     // Required FIELD rules (denominator of "N of N required fields ready").
+    // NOTE: tracked_prompts is NO LONGER a required intake field — prompts are
+    // chosen in the save-time picker (Build 2), so completing the intake no
+    // longer requires the user to hand-type queries. The monitoring cap
+    // (monitored ≤ cap) is still enforced below via capOk.
     const rules = [
       { key: 'display_name', ok: str(s.display_name).length > 0 },
       { key: 'business_description', ok: str(s.business_description).length > 0 },
       { key: 'icps', ok: icps.some(icpOk) },
       { key: 'competitors_business', ok: cb.some(namedOk) },
       { key: 'competitors_visibility', ok: cv.some(namedOk) },
-      { key: 'tracked_prompts', ok: prompts.length >= 3 && prompts.every(hasText) },
     ];
     const readyCount = rules.filter((r) => r.ok).length;
     const total = rules.length; // derived from the rule set, not hardcoded
@@ -567,6 +633,27 @@
     if (!el || !el.__vpProfileState) return null;
     const r = evaluateReadiness(el.__vpProfileState, el.__vpConfig);
     const progressEl = el.querySelector('.vp-progress');
+
+    // Picker mode: the progress line is the selection counter and the CTA gates
+    // on "≥1 selected AND within cap" (reuses the same monitoredCount + capOk).
+    if (el.__vpMode === 'picker') {
+      if (progressEl) {
+        progressEl.textContent = r.cap == null
+          ? `${r.monitoredCount} selected`
+          : `${r.monitoredCount} of ${r.cap} selected`;
+      }
+      const pcta = el.querySelector('.vp-cta');
+      if (pcta) pcta.disabled = el.__vpSubmitting ? true : !(r.monitoredCount >= 1 && r.capOk);
+      const preason = el.querySelector('.vp-cta-reason');
+      if (preason) {
+        if (!r.capOk && r.cap != null) {
+          preason.textContent = `Selected ${r.monitoredCount} of ${r.cap} allowed — unselect ${r.monitoredCount - r.cap} to continue.`;
+          preason.style.display = '';
+        } else { preason.textContent = ''; preason.style.display = 'none'; }
+      }
+      return r;
+    }
+
     if (progressEl) {
       progressEl.textContent =
         `${r.readyCount} of ${r.total} required fields ready · ${r.optionalAnswered} of ${r.optionalTotal} optional answered`;
@@ -612,6 +699,7 @@
         funnel_stage: normalizeFunnelStage(p && p.funnel_stage),
         volume: p && p.volume != null ? p.volume : null,
         is_monitored: !!(p && p.is_monitored),
+        source: normalizeSource(p && p.source),
       })),
       avg_customer_value: str(st0.avg_customer_value),
       priority_focus: str(st0.priority_focus),
@@ -631,13 +719,13 @@
     };
   }
 
-  const CTA_LABEL = { onboarding: 'Build my dashboard →', edit: 'Save' };
-  const CTA_BUSY = { onboarding: 'Building your dashboard…', edit: 'Saving…' };
+  const CTA_LABEL = { onboarding: 'Build my dashboard →', edit: 'Save', picker: 'Confirm & build dashboard →' };
+  const CTA_BUSY = { onboarding: 'Building your dashboard…', edit: 'Saving…', picker: 'Building your dashboard…' };
 
   function setCtaBusy(el, busy) {
     const cta = el.querySelector('.vp-cta');
     if (!cta) return;
-    const mode = el.__vpMode === 'edit' ? 'edit' : 'onboarding';
+    const mode = CTA_LABEL[el.__vpMode] ? el.__vpMode : 'onboarding';
     if (busy) {
       cta.disabled = true;
       cta.textContent = CTA_BUSY[mode];
@@ -654,6 +742,35 @@
     m.textContent = text;
     m.className = 'vp-submit-msg vp-submit-msg--' + type;
     m.style.display = '';
+  }
+
+  // Enter the save-time picker: re-render `el` in picker mode seeded with the
+  // suggestions (all unselected). Reuses the confirmed profile fields so the
+  // picker's Confirm POST re-sends the full profile with the chosen prompts.
+  function showPicker(el, suggestions) {
+    const cur = el.__vpProfileState || {};
+    const pickerData = {
+      display_name: cur.display_name,
+      company_name: cur.company_name,
+      industry: cur.industry,
+      location: cur.location,
+      business_description: cur.business_description,
+      icps: cur.icps,
+      competitors_business: cur.competitors_business,
+      competitors_visibility: cur.competitors_visibility,
+      avg_customer_value: cur.avg_customer_value,
+      priority_focus: cur.priority_focus,
+      tracked_prompts: arr(suggestions).map((p) => ({
+        text: p && p.text,
+        funnel_stage: p && p.funnel_stage,
+        volume: p && p.volume != null ? p.volume : null,
+        is_monitored: false, // start unselected — the user picks
+        source: normalizeSource(p && p.source) || 'suggested',
+      })),
+    };
+    render(el, { mode: 'picker', data: pickerData, config: el.__vpConfig, submit: el.__vpSubmitRaw });
+    const top = el.querySelector('.vp-form');
+    if (top && top.scrollIntoView) { try { top.scrollIntoView({ block: 'start' }); } catch (_) {} }
   }
 
   // CTA submit handler — active only when the CTA is enabled. Edits are NEVER
@@ -697,10 +814,28 @@
     }
 
     if (resp.ok) {
+      let okBody = {};
+      try { okBody = await resp.json(); } catch (_) { /* non-JSON */ }
+
       if (mode === 'onboarding') {
-        sub.redirect('dashboard.html'); // Step 6 gate now passes; keep CTA busy during redirect
+        // First completion returns the save-time suggestions — show the picker
+        // instead of redirecting. (Even if empty, the picker lets the user add
+        // their own.) Non-first-completion onboarding just proceeds.
+        if (okBody && okBody.first_completion) {
+          el.__vpSubmitting = false;
+          showPicker(el, Array.isArray(okBody.suggested_prompts) ? okBody.suggested_prompts : []);
+          return { state: 'picker', suggested: (okBody.suggested_prompts || []).length };
+        }
+        sub.redirect('dashboard.html');
         return { state: 'redirect' };
       }
+
+      if (mode === 'picker') {
+        // Selections persisted — onboarding complete. Keep CTA busy during redirect.
+        sub.redirect('dashboard.html');
+        return { state: 'redirect' };
+      }
+
       // edit: stay on page, confirm, restore CTA
       el.__vpSubmitting = false;
       setCtaBusy(el, false);
@@ -852,7 +987,8 @@
           // Pre-set the new item's stage from the group's add button.
           const btn = e.target.closest('[data-act]');
           const stage = normalizeFunnelStage(btn && btn.getAttribute('data-stage'));
-          state.tracked_prompts.push({ text: '', volume: null, is_monitored: monitored, funnel_stage: stage });
+          // User-added prompts are custom provenance.
+          state.tracked_prompts.push({ text: '', volume: null, is_monitored: monitored, funnel_stage: stage, source: 'custom' });
           el.__vpUi.promptCapHint = false;
           rerenderPrompts(el);
         } else if (act === 'token-cta') {
@@ -918,33 +1054,50 @@
       return;
     }
     const o = opts || {};
-    const mode = o.mode === 'edit' ? 'edit' : 'onboarding';
+    const mode = o.mode === 'edit' ? 'edit' : (o.mode === 'picker' ? 'picker' : 'onboarding');
     const config = o.config || null;
 
     // Build the working-profile state, then render FROM it (controls read their
     // initial values from state; edits write back to the same object).
     const state = createWorkingProfile(o.data || {});
-    const ui = { promptCapHint: false };
+    const ui = { promptCapHint: false, picker: mode === 'picker' };
+    // Graceful downgrade: if loaded/seeded state has more monitored prompts than
+    // the plan cap, trim — drop suggested picks first, keep customs.
+    trimMonitoredToCap(state, config);
     const st = resolveStates(state);
 
     el.classList.add('vp-scope');
-    el.innerHTML = `
-      <div class="vp-form" data-mode="${mode}">
-        ${sectionHeader(mode)}
-        ${sectionCallYou(state, st)}
-        ${sectionBasics(state, st)}
-        ${sectionAbout(state, st)}
-        ${sectionIcps(state)}
-        ${sectionCompetitors(state)}
-        ${sectionPrompts(state, config, ui)}
-        ${sectionExtras(state)}
-        ${sectionCta(mode)}
-      </div>`;
+    if (mode === 'picker') {
+      // Save-time picker: reuse the grouped prompt section + its cap logic.
+      el.innerHTML = `
+        <div class="vp-form" data-mode="picker">
+          ${pickerHeader()}
+          ${sectionPrompts(state, config, ui)}
+          ${pickerCta()}
+        </div>`;
+    } else {
+      // Onboarding intake omits the prompt section (chosen in the picker after
+      // Save); edit mode keeps it so returning users manage/promote prompts.
+      const promptSection = mode === 'edit' ? sectionPrompts(state, config, ui) : '';
+      el.innerHTML = `
+        <div class="vp-form" data-mode="${mode}">
+          ${sectionHeader(mode)}
+          ${sectionCallYou(state, st)}
+          ${sectionBasics(state, st)}
+          ${sectionAbout(state, st)}
+          ${sectionIcps(state)}
+          ${sectionCompetitors(state)}
+          ${promptSection}
+          ${sectionExtras(state)}
+          ${sectionCta(mode)}
+        </div>`;
+    }
 
     el.__vpProfileState = state;     // single source of truth for edits
     el.__vpConfig = config;          // draft_config (monitoring_cap, token unlock)
     el.__vpUi = ui;                  // transient UI flags (cap hint)
-    el.__vpMode = mode;              // onboarding | edit (CTA label + submit behavior)
+    el.__vpMode = mode;              // onboarding | edit | picker
+    el.__vpSubmitRaw = o.submit;     // raw submit opts (reused when entering picker)
     el.__vpSubmit = resolveSubmitOpts(o.submit); // POST target / auth / redirect (injectable)
     el.__vpSubmitting = false;       // in-flight guard
     bindSimpleFields(el, state);     // wire simple-field editing (9a)

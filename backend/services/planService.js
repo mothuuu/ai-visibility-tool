@@ -926,6 +926,7 @@ const PLAN_ENTITLEMENTS = Object.freeze({
       draft_enabled:              false,
       populated_prompts_min:      0,
       populated_prompts_max:      0,
+      suggestions_per_stage:      0,
       baseline_volume:            false,
       token_query_unlock_enabled: false,
       monitoring_cap:             0,
@@ -948,6 +949,7 @@ const PLAN_ENTITLEMENTS = Object.freeze({
       draft_enabled:              true,
       populated_prompts_min:      3,
       populated_prompts_max:      5,
+      suggestions_per_stage:      10,
       baseline_volume:            true,
       token_query_unlock_enabled: true,
       monitoring_cap:             5,
@@ -969,6 +971,7 @@ const PLAN_ENTITLEMENTS = Object.freeze({
       draft_enabled:              true,
       populated_prompts_min:      3,
       populated_prompts_max:      5,
+      suggestions_per_stage:      10,
       baseline_volume:            true,
       token_query_unlock_enabled: true,
       monitoring_cap:             20,
@@ -991,6 +994,7 @@ const PLAN_ENTITLEMENTS = Object.freeze({
       draft_enabled:              true,
       populated_prompts_min:      3,
       populated_prompts_max:      5,
+      suggestions_per_stage:      10,
       baseline_volume:            true,
       token_query_unlock_enabled: true,
       monitoring_cap:             null,
@@ -1104,8 +1108,11 @@ function getTokenAllowance(planName) {
  *
  * Returned shape:
  *   draft_enabled              boolean — whether the draft trigger may fire
- *   populated_prompts_min      number  — min auto-populated prompts (paid: 3)
- *   populated_prompts_max      number  — max auto-populated prompts (paid: 5)
+ *   populated_prompts_min      number  — LEGACY min auto-populated prompts (paid: 3);
+ *                                        no longer drives generation (kept for compat)
+ *   populated_prompts_max      number  — LEGACY max auto-populated prompts (paid: 5)
+ *   suggestions_per_stage      number  — save-time prompt suggestions per funnel
+ *                                        stage (paid: 10 → 30 total; freemium: 0)
  *   baseline_volume            boolean — show volume on the populated prompts
  *   token_query_unlock_enabled boolean — "see all queries + volumes" pop-up
  *   monitoring_cap             number|null — monitored-query cap (null = custom)

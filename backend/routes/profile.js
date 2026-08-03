@@ -95,6 +95,7 @@ function publicDraftConfig(cfg) {
     draft_enabled: cfg.draft_enabled,
     populated_prompts_min: cfg.populated_prompts_min,
     populated_prompts_max: cfg.populated_prompts_max,
+    suggestions_per_stage: cfg.suggestions_per_stage,
     baseline_volume: cfg.baseline_volume,
     token_query_unlock_enabled: cfg.token_query_unlock_enabled,
     monitoring_cap: cfg.monitoring_cap,
@@ -171,14 +172,16 @@ function validateProfilePayload(body, planCtx) {
     push('competitors_visibility', 'max', `Up to ${COMPETITOR_MAX} visibility competitors`);
   }
 
+  // Prompts are chosen in the save-time picker (Build 2), no longer hand-typed at
+  // intake — so there is NO minimum count: the completing intake save may carry
+  // none, and the picker confirm carries the full set (30 suggestions + customs,
+  // monitored & unmonitored). Empty-text items among present prompts are still
+  // rejected; the monitoring cap (below) is still enforced. source + unmonitored
+  // (is_monitored:false) items are accepted and persisted.
   const prompts = asArray(body.tracked_prompts);
-  if (prompts.length < 3) {
-    push('tracked_prompts', 'min', 'At least 3 tracked prompts are required');
-  } else {
-    const bad = prompts.findIndex((p) => !isNonEmptyString(typeof p === 'string' ? p : p?.text));
-    if (bad !== -1) {
-      push('tracked_prompts', 'item_invalid', `Tracked prompt at index ${bad} is missing text`);
-    }
+  const bad = prompts.findIndex((p) => !isNonEmptyString(typeof p === 'string' ? p : p?.text));
+  if (bad !== -1) {
+    push('tracked_prompts', 'item_invalid', `Tracked prompt at index ${bad} is missing text`);
   }
 
   // Server-enforce the plan's monitoring cap (never silently clamp/drop).
@@ -402,6 +405,39 @@ router.post('/', authenticateToken, async (req, res) => {
         );
     }
 
+    // Save-time Top-Queries suggestions: ONLY on first completion (same gate as
+    // the deeper-scan trigger). Generated synchronously (~5s) from the CONFIRMED
+    // submitted profile (`values`), not a stale draft, and returned to the client
+    // for the picker. These are SUGGESTIONS ONLY (is_monitored=false,
+    // source="suggested") — NOT persisted here; selection persistence is Build 2.
+    // Graceful: any failure yields [] so the picker still lets the user add their
+    // own; the save itself already committed above, so this can never fail it.
+    let suggestedPrompts = [];
+    if (scanTriggered) {
+      try {
+        const promptsGenerator = require('../services/draftGeneration/generators/promptsGenerator');
+        const gen = await promptsGenerator.run({
+          userId,
+          plan,
+          draftConfig,
+          scan: null,
+          profile: {
+            company_name: values.company_name,
+            industry: values.industry,
+            location: values.location,
+            business_description: values.business_description,
+            icps: values.icps,
+            competitors_business: values.competitors_business,
+            competitors_visibility: values.competitors_visibility,
+          },
+        });
+        suggestedPrompts = gen && Array.isArray(gen.tracked_prompts) ? gen.tracked_prompts : [];
+      } catch (err) {
+        console.warn(`[Profile] save-time prompt suggestions failed for user ${userId}: ${err && err.message ? err.message : err}`);
+        suggestedPrompts = [];
+      }
+    }
+
     // Return the fresh, normalized state.
     const { rows } = await db.query(
       `SELECT display_name, company_name, industry, location, business_description,
@@ -418,6 +454,7 @@ router.post('/', authenticateToken, async (req, res) => {
       profile_completed: Boolean(row?.profile_completed_at),
       first_completion: scanTriggered,
       deeper_scan_triggered: scanTriggered,
+      suggested_prompts: suggestedPrompts,
     });
   } catch (err) {
     await client.query('ROLLBACK');
