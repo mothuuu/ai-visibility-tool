@@ -172,14 +172,16 @@ function validateProfilePayload(body, planCtx) {
     push('competitors_visibility', 'max', `Up to ${COMPETITOR_MAX} visibility competitors`);
   }
 
+  // Prompts are chosen in the save-time picker (Build 2), no longer hand-typed at
+  // intake — so there is NO minimum count: the completing intake save may carry
+  // none, and the picker confirm carries the full set (30 suggestions + customs,
+  // monitored & unmonitored). Empty-text items among present prompts are still
+  // rejected; the monitoring cap (below) is still enforced. source + unmonitored
+  // (is_monitored:false) items are accepted and persisted.
   const prompts = asArray(body.tracked_prompts);
-  if (prompts.length < 3) {
-    push('tracked_prompts', 'min', 'At least 3 tracked prompts are required');
-  } else {
-    const bad = prompts.findIndex((p) => !isNonEmptyString(typeof p === 'string' ? p : p?.text));
-    if (bad !== -1) {
-      push('tracked_prompts', 'item_invalid', `Tracked prompt at index ${bad} is missing text`);
-    }
+  const bad = prompts.findIndex((p) => !isNonEmptyString(typeof p === 'string' ? p : p?.text));
+  if (bad !== -1) {
+    push('tracked_prompts', 'item_invalid', `Tracked prompt at index ${bad} is missing text`);
   }
 
   // Server-enforce the plan's monitoring cap (never silently clamp/drop).
