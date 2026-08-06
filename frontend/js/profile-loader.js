@@ -167,3 +167,51 @@
 
   window.ProfileLoader = { start, _load: load, _resolveOpts: resolveOpts };
 })();
+
+/* ==========================================================================
+   Sidebar "Set Up Profile" link (dashboard only)
+
+   Adds a clickable sidebar nav item that opens the intake / onboarding form
+   (profile-setup.html) directly, so paid users can reopen it any time —
+   independent of the completion-redirect gate, which stops routing to the
+   intake once the profile is marked complete.
+
+   Self-contained and injected here (rather than editing dashboard markup) so
+   it ships in this small, already-loaded module. It piggybacks on the existing
+   "Profile" nav item (#navVisibilityProfile): inserted right after it and kept
+   at the SAME visibility, so it appears exactly when the profile nav does
+   (paid users) and stays hidden for freemium. On pages without that item
+   (e.g. profile-setup.html itself) it does nothing.
+   ========================================================================== */
+(function () {
+  'use strict';
+  var SETUP_ROUTE = '/profile-setup.html';
+
+  function inject() {
+    var profileNav = document.getElementById('navVisibilityProfile');
+    if (!profileNav) return;                       // not the dashboard — skip
+    if (document.getElementById('navProfileSetup')) return; // already added
+
+    var item = document.createElement('div');
+    item.className = profileNav.className;          // match nav-item styling
+    item.id = 'navProfileSetup';
+    item.style.display = profileNav.style.display;  // mirror initial visibility
+    item.addEventListener('click', function () { window.location.href = SETUP_ROUTE; });
+    item.innerHTML = '<i class="fas fa-clipboard-list"></i><span>Set Up Profile</span>';
+    profileNav.insertAdjacentElement('afterend', item);
+
+    // The dashboard reveals the profile nav for paid users AFTER an async
+    // profile fetch, by setting its inline display. Mirror any such change so
+    // our link appears/disappears in lockstep.
+    try {
+      var obs = new MutationObserver(function () { item.style.display = profileNav.style.display; });
+      obs.observe(profileNav, { attributes: true, attributeFilter: ['style'] });
+    } catch (_) { /* MutationObserver unavailable — initial mirror still applies */ }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', inject);
+  } else {
+    inject();
+  }
+})();
