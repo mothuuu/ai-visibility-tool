@@ -169,23 +169,53 @@
 })();
 
 /* ==========================================================================
-   Sidebar "Set Up Profile" link (dashboard only)
+   Sidebar profile entry points (dashboard only)
 
-   Adds a clickable sidebar nav item that opens the intake / onboarding form
-   (profile-setup.html) directly, so paid users can reopen it any time —
-   independent of the completion-redirect gate, which stops routing to the
-   intake once the profile is marked complete.
+   Reveals the PAID profile entry points off the user's EFFECTIVE PLAN:
+     1. The native "Profile" nav item (#navVisibilityProfile) — the dashboard's
+        own reveal keys solely off GET /api/profile's draft_config.draft_enabled,
+        which resolves the plan ORG-FIRST server-side. For accounts whose org
+        row is unprovisioned (org.plan 'free' / no org Stripe) while users.plan
+        is paid — the same accounts that show hasV2Quota:false and 401/403 on
+        entitlement endpoints — that response says draft_enabled:false and the
+        nav never appears, even though the user is genuinely Pro.
+     2. An injected "Set Up Profile" item that opens the intake/onboarding form
+        (profile-setup.html) directly, independent of the completion-redirect
+        gate (which stops routing to the intake once a profile is complete).
 
-   Self-contained and injected here (rather than editing dashboard markup) so
-   it ships in this small, already-loaded module. It piggybacks on the existing
-   "Profile" nav item (#navVisibilityProfile): inserted right after it and kept
-   at the SAME visibility, so it appears exactly when the profile nav does
-   (paid users) and stays hidden for freemium. On pages without that item
-   (e.g. profile-setup.html itself) it does nothing.
+   Reveal condition (deliberately DECOUPLED from /api/competitors, citation, or
+   any quota/entitlement call): paid = the /auth/me plan the dashboard caches in
+   localStorage 'user' (starter/diy/pro/enterprise), OR the dashboard's own
+   draft_config reveal having fired (covers org-resolved paid accounts whose
+   users.plan is stale). Reveal-only: once shown, never re-hidden.
+
+   Also unlocks the dashboard's Profile section gate (the script-global
+   `visibilityProfileEnabled` lexical binding declared by dashboard.js) so the
+   revealed native item opens the real profile section, not the upgrade lock.
+
+   On pages without #navVisibilityProfile (e.g. profile-setup.html) this whole
+   block is a no-op; for free users nothing is shown.
    ========================================================================== */
 (function () {
   'use strict';
   var SETUP_ROUTE = '/profile-setup.html';
+  // Paid tiers with a visibility profile — mirrors backend getDraftConfig()
+  // (draft_enabled:true for starter/diy/pro/enterprise; freemium/free false).
+  var PAID_PLANS = { starter: 1, diy: 1, pro: 1, enterprise: 1 };
+  var POLL_MS = 500, MAX_POLLS = 40; // ~20s covers a slow /auth/me on login
+
+  function planIsPaid(plan) {
+    return PAID_PLANS[String(plan == null ? '' : plan).trim().toLowerCase()] === 1;
+  }
+
+  // Effective plan as the dashboard itself resolves it client-side: the
+  // /auth/me user payload it writes to localStorage on every init.
+  function storedUserIsPaid() {
+    try {
+      var u = JSON.parse(localStorage.getItem('user') || 'null');
+      return !!(u && planIsPaid(u.plan));
+    } catch (_) { return false; }
+  }
 
   function inject() {
     var profileNav = document.getElementById('navVisibilityProfile');
@@ -195,18 +225,61 @@
     var item = document.createElement('div');
     item.className = profileNav.className;          // match nav-item styling
     item.id = 'navProfileSetup';
-    item.style.display = profileNav.style.display;  // mirror initial visibility
-    item.addEventListener('click', function () { window.location.href = SETUP_ROUTE; });
+    item.style.display = 'none';                    // hidden until proven paid
+    item.addEventListener('click', function (e) {
+      // Ours must win over the dashboard's generic .nav-item handler (which
+      // would navigateToSection(null) since this item has no data-section).
+      if (e && e.stopImmediatePropagation) e.stopImmediatePropagation();
+      window.location.href = SETUP_ROUTE;
+    });
     item.innerHTML = '<i class="fas fa-clipboard-list"></i><span>Set Up Profile</span>';
     profileNav.insertAdjacentElement('afterend', item);
 
-    // The dashboard reveals the profile nav for paid users AFTER an async
-    // profile fetch, by setting its inline display. Mirror any such change so
-    // our link appears/disappears in lockstep.
+    var revealed = false;
+    var gateUnlocked = false;
+
+    function unlockSectionGate() {
+      if (gateUnlocked) return;
+      // Script-global `let` from dashboard.js — shared lexical binding across
+      // classic scripts. Throws only if dashboard.js hasn't executed yet (or
+      // isn't on the page); retried from the poll until it sticks.
+      try { visibilityProfileEnabled = true; gateUnlocked = true; } catch (_) {}
+    }
+
+    function maybeReveal() {
+      if (!revealed) {
+        var nativeShown = profileNav.style.display !== 'none';
+        if (nativeShown || storedUserIsPaid()) {
+          revealed = true;
+          profileNav.style.display = '';
+          item.style.display = '';
+        }
+      }
+      if (revealed) unlockSectionGate();
+      return revealed && gateUnlocked;
+    }
+
+    if (maybeReveal()) return;
+
+    // The dashboard's own draft_config reveal may fire later — react instantly.
+    var obs = null;
     try {
-      var obs = new MutationObserver(function () { item.style.display = profileNav.style.display; });
+      obs = new MutationObserver(function () {
+        if (maybeReveal() && obs) obs.disconnect();
+      });
       obs.observe(profileNav, { attributes: true, attributeFilter: ['style'] });
-    } catch (_) { /* MutationObserver unavailable — initial mirror still applies */ }
+    } catch (_) { /* MutationObserver unavailable — the poll still covers it */ }
+
+    // /auth/me may not have written localStorage yet on a fresh login — poll
+    // briefly. Also retries the section-gate unlock until dashboard.js has run.
+    var polls = 0;
+    var timer = setInterval(function () {
+      polls++;
+      if (maybeReveal() || polls >= MAX_POLLS) {
+        clearInterval(timer);
+        if (obs && revealed) obs.disconnect();
+      }
+    }, POLL_MS);
   }
 
   if (document.readyState === 'loading') {
