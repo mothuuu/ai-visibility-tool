@@ -310,6 +310,50 @@ function resolveOrgPlan(orgRow) {
 // =============================================================================
 
 /**
+ * Rescue path for under-provisioned org rows (legacy accounts).
+ *
+ * Some accounts recorded their upgrade on the USERS row (users.plan and/or
+ * user-level Stripe fields) while their organization row was never provisioned:
+ * org.plan stays 'free' with no org Stripe fields and no manual override. For
+ * those, org-first resolution lands on the weak `org_plan_fallback` and reads
+ * 'free', so every draft/profile/entitlement gate treats a genuinely paid user
+ * as freemium (the "users.plan says pro but Profile never appears" bug).
+ *
+ * Only that exact shape is rescued: org resolution source must be the fallback
+ * AND resolve 'free'. A manual override or org Stripe state is authoritative
+ * and is never second-guessed, and this never downgrades anyone — it can only
+ * lift an unprovisioned-free result up to the user-level paid plan.
+ */
+async function preferPaidUserPlanOverOrgFallback(orgResult, userId) {
+  if (!userId) return orgResult;
+  if (!orgResult || orgResult.source !== 'org_plan_fallback' || orgResult.plan !== 'free') {
+    return orgResult;
+  }
+  try {
+    const userPlan = await getUserPlan(userId);
+    if (userPlan.plan && userPlan.plan !== 'free') {
+      console.log(
+        `[PlanService] Org fallback resolved 'free' but user ${userId} resolves '${userPlan.plan}' ` +
+          `(${userPlan.source}) — using user plan (unprovisioned org row)`
+      );
+      return {
+        ...orgResult,
+        plan: userPlan.plan,
+        source: `user_plan_over_org_fallback_${userPlan.source}`,
+        details: {
+          ...(orgResult.details || {}),
+          user_plan: userPlan.plan,
+          user_plan_source: userPlan.source
+        }
+      };
+    }
+  } catch (error) {
+    console.warn(`[PlanService] user-plan reconcile failed for user ${userId}: ${error.message}`);
+  }
+  return orgResult;
+}
+
+/**
  * Resolve plan for a request context
  * This is the MAIN entry point for plan resolution.
  *
@@ -321,7 +365,7 @@ async function resolvePlanForRequest({ userId, orgId }) {
   if (orgId) {
     const orgRow = await getOrgRow(orgId);
     if (orgRow) {
-      const result = resolveOrgPlan(orgRow);
+      const result = await preferPaidUserPlanOverOrgFallback(resolveOrgPlan(orgRow), userId);
       return {
         ...result,
         orgId,
@@ -347,7 +391,7 @@ async function resolvePlanForRequest({ userId, orgId }) {
       if (userOrgId) {
         const orgRow = await getOrgRow(userOrgId);
         if (orgRow) {
-          const result = resolveOrgPlan(orgRow);
+          const result = await preferPaidUserPlanOverOrgFallback(resolveOrgPlan(orgRow), userId);
           return {
             ...result,
             orgId: userOrgId,
