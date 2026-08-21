@@ -39,6 +39,67 @@ function factValue(facts, name, fallback) {
   return f ? f.value : fallback;
 }
 
+// ---- Text / URL cleanup (Phase 1.2 output polish) ---------------------------
+
+/**
+ * Clean a business name derived from a <title>/OG tag (Defect 1): split on
+ * common SEO separators (| — – , " - " with surrounding spaces, ::), take the
+ * first segment, strip wrapping quotes, trim. A real org name rarely contains
+ * these, so an already-clean name is unchanged; a hyphenated name
+ * (Mercedes-Benz, Coca-Cola) is preserved because the "-" split requires
+ * surrounding spaces. Returns '' when nothing survives.
+ */
+function cleanBrandName(raw) {
+  let s = String(raw == null ? '' : raw).trim();
+  if (!s) return '';
+  s = s.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
+  const parts = s
+    .split(/\s*\|\s*|\s+[—–]\s+|\s+-\s+|\s*::\s*/)
+    .map(p => p.trim())
+    .filter(Boolean);
+  // parts is empty only when the input was all separators → nothing survives.
+  s = parts.length ? parts[0] : '';
+  return s.trim();
+}
+
+/**
+ * Canonical URL form for anchoring @ids (Defect 2): strip trailing slash(es)
+ * from the path so `${url}/#fragment` concatenations can't produce `//#`.
+ * Query and hash are dropped from the anchor. Falsy/invalid input is returned
+ * with only trailing slashes trimmed.
+ */
+function normalizeUrl(raw) {
+  try {
+    const u = new URL(raw);
+    return u.origin + u.pathname.replace(/\/+$/, '');
+  } catch (e) {
+    return String(raw || '').replace(/\/+$/, '');
+  }
+}
+
+/** Collapse any `//#` (double slash before a fragment) left by concatenation. */
+function fixFragmentSlashes(s) {
+  return s.replace(/\/{2,}#/g, '/#');
+}
+
+/**
+ * Defensively repair URL-concatenation artifacts in every string of a built
+ * JSON-LD object (Defect 2 — belt-and-suspenders on top of normalizeUrl).
+ * Mutates in place and returns the node.
+ */
+function sanitizeUrlsDeep(node) {
+  if (typeof node === 'string') return fixFragmentSlashes(node);
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i++) node[i] = sanitizeUrlsDeep(node[i]);
+    return node;
+  }
+  if (node && typeof node === 'object') {
+    for (const k in node) node[k] = sanitizeUrlsDeep(node[k]);
+    return node;
+  }
+  return node;
+}
+
 /**
  * Strip fabricated/guessed values before they reach the JSON-LD builder.
  * extractLogo emits a "/logo.png" guess (source 'fallback', confidence 'low');
@@ -58,7 +119,7 @@ function makeBlock(schemaType, status, obj) {
   const instructions = status === 'enhancement'
     ? `This REPLACES your existing ${schemaType} block (do not add a second one). ${HEAD_INSTRUCTIONS}`
     : HEAD_INSTRUCTIONS;
-  return { schema_type: schemaType, status, jsonld: scriptTag(obj), instructions };
+  return { schema_type: schemaType, status, jsonld: scriptTag(sanitizeUrlsDeep(obj)), instructions };
 }
 
 /** Recursively find the first Organization-family node in a parsed JSON-LD value. */
@@ -107,13 +168,79 @@ function orgFamilyNodeHasKey(structuredData, key) {
   return has;
 }
 
-/** FAQ {q,a} pairs from real on-page FAQ content (never fabricated). */
+// ---- FAQ hygiene (Phase 1.2, Defects 3 & 4) --------------------------------
+
+/** Strip wrapping quotes and leading list enumeration ("1. ", "2) ") from a question. */
+function cleanQuestion(q) {
+  let s = String(q == null ? '' : q).trim();
+  s = s.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();   // wrapping quotes
+  s = s.replace(/^\s*\d+[.)]\s*/, '').trim();            // leading "1." / "2)"
+  return s;
+}
+
+/** Case/punctuation-insensitive key for de-duplicating questions. */
+function normalizeQuestionKey(q) {
+  return String(q || '').toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/** A "question" that is really a call-to-action, not an informational question. */
+function isCtaQuestion(q) {
+  return /^(want|ready\s+(to|for)|looking\s+to|need\s+(a|help|to|your)|let'?s|book\b|schedule\b|get\s+started|start\s+your|sign\s+up|request\s+(a|an|your))\b/i
+    .test(String(q || '').trim());
+}
+
+/** Trust-badge / certification tokens that mark a non-prose answer. */
+const BADGE_RE = /\b(8\(a\)|GSA\s*Schedule|WOSB|SDVOSB|HUBZone|CMMI(?:\s*Level\s*\d+)?|SOC\s*2|ISO\s*\d{4,5}|NIST|FedRAMP|CISA|CMMC)\b/gi;
+
+/**
+ * An answer that is nav / trust-badge / CTA junk rather than an informational
+ * reply (Defect 4). Errs toward dropping — a smaller clean FAQPage beats a
+ * larger dirty one, and the free finding still exists.
+ */
+function isJunkAnswer(a) {
+  const text = String(a || '');
+  if (!text.trim()) return true;
+  // 2+ certification/trust-badge tokens → a badge strip, not prose.
+  if ((text.match(BADGE_RE) || []).length >= 2) return true;
+  // 3+ consecutive short line-broken fragments → menu/nav dump.
+  const lines = text.split(/\n+/).map(s => s.trim()).filter(Boolean);
+  let run = 0;
+  for (const ln of lines) {
+    const fragment = ln.length <= 40 && !/[.!?]$/.test(ln);
+    run = fragment ? run + 1 : 0;
+    if (run >= 3) return true;
+  }
+  // A short answer that is itself a CTA pitch.
+  if (text.length < 200 &&
+      /^\s*(request an?|book an?|contact us|get in touch|schedule an?|start your|sign up|call us)\b/i.test(text)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * FAQ {q,a} pairs from real on-page FAQ content, cleaned and de-duplicated
+ * (never fabricated):
+ *  - strip enumeration/quotes from questions (Defect 3)
+ *  - drop CTA "questions" and nav/badge/CTA-junk answers (Defect 4)
+ *  - dedupe case-insensitively on the question, keeping the longer answer (Defect 3)
+ * The caller omits the FAQPage block when fewer than 2 pairs survive.
+ */
 function faqPairsFromEvidence(scanEvidence) {
   const faqs = Array.isArray(scanEvidence.content?.faqs) ? scanEvidence.content.faqs : [];
-  return faqs
-    .map(f => ({ q: String(f && f.question || '').trim(), a: String(f && f.answer || '').trim() }))
-    .filter(p => p.q && p.a)
-    .slice(0, 10);
+  const byKey = new Map(); // normalized question → {q,a} (longest answer wins)
+  for (const f of faqs) {
+    const q = cleanQuestion(f && f.question);
+    const a = String(f && f.answer || '').trim();
+    if (!q || !a) continue;
+    if (isCtaQuestion(q)) continue;
+    if (isJunkAnswer(a)) continue;
+    const key = normalizeQuestionKey(q);
+    if (!key) continue;
+    const existing = byKey.get(key);
+    if (!existing || a.length > existing.a.length) byKey.set(key, { q, a });
+  }
+  return Array.from(byKey.values()).slice(0, 10);
 }
 
 function humanizeSegment(seg) {
@@ -160,11 +287,13 @@ function buildBreadcrumbFromUrl(url, brand) {
  */
 function generateSchemaArtifact(scanEvidence, scanUrl, scanId = null) {
   const ev = scanEvidence || {};
-  const url = scanUrl || ev.url;
-  if (!url || typeof url !== 'string') {
+  const rawUrl = scanUrl || ev.url;
+  if (!rawUrl || typeof rawUrl !== 'string') {
     throw new Error('SCHEMA_GEN: no scan URL available to anchor schema @ids');
   }
-  try { new URL(url); } catch (e) { throw new Error('SCHEMA_GEN: invalid scan URL'); }
+  try { new URL(rawUrl); } catch (e) { throw new Error('SCHEMA_GEN: invalid scan URL'); }
+  // Canonical, trailing-slash-free form so @id concatenations can't produce `//#`.
+  const url = normalizeUrl(rawUrl);
 
   // 1) What EXISTS — from raw JSON-LD, subtype/@graph aware.
   const structuredData = Array.isArray(ev.technical?.structuredData) ? ev.technical.structuredData : [];
@@ -178,16 +307,20 @@ function generateSchemaArtifact(scanEvidence, scanUrl, scanId = null) {
 
   // 2) Evidence facts (strip fabricated logo/guesses).
   const facts = sanitizeFacts(extractSiteFacts(ev).extracted_facts);
-  const brand = factValue(facts, 'brand');
-  if (!brand || !String(brand).trim()) {
+  // Clean the org name (Defect 1): a title/OG-derived name carries SEO
+  // separators and taglines; take the first clean segment.
+  const brand = cleanBrandName(factValue(facts, 'brand'));
+  if (!brand) {
     throw new Error('SCHEMA_GEN: insufficient evidence — no business name to build Organization schema');
   }
+  // Feed the cleaned brand back so buildCoreJsonLd uses it for all name fields.
+  const factsForBuild = facts.map(f => (f && f.name === 'brand') ? { ...f, value: brand } : f);
 
   const blocks = [];
 
   // 3) Core Organization / WebSite / WebPage — include only what is MISSING.
   //    buildCoreJsonLd omits any field it has no evidence for (no placeholders).
-  const core = buildCoreJsonLd(url, facts); // [Organization, WebSite, WebPage]
+  const core = buildCoreJsonLd(url, factsForBuild); // [Organization, WebSite, WebPage]
   const [orgBlock, siteBlock, pageBlock] = core;
   if (!hasOrg) blocks.push(makeBlock('Organization', 'missing', orgBlock));
   else {
@@ -202,9 +335,13 @@ function generateSchemaArtifact(scanEvidence, scanUrl, scanId = null) {
   if (!hasWebPage) blocks.push(makeBlock('WebPage', 'missing', pageBlock));
 
   // 4) FAQPage — only when the page has real FAQ content and no FAQ schema.
+  //    Omit unless at least 2 clean FAQs survive hygiene filtering (Defect 4).
   if (!hasFAQ) {
-    const faq = buildFAQJsonLd(url, faqPairsFromEvidence(ev));
-    if (faq) blocks.push(makeBlock('FAQPage', 'missing', faq));
+    const pairs = faqPairsFromEvidence(ev);
+    if (pairs.length >= 2) {
+      const faq = buildFAQJsonLd(url, pairs);
+      if (faq) blocks.push(makeBlock('FAQPage', 'missing', faq));
+    }
   }
 
   // 5) BreadcrumbList — only when the scanned URL has a real path and none exists.
@@ -238,4 +375,10 @@ module.exports = {
   faqPairsFromEvidence,
   findOrgFamilyNode,
   orgFamilyNodeHasKey,
+  cleanBrandName,
+  normalizeUrl,
+  sanitizeUrlsDeep,
+  cleanQuestion,
+  isCtaQuestion,
+  isJunkAnswer,
 };

@@ -182,3 +182,123 @@ describe('Phase 1: generateSchemaArtifact — throw paths (roll back the spend)'
     assert.throws(() => generateSchemaArtifact(ev, 'https://acme.example.com'), /nothing to generate/i);
   });
 });
+
+// ===========================================================================
+// Phase 1.2: output polish — the four scan-789 defects
+// ===========================================================================
+const {
+  cleanBrandName, normalizeUrl, sanitizeUrlsDeep, isCtaQuestion, isJunkAnswer,
+} = require('../../services/schemaArtifactGenerator');
+
+// Reproduces scan 789: title with SEO separators + trailing pipe, a trailing-
+// slash URL, and numbered / duplicate / CTA-badge-junk FAQs.
+function scan789Evidence(overrides = {}) {
+  return {
+    url: 'https://idrilservices.io/',
+    metadata: {
+      title: 'Idril Services | Your Technology Partner |',
+      description: 'We deliver technology services.',
+    },
+    content: {
+      headings: { h1: ['Idril Services'] },
+      paragraphs: ['We deliver technology services to government and enterprise.'],
+      faqs: [
+        // numbered + short answer (duplicate #1)
+        { question: '1. What counts as a valid assessment?', answer: 'It is a review of your systems.' },
+        // quoted duplicate with the LONGER answer (dedupe should keep this one)
+        { question: '"What counts as a valid assessment?"', answer: 'It is a thorough review of your systems and controls, delivered with a written report.' },
+        // CTA question + trust-badge / nav junk answer → dropped
+        { question: 'Want a fast assessment instead of guessing?', answer: 'Request an Assessment 8(a) Certified\n GSA Schedule\n WOSB\n CMMI Level 3\n SOC 2 · ISO 27001 · NIST 800-171' },
+        // clean second question → keeps us at 2 valid FAQs
+        { question: '2. How long does onboarding take?', answer: 'Typically two to three weeks depending on scope.' },
+      ],
+    },
+    technical: { structuredData: [] },
+    html: '',
+    ...overrides,
+  };
+}
+
+describe('Phase 1.2: cleanup helpers (unit)', () => {
+  it('Defect 1 — cleanBrandName strips separators/tagline/trailing pipe', () => {
+    assert.equal(cleanBrandName('Idril Services | Your Technology Partner |'), 'Idril Services');
+    assert.equal(cleanBrandName('Acme — The Best Widgets'), 'Acme');
+    assert.equal(cleanBrandName('Acme :: Home'), 'Acme');
+    assert.equal(cleanBrandName('"Acme Inc"'), 'Acme Inc');
+    // real names preserved: hyphen split needs surrounding spaces
+    assert.equal(cleanBrandName('Mercedes-Benz'), 'Mercedes-Benz');
+    assert.equal(cleanBrandName('Ben & Jerry\'s'), 'Ben & Jerry\'s');
+    assert.equal(cleanBrandName('|||'), '');
+  });
+  it('Defect 2 — normalizeUrl strips trailing slash; sanitizeUrlsDeep collapses //#', () => {
+    assert.equal(normalizeUrl('https://idrilservices.io/'), 'https://idrilservices.io');
+    assert.equal(normalizeUrl('https://x.io/services/'), 'https://x.io/services');
+    assert.equal(normalizeUrl('https://x.io'), 'https://x.io');
+    const fixed = sanitizeUrlsDeep({ '@id': 'https://idrilservices.io//#webpage', url: 'https://x.io/ok' });
+    assert.equal(fixed['@id'], 'https://idrilservices.io/#webpage');
+    assert.equal(fixed.url, 'https://x.io/ok'); // https:// untouched
+  });
+  it('Defects 3/4 — CTA question + junk answer detectors', () => {
+    assert.equal(isCtaQuestion('Want a fast assessment instead of guessing?'), true);
+    assert.equal(isCtaQuestion('Ready to get started?'), true);
+    assert.equal(isCtaQuestion('What counts as a valid assessment?'), false);
+    assert.equal(isJunkAnswer('Request an Assessment 8(a) Certified\n GSA Schedule\n WOSB\n CMMI Level 3\n SOC 2 · ISO 27001'), true);
+    assert.equal(isJunkAnswer('It is a thorough review of your systems and controls.'), false);
+  });
+});
+
+describe('Phase 1.2: generateSchemaArtifact — clean output on the 789 fixture', () => {
+  const art = generateSchemaArtifact(scan789Evidence(), 'https://idrilservices.io/', 789);
+
+  it('Defect 1 — Organization name is the clean brand, not the raw title', () => {
+    const org = innerJson(blockOfType(art, 'Organization'));
+    assert.equal(org.name, 'Idril Services');
+    assert.ok(!/\|/.test(org.name), 'no pipe in name');
+  });
+
+  it('Defect 2 — no `//#` in any @id/url across the whole artifact', () => {
+    const whole = JSON.stringify(art);
+    assert.ok(!/\/\/#/.test(whole), 'no double-slash-before-fragment anywhere');
+    // sanity: the webpage @id is well formed
+    const page = innerJson(blockOfType(art, 'WebPage'));
+    assert.equal(page['@id'], 'https://idrilservices.io/#webpage');
+  });
+
+  it('Defects 3/4 — FAQPage is clean: no numbering, no dupes, no CTA/badge junk', () => {
+    const faq = innerJson(blockOfType(art, 'FAQPage'));
+    const names = faq.mainEntity.map(m => m.name);
+    // exactly the 2 valid questions survive
+    assert.equal(names.length, 2);
+    // no leading enumeration
+    assert.ok(names.every(n => !/^\s*\d+[.)]/.test(n)), 'no numbered questions');
+    // deduped case-insensitively
+    const keys = names.map(n => n.toLowerCase());
+    assert.equal(new Set(keys).size, keys.length, 'no duplicate questions');
+    // the kept duplicate carries the LONGER answer
+    const counts = faq.mainEntity.find(m => /valid assessment/i.test(m.name));
+    assert.match(counts.acceptedAnswer.text, /written report/);
+    // no CTA question, no badge text anywhere
+    const blob = JSON.stringify(faq);
+    assert.ok(!/Want a fast assessment/.test(blob), 'CTA question dropped');
+    assert.ok(!/8\(a\)|GSA Schedule|WOSB/.test(blob), 'badge/nav junk dropped');
+  });
+});
+
+describe('Phase 1.2: FAQPage omitted when < 2 clean FAQs survive', () => {
+  it('one clean + one CTA-junk → no FAQPage block', () => {
+    const ev = scan789Evidence({
+      content: {
+        headings: { h1: ['Idril Services'] },
+        paragraphs: ['We deliver technology services.'],
+        faqs: [
+          { question: 'What counts as a valid assessment?', answer: 'It is a thorough review of your systems.' },
+          { question: 'Want a fast assessment instead of guessing?', answer: 'Request an Assessment 8(a) Certified\n GSA Schedule\n WOSB\n CMMI Level 3' },
+        ],
+      },
+    });
+    const art = generateSchemaArtifact(ev, 'https://idrilservices.io/');
+    assert.equal(blockOfType(art, 'FAQPage'), undefined, 'FAQPage omitted (only 1 valid FAQ)');
+    // core blocks still generated → artifact is non-empty
+    assert.ok(blockOfType(art, 'Organization'));
+  });
+});
