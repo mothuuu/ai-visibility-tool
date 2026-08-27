@@ -6,6 +6,13 @@ const VOCABULARY = require('../config/detection-vocabulary');
 const { safeHead, safeGet } = require('../utils/safe-http');
 const { anyOrgFamilyInTypes } = require('./schemaFamilies');
 const {
+  NON_PROSE_SELECTOR,
+  cleanQuestion,
+  normalizeQuestionKey,
+  isCtaQuestion,
+  isJunkAnswer,
+} = require('../utils/faqHygiene');
+const {
   CONFIDENCE_LEVELS,
   EVIDENCE_SOURCES,
   EVIDENCE_SCHEMAS,
@@ -660,6 +667,8 @@ class ContentExtractor {
                                    nextClass.includes('question') || nextClass.includes('title') || nextClass.includes('header');
 
             if (isNextQuestion) break;
+            // Phase 2.5: stop before non-prose (nav / trust-badge / CTA) bleeds in.
+            if ($next.is(NON_PROSE_SELECTOR)) break;
 
             const nextText = $next.text().trim();
             if (nextText.length > 0 && nextText.length < 2000) {
@@ -740,6 +749,14 @@ class ContentExtractor {
             }
             currentQuestion = text;
             currentAnswer = '';
+          } else if (currentQuestion && $el.is(NON_PROSE_SELECTOR)) {
+            // Phase 2.5: a non-prose block (nav / trust-badge / CTA) ends the
+            // answer — finalize here so it can't bleed into the answer text.
+            if (currentAnswer.length > 20) {
+              faqs.push({ question: currentQuestion, answer: currentAnswer.substring(0, 1000), source: 'section' });
+            }
+            currentQuestion = null;
+            currentAnswer = '';
           } else if (currentQuestion) {
             // This is answer content
             if (text.length > 0 && text.length < 2000) {
@@ -803,7 +820,10 @@ class ContentExtractor {
         }
 
         let checks = 0;
-        while ($next.length && !$next.is('h1, h2, h3, h4, h5, h6') && answer.length < 800 && checks < 5) {
+        // Phase 2.5: stop at the next heading OR the first non-prose block
+        // (nav / trust-badge / CTA) so it can't bleed into the answer.
+        while ($next.length && !$next.is('h1, h2, h3, h4, h5, h6') &&
+               !$next.is(NON_PROSE_SELECTOR) && answer.length < 800 && checks < 5) {
           const nextText = $next.text().trim();
           if (nextText.length > 0) {
             answer += ' ' + nextText;
@@ -819,26 +839,35 @@ class ContentExtractor {
       }
     });
 
-    // Deduplicate FAQs (keep first occurrence, prioritize schema sources)
-    const uniqueFAQs = [];
-    const seen = new Set();
-
-    // Sort to prioritize schema > html > section > aria > heading
-    const sourcePriority = { 'schema': 0, 'html': 1, 'details': 2, 'section': 3, 'aria': 4, 'heading': 5 };
-    faqs.sort((a, b) => (sourcePriority[a.source] || 99) - (sourcePriority[b.source] || 99));
-
+    // Phase 2.5 hygiene: clean question text (strip enumeration/quotes), drop
+    // CTA pseudo-questions and nav/badge/CTA-junk answers, then de-duplicate on
+    // the normalized question (enumeration-aware, no lossy truncation). When two
+    // variants merge, keep the authoritative schema source; otherwise the longer
+    // (more complete) answer.
+    const cleaned = [];
     for (const faq of faqs) {
-      // Normalize question for deduplication
-      const key = faq.question.toLowerCase()
-        .replace(/[^\w\s]/g, '') // Remove punctuation
-        .replace(/\s+/g, ' ')    // Normalize whitespace
-        .substring(0, 50);
-
-      if (!seen.has(key) && key.length > 5) {
-        seen.add(key);
-        uniqueFAQs.push(faq);
-      }
+      const question = cleanQuestion(faq.question);
+      const answer = String(faq.answer || '').trim();
+      if (!question || !answer) continue;
+      if (isCtaQuestion(question)) continue;   // drop CTA solicitations posing as questions
+      if (isJunkAnswer(answer)) continue;      // drop nav / trust-badge / CTA-junk answers
+      cleaned.push({ ...faq, question, answer });
     }
+
+    const preferKept = (a, b) => {
+      const aSchema = a.source === 'schema', bSchema = b.source === 'schema';
+      if (aSchema !== bSchema) return aSchema ? a : b;        // schema is authoritative
+      return b.answer.length > a.answer.length ? b : a;        // else the longer answer
+    };
+
+    const byKey = new Map(); // normalized question → best entry (first-seen order preserved)
+    for (const faq of cleaned) {
+      const key = normalizeQuestionKey(faq.question);
+      if (key.length <= 5) continue;
+      const cur = byKey.get(key);
+      byKey.set(key, cur ? preferKept(cur, faq) : faq);
+    }
+    const uniqueFAQs = Array.from(byKey.values());
 
     console.log(`[ContentExtractor] Found ${uniqueFAQs.length} FAQs (schema: ${uniqueFAQs.filter(f => f.source === 'schema').length}, html: ${uniqueFAQs.filter(f => f.source === 'html').length}, details: ${uniqueFAQs.filter(f => f.source === 'details').length}, section: ${uniqueFAQs.filter(f => f.source === 'section').length}, aria: ${uniqueFAQs.filter(f => f.source === 'aria').length}, heading: ${uniqueFAQs.filter(f => f.source === 'heading').length})`);
 
