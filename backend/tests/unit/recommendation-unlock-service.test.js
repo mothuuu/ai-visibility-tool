@@ -54,6 +54,39 @@ function fakeClient(state, opts = {}) {
   };
 }
 
+describe('Phase 3: unlockRecommendation — faq type (money-path)', () => {
+  it('spends 8 (faq ref), generates a pooled FAQ artifact, commits', async () => {
+    const state = {};
+    // industry resolves to the real ai-infrastructure library (5 fallback FAQs ≥ 3).
+    const scanRow = { id: 77, user_id: 1, url: 'https://acme-infra.com', status: 'completed',
+      industry: 'ai infrastructure',
+      detailed_analysis: { scanEvidence: { url: 'https://acme-infra.com',
+        metadata: { title: 'Acme — AI infrastructure', description: 'ML platform' },
+        content: { headings: { h1: ['Acme'] }, paragraphs: ['Cloud infra for ML.'], faqs: [] } } } };
+    let spendCalls = 0, ref = null;
+
+    db.query = async (sql) => {
+      if (/FROM scans WHERE id/i.test(sql)) return { rows: [scanRow] };
+      if (/FROM recommendation_unlocks/i.test(sql)) return { rows: [] };
+      return { rows: [] };
+    };
+    TokenService.getBalance = async () => ({ total_available: 50 });
+    TokenService.spendTokens = async (u, a, rt, ri) => { spendCalls++; ref = ri; assert.equal(a, 8); return { total_available: 42 }; };
+    db.getClient = async () => fakeClient(state);
+
+    const res = await unlockRecommendation(1, 77, 'faq');
+    assert.equal(res.unlocked, true);
+    assert.equal(res.tokens_spent, 8);
+    assert.equal(res.balance_after, 42);
+    assert.equal(ref, '77:faq', 'transaction reference carries the faq type');
+    assert.ok(Array.isArray(res.artifact.faqs) && res.artifact.faqs.length >= 3);
+    assert.ok(!/xeo|visible2ai/i.test(JSON.stringify(res.artifact.faqs)));
+    assert.equal(spendCalls, 1);
+    assert.equal(state.committed, true);
+    assert.ok(!state.rolledBack);
+  });
+});
+
 describe('Phase 1: unlockRecommendation — happy path', () => {
   it('spends once, generates, inserts, commits; returns artifact + balance_after', async () => {
     const state = {};
