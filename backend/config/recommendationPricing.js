@@ -27,7 +27,19 @@ const RECOMMENDATION_PRICING = Object.freeze({
     // structured_data_coverage, faq_schema_missing, breadcrumb_schema_missing, …
     subfactorKeyPattern: /schema|structured_data/i,
   },
-  // future: faq, alt_text, ... — add here, nowhere else.
+  faq: {
+    tokens: 8,
+    unit: 'per_scan_pooled', // one unlock = up to 5 pooled library FAQs for the scan
+    label: 'FAQ Pack',
+    description: 'Up to 5 industry FAQs answered from your site, with FAQPage schema — ready to paste',
+    // Internally stage-ready: null = pooled (all funnel stages). Per-stage blocks
+    // later are added config entries (faq_tofu/…) + a gate tweak, not a rebuild.
+    stage: null,
+    // Served FAQ finding: ai_search_readiness.icp_faqs. Schema keys are matched
+    // by the schema entry above (checked first), so the two stay disjoint.
+    subfactorKeyPattern: /icp_faqs|faq/i,
+  },
+  // future: alt_text, ... — add here, nowhere else.
 });
 
 /**

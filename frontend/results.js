@@ -2485,8 +2485,8 @@ function renderResultsSchemaGate(f) {
     if (!resultsScanId) return '';
 
     // Unlocked: show the persisted artifact (immediately after unlock AND on reload).
-    if (rec.unlocked && rec.artifact && Array.isArray(rec.artifact.blocks)) {
-        return renderResultsSchemaArtifact(rec.artifact);
+    if (rec.unlocked && rec.artifact && (Array.isArray(rec.artifact.blocks) || Array.isArray(rec.artifact.faqs))) {
+        return renderResultsRecommendationArtifact(rec);
     }
 
     const balance = (rec.balance != null) ? rec.balance : 0;
@@ -2514,7 +2514,7 @@ function renderResultsSchemaGate(f) {
             <div class="schema-gate-sub">${escapeHtmlR(rec.description || 'Ready-to-paste JSON-LD for this scan.')}</div>
             <div class="schema-gate-actions">
                 <button class="schema-gate-btn" type="button" data-gate-unlock data-gate-scan="${escapeAttrR(resultsScanId)}" data-gate-type="${escapeAttrR(rec.type)}">
-                    Generate Schema Pack · ${price} tokens
+                    Generate ${escapeHtmlR(rec.label)} · ${price} tokens
                 </button>
                 <span class="schema-gate-balance">You have ${balance} token${balance === 1 ? '' : 's'}</span>
             </div>
@@ -2522,8 +2522,17 @@ function renderResultsSchemaGate(f) {
     `;
 }
 
-// Render the unlocked artifact: one code area + copy button + instructions per block.
-function renderResultsSchemaArtifact(artifact) {
+// Dispatch the unlocked artifact render by its shape (schema blocks vs FAQ list).
+function renderResultsRecommendationArtifact(rec) {
+    const a = rec.artifact || {};
+    const label = rec.label || 'Recommendation';
+    if (Array.isArray(a.faqs)) return renderResultsFaqArtifact(a, label);
+    if (Array.isArray(a.blocks)) return renderResultsSchemaArtifact(a, label);
+    return '';
+}
+
+// Render the unlocked schema artifact: one code area + copy button + instructions per block.
+function renderResultsSchemaArtifact(artifact, label) {
     const blocks = Array.isArray(artifact.blocks) ? artifact.blocks : [];
     const rows = blocks.map(b => {
         const isEnh = b.status === 'enhancement';
@@ -2541,8 +2550,34 @@ function renderResultsSchemaArtifact(artifact) {
     }).join('');
     return `
         <div class="schema-gate unlocked">
-            <div class="schema-gate-head">✓ Schema Markup Pack — unlocked</div>
+            <div class="schema-gate-head">✓ ${escapeHtmlR(label || 'Schema Markup Pack')} — unlocked</div>
             ${rows}
+        </div>
+    `;
+}
+
+// Render the unlocked FAQ artifact: readable Q&As + one FAQPage JSON-LD code
+// block (reuses .schema-block/.schema-code/.schema-copy-btn so copy works).
+function renderResultsFaqArtifact(artifact, label) {
+    const faqs = Array.isArray(artifact.faqs) ? artifact.faqs : [];
+    const qas = faqs.map(f => `
+        <div class="faq-qa">
+            <div class="faq-q">${escapeHtmlR(f.question)}</div>
+            <div class="faq-a">${escapeHtmlR(f.answer)}${f.resolution === 'extracted' ? ' <span class="faq-res">from your site</span>' : ''}</div>
+        </div>
+    `).join('');
+    return `
+        <div class="schema-gate unlocked">
+            <div class="schema-gate-head">✓ ${escapeHtmlR(label || 'FAQ Pack')} — unlocked</div>
+            <div class="faq-qa-list">${qas}</div>
+            <div class="schema-block">
+                <div class="schema-block-head">
+                    <span class="schema-block-type">FAQPage JSON-LD</span>
+                    <button class="schema-copy-btn" type="button" data-copy>Copy</button>
+                </div>
+                <pre class="schema-code"><code>${escapeHtmlR(artifact.jsonld || '')}</code></pre>
+                <div class="schema-block-instructions">${escapeHtmlR(artifact.instructions || '')}</div>
+            </div>
         </div>
     `;
 }

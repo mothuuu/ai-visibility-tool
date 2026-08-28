@@ -21,10 +21,15 @@ const TokenService = require('./tokenService');
 const InsufficientTokensError = require('../errors/InsufficientTokensError');
 const { getPricing } = require('../config/recommendationPricing');
 const { generateSchemaArtifact } = require('./schemaArtifactGenerator');
+const { generateFaqArtifact } = require('./faqArtifactGenerator');
 
-// type → generator(scanEvidence, scanUrl, scanId) → artifact (throws if it can't)
+// type → generator(scanEvidence, scanUrl, scanId, ctx) → artifact (throws if it can't).
+// ctx = { scan, pricing } so type-specific generators can read the scan's
+// industry / a stage filter without changing the transaction wrapper.
 const GENERATORS = Object.freeze({
   schema: (scanEvidence, scanUrl, scanId) => generateSchemaArtifact(scanEvidence, scanUrl, scanId),
+  faq: (scanEvidence, scanUrl, scanId, ctx) =>
+    generateFaqArtifact(scanEvidence, scanUrl, ctx.scan, (ctx.pricing && ctx.pricing.stage) || null),
 });
 
 class UnlockValidationError extends Error {
@@ -81,7 +86,7 @@ async function unlockRecommendation(userId, scanId, type) {
 
   // 1) Ownership + completeness + evidence presence.
   const scanRes = await db.query(
-    `SELECT id, user_id, url, status, detailed_analysis
+    `SELECT id, user_id, url, status, industry, detailed_analysis
        FROM scans WHERE id = $1 AND user_id = $2`,
     [scanId, userId]
   );
@@ -126,7 +131,7 @@ async function unlockRecommendation(userId, scanId, type) {
       userId, price, 'recommendation_unlock', `${scanId}:${type}`, client
     );
 
-    const artifact = generator(scanEvidence, scanUrl, scanId); // throws on thin evidence / parse fail
+    const artifact = generator(scanEvidence, scanUrl, scanId, { scan, pricing }); // throws on thin evidence / parse fail
 
     const ins = await client.query(
       `INSERT INTO recommendation_unlocks
