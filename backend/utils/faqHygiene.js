@@ -77,11 +77,56 @@ function isJunkAnswer(a) {
   return false;
 }
 
+// Sources with explicit FAQ provenance — trusted even without interrogative form
+// (schema mainEntity, <details>/<summary>, <dt> re-tagged to 'details', and
+// aria accordions). Non-explicit html/section/heading candidates must look like
+// a question (Phase 2.5.1 question-form filter — kills section titles such as
+// "Frequently Asked Questions").
+const EXPLICIT_FAQ_SOURCES = new Set(['schema', 'details', 'aria']);
+
+/**
+ * Does the text read as a question — ends with '?' or opens with an
+ * interrogative/auxiliary word? Used to reject non-question section titles from
+ * the non-explicit extraction methods.
+ */
+function isInterrogative(q) {
+  const s = String(q || '').trim();
+  if (!s) return false;
+  if (s.endsWith('?')) return true;
+  return /^(what|how|why|when|where|who|which|whose|whom|can|could|do|does|did|is|are|was|were|should|will|would|may|might|shall|has|have|had|am)\b/i.test(s);
+}
+
+/**
+ * De-duplicate FAQ entries on the normalized question (Phase 2.5 rule, shared so
+ * per-page AND site-level aggregation use ONE pass). On collision: keep the
+ * authoritative schema source; otherwise the longer (more complete) answer.
+ * First-seen key order is preserved. Entries are assumed already cleaned.
+ */
+function dedupeFaqs(faqs) {
+  const preferKept = (a, b) => {
+    const aSchema = a.source === 'schema', bSchema = b.source === 'schema';
+    if (aSchema !== bSchema) return aSchema ? a : b;                 // schema is authoritative
+    return String(b.answer || '').length > String(a.answer || '').length ? b : a; // else longer answer
+  };
+  const byKey = new Map();
+  for (const faq of (Array.isArray(faqs) ? faqs : [])) {
+    if (!faq || !faq.question) continue;
+    const key = normalizeQuestionKey(faq.question);
+    if (key.length <= 5) continue;
+    const cur = byKey.get(key);
+    byKey.set(key, cur ? preferKept(cur, faq) : faq);
+  }
+  return Array.from(byKey.values());
+}
+
 module.exports = {
   NON_PROSE_SELECTOR,
+  EXPLICIT_FAQ_SOURCES,
   cleanQuestion,
   normalizeQuestionKey,
   isCtaQuestion,
   isJunkAnswer,
+  isInterrogative,
+  dedupeFaqs,
   BADGE_RE,
 };
