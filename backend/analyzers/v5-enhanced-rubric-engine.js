@@ -3,6 +3,7 @@ const { ContentExtractor, extractWithFallback, resetRenderCounter } = require('.
 const { detectCertifications, calculateCertificationScore } = require('./recommendation-engine/certification-detector');
 const { buildScanEvidence } = require('./evidence-builder');
 const { validateEvidence } = require('./evidence-contract');
+const { dedupeFaqs } = require('../utils/faqHygiene');
 
 /**
  * V5 Enhanced Rubric Scoring Engine
@@ -156,7 +157,11 @@ class V5EnhancedRubricEngine {
           content: {
             ...baseEvidence.content,
             ...firstPageEvidence.content,
-            faqs: allFAQs  // Use aggregated FAQs from all pages
+            // Site-level dedup (Phase 2.5.1): per-page dedup runs inside
+            // extractFAQs, but concatenating pages re-introduces cross-page
+            // duplicates (shared head-template FAQPage schema, blog listing +
+            // article, etc.). One shared pass over the aggregate.
+            faqs: dedupeFaqs(allFAQs)  // aggregated FAQs from all pages, de-duplicated
           },
           technical: {
             ...baseEvidence.technical,

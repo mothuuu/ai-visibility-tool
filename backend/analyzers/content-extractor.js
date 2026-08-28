@@ -7,10 +7,12 @@ const { safeHead, safeGet } = require('../utils/safe-http');
 const { anyOrgFamilyInTypes } = require('./schemaFamilies');
 const {
   NON_PROSE_SELECTOR,
+  EXPLICIT_FAQ_SOURCES,
   cleanQuestion,
-  normalizeQuestionKey,
   isCtaQuestion,
   isJunkAnswer,
+  isInterrogative,
+  dedupeFaqs,
 } = require('../utils/faqHygiene');
 const {
   CONFIDENCE_LEVELS,
@@ -681,11 +683,13 @@ class ContentExtractor {
 
         answer = answer.trim();
 
-        // Only add if it looks like a Q&A
+        // Only add if it looks like a Q&A. dt entries are tagged 'details'
+        // (definition-list = explicit FAQ provenance) so they stay exempt from
+        // the interrogative filter, like schema/<details>.
         if (question && answer &&
             (question.includes('?') || question.length > 15) &&
             answer.length > 20) {
-          faqs.push({ question, answer: answer.substring(0, 1000), source: 'html' });
+          faqs.push({ question, answer: answer.substring(0, 1000), source: tagName === 'dt' ? 'details' : 'html' });
         }
       });
     });
@@ -851,23 +855,15 @@ class ContentExtractor {
       if (!question || !answer) continue;
       if (isCtaQuestion(question)) continue;   // drop CTA solicitations posing as questions
       if (isJunkAnswer(answer)) continue;      // drop nav / trust-badge / CTA-junk answers
+      // Question-form filter (Phase 2.5.1): non-explicit-provenance candidates
+      // (html/section/heading) must read as a question — kills section titles
+      // like "Frequently Asked Questions". schema/details/aria are exempt.
+      if (!EXPLICIT_FAQ_SOURCES.has(faq.source) && !isInterrogative(question)) continue;
       cleaned.push({ ...faq, question, answer });
     }
 
-    const preferKept = (a, b) => {
-      const aSchema = a.source === 'schema', bSchema = b.source === 'schema';
-      if (aSchema !== bSchema) return aSchema ? a : b;        // schema is authoritative
-      return b.answer.length > a.answer.length ? b : a;        // else the longer answer
-    };
-
-    const byKey = new Map(); // normalized question → best entry (first-seen order preserved)
-    for (const faq of cleaned) {
-      const key = normalizeQuestionKey(faq.question);
-      if (key.length <= 5) continue;
-      const cur = byKey.get(key);
-      byKey.set(key, cur ? preferKept(cur, faq) : faq);
-    }
-    const uniqueFAQs = Array.from(byKey.values());
+    // One shared dedup pass (also used at site-level aggregation).
+    const uniqueFAQs = dedupeFaqs(cleaned);
 
     console.log(`[ContentExtractor] Found ${uniqueFAQs.length} FAQs (schema: ${uniqueFAQs.filter(f => f.source === 'schema').length}, html: ${uniqueFAQs.filter(f => f.source === 'html').length}, details: ${uniqueFAQs.filter(f => f.source === 'details').length}, section: ${uniqueFAQs.filter(f => f.source === 'section').length}, aria: ${uniqueFAQs.filter(f => f.source === 'aria').length}, heading: ${uniqueFAQs.filter(f => f.source === 'heading').length})`);
 
